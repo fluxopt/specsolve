@@ -646,7 +646,7 @@ expressions:
     expression: Line_angle_sum + Transformer_angle_sum
     description: 'the voltage angle differences around a cycle: every branch flow times its cycle weight,
       and every transformer phase shift'
-masks:
+conditions:
   StorageUnit_fix: {description: a storage unit with a fixed build that stands in the snapshot's period
-      — PyPSA's `fix` rows, where: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
+      — PyPSA's `fix` rows, condition: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
 objective: {sense: minimize, expression: total_cost}

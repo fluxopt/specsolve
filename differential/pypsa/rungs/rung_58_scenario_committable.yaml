@@ -392,7 +392,7 @@ expressions:
     expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-masks:
+conditions:
   Generator_committed: {description: a committable generator that stands in the snapshot's period — every
-      unit-commitment row's set, where: Generator_committable AND Generator_active}
+      unit-commitment row's set, condition: Generator_committable AND Generator_active}
 objective: {sense: minimize, expression: total_cost}

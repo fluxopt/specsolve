@@ -60,8 +60,6 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | $`\mathit{gen}`$ | `gen` over $`\mathcal{G}`$ — output of a generator |
 | $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{gen}^{\mathrm{p,nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{gen}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`gen`**

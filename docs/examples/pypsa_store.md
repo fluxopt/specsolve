@@ -57,9 +57,11 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 | $`e`$ | `e` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 | $`e^{\mathrm{nom}}`$ | `e_nom` over $`\mathcal{S}`$ — energy capacity built at a store |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
+| Symbol | Meaning |
+|---|---|
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
 #### Variable domains
 

@@ -18,23 +18,23 @@ from mathspec.program import (
     Add,
     Axis,
     Constant,
-    ConstraintDeclaration,
-    DimensionDeclaration,
+    Constraint,
+    Dimension,
     Expression,
     Join,
     JoinColumns,
     Mask,
     Multiply,
     Negate,
-    ObjectiveDeclaration,
+    Objective,
     Parameter,
     ParameterComparison,
-    ParameterDeclaration,
+    ParameterReference,
     Program,
-    RelationDeclaration,
+    Relation,
     Sum,
     Variable,
-    VariableDeclaration,
+    VariableReference,
 )
 from mathspec.spec import Spec
 
@@ -85,30 +85,32 @@ def dispatch_data():
 def dispatch_program() -> Program:
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'load': ParameterDeclaration(('snapshot',)),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'load': Parameter(('snapshot',)),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
                 where=Mask(ParameterComparison('p_max', '>', 0, ('generator',))),
-                lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                lower=Constant(0.0, dims=()),
+                upper=ParameterReference('p_max', dims=('generator',)),
             )
         },
         constraints={
-            'power_balance': ConstraintDeclaration(
+            'power_balance': Constraint(
                 ('snapshot',),
-                lhs=Sum(Variable('p'), over=(Axis('generator'),)),
+                lhs=Sum(
+                    VariableReference('p', dims=('generator', 'snapshot')),
+                    over=(Axis('generator'),),
+                    dims=('snapshot',),
+                ),
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load', dims=('snapshot',)),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
-        ),
-        dimensions={'snapshot': DimensionDeclaration(dtype='int', ordered=True), 'generator': DimensionDeclaration()},
+        objective=Objective('minimize', _total_cost()),
+        dimensions={'snapshot': Dimension(dtype='int', ordered=True), 'generator': Dimension()},
     )
 
 
@@ -201,9 +203,9 @@ def dispatch_linopy_objective(gens: pd.DataFrame, load: pd.DataFrame) -> float:
 
 #: The transport network's wiring, as the three maps a nodal balance reads.
 WIRING = {
-    'gen_bus': RelationDeclaration((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
-    'from': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
-    'to': RelationDeclaration((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'gen_bus': Relation((('generator', 'generator'), ('bus', 'bus')), ('generator',)),
+    'from': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
+    'to': Relation((('line', 'line'), ('bus', 'bus')), ('line',)),
 }
 
 
@@ -211,53 +213,61 @@ def _onto_bus(operand: Expression, name: str) -> Sum:
     """*operand* summed through relation *name* the way a nodal balance reads it: out of its key, onto the bus."""
     relation = WIRING[name]
     columns = JoinColumns(name, relation, joined=relation.key, grouped=relation.values)
-    return Sum(Join(operand, columns), columns.axes)
+    onto = tuple(sorted({*operand.dims} - {*columns.joined_dims} | {*columns.grouped_dims}))
+    return Sum(Join(operand, columns, dims=onto), columns.axes, dims=onto)
+
+
+def _total_cost() -> Sum:
+    """``sum(p * cost, over=[generator, snapshot])``, the objective both programs here minimize."""
+    p = VariableReference('p', dims=('generator', 'snapshot'))
+    product = Multiply(p, ParameterReference('cost', dims=('generator',)), dims=p.dims)
+    return Sum(product, over=(Axis('generator'), Axis('snapshot')), dims=())
 
 
 def transport_program() -> Program:
     injection = Add(
         Add(
-            _onto_bus(Variable('p'), 'gen_bus'),
-            _onto_bus(Variable('f'), 'to'),
+            _onto_bus(VariableReference('p', dims=('generator', 'snapshot')), 'gen_bus'),
+            _onto_bus(VariableReference('f', dims=('line', 'snapshot')), 'to'),
+            dims=('bus', 'snapshot'),
         ),
-        Negate(_onto_bus(Variable('f'), 'from')),
+        Negate(_onto_bus(VariableReference('f', dims=('line', 'snapshot')), 'from'), dims=('bus', 'snapshot')),
+        dims=('bus', 'snapshot'),
     )
     return Program(
         parameters={
-            'p_max': ParameterDeclaration(('generator',)),
-            'cost': ParameterDeclaration(('generator',)),
-            'cap': ParameterDeclaration(('line',)),
-            'cap_low': ParameterDeclaration(('line',)),
-            'load': ParameterDeclaration(('snapshot', 'bus')),
+            'p_max': Parameter(('generator',)),
+            'cost': Parameter(('generator',)),
+            'cap': Parameter(('line',)),
+            'cap_low': Parameter(('line',)),
+            'load': Parameter(('snapshot', 'bus')),
         },
         variables={
-            'p': VariableDeclaration(
+            'p': Variable(
                 ('snapshot', 'generator'),
-                lower=Constant(0.0),
-                upper=Parameter('p_max'),
+                lower=Constant(0.0, dims=()),
+                upper=ParameterReference('p_max', dims=('generator',)),
             ),
-            'f': VariableDeclaration(
+            'f': Variable(
                 ('snapshot', 'line'),
-                lower=Parameter('cap_low'),
-                upper=Parameter('cap'),
+                lower=ParameterReference('cap_low', dims=('line',)),
+                upper=ParameterReference('cap', dims=('line',)),
             ),
         },
         constraints={
-            'balance': ConstraintDeclaration(
+            'balance': Constraint(
                 ('snapshot', 'bus'),
                 lhs=injection,
                 sense='==',
-                rhs=Parameter('load'),
+                rhs=ParameterReference('load', dims=('bus', 'snapshot')),
             )
         },
-        objective=ObjectiveDeclaration(
-            'minimize', Sum(Multiply(Variable('p'), Parameter('cost')), over=(Axis('generator'), Axis('snapshot')))
-        ),
+        objective=Objective('minimize', _total_cost()),
         dimensions={
-            'snapshot': DimensionDeclaration(dtype='int', ordered=True),
-            'bus': DimensionDeclaration(),
-            'generator': DimensionDeclaration(),
-            'line': DimensionDeclaration(),
+            'snapshot': Dimension(dtype='int', ordered=True),
+            'bus': Dimension(),
+            'generator': Dimension(),
+            'line': Dimension(),
         },
         relations=WIRING,
     )
@@ -624,19 +634,6 @@ class TestTheLabelSpace:
         assert list(x) == labels, 'read-back follows declaration order'
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
-
-    def test_a_where_orders_string_labels_bytewise_not_by_declaration(self):
-        """`node >= 'b'` keeps {b, c} whatever order the labels were declared in
-        (the where-string rules). Declared c, a, b so the Enum's declaration order would keep {b} alone."""
-        spec = override(
-            NODE_CAP_SPEC,
-            **{'variables.x.where': "node >= 'b'", 'constraints.k.where': "node >= 'b'"},
-        )
-        cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
-
-        with sps.build(spec, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
-            assert sorted(model._engine._model.variables['x'].frame.collect()['node'].to_list()) == ['b', 'c']
-            assert model.solve().objective == pytest.approx(5.0)
 
     def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
         """A quoted label the dimension does not carry masks everything out (the

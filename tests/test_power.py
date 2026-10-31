@@ -14,7 +14,7 @@ import dataclasses
 
 import polars as pl
 import pytest
-from mathspec.program import Constant, Power, Variable
+from mathspec.program import Constant, Power, VariableReference
 
 import specsolve as sps
 from specsolve._sources import tidy_sources
@@ -130,7 +130,7 @@ def test_a_power_over_a_variable_is_refused_at_the_plan_boundary():
     }
     model = sps.build(spec, sources)
     program = model._program
-    expression = Power(Variable('p'), Constant(2.0))
+    expression = Power(VariableReference('p', dims=('g',)), Constant(2.0, dims=()), dims=('g',))
     patched = dataclasses.replace(program, objective=dataclasses.replace(program.objective, expression=expression))
     with pytest.raises((LanguageError, AssertionError), match='power over variables'):
         model._engine.build(patched, tidy_sources(program, dict(model._sources)))

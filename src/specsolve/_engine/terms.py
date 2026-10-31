@@ -185,7 +185,7 @@ def fan_in(expression: program.Expression) -> FanIn:
     Both classes other than ``'one-to-one'`` sum several input slots into an
     output row, so [`propagate_absence`][] runs before them.
     """
-    if isinstance(expression, program.NamedExpression):
+    if isinstance(expression, program.ExpressionReference):
         return fan_in(expression.body)
     if isinstance(expression, program.Sum):
         return 'many-to-one'
@@ -195,8 +195,8 @@ def fan_in(expression: program.Expression) -> FanIn:
         expression,
         (
             program.Constant,
-            program.Parameter,
-            program.Variable,
+            program.ParameterReference,
+            program.VariableReference,
             program.Dual,
             program.Negate,
             program.Add,

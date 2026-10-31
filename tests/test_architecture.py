@@ -587,8 +587,8 @@ def test_every_plan_node_is_handled_by_the_compiler():
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
-        ('program', program.Predicate, engine_dir / 'predicates.py'),
-        ('program', program.Predicate, ORACLE / 'where.py'),
+        ('program', program.Condition, engine_dir / 'predicates.py'),
+        ('program', program.Condition, ORACLE / 'where.py'),
     ]
     for qualifier, union, module in walkers:
         source = module.read_text()
@@ -710,7 +710,7 @@ def sources_annotations(doors: dict[str, Any]) -> set[str]:
 
 def _gen_bus_joins(program: Any) -> tuple[Any, Any]:
     """One map joined both ways: a sum by ``gen_bus[bus]``, and a lookup ``at(x, by=gen_bus[bus])``."""
-    gen_bus = program.RelationDeclaration((('g', 'g'), ('bus', 'bus')), ('g',))
+    gen_bus = program.Relation((('g', 'g'), ('bus', 'bus')), ('g',))
     return (
         program.JoinColumns('gen_bus', gen_bus, joined=('g',), grouped=('bus',)),
         program.JoinColumns('gen_bus', gen_bus, joined=('bus',), grouped=('g',)),
@@ -726,16 +726,18 @@ def test_every_shape_operator_declares_its_fan_in():
 
     from specsolve._engine.terms import fan_in
 
-    x = program.Variable('x')
+    x = program.VariableReference('x', dims=('g', 't'))
+    on_bus = program.VariableReference('x', dims=('bus', 't'))
     grouping, lookup = _gen_bus_joins(program)
+    grouped = program.Join(x, grouping, dims=on_bus.dims)
     declared = {
         label: fan_in(node)
         for label, node in (
-            ('Sum', program.Sum(x, (program.Axis('t'),))),
-            ('Sum through a relation', program.Sum(program.Join(x, grouping), grouping.axes)),
-            ('Join as a lookup', program.Join(x, lookup)),
-            ('Translate', program.Translate(x, 't', 1, wrap=False)),
-            ('WindowSum', program.WindowSum(x, 't', 3, wrap=False)),
+            ('Sum', program.Sum(x, (program.Axis('t'),), dims=('g',))),
+            ('Sum through a relation', program.Sum(grouped, grouping.axes, dims=grouped.dims)),
+            ('Join as a lookup', program.Join(on_bus, lookup, dims=x.dims)),
+            ('Translate', program.Translate(x, 't', 1, wrap=False, dims=x.dims)),
+            ('WindowSum', program.WindowSum(x, 't', 3, wrap=False, dims=x.dims)),
         )
     }
     assert declared == {
@@ -809,7 +811,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
 
     from mathspec import program
 
-    declared = {node.__name__ for union in (program.Expression, program.Predicate) for node in get_args(union)}
+    declared = {node.__name__ for union in (program.Expression, program.Condition) for node in get_args(union)}
     assert declared, 'no plan node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:

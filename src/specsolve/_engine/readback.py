@@ -86,7 +86,7 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
 def _members(
     model: BuiltModel,
     registry: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable | program.Constraint],
     found: pl.DataFrame,
     label: str,
     carried: Sequence[str],
@@ -261,7 +261,7 @@ def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSou
 def reordered(
     attached: AttachedSources,
     registry: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration | program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable | program.Constraint],
     frames: Mapping[str, pl.DataFrame],
 ) -> pl.Series:
     """A saved solution's value frames back as the positional vector — the inverse of [`laid_out`][].
@@ -309,7 +309,7 @@ def _aligned(
 
 def readers(
     compiler: Compiler,
-    named: Mapping[str, program.ExpressionDeclaration],
+    named: Mapping[str, program.NamedExpression],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
     """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one compiler.
@@ -433,7 +433,7 @@ def _place(
     into: np.ndarray,
     model: BuiltModel,
     held: Mapping[str, labels.Labelled],
-    declared: Mapping[str, program.VariableDeclaration] | Mapping[str, program.ConstraintDeclaration],
+    declared: Mapping[str, program.Variable] | Mapping[str, program.Constraint],
     previous: Mapping[str, pl.LazyFrame],
     value: pl.Expr,
 ) -> int:

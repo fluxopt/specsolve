@@ -68,8 +68,6 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 | $`\mathit{travel}`$ | `travel` over $`\mathcal{F} \times \mathcal{T}`$ — is this arc on the tour? |
 | $`u`$ | `u` over $`\mathcal{C}`$ — position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{distance}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{travel}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`travel`**

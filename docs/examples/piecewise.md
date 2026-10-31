@@ -69,13 +69,13 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — dispatched power |
 | $`\mathrm{cost}`$ | `op_cost` over $`\mathcal{T} \times \mathcal{G}`$ — operating cost, piecewise-linear in dispatch |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{max}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-$`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, and a position counted from the end prints against it — $`\lvert \mathcal{T} \rvert - 1`$ is the last position, one less than the size because the first is $`0`$.
+| Symbol | Meaning |
+|---|---|
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
+| $`\lvert \mathcal{T} \rvert`$ | the size of $`\mathcal{T}`$; $`\lvert \mathcal{T} \rvert - 1`$ is the last position |
 
 #### Variable domains
 
@@ -108,7 +108,7 @@ $`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, a
 **`cost_curve`**
 
 ```math
-\left( p_{t,g},\ \mathrm{cost}_{t,g} \right) \in \mathrm{conv}_{k \in \mathcal{K}}(x_{g,k},\ y_{g,k}) \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\left( p_{t,g},\ \mathrm{cost}_{t,g} \right) \in \mathrm{conv}_{k \in \mathcal{K}}(x_{g,k},\ y_{g,k}) \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Assumptions

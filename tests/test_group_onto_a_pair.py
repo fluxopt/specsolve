@@ -10,7 +10,7 @@ which a groupby sorts and the dim table keeps as declared.
 from __future__ import annotations
 
 import pytest
-from mathspec.program import Join, Sum, Variable
+from mathspec.program import Join, Sum, VariableReference
 
 from specsolve.errors import SchemaError
 from tests.conftest import by_coord, override, raw_of, schema_of
@@ -223,7 +223,7 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
     (limit, _demand) = schema_of(SPEC).program.constraints.values()
     assert isinstance(limit.lhs, Sum)
     assert isinstance(limit.lhs.operand, Join)
-    assert limit.lhs.operand.operand == Variable('p')
+    assert limit.lhs.operand.operand == VariableReference('p', dims=('generator',))
     columns = limit.lhs.operand.columns
     assert (columns.dropped_dims, columns.name, columns.added_dims) == (
         ('generator',),

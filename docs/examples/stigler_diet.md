@@ -42,8 +42,6 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 |---|---|
 | $`\mathit{spend}`$ | `spend` over $`\mathcal{F}`$ — dollars per day spent on this food |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{nutrient\_per\_dollar}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{spend}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`spend`**

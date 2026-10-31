@@ -54,7 +54,7 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
     A predicate with no value at a coordinate does not hold there. The empty
     string answers a failing assumption over no dims.
     """
-    failing = ~assumption.predicate
+    failing = ~assumption.holds
     if assumption.where is not None:
         failing = failing & assumption.where
     dims = scope.in_declaration_order(failing.dims)

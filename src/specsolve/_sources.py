@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
-from mathspec.program import ParameterDeclaration
+from mathspec.program import Parameter
 
 from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._assumptions import validate_assumptions
@@ -27,17 +27,17 @@ from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
     from mathspec.program import (
-        ConstraintDeclaration,
-        DimensionDeclaration,
+        Constraint,
+        Dimension,
         Program,
-        RelationDeclaration,
-        VariableDeclaration,
+        Relation,
+        Variable,
     )
 
     from specsolve._inputs import Label, Source
 
 
-def attachable(program: Program) -> dict[str, ParameterDeclaration | DimensionDeclaration | RelationDeclaration]:
+def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
     """Every name data may be attached to — declared parameters, dimensions and relations, one flat namespace."""
     return {**program.parameters, **program.dimensions, **program.relations}
 
@@ -355,7 +355,7 @@ def _relations_over(program: Program, dim: str) -> tuple[str, ...]:
     return tuple(name for name, lk in program.relations.items() if any(over == dim for _, over in lk.columns))
 
 
-def _unsupplied_relation_message(name: str, relation: RelationDeclaration) -> str:
+def _unsupplied_relation_message(name: str, relation: Relation) -> str:
     """A relation nothing gives a table for."""
     rows = f'one row per {list(relation.key)} it maps' if relation.values else 'one row per tuple it relates'
     return (
@@ -409,9 +409,7 @@ def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
     return index.select(dim).pipe(collected)[dim]
 
 
-def _read_relation(
-    source: Source, name: str, relation: RelationDeclaration, indexes: Mapping[str, pl.LazyFrame]
-) -> pl.LazyFrame:
+def _read_relation(source: Source, name: str, relation: Relation, indexes: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
     """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
 
     A column is read in its dimension's label type, from *indexes*.
@@ -478,7 +476,7 @@ def _read_relation(
 
 
 def _parameter_frame(
-    name: str, p: ParameterDeclaration, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+    name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy frame, whatever shape it took.
 
@@ -571,9 +569,7 @@ def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
     return cast('Mapping[str, Mapping[str, Source]]', start)
 
 
-def _read_by(
-    reader: str, program: Program
-) -> tuple[str, Mapping[str, VariableDeclaration] | Mapping[str, ConstraintDeclaration]]:
+def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable] | Mapping[str, Constraint]]:
     """What *reader* holds a table per, and those declarations by name."""
     if reader == 'constraint_basis':
         return 'constraint', program.constraints
@@ -597,7 +593,7 @@ def _read_values(
 
     *kind* and *name* say whose values they are in a refusal.
     """
-    declared = ParameterDeclaration(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
+    declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
     return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 
@@ -702,7 +698,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str)
 
 def _checked_parameter(
     name: str,
-    p: ParameterDeclaration,
+    p: Parameter,
     table: pl.LazyFrame,
     sources: Mapping[str, pl.LazyFrame],
     kind: str = 'parameter',
@@ -734,7 +730,7 @@ def _checked_parameter(
 
 
 def _check_one_row_per_coordinate(
-    name: str, p: ParameterDeclaration, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str, p: Parameter, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
 ) -> None:
     """A table of values is a function of its dims: one row per coordinate, every label a real one.
 
@@ -792,7 +788,7 @@ def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
     return pl.col(dim).is_in(labels.implode()).fill_null(False)
 
 
-def _check_values_are_present(name: str, p: ParameterDeclaration, frame: pl.DataFrame, kind: str) -> None:
+def _check_values_are_present(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read."""
     value = pl.col(VALUE)
     holed = value.is_null() | value.is_nan() if frame.schema[VALUE].is_float() else value.is_null()
@@ -826,7 +822,7 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
-def _check_value_dtype(name: str, p: ParameterDeclaration, frame: pl.DataFrame, kind: str) -> None:
+def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the declaration claims.
 
     Asked after the holes, so a column of nothing but nulls — which polars

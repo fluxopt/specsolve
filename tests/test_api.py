@@ -361,7 +361,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
     """Composition is merging declarations, not passing several models."""
-    with pytest.raises(sps.errors.LanguageError, match='Merge the declarations'):
+    with pytest.raises(sps.errors.LanguageError, match='Merge the entries'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
 

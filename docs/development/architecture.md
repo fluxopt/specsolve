@@ -140,8 +140,8 @@ absence is pushed into the operand first
 | plan node | the file writes | fan-in | the relational query |
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row constant term |
-| `Parameter` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `Variable` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
+| `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
+| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a constant term present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two lists of terms concatenated |
@@ -153,7 +153,7 @@ absence is pushed into the operand first
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the lists of terms concatenated |
-| `NamedExpression` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
+| `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 **The engine only builds.** Every refusal about the shape of a file is made
 upstream. The engine raises `DataError` about the data, and `SpecsolveError`

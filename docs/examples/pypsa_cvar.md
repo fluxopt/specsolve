@@ -68,8 +68,6 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 |---|---|
 | $`\mathit{operating\_cost}`$ | `operating_cost` over $`\mathcal{S}`$ — what one future costs to run, over the whole horizon |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{probability}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p^{\mathrm{nom}}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p_nom`**

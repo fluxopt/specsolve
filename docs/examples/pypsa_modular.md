@@ -45,8 +45,6 @@ PyPSA modular capacity expansion: a technology bought in whole units. The capaci
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 | $`n^{\mathrm{mod}}`$ | `n_mod` over $`\mathcal{G}`$ — how many whole modules are built |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom,mod}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

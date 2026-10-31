@@ -183,7 +183,7 @@ class Assembly:
     # declarations
     # ------------------------------------------------------------------
 
-    def _build_variable(self, name: str, v: program.VariableDeclaration) -> pl.DataFrame:
+    def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
         """One variable's labelled frame, and its share of ``cols``.
 
         The share leaves in label order: ``cols`` carries no ``col``, so a row's
@@ -212,7 +212,7 @@ class Assembly:
             self.measured.bounds[name] = spread
         return cols
 
-    def _build_sos(self, s: program.SosDeclaration, v: program.VariableDeclaration) -> pl.DataFrame:
+    def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
         """One declaration's sets as ``(set, type, col, weight)``, over *v*.
 
         A set and a weight are the two halves of a coordinate's row-major
@@ -251,7 +251,7 @@ class Assembly:
         return built
 
     def _build_constraint(
-        self, name: str, c: program.ConstraintDeclaration
+        self, name: str, c: program.Constraint
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
@@ -331,7 +331,7 @@ class Assembly:
         return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.ConstraintDeclaration
+        self, frame: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -388,7 +388,7 @@ class Assembly:
         self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
         return rows, matrix, qmatrix, start + surviving.height
 
-    def _build_objective(self, o: program.ObjectiveDeclaration | None) -> pl.DataFrame | None:
+    def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
@@ -453,7 +453,7 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
     return short
 
 
-def declares_quadratic(c: program.ConstraintDeclaration) -> bool:
+def declares_quadratic(c: program.Constraint) -> bool:
     """Whether constraint *c* multiplies two variable-carrying operands, either side."""
     return program.is_quadratic(c.lhs) or program.is_quadratic(c.rhs)
 

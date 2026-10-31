@@ -236,6 +236,12 @@ parameters:
     dims: [snapshot, process]
     dtype: bool
     description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
+  Generator_active_asset:
+    dims: [generator]
+    dtype: bool
+    description: whether a generator is one of PyPSA's `active_assets` — its `active` flag alone, without
+      build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+      refuses one that differs by scenario (`constants.py:51`)
 variables:
   Generator_p:
     dims: [scenario, snapshot, generator]
@@ -276,11 +282,11 @@ variables:
       in [0, 1] (`variables.py:188-189`)'
   Generator_p_nom_ext:
     dims: [generator]
-    where: Generator_p_nom_extendable
+    where: Generator_p_nom_extendable AND Generator_active_asset
     domain: continuous
     missing: absent
-    description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
-      PyPSA name carries the fixed regime'
+    description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;
+      the parameter of the same PyPSA name carries the fixed regime'
   Process_p:
     dims: [scenario, snapshot, process]
     where: Process_active
@@ -578,11 +584,11 @@ expressions:
     expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-masks:
-  Generator_committed: {where: Generator_committable AND Generator_active, description: a committable
+conditions:
+  Generator_committed: {condition: Generator_committable AND Generator_active, description: a committable
       generator that stands in the snapshot's period — every unit-commitment row's set}
-  Generator_ramps_from_previous: {where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
-      == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a snapshot whose ramp
-      reads a previous output — any snapshot but its period''s first, and the horizon''s first where the
-      generator comes in off or carries an initial output'}
+  Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR
+      (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a
+      snapshot whose ramp reads a previous output — any snapshot but its period''s first, and the horizon''s
+      first where the generator comes in off or carries an initial output'}
 objective: {sense: minimize, expression: total_cost}

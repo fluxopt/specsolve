@@ -64,8 +64,6 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 | $`\mathit{built\_capacity}`$ | `built_capacity` over $`\mathcal{T} \times \mathcal{Y}`$ — capacity standing in a year from every vintage still inside its life. A plant's life is read from data and differs by technology, so the window cannot be a fixed shift — it is an incidence table, the shape the KVL port uses for a cycle basis. |
 | $`\mathit{capacity}`$ | `capacity` over $`\mathcal{T} \times \mathcal{Y}`$ — all the capacity standing in a year, including what was already there in 1990 |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{still\_live}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{activity}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`activity`**

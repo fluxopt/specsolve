@@ -110,6 +110,7 @@ def _cut(expression: str, dead: set[str]) -> str | None:
 def _mentions(block: dict[str, Any]) -> set[str]:
     """Every declared name a block reads — through a ``cases:`` block's regions as well as its own keys."""
     found = names(str(block.get('expression', ''))) | names(str(block.get('where', '')))
+    found |= names(str(block.get('condition', '')))
     found |= names(' '.join(str(v) for v in (block.get('bounds') or {}).values()))
     if 'cases' in block:
         found |= names(str(block.get('otherwise', '')))
@@ -172,9 +173,9 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):
         mentioned |= _mentions(block)
-    masks = raw.get('masks', {})
-    kept: dict[str, dict[str, Any]] = {'expressions': {}, 'masks': {}, 'variables': variables}
-    sources = {'expressions': survived, 'masks': masks, 'variables': raw['variables']}
+    conditions = raw.get('conditions', {})
+    kept: dict[str, dict[str, Any]] = {'expressions': {}, 'conditions': {}, 'variables': variables}
+    sources = {'expressions': survived, 'conditions': conditions, 'variables': raw['variables']}
     while reached := [
         (kind, n) for kind, held in sources.items() for n in held if n in mentioned and n not in kept[kind]
     ]:
@@ -182,7 +183,7 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
             kept[kind][name] = sources[kind][name]
             mentioned |= _mentions(sources[kind][name])
     expressions = {n: block for n, block in survived.items() if n in kept['expressions']}
-    named_masks = {n: block for n, block in masks.items() if n in kept['masks']}
+    named_conditions = {n: block for n, block in conditions.items() if n in kept['conditions']}
     parameters = {n: p for n, p in raw['parameters'].items() if n in mentioned}
     relations = {n: lk for n, lk in raw.get('relations', {}).items() if n in mentioned}
     dims: set[str] = set()
@@ -202,8 +203,8 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     out['constraints'] = constraints
     if expressions:
         out['expressions'] = expressions
-    if named_masks:
-        out['masks'] = named_masks
+    if named_conditions:
+        out['conditions'] = named_conditions
     out['objective'] = objective
     return out
 

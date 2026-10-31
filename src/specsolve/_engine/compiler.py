@@ -107,7 +107,7 @@ class Compiler:
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, frame: pl.LazyFrame, variable: str, v: program.VariableDeclaration) -> pl.LazyFrame:
+    def bounds(self, frame: pl.LazyFrame, variable: str, v: program.Variable) -> pl.LazyFrame:
         """*frame* with ``lb``/``ub`` columns for the variable *variable* declares as *v*."""
         carrier = Carrier(frame)
 
@@ -124,7 +124,7 @@ class Compiler:
                 return pl.lit(open_side, dtype=pl.Float64)
             if isinstance(e, program.Constant):
                 return pl.lit(float(e.value), dtype=pl.Float64)
-            if isinstance(e, program.Parameter):
+            if isinstance(e, program.ParameterReference):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 read = pl.col(alias).cast(pl.Float64)
                 return read.fill_null(open_side) if self.scope.absent(e.name) else read
@@ -134,9 +134,7 @@ class Compiler:
         lower, upper = bound(v.lower, -math.inf), bound(v.upper, math.inf)
         return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
 
-    def _aligned_bound(
-        self, frame: pl.LazyFrame, param: str, v: program.VariableDeclaration, alias: str
-    ) -> pl.LazyFrame | None:
+    def _aligned_bound(self, frame: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
         """*frame* with *param* attached by position, or ``None`` to join.
 
         Position lines up only for a dense parameter over the variable's
@@ -298,9 +296,9 @@ class Compiler:
             if isinstance(e, program.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
                 return CompiledExpression((), (Term((), frame, 'constant'),))
-            if isinstance(e, program.Parameter):
+            if isinstance(e, program.ParameterReference):
                 return CompiledExpression((), (self._parameter_term(e.name),))
-            if isinstance(e, program.Variable):
+            if isinstance(e, program.VariableReference):
                 if self.solution is None:
                     return CompiledExpression((self._variable_term(e.name),), ())
                 return CompiledExpression((), (self._solved_term(e.name),))
@@ -335,7 +333,7 @@ class Compiler:
                 return shaped(e, lambda p: window_term(self.scope, p, e, context))
             if isinstance(e, program.Cases):
                 return cases(e)
-            if isinstance(e, program.NamedExpression):
+            if isinstance(e, program.ExpressionReference):
                 return ev(e.body)
             assert_never(e)
 

@@ -162,7 +162,7 @@ def compile_predicate(
         alias = f'__where {label} {next(serial)}__'
         return carrier.once(alias, lambda f, a: join_on(f, build(a), on, 'left'))
 
-    def walk(p: program.Predicate) -> pl.Expr:
+    def walk(p: program.Condition) -> pl.Expr:
         if isinstance(p, program.ParameterComparison):
             return _compare(pl.col(join_param(p.name)), p.op, p.value)
         if isinstance(p, program.ExpressionComparison):
@@ -175,11 +175,11 @@ def compile_predicate(
             keys = scope.in_declaration_order(p.dims)
             alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
             return _COLUMN_COMPARISONS[p.op](pl.col(alias).fill_null(0), pl.lit(p.value))
-        if isinstance(p, program.TranslatedPredicate):
+        if isinstance(p, program.TranslatedCondition):
             on = scope.in_declaration_order(p.dims)
             alias = join_reduction(f'shift {p.along}', lambda a: _translated(scope, p, on, a), on)
             return falsy_if_null(pl.col(alias))
-        if isinstance(p, program.JoinedPredicate):
+        if isinstance(p, program.JoinedCondition):
             on = scope.in_declaration_order(p.dims)
             alias = join_reduction(f'at {p.columns.name}', lambda a: _joined(scope, p, a), on)
             return falsy_if_null(pl.col(alias))
@@ -229,7 +229,7 @@ def compile_predicate(
             return falsy_if_null(pl.col(flag))
         if isinstance(p, program.BooleanLiteral):
             return pl.lit(value=p.value)
-        if isinstance(p, program.NamedMask):
+        if isinstance(p, program.ConditionReference):
             return walk(p.body)
         if isinstance(p, program.And):
             return walk(p.left) & walk(p.right)
@@ -267,15 +267,15 @@ def _counted(scope: Scope, p: program.CountComparison, alias: str) -> pl.LazyFra
 
     A coordinate no row survives at is missing, which the walk reads as zero.
     """
-    dims = scope.in_declaration_order(p.predicate.dims)
+    dims = scope.in_declaration_order(p.condition.dims)
     keys = [d for d in dims if d != p.over]
-    surviving = masked(scope, dims, p.predicate)
+    surviving = masked(scope, dims, p.condition)
     if not keys:
         return surviving.select(pl.len().alias(alias))
     return surviving.group_by(keys).agg(pl.len().alias(alias))
 
 
-def _translated(scope: Scope, p: program.TranslatedPredicate, dims: tuple[str, ...], alias: str) -> pl.LazyFrame:
+def _translated(scope: Scope, p: program.TranslatedCondition, dims: tuple[str, ...], alias: str) -> pl.LazyFrame:
     """Where the operand holds *offset* coordinates back along ``along``, true-only.
 
     The end the move vacates is a missing row, which reads as false.
@@ -285,7 +285,7 @@ def _translated(scope: Scope, p: program.TranslatedPredicate, dims: tuple[str, .
     return translate_rows(scope, admitted, dims, [alias], p.along, p.offset)
 
 
-def _joined(scope: Scope, p: program.JoinedPredicate, alias: str) -> pl.LazyFrame:
+def _joined(scope: Scope, p: program.JoinedCondition, alias: str) -> pl.LazyFrame:
     """Where the operand holds at the coarse coordinate the relation maps each fine one to, true-only.
 
     A fine coordinate the relation has no row for is a missing row, which reads as false.
@@ -338,14 +338,14 @@ def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.
     """The column a where-comparison on *dimension* reads.
 
     A string label is compared as ``String``, not ``Enum``: the where-string
-    rules order labels bytewise and read an unknown label as matching nothing.
+    rules read an unknown label as matching nothing.
     """
     column = pl.col(dimension)
     return column.cast(pl.String) if isinstance(value, str) else column
 
 
 #: The comparison operators, evaluated column against column.
-_COLUMN_COMPARISONS: dict[program.PredicateOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+_COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
     '==': lambda left, right: left == right,
     '!=': lambda left, right: left != right,
     '<': lambda left, right: left < right,
@@ -355,6 +355,6 @@ _COLUMN_COMPARISONS: dict[program.PredicateOperator, Callable[[pl.Expr, pl.Expr]
 }
 
 
-def _compare(column: pl.Expr, op: program.PredicateOperator, value: float | str | datetime.date) -> pl.Expr:
+def _compare(column: pl.Expr, op: program.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
     """One where-comparison against a literal."""
     return _COLUMN_COMPARISONS[op](column, pl.lit(value))

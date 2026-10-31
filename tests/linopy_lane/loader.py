@@ -247,7 +247,7 @@ def given_rows(
     return given
 
 
-def _fill(pdef: program.ParameterDeclaration, flag: bool) -> Any:
+def _fill(pdef: program.Parameter, flag: bool) -> Any:
     """What a reindex writes where the data has no row: the declared value, false for a flag, NaN otherwise."""
     if not isinstance(pdef.missing, str) and pdef.missing is not None:
         return pdef.missing

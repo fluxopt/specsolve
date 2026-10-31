@@ -66,9 +66,11 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 |---|---|
 | $`\mathit{new\_capacity}`$ | `new_capacity` over $`\mathcal{E}`$ — capacity of the capped carrier first standing in a period: each generator's capacity counted once, in the period it is built, and never again |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+| Symbol | Meaning |
+|---|---|
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
 
 #### Variable domains
 

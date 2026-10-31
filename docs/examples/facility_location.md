@@ -45,8 +45,6 @@ Uncapacitated facility location, OR-Library instance cap71: 16 possible warehous
 | $`\mathit{is\_open}`$ | `is_open` over $`\mathcal{W}`$ — is this warehouse open? The only integrality in the model |
 | $`\mathit{serve}`$ | `serve` over $`\mathcal{W} \times \mathcal{C}`$ — the share of a customer's demand served from a warehouse |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{fixed\_cost}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{is\_open}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`is_open`**

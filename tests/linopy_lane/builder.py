@@ -96,7 +96,7 @@ def _build_variables(ctx: EvaluationContext) -> None:
             )
 
 
-def _check_bounds_are_defined(name: str, vdef: program.VariableDeclaration, ctx: EvaluationContext, mask: Any) -> None:
+def _check_bounds_are_defined(name: str, vdef: program.Variable, ctx: EvaluationContext, mask: Any) -> None:
     """Refuse a bound with no value at build, before the NaN reaches linopy's IO layer.
 
     Checked against the variable's own mask: a coordinate the variable does not
@@ -125,7 +125,7 @@ def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: 
         return open_side
     if isinstance(bound, program.Constant):
         return bound.value
-    if isinstance(bound, program.Parameter):
+    if isinstance(bound, program.ParameterReference):
         values = ctx.dataset[bound.name]
         return values.fillna(open_side) if ctx.absent(bound.name) else values
     msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
@@ -336,7 +336,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
     if isinstance(node, program.Constant):
         return node.value
 
-    if isinstance(node, program.Variable):
+    if isinstance(node, program.VariableReference):
         variable, declared = ctx.model.variables[node.name], ctx.program.variables[node.name].missing
         return absence.variable_value(variable, declared) if ctx.solved else absence.variable_term(variable, declared)
 
@@ -344,7 +344,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         assert ctx.solved, 'a dual reached a build — the language keeps one out of the math'
         return _dual(node.constraint, ctx)
 
-    if isinstance(node, program.Parameter):
+    if isinstance(node, program.ParameterReference):
         values = ctx.dataset[node.name]
         return values if ctx.absent(node.name) else ctx.absent_parameter(values)
 
@@ -401,7 +401,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
     if isinstance(node, program.Cases):
         return _cases(node, ctx)
 
-    if isinstance(node, program.NamedExpression):
+    if isinstance(node, program.ExpressionReference):
         return _eval(node.body, ctx)
 
     assert_never(node)

@@ -60,8 +60,6 @@ PyPSA transmission losses, tangent form: the quadratic loss on a line, underesti
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `to` bus — unbounded here, because the rating covers the flow and its loss and so is a row rather than a bound |
 | $`\mathit{loss}`$ | `loss` over $`\mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — the energy a line dissipates carrying its flow — pushed down by the objective and held up by the tangents, so it settles on the approximated curve rather than needing an equality of its own. A line with no resistance dissipates nothing, which is a loss of zero rather than a quantity with no value, so the balances and ratings that name it keep their rows. |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

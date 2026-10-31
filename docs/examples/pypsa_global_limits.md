@@ -61,8 +61,6 @@ PyPSA's global constraints: four limits over four different selected sets — th
 | $`g`$ | `g` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a link, towards the bus it delivers at |
 | $`\mathit{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{L}`$ — capacity built on a link |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**
