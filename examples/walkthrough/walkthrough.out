@@ -12,14 +12,14 @@ spec: examples/walkthrough/walkthrough.yaml
 
 [2] expand macros -> core AST  (Spec.program)
     written      'sum(weighted_sum(p, cost, over=generator))'
-    core AST     Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=(Axis(dimension='generator', column=None),)), over=(Axis(dimension='snapshot', column=None),))
+    core AST     Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=())
                  ^ the macro is gone: sum(p * cost, over=generator)
 
 [3] a spec -> the program both lanes build from  (Spec.program)
     Program(
-      p: VariableDeclaration(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0), upper=Parameter(name='p_max'), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
-      power_balance: ConstraintDeclaration(dims=('snapshot',), lhs=NamedExpression(name='total_supply', body=Sum(operand=Variable(name='p'), over=(Axis(dimension='generator', column=None),))), sense='==', rhs=Parameter(name='load'), where=None, description='the fleet meets the load exactly in every snapshot')
-      ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=(Axis(dimension='generator', column=None),)), over=(Axis(dimension='snapshot', column=None),)), description='total cost of generation over the horizon')
+      p: Variable(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0, dims=()), upper=ParameterReference(name='p_max', dims=('generator',)), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
+      power_balance: Constraint(dims=('snapshot',), lhs=ExpressionReference(name='total_supply', body=Sum(operand=VariableReference(name='p', dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), dims=('snapshot',)), sense='==', rhs=ParameterReference(name='load', dims=('snapshot',)), where=None, description='the fleet meets the load exactly in every snapshot')
+      Objective(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=()), description='total cost of generation over the horizon')
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 

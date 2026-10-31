@@ -250,6 +250,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{on}`$ | `Generator_active` over $`\mathcal{T} \times \mathcal{G}`$ — whether a generator stands in a snapshot's period — PyPSA's `active`, from build year and lifetime, data prep |
 | $`\mathrm{on}^{f}`$ | `Link_active` over $`\mathcal{T} \times \mathcal{L}`$ — whether a link stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{z}`$ | `Process_active` over $`\mathcal{T} \times \mathcal{J}`$ — whether a process stands in a snapshot's period — PyPSA's `active`, data prep |
+| $`\mathrm{act}`$ | `Generator_active_asset` over $`\mathcal{G}`$ — whether a generator is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
+| $`\mathrm{act}^{f}`$ | `Link_active_asset` over $`\mathcal{L}`$ — whether a link is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
+| $`\mathrm{act}^{z}`$ | `Process_active_asset` over $`\mathcal{J}`$ — whether a process is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\mathrm{W}`$ | `Generator_capital_weight` over $`\mathcal{G}`$ — the sum of period weights a generator stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{W}^{f}`$ | `Link_capital_weight` over $`\mathcal{L}`$ — the sum of period weights a link stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{W}^{z}`$ | `Process_capital_weight` over $`\mathcal{J}`$ — the sum of period weights a process stands in — PyPSA's `active * period_weighting`, summed, data prep |
@@ -260,19 +263,19 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\overline{\mathrm{f}}^{\mathrm{nom}}`$ | `Link_p_nom_max` over $`\Xi \times \mathcal{L}`$ — most nominal power an extendable link may be built at |
 | $`\mathrm{c}^{\mathrm{cap},f}`$ | `Link_capital_cost` over $`\Xi \times \mathcal{L}`$ — cost of one unit of nominal power for the modelled horizon — PyPSA's `periodized_cost`: `overnight_cost` as an annuity over `lifetime` at `discount_rate`, times `nyears`, where it is given, and `capital_cost` where it is not, plus `fom_cost` (`components.py:1126-1147`, `costs.py:102-203`), data prep |
 
-#### Masks
+#### Conditions
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{Generator\_com\_ext}`$ | `Generator_com_ext` over $`\mathcal{T} \times \mathcal{G}`$ — a committable generator with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
-| $`\mathrm{Generator\_maint\_ext}`$ | `Generator_maint_ext` over $`\mathcal{T} \times \mathcal{G}`$ — a maintainable generator with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
-| $`\mathrm{Generator\_committed}`$ | `Generator_committed` over $`\mathcal{T} \times \mathcal{G}`$ — a committable generator that stands in the snapshot's period — every unit-commitment row's set |
-| $`\mathrm{Link\_com\_ext}`$ | `Link_com_ext` over $`\mathcal{T} \times \mathcal{L}`$ — a committable link with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
-| $`\mathrm{Link\_maint\_ext}`$ | `Link_maint_ext` over $`\mathcal{T} \times \mathcal{L}`$ — a maintainable link with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
-| $`\mathrm{Link\_committed}`$ | `Link_committed` over $`\mathcal{T} \times \mathcal{L}`$ — a committable link that stands in the snapshot's period — every unit-commitment row's set |
-| $`\mathrm{Process\_com\_ext}`$ | `Process_com_ext` over $`\mathcal{T} \times \mathcal{J}`$ — a committable process with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
-| $`\mathrm{Process\_maint\_ext}`$ | `Process_maint_ext` over $`\mathcal{T} \times \mathcal{J}`$ — a maintainable process with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
-| $`\mathrm{Process\_committed}`$ | `Process_committed` over $`\mathcal{T} \times \mathcal{J}`$ — a committable process that stands in the snapshot's period — every unit-commitment row's set |
+| $`\mathrm{Generator\_com\_ext}`$ | `Generator_com_ext` over $`\mathcal{G} \times \mathcal{T}`$ — a committable generator with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
+| $`\mathrm{Generator\_maint\_ext}`$ | `Generator_maint_ext` over $`\mathcal{G} \times \mathcal{T}`$ — a maintainable generator with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
+| $`\mathrm{Generator\_committed}`$ | `Generator_committed` over $`\mathcal{G} \times \mathcal{T}`$ — a committable generator that stands in the snapshot's period — every unit-commitment row's set |
+| $`\mathrm{Link\_com\_ext}`$ | `Link_com_ext` over $`\mathcal{L} \times \mathcal{T}`$ — a committable link with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
+| $`\mathrm{Link\_maint\_ext}`$ | `Link_maint_ext` over $`\mathcal{L} \times \mathcal{T}`$ — a maintainable link with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
+| $`\mathrm{Link\_committed}`$ | `Link_committed` over $`\mathcal{L} \times \mathcal{T}`$ — a committable link that stands in the snapshot's period — every unit-commitment row's set |
+| $`\mathrm{Process\_com\_ext}`$ | `Process_com_ext` over $`\mathcal{J} \times \mathcal{T}`$ — a committable process with an extendable, non-modular build that stands in the snapshot's period — PyPSA's `com-ext` rows, whose status is relaxed against the chosen build |
+| $`\mathrm{Process\_maint\_ext}`$ | `Process_maint_ext` over $`\mathcal{J} \times \mathcal{T}`$ — a maintainable process with an extendable build, unless it is committable and modular, that stands in the snapshot's period — the maintenance rows against the chosen build |
+| $`\mathrm{Process\_committed}`$ | `Process_committed` over $`\mathcal{J} \times \mathcal{T}`$ — a committable process that stands in the snapshot's period — every unit-commitment row's set |
 
 #### Variables
 
@@ -281,7 +284,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
 | $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
-| $`N`$ | `Generator_n_mod` over $`\mathcal{G}`$ — `Generator-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
+| $`N`$ | `Generator_n_mod` over $`\mathcal{G}`$ — `Generator-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`u`$ | `Generator_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-status` — how much of a committable unit is on: an integer the rows below cap at one, or at the module count where the build is modular |
 | $`\mathit{up}`$ | `Generator_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-start_up` — how much of a committable unit turns on this snapshot, capped as the status is |
 | $`\mathit{dn}`$ | `Generator_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-shut_down` — how much of a committable unit turns off this snapshot, capped as the status is |
@@ -289,7 +292,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mu^{\mathrm{up}}`$ | `Generator_maintenance_start` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the mask leaves it out — `Generator-maintenance_start` — whether a maintenance event starts in this snapshot |
 | $`\mu^{\mathrm{nom}}`$ | `Generator_maintenance_capacity` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the mask leaves it out — `Generator-maintenance_capacity` — the chosen build while in maintenance, zero otherwise: the product the `maintcap` rows linearize |
 | $`\mu^{u}`$ | `Generator_maintenance_status` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$, `neutral` where the mask leaves it out — `Generator-maintenance_status` — the status while in maintenance, zero otherwise: the product the `maint-status` rows linearize, so a unit in maintenance may also be off |
-| $`N^{f}`$ | `Link_n_mod` over $`\mathcal{L}`$ — `Link-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
+| $`N^{f}`$ | `Link_n_mod` over $`\mathcal{L}`$ — `Link-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`u^{f}`$ | `Link_status` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-status` — how much of a committable link is on: an integer the rows below cap at one, or at the module count where the build is modular |
 | $`\mathit{up}^{f}`$ | `Link_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-start_up` — how much of a committable link turns on this snapshot, capped as the status is |
 | $`\mathit{dn}^{f}`$ | `Link_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-shut_down` — how much of a committable link turns off this snapshot, capped as the status is |
@@ -297,7 +300,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mu^{f,\mathrm{up}}`$ | `Link_maintenance_start` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — `Link-maintenance_start` — whether a maintenance event starts in this snapshot |
 | $`\mu^{f,\mathrm{nom}}`$ | `Link_maintenance_capacity` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — `Link-maintenance_capacity` — the chosen build while in maintenance, zero otherwise: the product the `maintcap` rows linearize |
 | $`\mu^{f,u}`$ | `Link_maintenance_status` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$, `neutral` where the mask leaves it out — `Link-maintenance_status` — the status while in maintenance, zero otherwise: the product the `maint-status` rows linearize, so a unit in maintenance may also be off |
-| $`N^{z}`$ | `Process_n_mod` over $`\mathcal{J}`$ — `Process-n_mod` — how many modules of an extendable modular build; none for a build that stands in no snapshot |
+| $`N^{z}`$ | `Process_n_mod` over $`\mathcal{J}`$ — `Process-n_mod` — how many modules of an extendable modular build; none for a unit that is not active |
 | $`u^{z}`$ | `Process_status` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-status` — how much of a committable process is on: an integer the rows below cap at one, or at the module count where the build is modular |
 | $`\mathit{up}^{z}`$ | `Process_start_up` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-start_up` — how much of a committable process turns on this snapshot, capped as the status is |
 | $`\mathit{dn}^{z}`$ | `Process_shut_down` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-shut_down` — how much of a committable process turns off this snapshot, capped as the status is |
@@ -305,9 +308,9 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mu^{z,\mathrm{up}}`$ | `Process_maintenance_start` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, `neutral` where the mask leaves it out — `Process-maintenance_start` — whether a maintenance event starts in this snapshot |
 | $`\mu^{z,\mathrm{nom}}`$ | `Process_maintenance_capacity` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, `neutral` where the mask leaves it out — `Process-maintenance_capacity` — the chosen build while in maintenance, zero otherwise: the product the `maintcap` rows linearize |
 | $`\mu^{z,u}`$ | `Process_maintenance_status` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$, `neutral` where the mask leaves it out — `Process-maintenance_status` — the status while in maintenance, zero otherwise: the product the `maint-status` rows linearize, so a unit in maintenance may also be off |
-| $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
-| $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+| $`P`$ | `Generator_p_nom_ext` over $`\mathcal{G}`$ — `Generator-p_nom` — nominal power where it is a decision, for a generator that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`F`$ | `Link_p_nom_ext` over $`\mathcal{L}`$ — `Link-p_nom` — nominal power where it is a decision, for a link that is active; the parameter of the same PyPSA name carries the fixed regime |
+| $`Z`$ | `Process_p_nom_ext` over $`\mathcal{J}`$ — `Process-p_nom` — nominal internal power where it is a decision, for a process that is active; the parameter of the same PyPSA name carries the fixed regime |
 
 #### Definitions
 
@@ -334,74 +337,75 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
 | $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-#### Masks
+#### Conditions
 
 **`Generator_com_ext`**
 
 ```math
-\mathrm{Generator\_com\_ext}_{t,g} \iff \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \wedge \mathrm{on}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathrm{Generator\_com\_ext}_{g,t} \iff \mathrm{com}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \wedge \mathrm{on}_{t,g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`Generator_maint_ext`**
 
 ```math
-\mathrm{Generator\_maint\_ext}_{t,g} \iff \mathrm{mnt}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \wedge \mathrm{on}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathrm{Generator\_maint\_ext}_{g,t} \iff \mathrm{mnt}_{g} \wedge \mathrm{ext}_{g} \wedge \neg \left( \mathrm{com}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \wedge \mathrm{on}_{t,g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`Generator_committed`**
 
 ```math
-\mathrm{Generator\_committed}_{t,g} \iff \mathrm{com}_{g} \wedge \mathrm{on}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathrm{Generator\_committed}_{g,t} \iff \mathrm{com}_{g} \wedge \mathrm{on}_{t,g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`Link_com_ext`**
 
 ```math
-\mathrm{Link\_com\_ext}_{t,l} \iff \mathrm{com}^{f}_{l} \wedge \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{Link\_com\_ext}_{l,t} \iff \mathrm{com}^{f}_{l} \wedge \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
 ```
 
 **`Link_maint_ext`**
 
 ```math
-\mathrm{Link\_maint\_ext}_{t,l} \iff \mathrm{mnt}^{f}_{l} \wedge \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{com}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{Link\_maint\_ext}_{l,t} \iff \mathrm{mnt}^{f}_{l} \wedge \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{com}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
 ```
 
 **`Link_committed`**
 
 ```math
-\mathrm{Link\_committed}_{t,l} \iff \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{Link\_committed}_{l,t} \iff \mathrm{com}^{f}_{l} \wedge \mathrm{on}^{f}_{t,l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
 ```
 
 **`Process_com_ext`**
 
 ```math
-\mathrm{Process\_com\_ext}_{t,j} \iff \mathrm{com}^{z}_{j} \wedge \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, t \in \mathcal{T},\ j \in \mathcal{J}
+\mathrm{Process\_com\_ext}_{j,t} \iff \mathrm{com}^{z}_{j} \wedge \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, j \in \mathcal{J},\ t \in \mathcal{T}
 ```
 
 **`Process_maint_ext`**
 
 ```math
-\mathrm{Process\_maint\_ext}_{t,j} \iff \mathrm{mnt}^{z}_{j} \wedge \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{com}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, t \in \mathcal{T},\ j \in \mathcal{J}
+\mathrm{Process\_maint\_ext}_{j,t} \iff \mathrm{mnt}^{z}_{j} \wedge \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{com}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, j \in \mathcal{J},\ t \in \mathcal{T}
 ```
 
 **`Process_committed`**
 
 ```math
-\mathrm{Process\_committed}_{t,j} \iff \mathrm{com}^{z}_{j} \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, t \in \mathcal{T},\ j \in \mathcal{J}
+\mathrm{Process\_committed}_{j,t} \iff \mathrm{com}^{z}_{j} \wedge \mathrm{on}^{z}_{t,j} \qquad \forall\, j \in \mathcal{J},\ t \in \mathcal{T}
 ```
 
 #### Variable domains
@@ -427,25 +431,25 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_n_mod`**
 
 ```math
-N_{g} \ge 0, N_{g} \in \mathbb{Z} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}_{t,g} \} \rvert > 0
+N_{g} \ge 0, N_{g} \in \mathbb{Z} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \wedge \mathrm{act}_{g}
 ```
 
 **`Generator_status`**
 
 ```math
-u_{\xi,t,g} \ge 0, u_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
+u_{\xi,t,g} \ge 0, u_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t}
 ```
 
 **`Generator_start_up`**
 
 ```math
-\mathit{up}_{\xi,t,g} \ge 0, \mathit{up}_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
+\mathit{up}_{\xi,t,g} \ge 0, \mathit{up}_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t}
 ```
 
 **`Generator_shut_down`**
 
 ```math
-\mathit{dn}_{\xi,t,g} \ge 0, \mathit{dn}_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
+\mathit{dn}_{\xi,t,g} \ge 0, \mathit{dn}_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t}
 ```
 
 **`Generator_maintenance`**
@@ -463,37 +467,37 @@ u_{\xi,t,g} \ge 0, u_{\xi,t,g} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \
 **`Generator_maintenance_capacity`**
 
 ```math
-\mu^{\mathrm{nom}}_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{t,g}
+\mu^{\mathrm{nom}}_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{g,t}
 ```
 
 **`Generator_maintenance_status`**
 
 ```math
-\mu^{u}_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \neg \left( \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right)
+\mu^{u}_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \neg \left( \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right) \right)
 ```
 
 **`Link_n_mod`**
 
 ```math
-N^{f}_{l} \ge 0, N^{f}_{l} \in \mathbb{Z} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{f}_{t,l} \} \rvert > 0
+N^{f}_{l} \ge 0, N^{f}_{l} \in \mathbb{Z} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \wedge \mathrm{act}^{f}_{l}
 ```
 
 **`Link_status`**
 
 ```math
-u^{f}_{\xi,t,l} \ge 0, u^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l}
+u^{f}_{\xi,t,l} \ge 0, u^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t}
 ```
 
 **`Link_start_up`**
 
 ```math
-\mathit{up}^{f}_{\xi,t,l} \ge 0, \mathit{up}^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l}
+\mathit{up}^{f}_{\xi,t,l} \ge 0, \mathit{up}^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t}
 ```
 
 **`Link_shut_down`**
 
 ```math
-\mathit{dn}^{f}_{\xi,t,l} \ge 0, \mathit{dn}^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l}
+\mathit{dn}^{f}_{\xi,t,l} \ge 0, \mathit{dn}^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t}
 ```
 
 **`Link_maintenance`**
@@ -511,37 +515,37 @@ u^{f}_{\xi,t,l} \ge 0, u^{f}_{\xi,t,l} \in \mathbb{Z} \qquad \forall\, \xi \in \
 **`Link_maintenance_capacity`**
 
 ```math
-\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{t,l}
+\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{l,t}
 ```
 
 **`Link_maintenance_status`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \right)
+\mu^{f,u}_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right) \right)
 ```
 
 **`Process_n_mod`**
 
 ```math
-N^{z}_{j} \ge 0, N^{z}_{j} \in \mathbb{Z} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{z}_{t,j} \} \rvert > 0
+N^{z}_{j} \ge 0, N^{z}_{j} \in \mathbb{Z} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \wedge \mathrm{act}^{z}_{j}
 ```
 
 **`Process_status`**
 
 ```math
-u^{z}_{\xi,t,j} \ge 0, u^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j}
+u^{z}_{\xi,t,j} \ge 0, u^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t}
 ```
 
 **`Process_start_up`**
 
 ```math
-\mathit{up}^{z}_{\xi,t,j} \ge 0, \mathit{up}^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j}
+\mathit{up}^{z}_{\xi,t,j} \ge 0, \mathit{up}^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t}
 ```
 
 **`Process_shut_down`**
 
 ```math
-\mathit{dn}^{z}_{\xi,t,j} \ge 0, \mathit{dn}^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j}
+\mathit{dn}^{z}_{\xi,t,j} \ge 0, \mathit{dn}^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t}
 ```
 
 **`Process_maintenance`**
@@ -559,31 +563,31 @@ u^{z}_{\xi,t,j} \ge 0, u^{z}_{\xi,t,j} \in \mathbb{Z} \qquad \forall\, \xi \in \
 **`Process_maintenance_capacity`**
 
 ```math
-\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{t,j}
+\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{j,t}
 ```
 
 **`Process_maintenance_status`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \right)
+\mu^{z,u}_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right) \right)
 ```
 
 **`Generator_p_nom_ext`**
 
 ```math
-P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
+P_{g} \in \mathbb{R} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{act}_{g}
 ```
 
 **`Link_p_nom_ext`**
 
 ```math
-F_{l} \in \mathbb{R} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l}
+F_{l} \in \mathbb{R} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{act}^{f}_{l}
 ```
 
 **`Process_p_nom_ext`**
 
 ```math
-Z_{j} \in \mathbb{R} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j}
+Z_{j} \in \mathbb{R} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{act}^{z}_{j}
 ```
 
 #### Definitions
@@ -717,31 +721,31 @@ Z_{j} \in \mathbb{R} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{\xi,t,n} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Link\_injection}_{n,\xi,t} = -\left( \sum_{l \in \mathcal{L} \,:\, \mathrm{Link\_bus0}(l) = n} f_{\xi,t,l} \right) + \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
 
 ```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{n,\xi,t} + \mathit{Link\_injection}_{n,\xi,t} + \mathrm{Load\_injection}_{n,\xi,t} + \mathit{Process\_injection}_{n,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 #### Objective
@@ -779,139 +783,139 @@ f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_
 **`Generator_ext_p_nom_lower`**
 
 ```math
-P_{g} \ge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G} \,:\, \mathrm{ext}_{g}
+P_{g} \ge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{act}_{g}
 ```
 
 **`Generator_ext_p_nom_upper`**
 
 ```math
-P_{g} \le \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \text{ is defined}
+P_{g} \le \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{act}_{g} \wedge \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \text{ is defined}
 ```
 
 **`Link_ext_p_nom_lower`**
 
 ```math
-F_{l} \ge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l}
+F_{l} \ge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{act}^{f}_{l}
 ```
 
 **`Link_ext_p_nom_upper`**
 
 ```math
-F_{l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \text{ is defined}
+F_{l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{act}^{f}_{l} \wedge \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \text{ is defined}
 ```
 
 **`Process_ext_p_nom_lower`**
 
 ```math
-Z_{j} \ge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j}
+Z_{j} \ge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{act}^{z}_{j}
 ```
 
 **`Process_ext_p_nom_upper`**
 
 ```math
-Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \text{ is defined}
+Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{act}^{z}_{j} \wedge \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \text{ is defined}
 ```
 
 **`Generator_com_p_lower`**
 
 ```math
-p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_com_p_upper`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{nom}}_{\xi,g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_com_transition_start_up`**
 
 ```math
-\mathit{up}_{\xi,t,g} \ge u_{\xi,t,g} - \mathit{Generator\_previous\_status}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
+\mathit{up}_{\xi,t,g} \ge u_{\xi,t,g} - \mathit{Generator\_previous\_status}_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t}
 ```
 
 **`Generator_com_transition_shut_down`**
 
 ```math
-\mathit{dn}_{\xi,t,g} \ge \mathit{Generator\_previous\_status}_{\xi,t,g} - u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g}
+\mathit{dn}_{\xi,t,g} \ge \mathit{Generator\_previous\_status}_{\xi,t,g} - u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t}
 ```
 
 **`Generator_p_nom_modularity`**
 
 ```math
-P_{g} = \mathrm{p}^{\mathrm{mod}}_{g} \cdot N_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}_{t,g} \} \rvert > 0
+P_{g} = \mathrm{p}^{\mathrm{mod}}_{g} \cdot N_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \wedge \mathrm{act}_{g}
 ```
 
 **`Generator_com_ext_p_upper_cap`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \left( P_{g} - \gamma_{\xi,g} \cdot \mu^{\mathrm{nom}}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{t,g}
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \left( P_{g} - \gamma_{\xi,g} \cdot \mu^{\mathrm{nom}}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{g,t}
 ```
 
 **`Generator_com_ext_p_upper_big_m`**
 
 ```math
-p_{\xi,t,g} \le \mathrm{M}_{\xi,g} \cdot u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{t,g}
+p_{\xi,t,g} \le \mathrm{M}_{\xi,g} \cdot u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{g,t}
 ```
 
 **`Generator_com_ext_p_lower`**
 
 ```math
-p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \left( P_{g} - \gamma_{\xi,g} \cdot \mu^{\mathrm{nom}}_{\xi,t,g} \right) + \mathrm{M}_{\xi,g} \cdot u_{\xi,t,g} - \mathrm{M}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{t,g}
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \left( P_{g} - \gamma_{\xi,g} \cdot \mu^{\mathrm{nom}}_{\xi,t,g} \right) + \mathrm{M}_{\xi,g} \cdot u_{\xi,t,g} - \mathrm{M}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{g,t}
 ```
 
 **`Generator_com_ext_p_lower_nonneg`**
 
 ```math
-p_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{t,g} \wedge \mathrm{nonneg}_{g}
+p_{\xi,t,g} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_com\_ext}_{g,t} \wedge \mathrm{nonneg}_{g}
 ```
 
 **`Generator_com_mod_p_lower`**
 
 ```math
-p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{mod}}_{g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+p_{\xi,t,g} \ge \underline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{mod}}_{g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_com_mod_p_upper`**
 
 ```math
-p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{mod}}_{g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+p_{\xi,t,g} \le \overline{\mathrm{p}}_{\xi,t,g} \cdot \mathrm{p}^{\mathrm{mod}}_{g} \cdot \left( u_{\xi,t,g} - \gamma_{\xi,g} \cdot \mu^{u}_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_status_p_fixed_upper`**
 
 ```math
-u_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+u_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_start_up_p_fixed_upper`**
 
 ```math
-\mathit{up}_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+\mathit{up}_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_shut_down_p_fixed_upper`**
 
 ```math
-\mathit{dn}_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+\mathit{dn}_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \neg \left( \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_status_p_nom_variable_upper`**
 
 ```math
-u_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+u_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_start_up_p_nom_variable_upper`**
 
 ```math
-\mathit{up}_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+\mathit{up}_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_shut_down_p_nom_variable_upper`**
 
 ```math
-\mathit{dn}_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+\mathit{dn}_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{ext}_{g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_maint_event_count`**
@@ -935,163 +939,163 @@ u_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \
 **`Generator_maintcap_upper`**
 
 ```math
-\mu^{\mathrm{nom}}_{\xi,t,g} \le P_{g} - \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{t,g}
+\mu^{\mathrm{nom}}_{\xi,t,g} \le P_{g} - \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{g,t}
 ```
 
 **`Generator_maintcap_upper_nommax`**
 
 ```math
-\mu^{\mathrm{nom}}_{\xi,t,g} \le \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{t,g}
+\mu^{\mathrm{nom}}_{\xi,t,g} \le \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{g,t}
 ```
 
 **`Generator_maintcap_lower_nommax`**
 
 ```math
-\mu^{\mathrm{nom}}_{\xi,t,g} \ge P_{g} - \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{t,g}
+\mu^{\mathrm{nom}}_{\xi,t,g} \ge P_{g} - \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{g,t}
 ```
 
 **`Generator_maintcap_lower_nommin`**
 
 ```math
-\mu^{\mathrm{nom}}_{\xi,t,g} \ge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{t,g} \wedge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} > 0
+\mu^{\mathrm{nom}}_{\xi,t,g} \ge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{Generator\_maint\_ext}_{g,t} \wedge \underline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} > 0
 ```
 
 **`Generator_maint_status_le_status`**
 
 ```math
-\mu^{u}_{\xi,t,g} \le u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+\mu^{u}_{\xi,t,g} \le u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_maint_status_le_maint`**
 
 ```math
-\mu^{u}_{\xi,t,g} \le \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+\mu^{u}_{\xi,t,g} \le \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_maint_status_lb`**
 
 ```math
-\mu^{u}_{\xi,t,g} \ge u_{\xi,t,g} + \mu_{\xi,t,g} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
+\mu^{u}_{\xi,t,g} \ge u_{\xi,t,g} + \mu_{\xi,t,g} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \neg \mathrm{ext}_{g} \wedge \neg \left( \mathrm{p}^{\mathrm{mod}}_{g} > 0 \right)
 ```
 
 **`Generator_maint_modstatus_le_status`**
 
 ```math
-\mu^{u}_{\xi,t,g} \le u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+\mu^{u}_{\xi,t,g} \le u_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_maint_modstatus_le_maint`**
 
 ```math
-\mu^{u}_{\xi,t,g} \le \frac{\overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g}}{\mathrm{p}^{\mathrm{mod}}_{g}} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+\mu^{u}_{\xi,t,g} \le \frac{\overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g}}{\mathrm{p}^{\mathrm{mod}}_{g}} \cdot \mu_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Generator_maint_modstatus_lb`**
 
 ```math
-\mu^{u}_{\xi,t,g} \ge u_{\xi,t,g} - \frac{\overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g}}{\mathrm{p}^{\mathrm{mod}}_{g}} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{t,g} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
+\mu^{u}_{\xi,t,g} \ge u_{\xi,t,g} - \frac{\overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g}}{\mathrm{p}^{\mathrm{mod}}_{g}} \cdot \left( 1 - \mu_{\xi,t,g} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{mnt}_{g} \wedge \mathrm{Generator\_committed}_{g,t} \wedge \mathrm{p}^{\mathrm{mod}}_{g} > 0
 ```
 
 **`Link_com_p_lower`**
 
 ```math
-f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_com_p_upper`**
 
 ```math
-f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_{\xi,l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_com_transition_start_up`**
 
 ```math
-\mathit{up}^{f}_{\xi,t,l} \ge u^{f}_{\xi,t,l} - \mathit{Link\_previous\_status}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l}
+\mathit{up}^{f}_{\xi,t,l} \ge u^{f}_{\xi,t,l} - \mathit{Link\_previous\_status}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t}
 ```
 
 **`Link_com_transition_shut_down`**
 
 ```math
-\mathit{dn}^{f}_{\xi,t,l} \ge \mathit{Link\_previous\_status}_{\xi,t,l} - u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l}
+\mathit{dn}^{f}_{\xi,t,l} \ge \mathit{Link\_previous\_status}_{\xi,t,l} - u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t}
 ```
 
 **`Link_p_nom_modularity`**
 
 ```math
-F_{l} = \mathrm{f}^{\mathrm{mod}}_{l} \cdot N^{f}_{l} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{f}_{t,l} \} \rvert > 0
+F_{l} = \mathrm{f}^{\mathrm{mod}}_{l} \cdot N^{f}_{l} \qquad \forall\, l \in \mathcal{L} \,:\, \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \wedge \mathrm{act}^{f}_{l}
 ```
 
 **`Link_com_ext_p_upper_cap`**
 
 ```math
-f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \left( F_{l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,\mathrm{nom}}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{t,l}
+f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \left( F_{l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,\mathrm{nom}}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{l,t}
 ```
 
 **`Link_com_ext_p_upper_big_m`**
 
 ```math
-f_{\xi,t,l} \le \mathrm{M}^{f}_{\xi,l} \cdot u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{t,l}
+f_{\xi,t,l} \le \mathrm{M}^{f}_{\xi,l} \cdot u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{l,t}
 ```
 
 **`Link_com_ext_p_lower`**
 
 ```math
-f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \left( F_{l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,\mathrm{nom}}_{\xi,t,l} \right) + \mathrm{M}^{f}_{\xi,l} \cdot u^{f}_{\xi,t,l} - \mathrm{M}^{f}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{t,l}
+f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \left( F_{l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,\mathrm{nom}}_{\xi,t,l} \right) + \mathrm{M}^{f}_{\xi,l} \cdot u^{f}_{\xi,t,l} - \mathrm{M}^{f}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{l,t}
 ```
 
 **`Link_com_ext_p_lower_nonneg`**
 
 ```math
-f_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{t,l} \wedge \mathrm{nonneg}^{f}_{l}
+f_{\xi,t,l} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_com\_ext}_{l,t} \wedge \mathrm{nonneg}^{f}_{l}
 ```
 
 **`Link_com_mod_p_lower`**
 
 ```math
-f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{mod}}_{l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+f_{\xi,t,l} \ge \underline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{mod}}_{l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_com_mod_p_upper`**
 
 ```math
-f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{mod}}_{l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{mod}}_{l} \cdot \left( u^{f}_{\xi,t,l} - \gamma^{f}_{\xi,l} \cdot \mu^{f,u}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_status_p_fixed_upper`**
 
 ```math
-u^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+u^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_start_up_p_fixed_upper`**
 
 ```math
-\mathit{up}^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+\mathit{up}^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_shut_down_p_fixed_upper`**
 
 ```math
-\mathit{dn}^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+\mathit{dn}^{f}_{\xi,t,l} \le \mathrm{N}^{f,\mathrm{fix}}_{\xi,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \neg \left( \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_status_p_nom_variable_upper`**
 
 ```math
-u^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+u^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_start_up_p_nom_variable_upper`**
 
 ```math
-\mathit{up}^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+\mathit{up}^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_shut_down_p_nom_variable_upper`**
 
 ```math
-\mathit{dn}^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{t,l} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+\mathit{dn}^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_committed}_{l,t} \wedge \mathrm{ext}^{f}_{l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_maint_event_count`**
@@ -1115,163 +1119,163 @@ u^{f}_{\xi,t,l} \le N^{f}_{l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
 **`Link_maintcap_upper`**
 
 ```math
-\mu^{f,\mathrm{nom}}_{\xi,t,l} \le F_{l} - \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{t,l}
+\mu^{f,\mathrm{nom}}_{\xi,t,l} \le F_{l} - \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{l,t}
 ```
 
 **`Link_maintcap_upper_nommax`**
 
 ```math
-\mu^{f,\mathrm{nom}}_{\xi,t,l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{t,l}
+\mu^{f,\mathrm{nom}}_{\xi,t,l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{l,t}
 ```
 
 **`Link_maintcap_lower_nommax`**
 
 ```math
-\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge F_{l} - \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{t,l}
+\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge F_{l} - \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{l,t}
 ```
 
 **`Link_maintcap_lower_nommin`**
 
 ```math
-\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{t,l} \wedge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} > 0
+\mu^{f,\mathrm{nom}}_{\xi,t,l} \ge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{Link\_maint\_ext}_{l,t} \wedge \underline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} > 0
 ```
 
 **`Link_maint_status_le_status`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \le u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+\mu^{f,u}_{\xi,t,l} \le u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_maint_status_le_maint`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \le \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+\mu^{f,u}_{\xi,t,l} \le \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_maint_status_lb`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \ge u^{f}_{\xi,t,l} + \mu^{f}_{\xi,t,l} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
+\mu^{f,u}_{\xi,t,l} \ge u^{f}_{\xi,t,l} + \mu^{f}_{\xi,t,l} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \neg \mathrm{ext}^{f}_{l} \wedge \neg \left( \mathrm{f}^{\mathrm{mod}}_{l} > 0 \right)
 ```
 
 **`Link_maint_modstatus_le_status`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \le u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+\mu^{f,u}_{\xi,t,l} \le u^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_maint_modstatus_le_maint`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \le \frac{\overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l}}{\mathrm{f}^{\mathrm{mod}}_{l}} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+\mu^{f,u}_{\xi,t,l} \le \frac{\overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l}}{\mathrm{f}^{\mathrm{mod}}_{l}} \cdot \mu^{f}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Link_maint_modstatus_lb`**
 
 ```math
-\mu^{f,u}_{\xi,t,l} \ge u^{f}_{\xi,t,l} - \frac{\overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l}}{\mathrm{f}^{\mathrm{mod}}_{l}} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{t,l} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
+\mu^{f,u}_{\xi,t,l} \ge u^{f}_{\xi,t,l} - \frac{\overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l}}{\mathrm{f}^{\mathrm{mod}}_{l}} \cdot \left( 1 - \mu^{f}_{\xi,t,l} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ l \in \mathcal{L} \,:\, \mathrm{mnt}^{f}_{l} \wedge \mathrm{Link\_committed}_{l,t} \wedge \mathrm{f}^{\mathrm{mod}}_{l} > 0
 ```
 
 **`Process_com_p_lower`**
 
 ```math
-z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{nom}}_{\xi,j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{nom}}_{\xi,j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_com_p_upper`**
 
 ```math
-z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{nom}}_{\xi,j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{nom}}_{\xi,j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_com_transition_start_up`**
 
 ```math
-\mathit{up}^{z}_{\xi,t,j} \ge u^{z}_{\xi,t,j} - \mathit{Process\_previous\_status}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j}
+\mathit{up}^{z}_{\xi,t,j} \ge u^{z}_{\xi,t,j} - \mathit{Process\_previous\_status}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t}
 ```
 
 **`Process_com_transition_shut_down`**
 
 ```math
-\mathit{dn}^{z}_{\xi,t,j} \ge \mathit{Process\_previous\_status}_{\xi,t,j} - u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j}
+\mathit{dn}^{z}_{\xi,t,j} \ge \mathit{Process\_previous\_status}_{\xi,t,j} - u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t}
 ```
 
 **`Process_p_nom_modularity`**
 
 ```math
-Z_{j} = \mathrm{z}^{\mathrm{mod}}_{j} \cdot N^{z}_{j} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \wedge \lvert \{ t \in \mathcal{T} \,:\, \mathrm{on}^{z}_{t,j} \} \rvert > 0
+Z_{j} = \mathrm{z}^{\mathrm{mod}}_{j} \cdot N^{z}_{j} \qquad \forall\, j \in \mathcal{J} \,:\, \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \wedge \mathrm{act}^{z}_{j}
 ```
 
 **`Process_com_ext_p_upper_cap`**
 
 ```math
-z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \left( Z_{j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,\mathrm{nom}}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{t,j}
+z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \left( Z_{j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,\mathrm{nom}}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{j,t}
 ```
 
 **`Process_com_ext_p_upper_big_m`**
 
 ```math
-z_{\xi,t,j} \le \mathrm{M}^{z}_{\xi,j} \cdot u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{t,j}
+z_{\xi,t,j} \le \mathrm{M}^{z}_{\xi,j} \cdot u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{j,t}
 ```
 
 **`Process_com_ext_p_lower`**
 
 ```math
-z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \left( Z_{j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,\mathrm{nom}}_{\xi,t,j} \right) + \mathrm{M}^{z}_{\xi,j} \cdot u^{z}_{\xi,t,j} - \mathrm{M}^{z}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{t,j}
+z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \left( Z_{j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,\mathrm{nom}}_{\xi,t,j} \right) + \mathrm{M}^{z}_{\xi,j} \cdot u^{z}_{\xi,t,j} - \mathrm{M}^{z}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{j,t}
 ```
 
 **`Process_com_ext_p_lower_nonneg`**
 
 ```math
-z_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{t,j} \wedge \mathrm{nonneg}^{z}_{j}
+z_{\xi,t,j} \ge 0 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_com\_ext}_{j,t} \wedge \mathrm{nonneg}^{z}_{j}
 ```
 
 **`Process_com_mod_p_lower`**
 
 ```math
-z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{mod}}_{j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+z_{\xi,t,j} \ge \underline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{mod}}_{j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_com_mod_p_upper`**
 
 ```math
-z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{mod}}_{j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{mod}}_{j} \cdot \left( u^{z}_{\xi,t,j} - \gamma^{z}_{\xi,j} \cdot \mu^{z,u}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_status_p_fixed_upper`**
 
 ```math
-u^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+u^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_start_up_p_fixed_upper`**
 
 ```math
-\mathit{up}^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+\mathit{up}^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_shut_down_p_fixed_upper`**
 
 ```math
-\mathit{dn}^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+\mathit{dn}^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \neg \left( \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_status_p_nom_variable_upper`**
 
 ```math
-u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_start_up_p_nom_variable_upper`**
 
 ```math
-\mathit{up}^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+\mathit{up}^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_shut_down_p_nom_variable_upper`**
 
 ```math
-\mathit{dn}^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{t,j} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+\mathit{dn}^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_committed}_{j,t} \wedge \mathrm{ext}^{z}_{j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_maint_event_count`**
@@ -1295,61 +1299,61 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
 **`Process_maintcap_upper`**
 
 ```math
-\mu^{z,\mathrm{nom}}_{\xi,t,j} \le Z_{j} - \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{t,j}
+\mu^{z,\mathrm{nom}}_{\xi,t,j} \le Z_{j} - \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{j,t}
 ```
 
 **`Process_maintcap_upper_nommax`**
 
 ```math
-\mu^{z,\mathrm{nom}}_{\xi,t,j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{t,j}
+\mu^{z,\mathrm{nom}}_{\xi,t,j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{j,t}
 ```
 
 **`Process_maintcap_lower_nommax`**
 
 ```math
-\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge Z_{j} - \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{t,j}
+\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge Z_{j} - \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{j,t}
 ```
 
 **`Process_maintcap_lower_nommin`**
 
 ```math
-\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{t,j} \wedge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} > 0
+\mu^{z,\mathrm{nom}}_{\xi,t,j} \ge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{Process\_maint\_ext}_{j,t} \wedge \underline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} > 0
 ```
 
 **`Process_maint_status_le_status`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \le u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+\mu^{z,u}_{\xi,t,j} \le u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_maint_status_le_maint`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \le \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+\mu^{z,u}_{\xi,t,j} \le \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_maint_status_lb`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \ge u^{z}_{\xi,t,j} + \mu^{z}_{\xi,t,j} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
+\mu^{z,u}_{\xi,t,j} \ge u^{z}_{\xi,t,j} + \mu^{z}_{\xi,t,j} - 1 \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \neg \mathrm{ext}^{z}_{j} \wedge \neg \left( \mathrm{z}^{\mathrm{mod}}_{j} > 0 \right)
 ```
 
 **`Process_maint_modstatus_le_status`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \le u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+\mu^{z,u}_{\xi,t,j} \le u^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_maint_modstatus_le_maint`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \le \frac{\overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j}}{\mathrm{z}^{\mathrm{mod}}_{j}} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+\mu^{z,u}_{\xi,t,j} \le \frac{\overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j}}{\mathrm{z}^{\mathrm{mod}}_{j}} \cdot \mu^{z}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Process_maint_modstatus_lb`**
 
 ```math
-\mu^{z,u}_{\xi,t,j} \ge u^{z}_{\xi,t,j} - \frac{\overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j}}{\mathrm{z}^{\mathrm{mod}}_{j}} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{t,j} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
+\mu^{z,u}_{\xi,t,j} \ge u^{z}_{\xi,t,j} - \frac{\overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j}}{\mathrm{z}^{\mathrm{mod}}_{j}} \cdot \left( 1 - \mu^{z}_{\xi,t,j} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j \in \mathcal{J} \,:\, \mathrm{mnt}^{z}_{j} \wedge \mathrm{Process\_committed}_{j,t} \wedge \mathrm{z}^{\mathrm{mod}}_{j} > 0
 ```
 
 **`Bus_nodal_balance`**
@@ -1759,6 +1763,24 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
         dims: [snapshot, process]
         dtype: bool
+      Generator_active_asset:
+        description: whether a generator is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [generator]
+        dtype: bool
+      Link_active_asset:
+        description: whether a link is one of PyPSA's `active_assets` — its `active` flag alone, without build
+          year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses
+          one that differs by scenario (`constants.py:51`)
+        dims: [link]
+        dtype: bool
+      Process_active_asset:
+        description: whether a process is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [process]
+        dtype: bool
       Generator_capital_weight:
         description: the sum of period weights a generator stands in — PyPSA's `active * period_weighting`,
           summed, data prep
@@ -1811,11 +1833,10 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         dims: [scenario, snapshot, process]
         where: Process_active
       Generator_n_mod:
-        description: '`Generator-n_mod` — how many modules of an extendable modular build; none for a build
-          that stands in no snapshot'
+        description: '`Generator-n_mod` — how many modules of an extendable modular build; none for a unit
+          that is not active'
         dims: [generator]
-        where: Generator_p_nom_extendable AND Generator_p_nom_mod > 0 AND count(Generator_active, over=snapshot)
-          > 0
+        where: Generator_p_nom_extendable AND Generator_p_nom_mod > 0 AND Generator_active_asset
         domain: integer
         bounds: {lower: 0}
       Generator_status:
@@ -1868,10 +1889,10 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         missing: neutral
         bounds: {lower: 0}
       Link_n_mod:
-        description: '`Link-n_mod` — how many modules of an extendable modular build; none for a build that
-          stands in no snapshot'
+        description: '`Link-n_mod` — how many modules of an extendable modular build; none for a unit that
+          is not active'
         dims: [link]
-        where: Link_p_nom_extendable AND Link_p_nom_mod > 0 AND count(Link_active, over=snapshot) > 0
+        where: Link_p_nom_extendable AND Link_p_nom_mod > 0 AND Link_active_asset
         domain: integer
         bounds: {lower: 0}
       Link_status:
@@ -1924,11 +1945,10 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         missing: neutral
         bounds: {lower: 0}
       Process_n_mod:
-        description: '`Process-n_mod` — how many modules of an extendable modular build; none for a build
-          that stands in no snapshot'
+        description: '`Process-n_mod` — how many modules of an extendable modular build; none for a unit that
+          is not active'
         dims: [process]
-        where: Process_p_nom_extendable AND Process_p_nom_mod > 0 AND count(Process_active, over=snapshot)
-          > 0
+        where: Process_p_nom_extendable AND Process_p_nom_mod > 0 AND Process_active_asset
         domain: integer
         bounds: {lower: 0}
       Process_status:
@@ -1981,20 +2001,20 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         missing: neutral
         bounds: {lower: 0}
       Generator_p_nom_ext:
-        description: '`Generator-p_nom` — nominal power where it is a decision; the parameter of the same
-          PyPSA name carries the fixed regime'
+        description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;
+          the parameter of the same PyPSA name carries the fixed regime'
         dims: [generator]
-        where: Generator_p_nom_extendable
+        where: Generator_p_nom_extendable AND Generator_active_asset
       Link_p_nom_ext:
-        description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
-          name carries the fixed regime'
+        description: '`Link-p_nom` — nominal power where it is a decision, for a link that is active; the
+          parameter of the same PyPSA name carries the fixed regime'
         dims: [link]
-        where: Link_p_nom_extendable
+        where: Link_p_nom_extendable AND Link_active_asset
       Process_p_nom_ext:
-        description: '`Process-p_nom` — nominal internal power where it is a decision; the parameter of the
-          same PyPSA name carries the fixed regime'
+        description: '`Process-p_nom` — nominal internal power where it is a decision, for a process that
+          is active; the parameter of the same PyPSA name carries the fixed regime'
         dims: [process]
-        where: Process_p_nom_extendable
+        where: Process_p_nom_extendable AND Process_active_asset
     constraints:
       Generator_fix_p_lower:
         description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
@@ -2022,35 +2042,35 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Generator_ext_p_nom_lower:
         description: '`Generator-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, generator]
-        where: Generator_p_nom_extendable
+        where: Generator_p_nom_extendable AND Generator_active_asset
         expression: Generator_p_nom_ext >= Generator_p_nom_min
       Generator_ext_p_nom_upper:
         description: '`Generator-ext-p_nom-upper` — the chosen build is at most its cap in every scenario;
           a cap of infinity is no row'
         dims: [scenario, generator]
-        where: Generator_p_nom_extendable AND Generator_p_nom_max
+        where: Generator_p_nom_extendable AND Generator_active_asset AND Generator_p_nom_max
         expression: Generator_p_nom_ext <= Generator_p_nom_max
       Link_ext_p_nom_lower:
         description: '`Link-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, link]
-        where: Link_p_nom_extendable
+        where: Link_p_nom_extendable AND Link_active_asset
         expression: Link_p_nom_ext >= Link_p_nom_min
       Link_ext_p_nom_upper:
         description: '`Link-ext-p_nom-upper` — the chosen build is at most its cap in every scenario; a cap
           of infinity is no row'
         dims: [scenario, link]
-        where: Link_p_nom_extendable AND Link_p_nom_max
+        where: Link_p_nom_extendable AND Link_active_asset AND Link_p_nom_max
         expression: Link_p_nom_ext <= Link_p_nom_max
       Process_ext_p_nom_lower:
         description: '`Process-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, process]
-        where: Process_p_nom_extendable
+        where: Process_p_nom_extendable AND Process_active_asset
         expression: Process_p_nom_ext >= Process_p_nom_min
       Process_ext_p_nom_upper:
         description: '`Process-ext-p_nom-upper` — the chosen build is at most its cap in every scenario; a
           cap of infinity is no row'
         dims: [scenario, process]
-        where: Process_p_nom_extendable AND Process_p_nom_max
+        where: Process_p_nom_extendable AND Process_active_asset AND Process_p_nom_max
         expression: Process_p_nom_ext <= Process_p_nom_max
       Generator_com_p_lower:
         description: '`Generator-com-p-lower` — a committed unit outputs at least its minimum; off, at least
@@ -2081,8 +2101,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Generator_p_nom_modularity:
         description: '`Generator-p_nom_modularity` — the chosen build is a whole number of modules'
         dims: [generator]
-        where: Generator_p_nom_extendable AND Generator_p_nom_mod > 0 AND count(Generator_active, over=snapshot)
-          > 0
+        where: Generator_p_nom_extendable AND Generator_p_nom_mod > 0 AND Generator_active_asset
         expression: Generator_p_nom_ext == Generator_p_nom_mod * Generator_n_mod
       Generator_com_ext_p_upper_cap:
         description: '`Generator-com-ext-p-upper-cap` — a committed extendable unit outputs at most what is
@@ -2266,7 +2285,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Link_p_nom_modularity:
         description: '`Link-p_nom_modularity` — the chosen build is a whole number of modules'
         dims: [link]
-        where: Link_p_nom_extendable AND Link_p_nom_mod > 0 AND count(Link_active, over=snapshot) > 0
+        where: Link_p_nom_extendable AND Link_p_nom_mod > 0 AND Link_active_asset
         expression: Link_p_nom_ext == Link_p_nom_mod * Link_n_mod
       Link_com_ext_p_upper_cap:
         description: '`Link-com-ext-p-upper-cap` — a committed extendable link flows at most what is available
@@ -2445,8 +2464,7 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
       Process_p_nom_modularity:
         description: '`Process-p_nom_modularity` — the chosen build is a whole number of modules'
         dims: [process]
-        where: Process_p_nom_extendable AND Process_p_nom_mod > 0 AND count(Process_active, over=snapshot)
-          > 0
+        where: Process_p_nom_extendable AND Process_p_nom_mod > 0 AND Process_active_asset
         expression: Process_p_nom_ext == Process_p_nom_mod * Process_n_mod
       Process_com_ext_p_upper_cap:
         description: '`Process-com-ext-p-upper-cap` — a committed extendable process runs at most what is
@@ -2742,36 +2760,36 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
         description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
           term into the balance, and a load on its right-hand side
-    masks:
+    conditions:
       Generator_com_ext: {description: 'a committable generator with an extendable, non-modular build that
           stands in the snapshot''s period — PyPSA''s `com-ext` rows, whose status is relaxed against the
-          chosen build', where: Generator_committable AND Generator_p_nom_extendable AND NOT (Generator_p_nom_mod
+          chosen build', condition: Generator_committable AND Generator_p_nom_extendable AND NOT (Generator_p_nom_mod
           > 0) AND Generator_active}
       Generator_maint_ext: {description: 'a maintainable generator with an extendable build, unless it is
           committable and modular, that stands in the snapshot''s period — the maintenance rows against the
-          chosen build', where: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable
+          chosen build', condition: Generator_maintainable AND Generator_p_nom_extendable AND NOT (Generator_committable
           AND Generator_p_nom_mod > 0) AND Generator_active}
       Generator_committed: {description: a committable generator that stands in the snapshot's period — every
-          unit-commitment row's set, where: Generator_committable AND Generator_active}
+          unit-commitment row's set, condition: Generator_committable AND Generator_active}
       Link_com_ext: {description: 'a committable link with an extendable, non-modular build that stands in
           the snapshot''s period — PyPSA''s `com-ext` rows, whose status is relaxed against the chosen build',
-        where: Link_committable AND Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0) AND Link_active}
+        condition: Link_committable AND Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0) AND Link_active}
       Link_maint_ext: {description: 'a maintainable link with an extendable build, unless it is committable
           and modular, that stands in the snapshot''s period — the maintenance rows against the chosen build',
-        where: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod >
-          0) AND Link_active}
+        condition: Link_maintainable AND Link_p_nom_extendable AND NOT (Link_committable AND Link_p_nom_mod
+          > 0) AND Link_active}
       Link_committed: {description: a committable link that stands in the snapshot's period — every unit-commitment
-          row's set, where: Link_committable AND Link_active}
+          row's set, condition: Link_committable AND Link_active}
       Process_com_ext: {description: 'a committable process with an extendable, non-modular build that stands
           in the snapshot''s period — PyPSA''s `com-ext` rows, whose status is relaxed against the chosen
-          build', where: Process_committable AND Process_p_nom_extendable AND NOT (Process_p_nom_mod > 0)
-          AND Process_active}
+          build', condition: Process_committable AND Process_p_nom_extendable AND NOT (Process_p_nom_mod >
+          0) AND Process_active}
       Process_maint_ext: {description: 'a maintainable process with an extendable build, unless it is committable
           and modular, that stands in the snapshot''s period — the maintenance rows against the chosen build',
-        where: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
+        condition: Process_maintainable AND Process_p_nom_extendable AND NOT (Process_committable AND Process_p_nom_mod
           > 0) AND Process_active}
       Process_committed: {description: a committable process that stands in the snapshot's period — every
-          unit-commitment row's set, where: Process_committable AND Process_active}
+          unit-commitment row's set, condition: Process_committable AND Process_active}
     objective: {sense: minimize, expression: total_cost}
     ```
 

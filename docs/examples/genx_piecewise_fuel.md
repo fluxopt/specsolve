@@ -76,12 +76,14 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{started\_recently}`$ | `started_recently` over $`\mathcal{P} \times \mathcal{H}`$ — units started in this hour or the five before it — the day is a representative period that repeats, so the first hour follows the last |
-| $`\mathit{shut\_recently}`$ | `shut_recently` over $`\mathcal{P} \times \mathcal{H}`$ — units shut in this hour or the five before it |
+| $`\mathit{started\_recently}`$ | `started_recently` over $`\mathcal{H} \times \mathcal{P}`$ — units started in this hour or the five before it — the day is a representative period that repeats, so the first hour follows the last |
+| $`\mathit{shut\_recently}`$ | `shut_recently` over $`\mathcal{H} \times \mathcal{P}`$ — units shut in this hour or the five before it |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{unit\_size}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{output}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 
 #### Variable domains
 
@@ -138,13 +140,13 @@ $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size 
 **`started_recently`**
 
 ```math
-\mathit{started\_recently}_{p,h} = \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+\mathit{started\_recently}_{h,p} = \mathit{starting}_{p,h} + \mathit{starting}_{p,h \ominus 1} + \mathit{starting}_{p,h \ominus 2} + \mathit{starting}_{p,h \ominus 3} + \mathit{starting}_{p,h \ominus 4} + \mathit{starting}_{p,h \ominus 5} \qquad \forall\, h \in \mathcal{H},\ p \in \mathcal{P}
 ```
 
 **`shut_recently`**
 
 ```math
-\mathit{shut\_recently}_{p,h} = \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H}
+\mathit{shut\_recently}_{h,p} = \mathit{shutting}_{p,h} + \mathit{shutting}_{p,h \ominus 1} + \mathit{shutting}_{p,h \ominus 2} + \mathit{shutting}_{p,h \ominus 3} + \mathit{shutting}_{p,h \ominus 4} + \mathit{shutting}_{p,h \ominus 5} \qquad \forall\, h \in \mathcal{H},\ p \in \mathcal{P}
 ```
 
 #### Objective
@@ -200,13 +202,13 @@ $`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size 
 **`stay_up_once_started`**
 
 ```math
-\mathit{committed}_{p,h} \ge \mathit{started\_recently}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{committed}_{p,h} \ge \mathit{started\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`stay_down_once_shut`**
 
 ```math
-\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shut\_recently}_{p,h} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
+\mathit{units}_{p} - \mathit{committed}_{p,h} \ge \mathit{shut\_recently}_{h,p} \qquad \forall\, p \in \mathcal{P},\ h \in \mathcal{H} \,:\, \mathrm{commitment}(p) = \text{'}\mathrm{unit}\text{'}
 ```
 
 **`ramp_up`**

@@ -134,7 +134,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{a}^{h}`$ | `StorageUnit_primary_energy_weight` over $`\Xi \times \mathcal{B} \times \mathcal{S}`$, `neutral` where the data has no row — the constrained attribute per unit of charge depleted — data prep; an unweighted unit has no row |
 | $`\mathrm{a}^{e}`$ | `Store_primary_energy_weight` over $`\Xi \times \mathcal{B} \times \mathcal{V}`$, `neutral` where the data has no row — the constrained attribute per unit of energy depleted — data prep; an unweighted store has no row |
 
-#### Masks
+#### Conditions
 
 | Symbol | Meaning |
 |---|---|
@@ -165,8 +165,8 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{StorageUnit\_closing\_weight}`$ | `StorageUnit_closing_weight` over $`\Xi \times \mathcal{B} \times \mathcal{T} \times \mathcal{S}`$ — what the charge a unit holds at a snapshot counts for in a row as its closing level — the years of the period at the last snapshot of each counted period where the unit reopens per period, one at the last counted snapshot it stands in where it does not, and nothing elsewhere |
 | $`\mathrm{Store\_last\_counted\_active}`$ | `Store_last_counted_active` over $`\Xi \times \mathcal{B} \times \mathcal{T} \times \mathcal{V}`$ — one at the last snapshot a row counts where a store stands, and zero elsewhere — a store that retires before the last counted snapshot closes on its last active level, as PyPSA forward-fills the level over the counted snapshots (`global_constraints.py:507-510`) |
 | $`\mathrm{Store\_closing\_weight}`$ | `Store_closing_weight` over $`\Xi \times \mathcal{B} \times \mathcal{T} \times \mathcal{V}`$ — what the energy a store holds at a snapshot counts for in a row as its closing level — the years of the period at the last snapshot of each counted period where the store reopens per period, one at the last counted snapshot it stands in where it does not, and nothing elsewhere |
-| $`\mathit{StorageUnit\_primary\_energy}`$ | `StorageUnit_primary_energy` over $`\Xi \times \mathcal{B}`$ |
-| $`\mathit{Store\_primary\_energy}`$ | `Store_primary_energy` over $`\Xi \times \mathcal{B}`$ |
+| $`\mathit{StorageUnit\_primary\_energy}`$ | `StorageUnit_primary_energy` over $`\mathcal{B} \times \Xi`$ |
+| $`\mathit{Store\_primary\_energy}`$ | `Store_primary_energy` over $`\mathcal{B} \times \Xi`$ |
 | $`\mathit{primary\_energy}`$ | `primary_energy` over $`\Xi \times \mathcal{B}`$ — what a `primary_energy` row totals — weighted generator energy over the snapshots it counts, less the charge left in weighted storage at the close; the initial charge it is compared against is folded into the row's constant |
 | $`\mathit{Generator\_opex}`$ | `Generator_opex` over $`\Xi`$ |
 | $`\mathit{StorageUnit\_opex}`$ | `StorageUnit_opex` over $`\Xi`$ |
@@ -175,27 +175,26 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
 | $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{StorageUnit\_injection}`$ | `StorageUnit_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
+| $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ | `position(within=relation[...])` — the position of $`t`$ inside its group |
+| $`\lvert \mathcal{T} \rvert`$ | the size of $`\mathcal{T}`$; $`\lvert \mathcal{T} \rvert - 1`$ is the last position |
 
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-$`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ counts within the group a relation puts $`t`$ in: the subscript names the map, $`\mathcal{T}_{\mathrm{relation}(t)}`$ is the group it lands in, and that group has a first position of its own.
-
-$`\lvert \mathcal{T} \rvert`$ denotes the size of the set being counted along, and a position counted from the end prints against it — $`\lvert \mathcal{T} \rvert - 1`$ is the last position, one less than the size because the first is $`0`$.
-
-#### Masks
+#### Conditions
 
 **`StorageUnit_fix`**
 
@@ -306,19 +305,19 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`StorageUnit_primary_energy`**
 
 ```math
-\mathit{StorageUnit\_primary\_energy}_{\xi,b} = -\left( \sum_{s \in \mathcal{S}} \sum_{t \in \mathcal{T}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{StorageUnit\_closing\_weight}_{\xi,b,t,s} \cdot \mathrm{a}^{h}_{\xi,b,s} \right) \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{StorageUnit\_primary\_energy}_{b,\xi} = -\left( \sum_{s \in \mathcal{S}} \sum_{t \in \mathcal{T}} \mathit{soc}_{\xi,t,s} \cdot \mathrm{StorageUnit\_closing\_weight}_{\xi,b,t,s} \cdot \mathrm{a}^{h}_{\xi,b,s} \right) \qquad \forall\, b \in \mathcal{B},\ \xi \in \Xi
 ```
 
 **`Store_primary_energy`**
 
 ```math
-\mathit{Store\_primary\_energy}_{\xi,b} = -\left( \sum_{v \in \mathcal{V}} \sum_{t \in \mathcal{T}} e_{\xi,t,v} \cdot \mathrm{Store\_closing\_weight}_{\xi,b,t,v} \cdot \mathrm{a}^{e}_{\xi,b,v} \right) \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{Store\_primary\_energy}_{b,\xi} = -\left( \sum_{v \in \mathcal{V}} \sum_{t \in \mathcal{T}} e_{\xi,t,v} \cdot \mathrm{Store\_closing\_weight}_{\xi,b,t,v} \cdot \mathrm{a}^{e}_{\xi,b,v} \right) \qquad \forall\, b \in \mathcal{B},\ \xi \in \Xi
 ```
 
 **`primary_energy`**
 
 ```math
-\mathit{primary\_energy}_{\xi,b} = \mathit{StorageUnit\_primary\_energy}_{\xi,b} + \mathit{Store\_primary\_energy}_{\xi,b} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
+\mathit{primary\_energy}_{\xi,b} = \mathit{StorageUnit\_primary\_energy}_{b,\xi} + \mathit{Store\_primary\_energy}_{b,\xi} \qquad \forall\, \xi \in \Xi,\ b \in \mathcal{B}
 ```
 
 **`Generator_opex`**
@@ -366,43 +365,43 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{\xi,t,n} = \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Link\_injection}_{n,\xi,t} = \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`StorageUnit_injection`**
 
 ```math
-\mathit{StorageUnit\_injection}_{\xi,t,n} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{StorageUnit\_injection}_{n,\xi,t} = \sum_{s \in \mathcal{S} \,:\, \mathrm{StorageUnit\_bus}(s) = n} \mathrm{sgn}^{h}_{s} \cdot \left( h^{+}_{\xi,t,s} - h^{-}_{\xi,t,s} \right) \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Store_injection`**
 
 ```math
-\mathit{Store\_injection}_{\xi,t,n} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Store\_injection}_{n,\xi,t} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
 
 ```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} + \mathit{StorageUnit\_injection}_{\xi,t,n} + \mathit{Store\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{n,\xi,t} + \mathit{Link\_injection}_{n,\xi,t} + \mathrm{Load\_injection}_{n,\xi,t} + \mathit{Process\_injection}_{n,\xi,t} + \mathit{StorageUnit\_injection}_{n,\xi,t} + \mathit{Store\_injection}_{n,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 #### Objective
@@ -1109,9 +1108,9 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           + Store_injection
         description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
           term into the balance, and a load on its right-hand side
-    masks:
+    conditions:
       StorageUnit_fix: {description: a storage unit with a fixed build that stands in the snapshot's period
-          — PyPSA's `fix` rows, where: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
+          — PyPSA's `fix` rows, condition: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
     objective: {sense: minimize, expression: total_cost}
     ```
 

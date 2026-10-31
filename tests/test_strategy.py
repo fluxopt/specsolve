@@ -2029,7 +2029,7 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     What a worker receives is the document already read, so no slice reads
     the YAML again. Counted at the language's own front door.
     """
-    from mathspec import validation
+    from mathspec import _validation as validation
     from mathspec.spec import Spec
 
     from specsolve import _inputs as inputs

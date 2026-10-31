@@ -38,8 +38,6 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 | $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — PyPSA's p0 — flow measured at the link's `link_from` end, so a positive value withdraws there and injects at `link_to` |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`p`**

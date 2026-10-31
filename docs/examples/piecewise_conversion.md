@@ -50,8 +50,6 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 | $`\mathit{rate}`$ | `rate` over $`\mathcal{F} \times \mathcal{T}`$ — what each flow runs at |
 | $`\mathit{weight}`$ | `weight` over $`\mathcal{C} \times \mathcal{T} \times \mathcal{B}`$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{bp\_rate}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{rate}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
 #### Variable domains
 
 **`rate`**

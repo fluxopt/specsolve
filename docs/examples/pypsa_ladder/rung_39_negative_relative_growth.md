@@ -82,6 +82,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathrm{on}^{f}`$ | `Link_active` over $`\mathcal{T} \times \mathcal{L}`$ — whether a link stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{e}`$ | `Store_active` over $`\mathcal{T} \times \mathcal{V}`$ — whether a store stands in a snapshot's period — PyPSA's `active`, data prep |
 | $`\mathrm{on}^{z}`$ | `Process_active` over $`\mathcal{T} \times \mathcal{J}`$ — whether a process stands in a snapshot's period — PyPSA's `active`, data prep |
+| $`\mathrm{act}^{e}`$ | `Store_active_asset` over $`\mathcal{V}`$ — whether a store is one of PyPSA's `active_assets` — its `active` flag alone, without build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses one that differs by scenario (`constants.py:51`) |
 | $`\mathrm{W}^{e}`$ | `Store_capital_weight` over $`\mathcal{V}`$ — the sum of period weights a store stands in — PyPSA's `active * period_weighting`, summed, data prep |
 | $`\mathrm{new}^{e}`$ | `Store_first_active` over $`\mathcal{Y} \times \mathcal{V}`$ — one in the first period a store stands in, zero elsewhere, data prep. PyPSA takes `active & (active.cumsum() == 1)` (`global_constraints.py:265`) |
 | $`\overline{\Delta}`$ | `Carrier_max_growth` over $`\mathcal{I}`$, `neutral` where the data has no row — most capacity of a carrier that may be added in a period; no value means no limit. The least over the scenarios, as PyPSA takes it (`global_constraints.py:227-231`), data prep. PyPSA reads it only under `multi_investment_periods` (`global_constraints.py:220-221`), so data prep feeds no value otherwise |
@@ -112,7 +113,7 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`p`$ | `Generator_p` over $`\Xi \times \mathcal{T} \times \mathcal{G}`$ — `Generator-p` — output of a generator in a snapshot |
 | $`e`$ | `Store_e` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-e` — energy held at the end of a snapshot |
 | $`q`$ | `Store_p` over $`\Xi \times \mathcal{T} \times \mathcal{V}`$ — `Store-p` — power delivered to the bus; charging is negative |
-| $`E`$ | `Store_e_nom_ext` over $`\mathcal{V}`$ — `Store-e_nom` — nominal capacity where it is a decision; the parameter of the same PyPSA name carries the fixed regime |
+| $`E`$ | `Store_e_nom_ext` over $`\mathcal{V}`$ — `Store-e_nom` — nominal capacity where it is a decision, for a store that is active; the parameter of the same PyPSA name carries the fixed regime |
 | $`f`$ | `Link_p` over $`\Xi \times \mathcal{T} \times \mathcal{L}`$ — `Link-p` — PyPSA's `p0`, the flow measured at the `Link_bus0` end: a positive value withdraws there and injects at every bus the link's output ports deliver to |
 | $`z`$ | `Process_p` over $`\Xi \times \mathcal{T} \times \mathcal{J}`$ — `Process-p` — PyPSA's internal power `p`: a positive value drives every port at its own rate, withdrawing where the rate is negative and injecting where it is positive |
 
@@ -129,26 +130,26 @@ A plain `n.optimize()`, and its multi-period and stochastic classes, in one file
 | $`\mathit{Store\_capex}`$ | `Store_capex` (scalar) |
 | $`\mathit{risk\_weighted\_opex}`$ | `risk_weighted_opex` (scalar) |
 | $`\mathit{total\_cost}`$ | `total_cost` (scalar) — what the system costs — capacity once per active period at its expected cost over the scenarios, operation in expectation over the scenarios, and a share of it at the tail |
-| $`\mathit{Store\_additions}`$ | `Store_additions` over $`\mathcal{Y} \times \mathcal{I}`$ |
+| $`\mathit{Store\_additions}`$ | `Store_additions` over $`\mathcal{I} \times \mathcal{Y}`$ |
 | $`\mathit{Carrier\_additions}`$ | `Carrier_additions` over $`\mathcal{Y} \times \mathcal{I}`$ — what a carrier adds in a period — every extendable component of that carrier, counting each build in the first period it stands in. Like PyPSA, it sums only the components that carry a carrier attribute, so a transformer, which has none, counts in no carrier |
 | $`\mathrm{Carrier\_relative\_growth}`$ | `Carrier_relative_growth` over $`\mathcal{I}`$ — the share of the previous period's additions a carrier's growth limit reads — PyPSA's `max_relative_growth` clipped at zero, so a negative share adds nothing and never tightens the limit |
 | $`\mathrm{Load\_demand}`$ | `Load_demand` over $`\Xi \times \mathcal{T} \times \mathcal{D}`$ — what a load draws from its bus's balance — its demand times its sign where it is active, nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`) |
-| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
-| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ |
+| $`\mathit{Generator\_injection}`$ | `Generator_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Link\_injection}`$ | `Link_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathrm{Load\_injection}`$ | `Load_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Process\_injection}`$ | `Process_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
+| $`\mathit{Store\_injection}`$ | `Store_injection` over $`\mathcal{N} \times \Xi \times \mathcal{T}`$ |
 | $`\mathit{Bus\_injection}`$ | `Bus_injection` over $`\Xi \times \mathcal{T} \times \mathcal{N}`$ — what every component puts into a bus, less what it takes out of it; PyPSA writes each term into the balance, and a load on its right-hand side |
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
-
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(within=relation[c])`), so a term never crosses out of its own group. The two modifiers take different slots — the group above, the fill below — so $`t \boxminus_{v}^{\mathrm{relation}(t)} k`$ is both at once.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-$`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ counts within the group a relation puts $`t`$ in: the subscript names the map, $`\mathcal{T}_{\mathrm{relation}(t)}`$ is the group it lands in, and that group has a first position of its own.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
+| $`\mathrm{pos}_{\mathrm{relation}(t)}(t)`$ | `position(within=relation[...])` — the position of $`t`$ inside its group |
 
 #### Variable domains
 
@@ -173,7 +174,7 @@ q_{\xi,t,v} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ v 
 **`Store_e_nom_ext`**
 
 ```math
-E_{v} \in \mathbb{R} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v}
+E_{v} \in \mathbb{R} \qquad \forall\, v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Link_p`**
@@ -247,13 +248,13 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Store_additions`**
 
 ```math
-\mathit{Store\_additions}_{y,i} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_carrier}(v) = i} E_{v} \cdot \mathrm{new}^{e}_{y,v} \qquad \forall\, y \in \mathcal{Y},\ i \in \mathcal{I}
+\mathit{Store\_additions}_{i,y} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_carrier}(v) = i} E_{v} \cdot \mathrm{new}^{e}_{y,v} \qquad \forall\, i \in \mathcal{I},\ y \in \mathcal{Y}
 ```
 
 **`Carrier_additions`**
 
 ```math
-\mathit{Carrier\_additions}_{y,i} = \mathit{Store\_additions}_{y,i} \qquad \forall\, y \in \mathcal{Y},\ i \in \mathcal{I}
+\mathit{Carrier\_additions}_{y,i} = \mathit{Store\_additions}_{i,y} \qquad \forall\, y \in \mathcal{Y},\ i \in \mathcal{I}
 ```
 
 **`Carrier_relative_growth`**
@@ -271,37 +272,37 @@ z_{\xi,t,j} \in \mathbb{R} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ j 
 **`Generator_injection`**
 
 ```math
-\mathit{Generator\_injection}_{\xi,t,n} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Generator\_injection}_{n,\xi,t} = \sum_{g \in \mathcal{G} \,:\, \mathrm{Generator\_bus}(g) = n} \mathrm{sgn}_{g} \cdot p_{\xi,t,g} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Link_injection`**
 
 ```math
-\mathit{Link\_injection}_{\xi,t,n} = \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Link\_injection}_{n,\xi,t} = \sum_{o \in \mathcal{O} \,:\, \mathrm{Link\_output\_bus}(o) = n} \mathit{Link\_output\_arrival}_{\xi,t,o} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Load_injection`**
 
 ```math
-\mathrm{Load\_injection}_{\xi,t,n} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathrm{Load\_injection}_{n,\xi,t} = \sum_{d \in \mathcal{D} \,:\, \mathrm{Load\_bus}(d) = n} \mathrm{Load\_demand}_{\xi,t,d} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Process_injection`**
 
 ```math
-\mathit{Process\_injection}_{\xi,t,n} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Process\_injection}_{n,\xi,t} = \sum_{r \in \mathcal{R} \,:\, \mathrm{Process\_output\_bus}(r) = n} \mathit{Process\_output\_arrival}_{\xi,t,r} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Store_injection`**
 
 ```math
-\mathit{Store\_injection}_{\xi,t,n} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Store\_injection}_{n,\xi,t} = \sum_{v \in \mathcal{V} \,:\, \mathrm{Store\_bus}(v) = n} \mathrm{sgn}^{q}_{v} \cdot q_{\xi,t,v} \qquad \forall\, n \in \mathcal{N},\ \xi \in \Xi,\ t \in \mathcal{T}
 ```
 
 **`Bus_injection`**
 
 ```math
-\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{\xi,t,n} + \mathit{Link\_injection}_{\xi,t,n} + \mathrm{Load\_injection}_{\xi,t,n} + \mathit{Process\_injection}_{\xi,t,n} + \mathit{Store\_injection}_{\xi,t,n} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
+\mathit{Bus\_injection}_{\xi,t,n} = \mathit{Generator\_injection}_{n,\xi,t} + \mathit{Link\_injection}_{n,\xi,t} + \mathrm{Load\_injection}_{n,\xi,t} + \mathit{Process\_injection}_{n,\xi,t} + \mathit{Store\_injection}_{n,\xi,t} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ n \in \mathcal{N}
 ```
 
 #### Objective
@@ -339,13 +340,13 @@ e_{\xi,t,v} \le \overline{\mathrm{e}}_{\xi,t,v} \cdot E_{v} \qquad \forall\, \xi
 **`Store_ext_e_nom_lower`**
 
 ```math
-E_{v} \ge \underline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v}
+E_{v} \ge \underline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{act}^{e}_{v}
 ```
 
 **`Store_ext_e_nom_upper`**
 
 ```math
-E_{v} \le \overline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \overline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \text{ is defined}
+E_{v} \le \overline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \qquad \forall\, \xi \in \Xi,\ v \in \mathcal{V} \,:\, \mathrm{ext}^{e}_{v} \wedge \mathrm{act}^{e}_{v} \wedge \overline{\mathrm{e}}^{\mathrm{nom}}_{\xi,v} \text{ is defined}
 ```
 
 **`Store_energy_balance`**
@@ -520,6 +521,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
         dims: [snapshot, process]
         dtype: bool
+      Store_active_asset:
+        description: whether a store is one of PyPSA's `active_assets` — its `active` flag alone, without
+          build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+          refuses one that differs by scenario (`constants.py:51`)
+        dims: [store]
+        dtype: bool
       Store_capital_weight:
         description: the sum of period weights a store stands in — PyPSA's `active * period_weighting`, summed,
           data prep
@@ -625,10 +632,10 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         dims: [scenario, snapshot, store]
         where: Store_active
       Store_e_nom_ext:
-        description: '`Store-e_nom` — nominal capacity where it is a decision; the parameter of the same PyPSA
-          name carries the fixed regime'
+        description: '`Store-e_nom` — nominal capacity where it is a decision, for a store that is active;
+          the parameter of the same PyPSA name carries the fixed regime'
         dims: [store]
-        where: Store_e_nom_extendable
+        where: Store_e_nom_extendable AND Store_active_asset
       Link_p:
         description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
           withdraws there and injects at every bus the link''s output ports deliver to'
@@ -663,13 +670,13 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Store_ext_e_nom_lower:
         description: '`Store-ext-e_nom-lower` — the chosen build is at least its floor in every scenario'
         dims: [scenario, store]
-        where: Store_e_nom_extendable
+        where: Store_e_nom_extendable AND Store_active_asset
         expression: Store_e_nom_ext >= Store_e_nom_min
       Store_ext_e_nom_upper:
         description: '`Store-ext-e_nom-upper` — the chosen build is at most its cap in every scenario; a cap
           of infinity is no row'
         dims: [scenario, store]
-        where: Store_e_nom_extendable AND Store_e_nom_max
+        where: Store_e_nom_extendable AND Store_active_asset AND Store_e_nom_max
         expression: Store_e_nom_ext <= Store_e_nom_max
       Store_energy_balance:
         description: '`Store-energy_balance` — the energy carried in, less what is delivered to the bus'
