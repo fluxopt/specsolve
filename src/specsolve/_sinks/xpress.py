@@ -1,0 +1,303 @@
+"""The ``xpress`` solver: the model in two calls, straight into the Optimizer.
+
+The objective's constant is the negated objective coefficient of column
+``-1``. ``xpress`` is imported inside the functions, so importing this module
+stays free for a caller who never solves with it.
+"""
+
+from __future__ import annotations
+
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
+
+from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.solver import (
+    Basis,
+    InfeasibleSubsystemIndices,
+    SolveAnswer,
+    Solver,
+    basis_codes,
+    solver_codes,
+    solver_vector,
+    spelled_senses,
+)
+from specsolve._status import SolveStatus
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    import polars as pl
+
+    from specsolve._sinks.handoff import Handoff
+
+
+#: Xpress solution status -> termination condition, copied from linopy's
+#: ``Xpress.CONDITION_MAP``; ``tests/test_solve_status.py`` asserts the copy.
+#: Keyed by value, since the enum is an optional import.
+_CONDITION_OF_SOL_STATUS = {
+    0: 'unknown',
+    1: 'optimal',
+    2: 'terminated_by_limit',
+    3: 'infeasible',
+    4: 'unbounded',
+}
+
+#: ``OPTIMAL`` and ``FEASIBLE``, by value: the solution statuses that carry values.
+_HAS_PRIMAL = frozenset({1, 2})
+
+#: ``SolveStatus.FAILED``, by value: whether the run errored, which
+#: ``solstatus`` cannot say.
+_SOLVE_FAILED = 2
+
+
+class Xpress(Solver):
+    """FICO Xpress, holding one model at ``.handle``, an `xpress.problem`.
+
+    The problem owns its licence and releases it when it is collected. Duals
+    are ``None`` rather than zero-filled on a model that has none.
+    """
+
+    #: The loaded problem; ``close`` drops it, and the licence with it.
+    _p: Any
+
+    #: One package, and it carries its own solver library.
+    requires = ('xpress',)
+    recorded_options = frozenset(
+        {
+            'timelimit',
+            'miprelstop',
+            'mipabsstop',
+            'randomseed',
+            'threads',
+            'defaultalg',
+            'presolve',
+            'feastol',
+            'optimalitytol',
+            'miptol',
+        }
+    )
+    unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "specsolve[xpress]"'
+
+    #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
+    #: sink does not hand it one.
+    lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'refused'})
+    capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
+
+    def _load(self, handoff: Handoff) -> None:
+        self._p = _built(handoff, self._options)
+
+    @property
+    def handle(self) -> Any:
+        return self._p
+
+    def push(self, handoff: Handoff) -> None:
+        """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per entry."""
+        import numpy as np
+
+        xpress = _xpress()
+        cols = handoff.dense_columns(xpress.infinity)
+        every = np.arange(handoff.column_count, dtype=np.int64)
+        self._p.chgBounds(
+            np.concatenate([every, every]),
+            ['L'] * handoff.column_count + ['U'] * handoff.column_count,
+            np.concatenate([cols.lb, cols.ub]),
+        )
+        self._p.chgObj(np.append(every, -1), np.append(cols.cost, -handoff.objective_constant))
+        self._p.chgRHS(np.arange(handoff.row_count, dtype=np.int64), handoff.dense_rows(xpress.infinity).rhs)
+
+    def _basis(self) -> tuple[Any, Any] | None:
+        """``getBasis``, which returns rows first; each status is ``0`` at lower, ``1`` basic, ``2`` at upper, ``3`` superbasic.
+
+        After a mixed-integer solve Xpress hands back a trivial all-slack
+        basis rather than none, so that is asked of the problem directly; after
+        a barrier run without crossover it refuses.
+        """
+        if int(self._p.attributes.mipents):
+            return None
+        try:
+            rows, columns = self._p.getBasis()
+        except _xpress().SolverError:
+            return None
+        codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC)
+        return basis_codes(columns, codes), basis_codes(rows, codes)
+
+    def _warm(self, basis: Basis) -> None:
+        """``loadBasis``, which takes rows first, with ``keepbasis`` back on.
+
+        A row's status is its slack's, and a binding ``<=`` row holds its
+        slack at ``0`` and a binding ``>=`` row at ``2``.
+        """
+        self._p.controls.keepbasis = 1
+        rows = solver_codes(basis.rows, {BASIC: 1, AT_LOWER: 2, AT_UPPER: 0, FIXED: 0, SUPERBASIC: 3})
+        columns = solver_codes(basis.columns, {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3})
+        self._p.loadBasis(rows, columns)
+
+    def _start(self, values: Any) -> None:
+        """``addMipSol`` over the columns given a value, or for an LP ``loadLPSol``, which takes only a value for every column."""
+        import numpy as np
+
+        if not int(self._p.attributes.mipents):
+            self._p.loadLPSol(values, None, None, None)
+            return
+        given = np.flatnonzero(~np.isnan(values))
+        self._p.addMipSol(values[given], given)
+
+    def _run(self, handoff: Handoff) -> SolveAnswer:
+        """Solve what is loaded and read it back; the objective constant is already in the model."""
+        self._p.optimize()
+        status = _status_of(self._p)
+        if not status.is_readable:
+            return self._unreadable(status)
+        return SolveAnswer(
+            status,
+            float(self._p.attributes.objval),
+            solver_vector(self._p.getSolution()),
+            _duals(self._p),
+            _activity(self._p),
+        )
+
+    def dual_ray(self) -> pl.Series | None:
+        """``getDualRay``, signed the way the contract wants.
+
+        ``None`` where presolve found the infeasibility, which is the default;
+        ``solver_options={'presolve': 0}`` gets a ray.
+        """
+        values = self._p.getDualRay()
+        return None if values is None else solver_vector(values)
+
+    def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
+        """``firstIIS``, emphasising a small subsystem over a quick one.
+
+        A fixed column is both of its bounds; an integrality or set entry is
+        neither a row nor a bound, and is dropped.
+        """
+        import numpy as np
+
+        if self._p.firstIIS(1) != 0:
+            return None
+        rows, columns, senses, sides, *_ = self._p.getIISData(1)
+        rows, columns = np.asarray(rows, dtype=np.int64), np.asarray(columns, dtype=np.int64)
+        sides = np.asarray(sides, dtype=str)
+        return InfeasibleSubsystemIndices(
+            rows[np.isin(np.asarray(senses, dtype=str), list(_XPRESS_SENSE.values()))],
+            columns[np.isin(sides, ['L', 'F'])],
+            columns[np.isin(sides, ['U', 'F'])],
+        )
+
+    def forget(self) -> None:
+        """``keepbasis = 0``: the next solve ignores the basis this one left.
+
+        ``problem.reset()`` would clear the model too. The control is durable;
+        [`_warm`][] turns it back on.
+        """
+        self._p.controls.keepbasis = 0
+
+    def close(self) -> None:
+        """Release the problem, and the licence it holds."""
+        if self._p is not None:
+            self._p.reset()
+            self._p = None
+
+
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
+    """The loaded problem: columns with no entries, then every linear row in one ``addRows`` call.
+
+    ``outputlog`` leads the controls so a caller's options can put the log back.
+    """
+    import numpy as np
+
+    xpress = _xpress()
+    p = xpress.problem()
+    p.setControl({'outputlog': 0, **dict(solver_options or {})})
+
+    cols = handoff.dense_columns(xpress.infinity)
+    p.addCols(
+        objcoef=cols.cost,
+        start=np.zeros(handoff.column_count + 1, dtype=np.int64),
+        rowind=np.empty(0, dtype=np.int64),
+        rowcoef=np.empty(0, dtype=np.float64),
+        lb=cols.lb,
+        ub=cols.ub,
+    )
+    if cols.integral.any():
+        integral = np.flatnonzero(cols.integral)
+        p.chgColType(integral, ['I'] * integral.size)
+
+    rows = handoff.dense_rows(xpress.infinity)
+    spelling = spelled_senses(_XPRESS_SENSE)
+    (linear,) = handoff.row_blocks(None)
+    entries = linear.entries
+    p.addRows(
+        rowtype=spelling[rows.sense[: linear.height]].tolist(),
+        rhs=rows.rhs[: linear.height],
+        start=np.append(linear.starts, entries.height),
+        colind=entries['col'].to_numpy(),
+        rowcoef=entries['coeff'].to_numpy(),
+    )
+
+    _add_sets(p, handoff, xpress)
+    if handoff.objective_sense == 'maximize':
+        p.chgObjSense(xpress.maximize)
+    if handoff.objective_constant:
+        p.chgObj([-1], [-handoff.objective_constant])
+    return p
+
+
+def _add_sets(p: Any, handoff: Handoff, xpress: Any) -> None:
+    """Every special-ordered set, one ``addSOS`` call each: there is no bulk form."""
+    if not handoff.sos.height:
+        return
+    for set_type, cols, weights in handoff.sets():
+        p.addSOS(cols.to_list(), weights.cast(float).to_list(), type=set_type)
+
+
+#: Each comparison as an Optimizer row type.
+_XPRESS_SENSE = {'<=': 'L', '>=': 'G', '==': 'E'}
+
+
+def _xpress() -> Any:
+    """The optional dependency, or [`Xpress.unavailable_message`][]."""
+    return Xpress.imported()
+
+
+def _status_of(p: Any) -> SolveStatus:
+    """What the solve concluded, on both axes.
+
+    ``solvestatus`` separates a solve that errored, reported as
+    ``internal_solver_error``, from one that found nothing; ``solstatus`` alone
+    cannot.
+    """
+    solution = int(p.attributes.solstatus)
+    if int(p.attributes.solvestatus) == _SOLVE_FAILED:
+        return SolveStatus('internal_solver_error', _wording(solution), has_primal=False)
+    return SolveStatus(
+        termination_condition=_CONDITION_OF_SOL_STATUS.get(solution, 'unknown'),
+        solver_wording=_wording(solution),
+        has_primal=solution in _HAS_PRIMAL,
+    )
+
+
+def _wording(solution: int) -> str:
+    """Xpress's own name for a solution status, read off the enum so an unknown one still arrives."""
+    xpress = _xpress()
+    names = {int(member): member.name for member in xpress.SolStatus}
+    return names.get(solution, str(solution))
+
+
+def _activity(p: Any) -> pl.Series:
+    """Each row's left-hand side at the solution, as ``rhs - slack``: Xpress exposes only the slack."""
+    import numpy as np
+
+    slack = np.asarray(p.getSlacks(), dtype=np.float64)
+    rhs = np.asarray(p.getRHS(), dtype=np.float64)
+    return solver_vector(rhs - slack)
+
+
+def _duals(p: Any) -> pl.Series | None:
+    """Shadow prices in row order, or ``None`` on a mixed-integer model, where Xpress refuses ``getDuals``."""
+    xpress = _xpress()
+    try:
+        return solver_vector(p.getDuals())
+    except (xpress.SolverError, xpress.ModelError):
+        return None

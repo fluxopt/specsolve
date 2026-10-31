@@ -275,7 +275,7 @@ constraints:
     description: '`Line-fix-s-lower-security-for-{c}-outage-in-sub-network-{n}` — after any one outage,
       a fixed line carries at least the negative of its rating: its flow takes on its share of the outaged
       branch''s flow. PyPSA names one row per outaged component `c` and sub-network `n`, and under `multi_investment_periods`
-      it appends `-period-{p}` for each period `p`. This block states them all over the outage dimension'
+      it appends `-period-{p}` for each period `p`. This entry states them all over the outage dimension'
     dims: [scenario, snapshot, line, outage]
     where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot_period[period])
     expression: Line_s_monitored + at(Line_BODF, by=snapshot_period[period]) * Outage_s >= -Line_s_max_pu
@@ -284,7 +284,7 @@ constraints:
     description: '`Line-fix-s-upper-security-for-{c}-outage-in-sub-network-{n}` — after any one outage,
       a fixed line carries at most its rating: its flow takes on its share of the outaged branch''s flow.
       PyPSA names one row per outaged component `c` and sub-network `n`, and under `multi_investment_periods`
-      it appends `-period-{p}` for each period `p`. This block states them all over the outage dimension'
+      it appends `-period-{p}` for each period `p`. This entry states them all over the outage dimension'
     dims: [scenario, snapshot, line, outage]
     where: not Line_s_nom_extendable AND at(Line_BODF, by=snapshot_period[period])
     expression: Line_s_monitored + at(Line_BODF, by=snapshot_period[period]) * Outage_s <= Line_s_max_pu

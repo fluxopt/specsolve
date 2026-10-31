@@ -24,8 +24,8 @@ import polars as pl
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
+from specsolve._engine.engine import Engine
+from specsolve._sources import tidy_sources
 
 if TYPE_CHECKING:
     from mathspec.spec import Spec
@@ -144,7 +144,7 @@ def model_frames(engine: Engine, schema: Spec, program: Any) -> None:
     The frames are engine-private, so this is the one place the script reads
     private attributes.
     """
-    banner(4, 'plan + data -> the model frames', 'relational/engine/engine.py')
+    banner(4, 'plan + data -> the model frames', '_engine/engine.py')
     engine.build(program, tidy_sources(program, SOURCES))
     handoff = engine._model.handoff
     for name, frame in (
@@ -171,7 +171,7 @@ def lp_file(engine: Engine) -> None:
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
     without ever forming a full CSR here.
     """
-    banner(5, 'sink: stream the frames to an LP file', 'relational/sinks/writers/lp_file.py')
+    banner(5, 'sink: stream the frames to an LP file', '_sinks/lp_file.py')
     with tempfile.TemporaryDirectory() as tmp:
         lp = Path(tmp) / 'model.lp'
         engine.write(lp)
@@ -190,7 +190,7 @@ def solution(engine: Engine) -> None:
     ``evaluate()`` reads the quantity stage 1 named, lowered on this call
     rather than at build.
     """
-    banner(6, 'sink: batches -> highspy -> solution frames', 'relational/sinks/solvers/highs.py')
+    banner(6, 'sink: batches -> highspy -> solution frames', '_sinks/highs.py')
     result = engine.solve()
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')

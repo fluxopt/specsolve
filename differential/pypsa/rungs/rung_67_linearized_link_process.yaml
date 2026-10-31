@@ -347,6 +347,18 @@ parameters:
     dims: [snapshot, process]
     dtype: bool
     description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
+  Link_active_asset:
+    dims: [link]
+    dtype: bool
+    description: whether a link is one of PyPSA's `active_assets` — its `active` flag alone, without build
+      year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA refuses
+      one that differs by scenario (`constants.py:51`)
+  Process_active_asset:
+    dims: [process]
+    dtype: bool
+    description: whether a process is one of PyPSA's `active_assets` — its `active` flag alone, without
+      build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
+      refuses one that differs by scenario (`constants.py:51`)
   Link_capital_weight:
     dims: [link]
     dtype: float
@@ -438,18 +450,18 @@ variables:
       in [0, 1] (`variables.py:188-189`)'
   Link_p_nom_ext:
     dims: [link]
-    where: Link_p_nom_extendable
+    where: Link_p_nom_extendable AND Link_active_asset
     domain: continuous
     missing: absent
-    description: '`Link-p_nom` — nominal power where it is a decision; the parameter of the same PyPSA
-      name carries the fixed regime'
+    description: '`Link-p_nom` — nominal power where it is a decision, for a link that is active; the
+      parameter of the same PyPSA name carries the fixed regime'
   Process_p_nom_ext:
     dims: [process]
-    where: Process_p_nom_extendable
+    where: Process_p_nom_extendable AND Process_active_asset
     domain: continuous
     missing: absent
-    description: '`Process-p_nom` — nominal internal power where it is a decision; the parameter of the
-      same PyPSA name carries the fixed regime'
+    description: '`Process-p_nom` — nominal internal power where it is a decision, for a process that
+      is active; the parameter of the same PyPSA name carries the fixed regime'
 constraints:
   Generator_fix_p_lower:
     dims: [scenario, snapshot, generator]
@@ -474,12 +486,12 @@ constraints:
     description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
   Link_ext_p_nom_lower:
     dims: [scenario, link]
-    where: Link_p_nom_extendable
+    where: Link_p_nom_extendable AND Link_active_asset
     expression: Link_p_nom_ext >= Link_p_nom_min
     description: '`Link-ext-p_nom-lower` — the chosen build is at least its floor in every scenario'
   Link_ext_p_nom_upper:
     dims: [scenario, link]
-    where: Link_p_nom_extendable AND Link_p_nom_max
+    where: Link_p_nom_extendable AND Link_active_asset AND Link_p_nom_max
     expression: Link_p_nom_ext <= Link_p_nom_max
     description: '`Link-ext-p_nom-upper` — the chosen build is at most its cap in every scenario; a cap
       of infinity is no row'
@@ -978,20 +990,21 @@ expressions:
     expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
     description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
       term into the balance, and a load on its right-hand side
-masks:
-  Link_com_ext: {where: Link_committable AND Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0) AND Link_active,
-    description: 'a committable link with an extendable, non-modular build that stands in the snapshot''s
-      period — PyPSA''s `com-ext` rows, whose status is relaxed against the chosen build'}
-  Link_committed: {where: Link_committable AND Link_active, description: a committable link that stands
+conditions:
+  Link_com_ext: {condition: Link_committable AND Link_p_nom_extendable AND NOT (Link_p_nom_mod > 0) AND
+      Link_active, description: 'a committable link with an extendable, non-modular build that stands
+      in the snapshot''s period — PyPSA''s `com-ext` rows, whose status is relaxed against the chosen
+      build'}
+  Link_committed: {condition: Link_committable AND Link_active, description: a committable link that stands
       in the snapshot's period — every unit-commitment row's set}
-  Link_ramps_from_previous: {where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
+  Link_ramps_from_previous: {condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
       == 0 AND (Link_status_initial == 0 OR Link_p_init))', description: 'a snapshot whose ramp reads
       a previous output — any snapshot but its period''s first, and the horizon''s first where the link
       comes in off or carries an initial output'}
-  Process_committed: {where: Process_committable AND Process_active, description: a committable process
+  Process_committed: {condition: Process_committable AND Process_active, description: a committable process
       that stands in the snapshot's period — every unit-commitment row's set}
-  Process_ramps_from_previous: {where: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
-      == 0 AND (Process_status_initial == 0 OR Process_p_init))', description: 'a snapshot whose ramp
-      reads a previous output — any snapshot but its period''s first, and the horizon''s first where the
-      process comes in off or carries an initial output'}
+  Process_ramps_from_previous: {condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR
+      (position(snapshot) == 0 AND (Process_status_initial == 0 OR Process_p_init))', description: 'a
+      snapshot whose ramp reads a previous output — any snapshot but its period''s first, and the horizon''s
+      first where the process comes in off or carries an initial output'}
 objective: {sense: minimize, expression: total_cost}

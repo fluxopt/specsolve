@@ -10,9 +10,9 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import api
+from specsolve import _api as api
+from specsolve._engine.compiler import Compiler
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.relational.engine.compiler import Compiler
 from tests.fixtures import override
 
 SPEC = {
