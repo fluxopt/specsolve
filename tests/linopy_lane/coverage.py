@@ -52,10 +52,10 @@ def gaps_under(array: Any, mask: Any) -> int:
 def check_constant_side_covers(name: str, row: program.Constraint, ctx: EvaluationContext, mask: Any) -> None:
     """A comparison's constant side must have values wherever the row is built.
 
-    A missing row is read as 0, and where that zero is a constant piece it *is*
+    A missing row is read as 0, and where that zero is a constant term it *is*
     the bound — `x <= cap` becomes `x <= 0`, and `x + hi <= 100` becomes
     `x <= 100`, both binding rather than vanishing. The question is asked of
-    every constant piece, a parameter in a variable-free additive position,
+    every constant term, a parameter in a variable-free additive position,
     whichever side it was written on and beside whatever term: a coefficient,
     which a variable stands with in a product, is a zero when it is missing (the
     absence rules) and is not one. Keyed to the rows the declaration builds, not
@@ -72,9 +72,9 @@ def check_constant_side_covers(name: str, row: program.Constraint, ctx: Evaluati
 def _constant_leaves(
     node: program.Expression, ctx: EvaluationContext, mask: Any, coefficient: bool
 ) -> Iterator[tuple[str, Any]]:
-    """Every parameter standing as a constant piece under *node*, with the rows it must cover.
+    """Every parameter standing as a constant term under *node*, with the rows it must cover.
 
-    A constant piece is a parameter in a variable-free additive position — `hi`
+    A constant term is a parameter in a variable-free additive position — `hi`
     in `x + hi`. Under a sum a missing neutral row is one summand fewer, so a
     reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
@@ -111,7 +111,7 @@ def _under_regions(
     """Every node under *node*, each with the rows it actually has to cover.
 
     The mask narrows at every region of a ``cases:`` block: a region's data is
-    owed only where that region applies, so asking a piece to cover the whole
+    owed only where that region applies, so asking a term to cover the whole
     frame would refuse a model the language accepts. Sorted by the caller
     where the order decides which name an error can reach: a mask is an array,
     so the pairs are not orderable among themselves.

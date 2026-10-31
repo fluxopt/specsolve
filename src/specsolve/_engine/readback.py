@@ -10,7 +10,7 @@ from mathspec import program
 from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve._collect import collected
 from specsolve._engine import coverage, labels
-from specsolve._engine.pieces import Piece, absence_restrictions
+from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, InfeasibleSubsystem
@@ -274,10 +274,10 @@ def reordered(
             rebuilt model holds — the frame is not this model's answer.
     """
     in_start_order = sorted((held.start, name) for name, held in registry.items())
-    pieces = [
+    aligned = [
         _aligned(attached, name, registry[name], declared[name].dims, frames.get(name)) for _, name in in_start_order
     ]
-    return pl.concat(pieces) if pieces else pl.Series(_SOLUTION, [], dtype=pl.Float64)
+    return pl.concat(aligned) if aligned else pl.Series(_SOLUTION, [], dtype=pl.Float64)
 
 
 def _aligned(
@@ -348,31 +348,31 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"
-    pieces = compiler.expression(expr, context, reported=True).consts
-    dims = compiler.scope.spanned(pieces)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
+    terms = compiler.expression(expr, context, reported=True).constant
+    dims = compiler.scope.spanned(terms)
+    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
 
     coverage.refuse_null_constants(
-        [_holed(carrier, pieces), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in pieces)],
+        [_holed(carrier, terms), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in terms)],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
     )
 
-    added = compiler.summed_onto(pieces, carrier, absent='zero')
+    added = compiler.summed_onto(terms, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
 
-def _holed(carrier: pl.LazyFrame, pieces: Sequence[Piece]) -> pl.LazyFrame:
-    """One ``cval`` per row of *carrier*, null where any of *pieces* holds a null there, else zero.
+def _holed(carrier: pl.LazyFrame, terms: Sequence[Term]) -> pl.LazyFrame:
+    """One ``cval`` per row of *carrier*, null where any of *terms* holds a null there, else zero.
 
     The refusal counts the coordinates the expression divides at, and two
-    pieces can hold a hole at one coordinate, as ``v / p - v / p`` does.
+    terms can hold a hole at one coordinate, as ``v / p - v / p`` does.
     """
     holed: pl.Expr = pl.lit(False)
-    for i, p in enumerate(pieces):
+    for i, p in enumerate(terms):
         column = f'__hole {i}__'
         if p.dims:
             hole = (
