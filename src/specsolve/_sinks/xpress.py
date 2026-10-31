@@ -238,7 +238,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
 
     _add_sets(p, handoff, xpress)
     if handoff.objective_sense == 'maximize':
-        p.chgObjSense(xpress.maximize)
+        p.chgObjSense(xpress.ObjSense.MAXIMIZE)
     if handoff.objective_constant:
         p.chgObj([-1], [-handoff.objective_constant])
     return p
