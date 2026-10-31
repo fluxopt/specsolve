@@ -36,8 +36,8 @@ gurobi = [
     "scipy>=1.11",
 ]
 xpress = [
-    # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
-    "xpress>=9.5",
+    # 9.6 is the release that added `ObjSense`, which Xpress 10 requires in place of `xpress.maximize`.
+    "xpress>=9.6",
 ]
 
 [project.urls]
@@ -301,7 +301,11 @@ testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = ["benchmem: pytest-benchmem settings for a benchmark (bench/, needs --group bench)"]
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # Xpress 10 warns once per process on the bundled Community licence, which CI and this suite run on.
+    "ignore:Using the Community license in this session",
+]
 
 [tool.coverage.run]
 branch = true
