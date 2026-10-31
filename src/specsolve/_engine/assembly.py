@@ -7,7 +7,7 @@ declaration built later reads what earlier ones produced.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, get_args
 
 import numpy as np
@@ -25,6 +25,8 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Collection, Mapping
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -196,9 +198,12 @@ class Assembly:
         labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
         self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
+        return self._columns(name, v, labelled.lazy())
 
+    def _columns(self, name: str, v: program.Variable, frame: pl.LazyFrame) -> pl.DataFrame:
+        """The share of ``cols`` for the variable labelled *frame*, its bounds read off the data attached now."""
         with in_memory():
-            bounds = self.compiler.bounds(labelled.lazy(), name, v).select(
+            bounds = self.compiler.bounds(frame, name, v).select(
                 'var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
             )
             bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
@@ -208,6 +213,7 @@ class Assembly:
             bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
             raise DataError(null_bounds_message(name, bad))
 
+        self.measured.bounds.pop(name, None)
         if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
             self.measured.bounds[name] = spread
         return cols
@@ -259,12 +265,7 @@ class Assembly:
         can hide a hole. A row is built where either matrix has a term, and the
         labelled block narrows to the rows that survived.
         """
-        quadratic = declares_quadratic(c)
-        lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
-        rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", quadratic=quadratic)
-        terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
-        quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
-        consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
+        terms, quads, consts = self._compiled(name, c)
         restrictions = absence_restrictions([p for p, _ in (*terms, *quads, *consts)])
         start = self.n_rows
         declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
@@ -276,13 +277,7 @@ class Assembly:
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
 
         subject = f"constraint '{name}'"
-        pieces = [p for p, _ in consts]
-        coverage.refuse_null_constants(
-            coverage.narrowed_to_rows(frame, pieces),
-            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
-            subject,
-        )
-        rows = coverage.constant_side(self.scope, frame, consts, c, subject)
+        rows = self._constant_side(name, c, frame, consts)
 
         if not terms and not quads:
             none = pl.Series('row', [], dtype=_DTYPES['row'])
@@ -319,6 +314,33 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
+
+    def _compiled(
+        self, name: str, c: program.Constraint
+    ) -> tuple[list[tuple[Piece, float]], list[tuple[Piece, float]], list[tuple[Piece, float]]]:
+        """*c* as its linear terms, its quadratic terms and its constant pieces, each signed for ``lhs - rhs``.
+
+        A term keeps the side it was written on; a constant moves to the right.
+        """
+        quadratic = declares_quadratic(c)
+        lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
+        rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", quadratic=quadratic)
+        terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
+        quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
+        consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
+        return terms, quads, consts
+
+    def _constant_side(
+        self, name: str, c: program.Constraint, frame: pl.LazyFrame, consts: list[tuple[Piece, float]]
+    ) -> pl.DataFrame:
+        """The rows of *frame* as ``(row, sense, rhs)``, every constant piece checked where the rows ask for it."""
+        subject = f"constraint '{name}'"
+        coverage.refuse_null_constants(
+            coverage.narrowed_to_rows(frame, [p for p, _ in consts]),
+            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
+            subject,
+        )
+        return coverage.constant_side(self.scope, frame, consts, c, subject)
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
@@ -452,6 +474,144 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
         if rows < reach:
             short[name] = (reach, rows)
     return short
+
+
+def numbers_only(built: BuiltModel, measured: Measured, attached: AttachedSources, changed: Collection[str]) -> bool:
+    """Whether *changed* moves only numbers [`refilled`][] can read again, so *built* keeps its labels and matrix.
+
+    Every name must be a parameter that no build reads for which columns, rows
+    or matrix entries exist ([`_structural_parameters`][]), attached now at
+    exactly the coordinates *built* attached it at. A constraint it feeds must
+    have built every row it labelled: its checks ran on rows the stored frame
+    no longer holds once a row is dropped.
+    """
+    plan = built.program
+    if not set(changed) <= set(plan.parameters) or set(changed) & _structural_parameters(plan):
+        return False
+    if any(name in measured.omitted for name in _fed(plan.constraints, changed, _constraint_parameters)):
+        return False
+    return all(_same_coordinates(built.attached, attached, name, plan.parameters[name].dims) for name in changed)
+
+
+def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[str], measured: Measured) -> BuiltModel:
+    """*built* with every bound, constant side and objective that reads a name in *changed* read again off *attached*.
+
+    The hand-off a full build of the same data gives, where [`numbers_only`][]
+    holds: the labels, the matrix, the quadratic rows and the sets are
+    *built*'s, and each recomputed share is spliced over the run of labels its
+    declaration owns. *measured* is *built*'s, updated for what was read.
+
+    Raises:
+        DataError: A bound, constant side or objective the new data leaves
+            without a value, as a full build would.
+    """
+    plan, handoff = built.program, built.handoff
+    assembly = Assembly(plan, attached, measured)
+    assembly.variables.update(built.variables)
+    assembly.constraints.update(built.constraints)
+    assembly.n_cols, assembly.n_rows = handoff.column_count, handoff.row_count
+    cols, rows = handoff.cols, handoff.rows
+    obj, quad, constant = handoff.obj, handoff.quad, handoff.objective_constant
+
+    with in_memory(assembly._reach() <= IN_MEMORY_REACH):
+        for name in _fed(plan.variables, changed, _bound_parameters):
+            held = built.variables[name]
+            share = assembly._columns(name, plan.variables[name], held.frame)
+            cols = _spliced(cols, held.start, held.start + held.height, share)
+        for name in _fed(plan.constraints, changed, _constraint_parameters):
+            held = built.constraints[name]
+            c = plan.constraints[name]
+            share = labels.in_position_order(
+                assembly._constant_side(name, c, held.frame, assembly._compiled(name, c)[2]), 'row'
+            )
+            measured.rhs.pop(name, None)
+            if (sides := _magnitude_range(share, 'rhs')) is not None:
+                measured.rhs[name] = sides
+            at = rows.get_column('row')
+            lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
+            rows = _spliced(rows, lo, hi, share)
+        o = plan.objective
+        if o is not None and program.parameters_of(o.expression) & set(changed):
+            measured.objective_range = None
+            terms = assembly._build_objective(o)
+            obj = _stack([terms] if terms is not None else [], _OBJ)
+            quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
+            constant = assembly.obj_const
+
+    measured.bounds = _in_build_order(measured.bounds, built.variables)
+    measured.rhs = _in_build_order(measured.rhs, built.constraints)
+    refreshed = replace(handoff, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
+    return BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+
+
+def _structural_parameters(plan: program.Program) -> frozenset[str]:
+    """The parameters a build reads for which columns, rows or matrix entries exist, or where a matrix entry is.
+
+    Those a ``where`` reads, or a ``cases`` region's condition, or a shift or a
+    window as its amount, decide which coordinates exist. Inside a constraint
+    a parameter that scales a variable is a matrix coefficient. Every other use
+    is a bound, a constant side or the objective, which a sink takes by value.
+    """
+    names: set[str] = set()
+    for declaration in (*plan.variables.values(), *plan.constraints.values()):
+        if declaration.where is not None:
+            names |= declaration.where.names_read
+    for c in plan.constraints.values():
+        for node in program.walk(c.lhs, c.rhs):
+            if isinstance(node, program.Cases):
+                names.update(*(region.when.names_read for region in node.regions))
+            elif isinstance(node, (program.Translate, program.WindowSum)):
+                amount = node.offset if isinstance(node, program.Translate) else node.width
+                if isinstance(amount, str):
+                    names.add(amount)
+            elif isinstance(node, program.Multiply):
+                for side, other in ((node.left, node.right), (node.right, node.left)):
+                    if program.carries_variable(other):
+                        names |= program.parameters_of(side)
+            elif isinstance(node, program.Divide) and program.carries_variable(node.numerator):
+                names |= program.parameters_of(node.divisor)
+    return frozenset(names)
+
+
+def _bound_parameters(v: program.Variable) -> frozenset[str]:
+    """The parameters *v*'s bounds read."""
+    return program.parameters_of(*(side for side in (v.lower, v.upper) if side is not None))
+
+
+def _constraint_parameters(c: program.Constraint) -> frozenset[str]:
+    """The parameters either side of *c* reads."""
+    return program.parameters_of(c.lhs, c.rhs)
+
+
+def _fed[D](declarations: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]) -> list[str]:
+    """The names of *declarations* that *reads* says read a name in *changed*, in declaration order."""
+    return [name for name, d in declarations.items() if reads(d) & set(changed)]
+
+
+def _same_coordinates(before: AttachedSources, now: AttachedSources, name: str, dims: tuple[str, ...]) -> bool:
+    """Whether parameter *name* is attached at the coordinates it was, a filled one at the coordinates it was filled to.
+
+    The door refuses a repeated coordinate, so equal heights and nothing new
+    is the same set.
+    """
+    if before.parameter_rows[name] != now.parameter_rows[name]:
+        return False
+    if not dims:
+        return True
+    new = now.parameters[name].select(*dims).join(before.parameters[name].select(*dims), on=list(dims), how='anti')
+    return new.select(pl.len()).pipe(collected).item() == 0
+
+
+def _in_build_order(
+    ranges: dict[str, tuple[float, float]], built: Mapping[str, object]
+) -> dict[str, tuple[float, float]]:
+    """*ranges* keyed as *built* is ordered: a range read again goes back to its block's place in the diagnostics."""
+    return {name: ranges[name] for name in built if name in ranges}
+
+
+def _spliced(frame: pl.DataFrame, lo: int, hi: int, share: pl.DataFrame) -> pl.DataFrame:
+    """*frame* with its rows ``[lo, hi)`` replaced by *share*."""
+    return pl.concat([frame.slice(0, lo), share, frame.slice(hi)])
 
 
 def declares_quadratic(c: program.Constraint) -> bool:

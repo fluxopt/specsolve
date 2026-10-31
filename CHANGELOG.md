@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): an update that gives a bound, a right-hand side or a cost new numbers at the coordinates it had skips most of the build ([#2070](https://github.com/fluxopt/specsolve/pull/2070))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
 - fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
 - feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))

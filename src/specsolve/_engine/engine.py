@@ -10,6 +10,7 @@ The lane is described in docs/development/architecture.md.
 
 from __future__ import annotations
 
+import copy
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,6 +27,8 @@ from specsolve._engine.assembly import (
     BuiltModel,
     Measured,
     declares_quadratic,
+    numbers_only,
+    refilled,
     short_parameters,
 )
 from specsolve._engine.attaching import attach
@@ -37,7 +40,7 @@ from specsolve._sinks.solver import Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 
     import numpy as np
     from mathspec import program
@@ -131,21 +134,33 @@ class Engine:
     # build
     # ------------------------------------------------------------------
 
-    def build(self, program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> None:
+    def build(
+        self, program: program.Program, sources: Mapping[str, pl.LazyFrame], changed: Collection[str] | None = None
+    ) -> None:
         """Attach *sources*, then build every declaration into the model frames.
 
-        A second call rebuilds over the same object. The held solver reads its
+        A second call rebuilds over the same object. With *changed*, the names
+        whose sources differ from the last build's, a change of numbers alone
+        ([`numbers_only`][]) reads again only the bounds, constant sides and
+        objective they feed ([`refilled`][]); anything else builds in full.
+        The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         frames. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
             self._solver.structure()
+        held, previous = self._built, self._measured
         self._built = None
         self._solved = None
         self._measured = Measured()
         with _clocked(self._seconds, 'attach'):
             attached = attach(program, sources)
+        if held is not None and changed is not None and numbers_only(held, previous, attached, changed):
+            self._measured = copy.deepcopy(previous)
+            with _clocked(self._seconds, 'build'):
+                self._built = refilled(held, attached, changed, self._measured)
+            return
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
         with _clocked(self._seconds, 'build'):
