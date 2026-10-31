@@ -155,7 +155,11 @@ def check_divisors_cover(
     """
     for quotient, params, needed in _quotients(expressions, ctx, mask):
         _refuse_gaps(
-            name, frozenset(_in_place(quotient.divisor, program.Parameter)), needed, ctx, sparse_divisor_message
+            name,
+            frozenset(_in_place(quotient.divisor, program.ParameterReference)),
+            needed,
+            ctx,
+            sparse_divisor_message,
         )
         if not terms and program.carries_variable(quotient.numerator):
             continue
@@ -201,7 +205,7 @@ def _quotients(
     masked, and removes nothing.
     """
     at_the_row = [node for e in expressions for node in _at_the_row(e)]
-    row_variables = {node.name for node in at_the_row if isinstance(node, program.Variable)}
+    row_variables = {node.name for node in at_the_row if isinstance(node, program.VariableReference)}
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
             if not isinstance(quotient, program.Divide):
@@ -225,7 +229,8 @@ def _quotients(
 
 
 def _in_place(
-    expression: program.Expression, kind: type[program.Variable | program.Parameter] = program.Variable
+    expression: program.Expression,
+    kind: type[program.VariableReference | program.ParameterReference] = program.VariableReference,
 ) -> set[str]:
     """The variables, or the parameters, under *expression* that stand at its own coordinate.
 

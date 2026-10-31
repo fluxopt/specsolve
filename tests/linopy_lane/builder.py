@@ -513,7 +513,7 @@ def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any,
 
 def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
     return any(
-        isinstance(n, program.Parameter) and ctx.program.parameters[n.name].missing == 'neutral'
+        isinstance(n, program.ParameterReference) and ctx.program.parameters[n.name].missing == 'neutral'
         for n in program.walk(node)
     )
 
