@@ -1021,6 +1021,20 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
         model.solve()
 
 
+def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
+    """`model.update(x)` answers what a fresh build of every source given so far answers.
+
+    The refused `load` is still the model's source, so an update of `cost`
+    alone is refused for it, as a fresh build of the same sources is. The
+    door refused `load` before the last good tables were replaced, and the
+    next update kept that good `load` and built, until a failure forgot them.
+    """
+    with pytest.raises(sps.errors.DataError):
+        model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
+    with pytest.raises(sps.errors.DataError, match='load'):
+        model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})})
+
+
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
