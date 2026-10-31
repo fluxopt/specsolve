@@ -1585,7 +1585,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.33.1" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },
-    { name = "xpress", marker = "extra == 'xpress'", specifier = ">=9.6" },
+    { name = "xpress", marker = "extra == 'xpress'", specifier = ">=9.8" },
 ]
 provides-extras = ["gurobi", "xpress"]
 
