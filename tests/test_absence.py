@@ -228,6 +228,33 @@ def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
     )
 
 
+@pytest.mark.xfail(strict=True, reason='a join ahead of an aligned piece reorders the rows under the streaming engine')
+def test_a_piece_attached_by_position_after_a_joined_one_lands_on_its_own_rows():
+    """`x <= c + d` over more rows than the in-memory engine takes, so the build streams.
+
+    `c` arrives in another order than the rows and is joined; `d` arrives in
+    row order and is attached by position. Each row is owed its own `c + d`.
+    """
+    n = 300_000
+    t = list(range(n))
+    shuffled = list(reversed(t))
+    spec = {
+        'dimensions': {'t': {'dtype': 'int'}},
+        'parameters': {'c': {'dims': ['t']}, 'd': {'dims': ['t']}},
+        'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10 * n}}},
+        'constraints': {'cap': {'dims': ['t'], 'expression': 'x <= c + d'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    data = {
+        't': t,
+        'c': pl.DataFrame({'t': shuffled, 'value': [float(v) for v in shuffled]}),
+        'd': pl.DataFrame({'t': t, 'value': [float(v) for v in t]}),
+    }
+    with sps.build(spec, data) as model:
+        rhs = model._engine._model.handoff.rows.get_column('rhs')
+    assert rhs.to_list() == [2.0 * v for v in t], 'row t is owed c[t] + d[t] = 2t'
+
+
 def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     """A parameter added beside a variable term is a constant piece, and is checked (#1521).
 
