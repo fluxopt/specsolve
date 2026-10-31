@@ -36,8 +36,8 @@ gurobi = [
     "scipy>=1.11",
 ]
 xpress = [
-    # 9.6 is the release that added `ObjSense`, which Xpress 10 requires in place of `xpress.maximize`.
-    "xpress>=9.6",
+    # 9.8 is the first release whose problem has `chgObjSense`, which the sink calls with `ObjSense`.
+    "xpress>=9.8",
 ]
 
 [project.urls]
