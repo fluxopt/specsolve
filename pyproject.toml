@@ -104,6 +104,10 @@ platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # `choices` on a task argument arrived in 0.65.
 requires-pixi = ">=0.65"
 
+[tool.pixi.system-requirements]
+# Xpress 9.8, the floor of the `xpress` extra, ships its macOS arm64 libraries for macOS 14 and later.
+macos = "14.0"
+
 [tool.pixi.dependencies]
 python = "3.12.*"
 
