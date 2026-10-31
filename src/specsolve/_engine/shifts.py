@@ -12,6 +12,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import polars as pl
+from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine.pieces import Piece, Presence, refuse_a_piece_without_the_dims
@@ -21,8 +22,6 @@ from specsolve._names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-
-    from mathspec import program
 
     from specsolve._engine.scope import Scope
 
@@ -84,6 +83,21 @@ class _Order:
         )
 
 
+def walked_dims(scope: Scope, s: program.Translate | program.WindowSum) -> tuple[str, ...]:
+    """The dims a walk keys each row of its operand by.
+
+    The dimension walked, a partition's joined dims, and a named offset's or
+    width's own dims, less the ones a partition groups into, which it reads
+    under the group column ([`_named_amount`][]).
+    """
+    amount = s.offset if isinstance(s, program.Translate) else s.width
+    named = scope.program.parameters[amount].dims if isinstance(amount, str) else ()
+    partition = s.partition
+    joined = partition.joined_dims if partition is not None else ()
+    grouped = {partition.dim(role) for role in partition.grouped} if partition is not None else set()
+    return tuple(dict.fromkeys((s.along, *joined, *(d for d in named if d not in grouped))))
+
+
 def translate_rows(
     scope: Scope, frame: pl.LazyFrame, dims: tuple[str, ...], carried: Sequence[str], along: str, offset: int
 ) -> pl.LazyFrame:
@@ -130,7 +144,7 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
 
     def travelled(presence: Presence) -> Presence:
         keyed_by, source = presence.keyed_by, presence.frame
-        if keyed_by is not None and not set(order.grouping.keys).issubset(keyed_by):
+        if keyed_by is not None and not set(walked_dims(scope, s)).issubset(keyed_by):
             source, keyed_by = scope.widen(source, keyed_by, p.dims), None
         return Presence(remap(source, [], p.dims if keyed_by is None else keyed_by).unique(), keyed_by)
 
@@ -140,12 +154,14 @@ def window_piece(scope: Scope, p: Piece, s: program.WindowSum, context: str) -> 
     return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
 
 
-def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) -> Piece:
+def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str, *, over_a_variable: bool) -> Piece:
     """A pointwise remap of the dimension: a row at *o* contributes at ``o + offset``.
 
     Every fill over a constant is written, ``0`` included, so the slot has a
     value. Over a term a fill writes nothing: the vacated slot contributes no
     term, and lowering refuses every nonzero fill over a variable.
+    *over_a_variable* says whether the whole operand carries a variable, which
+    decides where a fill stands ([`_Edge.vacated`][]).
     """
     if s.along not in p.dims:
         refuse_a_piece_without_the_dims(p, [s.along], context, f'shift(along={s.along!r})')
@@ -189,11 +205,12 @@ def translate_piece(scope: Scope, p: Piece, s: program.Translate, context: str) 
         source, keyed_by = presence.frame, presence.keyed_by
         if keyed_by is not None and not set(edge.keys).issubset(keyed_by):
             source, keyed_by = scope.widen(source, keyed_by, p.dims), None
-        moved_presence = remap(source, [], p.dims if keyed_by is None else keyed_by)
+        keys = p.dims if keyed_by is None else keyed_by
+        moved_presence = remap(source, [], keys)
         if s.wrap or s.fill is None:
             return Presence(moved_presence, keyed_by)
-        vacated = edge.vacated_of(scope, presence, p.dims)
-        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique())
+        vacated = edge.vacated(scope, keys, beside=source if over_a_variable else None)
+        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), keyed_by)
 
     frame = remap(p.frame, p.carried, p.dims)
     if not s.wrap and s.fill is not None and p.kind == 'const':
@@ -254,25 +271,29 @@ class _Edge:
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
-        edge = scope.spread(self.coordinates(vacated=True), [d for d in others if d not in self.keys])
-        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval')).select(*others, self.shift.along, 'cval')
+        edge = self.vacated(scope, (*others, self.shift.along), beside=None)
+        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval'))
 
-    def vacated_of(self, scope: Scope, presence: Presence, dims: tuple[str, ...]) -> pl.LazyFrame:
-        """The edge positions ``shift`` leaves with nothing to move in, for one presence.
+    def vacated(self, scope: Scope, keys: tuple[str, ...], *, beside: pl.LazyFrame | None) -> pl.LazyFrame:
+        """The coordinates the shift leaves with nothing to move in, under *keys*.
 
-        Back in the presence set they are present with no term, so the row
-        survives. The edge is crossed with the other-dim combinations the
-        variable has, so a coordinate its own mask removed stays absent.
+        Back in a presence set they are present with no term, so the row
+        survives. *beside*, a presence over *keys*, keeps only the combinations
+        of the other keys it has rows for, so a line along the dimension that
+        the operand's variable lacks whole stays absent; ``None`` keeps every
+        one, as an operand with no variable reads. The columns come in the
+        order [`_Order.remap`][] writes them, for the concat with the moved
+        presence.
         """
-        others = [d for d in dims if d != self.shift.along]
+        along = self.shift.along
+        others = [d for d in keys if d != along]
         edge = self.coordinates(vacated=True)
-        if not others:
-            return edge
-        have = presence.keys(dims)
-        source = presence.frame if all(d in have for d in others) else scope.widen(presence.frame, have, dims)
-        keys = [d for d in self.keys if d in others]
-        rows = source.select(*others).unique()
-        return join_on(rows, edge, keys, 'inner')
+        if beside is not None and others:
+            rows = beside.select(*others).unique()
+            edge = join_on(rows, edge, [d for d in self.keys if d in others], 'inner')
+        else:
+            edge = scope.spread(edge, [d for d in others if d not in self.keys])
+        return edge.select(*others, along)
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:

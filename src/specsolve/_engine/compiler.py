@@ -25,6 +25,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
+from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.pieces import (
     PRESENT,
     CompiledExpression,
@@ -44,11 +45,12 @@ from specsolve._engine.pieces import (
     propagate_absence,
     refuse_a_piece_without_the_dims,
     region_over,
+    spread_piece,
 )
 from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
-from specsolve._engine.shifts import translate_piece, window_piece
+from specsolve._engine.shifts import translate_piece, walked_dims, window_piece
 from specsolve._names import VALUE
 from specsolve.errors import SpecsolveError
 
@@ -201,11 +203,17 @@ class Compiler:
             return CompiledExpression(terms, consts, quads)
 
         def quotient(e: program.Divide) -> CompiledExpression:
-            """``a / b``, where *b* carries no variable, added up first to one value per coordinate."""
+            """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
+
+            *a* is repeated along the dims of *b* it lacks first: joined across
+            the divisor's rows, a coordinate the divisor has no row for would
+            drop the quotient rather than leave the null its refusal looks for.
+            """
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
             assert not (b.terms or b.quads), f'in {context}: a divisor carrying a variable reached the compiler'
             assert len(b.consts) == 1, 'a variable-free divisor is added up to one piece'
             inv = self._read_divisor(b.consts[0]) if reported else b.consts[0]
+            a = map_pieces(a, lambda p: spread_piece(self.scope, p, inv.dims))
             terms = tuple(join_mul(t, inv, t.kind, divide=True) for t in a.terms)
             quads = tuple(join_mul(q, inv, 'quad', divide=True) for q in a.quads)
             consts = tuple(join_mul(x, inv, 'const', divide=True) for x in a.consts)
@@ -224,14 +232,27 @@ class Compiler:
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Piece], Piece],
-            operand: program.Expression | None = None,
+            reads: tuple[str, ...],
+            acts: tuple[str, ...],
+            inner: CompiledExpression | None = None,
         ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand, *operand* where it is not ``e.operand``.
+            """One shape operator applied to its compiled operand, *inner* where the caller compiled it.
 
+            *reads* are the dims the rewrite keys each piece by, and *acts*
+            those among them it moves or sums along. A piece lacking one is
+            constant along it, so it is repeated there first, as the
+            operator's input: a term along all of them, and a constant along
+            the ones it does not act along, since the rewrite refuses a
+            constant short of those ([`refuse_a_piece_without_the_dims`][]).
             A node that is not one-to-one mixes input slots, so absence reaches
-            the operand before the rewrite consumes it.
+            the operand next, a repeated term with it, before the rewrite
+            consumes it.
             """
-            inner = ev(e.operand if operand is None else operand)
+            inner = ev(e.operand) if inner is None else inner
+            constant_along = tuple(d for d in reads if d not in acts)
+            inner = map_pieces(
+                inner, lambda p: spread_piece(self.scope, p, constant_along if p.kind == 'const' else reads)
+            )
             if fan_in(e) != 'one-to-one':
                 assert isinstance(e, program.Sum | program.WindowSum), 'only a sum fans in'
                 inner = propagate_absence(inner, self.scope, acted_along(e))
@@ -247,11 +268,16 @@ class Compiler:
 
                 Unwidened, it would unmake rows another region covers. The
                 regions are disjoint, so each coordinate is still held to the
-                one region that claims it.
+                one region that claims it. Keyed by no dim, both halves are
+                the scalar marker [`PRESENT`][], since a frame with no columns
+                holds no rows.
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
                 complement = masked(self.scope, on, ~r.when)
+                if not keys:
+                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
+                    return Presence(pl.concat(marks).unique(), keys)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
                 widened = [self.scope.widen(x.frame, have, keys), self.scope.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
@@ -322,15 +348,35 @@ class Compiler:
                 if isinstance(e.operand, program.Join) and e.operand.columns.axes:
                     join = e.operand
                     assert e.over == join.columns.axes, 'a sum through a relation sums exactly the axes its join opens'
-                    return shaped(e, lambda p: self._group_piece(p, join.columns, context), join.operand)
-                return shaped(e, lambda p: self._sum_piece(p, _dimensions(e.over), context))
+                    columns = join.columns
+                    return shaped(
+                        e,
+                        lambda p: self._group_piece(p, columns, context),
+                        columns.joined_dims,
+                        columns.dropped_dims,
+                        ev(join.operand),
+                    )
+                over = _dimensions(e.over)
+                return shaped(e, lambda p: self._sum_piece(p, over, context), over, over)
             if isinstance(e, program.Join):
                 assert not e.columns.axes, f'in {context}: a join that opens axes stands under the sum over them'
-                return shaped(e, lambda p: self._at_piece(p, e.columns, context))
+                at = e.columns
+                return shaped(e, lambda p: self._at_piece(p, at, context), at.joined_dims, at.dropped_dims)
             if isinstance(e, program.Translate):
-                return shaped(e, lambda p: translate_piece(self.scope, p, e, context))
+                operand = ev(e.operand)
+                over_a_variable = bool(operand.terms or operand.quads)
+                return shaped(
+                    e,
+                    lambda p: translate_piece(self.scope, p, e, context, over_a_variable=over_a_variable),
+                    walked_dims(self.scope, e),
+                    (e.along,),
+                    operand,
+                )
             if isinstance(e, program.WindowSum):
-                return shaped(e, lambda p: window_piece(self.scope, p, e, context))
+                if isinstance(e.width, str):
+                    refuse_a_negative_window(self.scope.data, e.width)
+                walk = walked_dims(self.scope, e)
+                return shaped(e, lambda p: self._empty_sums(window_piece(self.scope, p, e, context)), walk, (e.along,))
             if isinstance(e, program.Cases):
                 return cases(e)
             if isinstance(e, program.ExpressionReference):
@@ -463,17 +509,35 @@ class Compiler:
         [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
         the caller to where every variable under the pieces exists. *absent*
         is what a piece with no value adds: ``zero``; ``hole``, null where no
-        piece has a value; ``spreads``, null where any piece has none.
+        piece has a value; ``spreads``, null where any piece has none inside
+        the ``cases:`` region it was built under ([`_zero_outside`][]).
         """
         assert pieces, 'an expression compiles to at least one piece'
         assert all(p.kind == 'const' for p in pieces), 'a read compiles every variable to its value'
         columns = [f'__piece {i}__' for i in range(len(pieces))]
         for p, column in zip(pieces, columns, strict=True):
             carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            if absent == 'spreads' and p.region is not None:
+                carrier = self._zero_outside(carrier, column, p.region, self.scope.spanned(pieces))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')
         if absent == 'hole':
             total = pl.when(pl.any_horizontal([pl.col(c).is_not_null() for c in columns])).then(total).otherwise(None)
         return carrier.select(pl.exclude(columns), total.alias('cval'))
+
+    def _zero_outside(
+        self, carrier: pl.LazyFrame, column: str, region: program.Mask, dims: tuple[str, ...]
+    ) -> pl.LazyFrame:
+        """*carrier* with *column* read as zero at the coordinates of *dims* that *region* does not claim.
+
+        A piece built under a ``cases:`` region has rows only inside it, and the
+        regions are disjoint, so a divisor that is null wherever any piece has
+        no row would find a hole at every coordinate another region claims.
+        """
+        keys = list(dims or (UNIT,))
+        claimed = masked(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
+        inside = carrier.join(claimed, on=keys, how='left')
+        value = pl.when(pl.col('__claimed__')).then(pl.col(column)).otherwise(0.0)
+        return inside.with_columns(value.alias(column)).drop('__claimed__')
 
     # ------------------------------------------------------------------
     # shape operators — one dim rewritten per piece
@@ -486,13 +550,10 @@ class Compiler:
         skips absent slots.
         """
         missing = [d for d in over if d not in p.dims]
-        if missing and p.kind == 'const':
+        if missing:
             refuse_a_piece_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
-        scale = math.prod(self.scope.data.cardinality[d] for d in missing)
         frame = p.frame.select(*keep, *p.carried)
-        if scale != 1:
-            frame = frame.with_columns(pl.col(p.value_column) * scale)
         return self._empty_sums(Piece(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
     def _group_piece(self, p: Piece, columns: program.JoinColumns, context: str) -> Piece:
@@ -513,8 +574,9 @@ class Compiler:
 
         An empty sum is zero, not a hole, and [`coverage.constant_side`][]
         cannot tell the two apart, so the zero is written here: a dimension
-        with no labels, a group its relation maps no member to, and a member a
-        ``cases:`` region leaves out all land nowhere. Asked of the piece
+        with no labels, a group its relation maps no member to, a window of
+        width zero or over no row, and a member a ``cases:`` region leaves out
+        all land nowhere. Asked of the piece
         rather than the relation for that last reason. A neutral parameter short
         of a member is one summand fewer. Only for a constant part: a row with
         no terms is not built.
@@ -528,7 +590,7 @@ class Compiler:
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
-        return replace(p, frame=pl.concat([p.frame, zeros]))
+        return replace(p, frame=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
 
     def _at_piece(self, p: Piece, a: program.JoinColumns, context: str) -> Piece:
         """Spread the dropped dims back out over the added ones — the adjoint of a group.
@@ -537,8 +599,9 @@ class Compiler:
         ``var_label`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
-        absent = [d for d in a.dropped_dims if d not in p.dims]
-        assert not absent, f'in {context}: a lookup through {absent}, which the expression does not span'
+        missing = [d for d in a.dropped_dims if d not in p.dims]
+        if missing:
+            refuse_a_piece_without_the_dims(p, missing, context, 'at(by=)')
         remapped = self._remap_piece(p, a)
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 

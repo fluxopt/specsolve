@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 #: Ports whose model moves when the rows of a table are shuffled, and why.
 MOVES = {
     'osemosys_utopia': (
-        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
+        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1898)'
     ),
 }
 

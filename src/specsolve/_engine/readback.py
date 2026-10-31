@@ -10,8 +10,8 @@ from mathspec import program
 from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve._collect import collected
 from specsolve._engine import coverage, labels
-from specsolve._engine.pieces import absence_restrictions
-from specsolve._messages import coordinate_expr, unknown_name_message
+from specsolve._engine.pieces import Piece, absence_restrictions
+from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, InfeasibleSubsystem
 from specsolve._sinks.handoff import SENSE_CODES
@@ -327,7 +327,8 @@ def readers(
         return declared, None
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
-        return expression_frame('the expression', lower(written), compiler)
+        name = written if isinstance(written, str) and written in named else 'the expression'
+        return expression_frame(name, lower(written), compiler)
 
     return declared, evaluate
 
@@ -347,33 +348,44 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"
-    compiled = compiler.expression(expr, context, reported=True)
-
-    coverage.refuse_null_constants(
-        [p.frame for p in compiled.consts],
-        program.parameters_of(*coverage.divisors_of(expr)),
-        context,
-        _reported_divisor_message,
-    )
-
-    pieces = compiled.consts
+    pieces = compiler.expression(expr, context, reported=True).consts
     dims = compiler.scope.spanned(pieces)
     carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(pieces)).lazy()
+
+    coverage.refuse_null_constants(
+        [_holed(carrier, pieces), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in pieces)],
+        program.parameters_of(*coverage.divisors_of(expr)),
+        context,
+        reported_divisor_message,
+    )
+
     added = compiler.summed_onto(pieces, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
     ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
 
-def _reported_divisor_message(name: str, missing: int) -> str:
-    """The message for a divisor parameter a reported expression reads short of a row."""
-    return (
-        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
-        f'quotient is not dropped there, and there is no number to divide by.\n'
-        f'  Supply the missing rows.\n'
-        f'  Declare the parameter `missing: absent`, if the quotient has no value there.'
-    )
+def _holed(carrier: pl.LazyFrame, pieces: Sequence[Piece]) -> pl.LazyFrame:
+    """One ``cval`` per row of *carrier*, null where any of *pieces* holds a null there, else zero.
+
+    The refusal counts the coordinates the expression divides at, and two
+    pieces can hold a hole at one coordinate, as ``v / p - v / p`` does.
+    """
+    holed: pl.Expr = pl.lit(False)
+    for i, p in enumerate(pieces):
+        column = f'__hole {i}__'
+        if p.dims:
+            hole = (
+                p.frame.filter(pl.col('cval').is_null())
+                .select(*p.dims)
+                .unique()
+                .with_columns(pl.lit(True).alias(column))
+            )
+            carrier = carrier.join(hole, on=list(p.dims), how='left')
+        else:
+            carrier = carrier.join(p.frame.select(pl.col('cval').is_null().any().alias(column)), how='cross')
+        holed = holed | pl.col(column).fill_null(False)
+    return carrier.select(pl.when(holed).then(None).otherwise(0.0).alias('cval'))
 
 
 def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:
