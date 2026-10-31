@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected, collected_all
+from specsolve._collect import collected_all
 from specsolve._engine.pieces import constant_scalar
 from specsolve._engine.predicates import masked
 from specsolve._engine.scope import join_on
@@ -126,17 +126,14 @@ def constant_side(
     rows: pl.LazyFrame,
     consts: Sequence[tuple[Piece, float]],
     c: program.Constraint,
-    subject: str,
-) -> pl.DataFrame:
-    """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.
+) -> pl.LazyFrame:
+    """One constraint's rows as ``(row, sense, rhs)``, and where a constant piece left a row uncovered.
 
-    A coordinate a piece has no row for contributes zero, and the coverage
-    check rides on the same pass. A piece built under a ``cases:`` region is
-    owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
-
-    Raises:
-        DataError: A constant piece with no value at a row it is owed.
+    A coordinate a piece has no row for contributes zero. A piece built under a
+    ``cases:`` region is owed only inside it. The plan carries one gap column
+    per piece, which [`refuse_uncovered`][] reads. A gap a reduction summed
+    away is one summand fewer, as it is for a ``missing: neutral`` row anywhere
+    inside a sum.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: list[str] = []
@@ -152,15 +149,24 @@ def constant_side(
             claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
-        carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
-        gaps.append(f'__gap {i}__')
+        carrier = carrier.with_columns(gap.alias(_gap_column(i)))
+        gaps.append(_gap_column(i))
 
-    built = carrier.select(
+    return carrier.select(
         'row',
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *gaps,
-    ).pipe(collected)
+    )
+
+
+def refuse_uncovered(built: pl.DataFrame, consts: Sequence[tuple[Piece, float]], subject: str) -> pl.DataFrame:
+    """*built*, a [`constant_side`][] read over *consts*, without its gap columns, once no row is left uncovered.
+
+    Raises:
+        DataError: A constant piece with no value at a row it is owed.
+    """
+    gaps = [_gap_column(i) for i in range(len(consts))]
     if not gaps:
         return built
     owed = [p.parameters for (p, _), column in zip(consts, gaps, strict=True) if built.get_column(column).any()]
@@ -169,3 +175,8 @@ def constant_side(
         names = ', '.join(sorted(frozenset[str]().union(*owed)))
         raise DataError(uncovered_constant_message(names, uncovered, subject))
     return built.drop(gaps)
+
+
+def _gap_column(i: int) -> str:
+    """The column [`constant_side`][] marks the rows piece *i* leaves uncovered in."""
+    return f'__gap {i}__'
