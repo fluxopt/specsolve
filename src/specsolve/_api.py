@@ -53,7 +53,14 @@ from specsolve._engine.engine import Engine, expression_readers
 from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve._result import Result, evaluated
 from specsolve._sinks import solver, writer
-from specsolve._sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
+from specsolve._sources import (
+    kept_parameters,
+    numbered,
+    read_start,
+    refuse_unknown_sources,
+    refuse_unknown_start_word,
+    tidy_sources,
+)
 from specsolve.errors import (
     LayoutError,
     SpecsolveError,
@@ -61,7 +68,7 @@ from specsolve.errors import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from mathspec.program import Expression, Program
 
@@ -221,16 +228,21 @@ class Model:
         """
         return lower(self._spec, written)
 
-    def _fill(self) -> None:
+    def _fill(self, changed: Collection[str] | None = None) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.
 
         What the build read is kept for an archive: a one-shot iterator is
-        spent by then, and a path may have been rewritten.
+        spent by then, and a path may have been rewritten. With *changed*, the
+        names an update replaced, a parameter that change leaves alone is not
+        read again. A failure forgets what was read, so the next update reads
+        every source again, the refused one included.
         """
         try:
-            self._tidied = tidy_sources(self._program, self._sources)
+            kept = kept_parameters(self._program, self._tidied, changed) if changed is not None else None
+            self._tidied = tidy_sources(self._program, self._sources, kept)
             self._engine.build(self._program, self._tidied)
         except BaseException:
+            self._tidied = {}
             self._engine.close()
             raise
 
@@ -267,7 +279,7 @@ class Model:
         """
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
-        self._fill()
+        self._fill(sources.keys())
         return self
 
     def solve(

@@ -563,6 +563,44 @@ def test_a_dimension_index_updates_as_a_source(model):
     assert model.update(change).solve().primal('p').height > 0, 'a dimension index is a source, and updates as one'
 
 
+@pytest.mark.parametrize(
+    ('change', 'checked'),
+    [
+        pytest.param(
+            {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [41.0, 81.0, 56.0, 96.0]})},
+            {'load'},
+            id='a parameter alone',
+        ),
+        pytest.param({'snapshot': SNAPSHOTS}, {'load'}, id='an index and the parameter over it'),
+        pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='an index and the parameters over it'),
+    ],
+)
+def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked):
+    """A parameter whose own source and whose dims' indices an update leaves alone is not read or checked again."""
+    from specsolve import _sources
+
+    real = _sources._checked_parameter
+    seen: list[str] = []
+
+    def spy(name, *args, **kwargs):
+        seen.append(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(_sources, '_checked_parameter', spy)
+    model.update(change)
+    assert set(seen) == checked, f'the update checked {sorted(seen)} again'
+
+
+def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over_it(model):
+    """A parameter kept from the last build is still checked against an index the update changed.
+
+    `load` is not in the update, but its rows at snapshot 3 now name a label
+    the index no longer has.
+    """
+    with pytest.raises(sps.errors.DataError, match="parameter 'load' has label"):
+        model.update({'snapshot': [0, 1, 2]})
+
+
 def test_a_update_can_grow_a_dimension():
     """Appending rows is an update — the Benders master, in three lines.
 
@@ -641,6 +679,48 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
 
     with pytest.raises(sps.errors.SpecsolveError, match='no built model to hand over'):
         model.solve()
+
+
+def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
+    """`model.update(x)` answers what a fresh build of every source given so far answers.
+
+    The refused `load` is still the model's source, so an update of `cost`
+    alone is refused for it, as a fresh build of the same sources is. The
+    door refused `load` before the last good tables were replaced, and the
+    next update kept that good `load` and built, until a failure forgot them.
+    """
+    with pytest.raises(sps.errors.DataError):
+        model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
+    with pytest.raises(sps.errors.DataError, match='load'):
+        model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})})
+
+
+def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_again(model, dispatch_yaml, monkeypatch):
+    """`model.update(x)` answers what a fresh build of every source given so far answers.
+
+    The first update of `load` stops while it chooses what to keep, after the
+    new `load` is attached. The next update, of `cost` alone, must still read
+    that `load` rather than keep the tables of the build before it. The choice
+    ran before the cleanup that forgets the last build's tables, so the next
+    update kept the `load` built before the attached one.
+    """
+    import specsolve._api as api
+
+    load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
+    cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
+    choose = api.kept_parameters
+
+    def interrupted(*args):
+        monkeypatch.setattr(api, 'kept_parameters', choose)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(api, 'kept_parameters', interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        model.update({'load': load})
+    model.update({'cost': cost})
+    with sps.build(dispatch_yaml, sources() | COORDS | {'load': load, 'cost': cost}) as fresh:
+        expected = fresh.solve().objective
+    assert model.solve().objective == pytest.approx(expected), 'the attached load, not the one built before it'
 
 
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
