@@ -959,6 +959,34 @@ def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
         model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})})
 
 
+def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_again(model, dispatch_yaml, monkeypatch):
+    """`model.update(x)` answers what a fresh build of every source given so far answers.
+
+    The first update of `load` stops while it chooses what to keep, after the
+    new `load` is attached. The next update, of `cost` alone, must still read
+    that `load` rather than keep the tables of the build before it. The choice
+    ran before the cleanup that forgets the last build's tables, so the next
+    update kept the `load` built before the attached one.
+    """
+    import specsolve._api as api
+
+    load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
+    cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
+    choose = api.kept_parameters
+
+    def interrupted(*args):
+        monkeypatch.setattr(api, 'kept_parameters', choose)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(api, 'kept_parameters', interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        model.update({'load': load})
+    model.update({'cost': cost})
+    with sps.build(dispatch_yaml, sources() | COORDS | {'load': load, 'cost': cost}) as fresh:
+        expected = fresh.solve().objective
+    assert model.solve().objective == pytest.approx(expected), 'the attached load, not the one built before it'
+
+
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
