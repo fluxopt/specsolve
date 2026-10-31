@@ -132,7 +132,8 @@ def constant_side(
     """One constraint's rows as ``(row, sense, rhs)``, every constant piece covering the rows it is given.
 
     A coordinate a piece has no row for contributes zero, and the coverage
-    check rides on the same pass. A piece built under a ``cases:`` region is
+    check rides on the same pass. Every piece attached by position goes onto
+    the rows before any join, which keeps no order once the build streams. A piece built under a ``cases:`` region is
     owed only inside it. A gap a reduction summed away is one summand fewer,
     as it is for a ``missing: neutral`` row anywhere inside a sum.
 
@@ -142,14 +143,14 @@ def constant_side(
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: list[str] = []
     built_rows = rows.pipe(collected)
-    carrier = built_rows.lazy()
-    for i, (p, sign) in enumerate(consts):
+    pieces = [replace(p, frame=p.frame.pipe(collected).lazy()) for p, _ in consts]
+    aligned = [_aligned(built_rows, p) if set(p.dims) == set(c.dims) else None for p in pieces]
+    carrier = built_rows.lazy().with_columns(
+        values.alias(f'__const {i}__') for i, values in enumerate(aligned) if values is not None
+    )
+    for i, ((p, sign), piece, values) in enumerate(zip(consts, pieces, aligned, strict=True)):
         column = f'__const {i}__'
-        piece = replace(p, frame=p.frame.pipe(collected).lazy())
-        aligned = _aligned(built_rows, piece) if set(p.dims) == set(c.dims) else None
-        if aligned is not None:
-            carrier = carrier.with_columns(aligned.alias(column))
-        else:
+        if values is None:
             carrier = join_on(carrier, constant_scalar(piece).rename({'cval': column}), p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         gap = pl.col(column).is_null()

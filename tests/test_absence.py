@@ -228,12 +228,13 @@ def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
     )
 
 
-@pytest.mark.xfail(strict=True, reason='a join ahead of an aligned piece reorders the rows under the streaming engine')
 def test_a_piece_attached_by_position_after_a_joined_one_lands_on_its_own_rows():
     """`x <= c + d` over more rows than the in-memory engine takes, so the build streams.
 
     `c` arrives in another order than the rows and is joined; `d` arrives in
-    row order and is attached by position. Each row is owed its own `c + d`.
+    row order and is attached by position. The streaming join kept no row
+    order, so `d` landed on other rows (row 0 got 75000) until every
+    positional piece went onto the rows before any join.
     """
     n = 300_000
     t = list(range(n))
