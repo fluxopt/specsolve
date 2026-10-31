@@ -42,7 +42,7 @@ SWEPT_SIZES = ('2xs', 'xs', 's')
 FRESH_SIZES = ('2xs', 'xs')
 
 #: Each window change, and whether it should load the solver from scratch.
-RELOADS = {'values': False, 'shape': True, 'one': False, 'coefficient': True, 'cold': True}
+RELOADS = {'values': False, 'shape': True, 'one': False, 'coefficient': False, 'cold': True}
 
 
 def _rounds(benchmark: Any, request: pytest.FixtureRequest, fn: Any, *args: Any, setup: Any = None) -> Any:
@@ -193,9 +193,8 @@ def test_window(
     ``values`` re-attaches the same data, which a loaded solver takes by value;
     ``shape`` attaches the rung one snapshot shorter, which it cannot; ``one``
     updates one parameter alone, which rebuilds only what it feeds where it moves only numbers;
-    ``coefficient`` updates the case's parameter inside the matrix, which moves
-    the digest and loads the solver again, so only a case that names one has
-    it; and ``cold`` re-attaches the same data after dropping the loaded solver. An arm carries
+    ``coefficient`` updates the case's parameter inside the matrix, which a
+    loaded solver takes in place, so only a case that names one has it; and ``cold`` re-attaches the same data after dropping the loaded solver. An arm carries
     between windows whatever its library has a verb for: specsolve updates and
     loads, linopy builds a new model. Each arm's `window_setup`
     runs untracked in the spawned child before every sample (#1617). An arm
@@ -217,7 +216,7 @@ def test_window(
 
     case = CASES[case_name]
     if change == 'coefficient' and case.coefficient is None:
-        pytest.skip(f'{case_name} has no parameter inside the matrix, so no update of its values moves the digest')
+        pytest.skip(f'{case_name} has no parameter inside the matrix, so it has no coefficient window')
 
     prepared = module.prepare(case_name, size, paths(case_name, size), {})
     following = prepared
