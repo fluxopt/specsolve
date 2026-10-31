@@ -90,8 +90,8 @@ def _bounded(*dims: str) -> dict[str, Any]:
     return {'dims': list(dims), 'bounds': {'lower': 0, 'upper': 1}}
 
 
-def _case(spec: dict[str, Any], sources: dict[str, Any], *reads: str) -> Case:
-    return Case(seed=0, spec=spec, sources=sources, reads=list(reads))
+def _case(spec: dict[str, Any], sources: dict[str, Any], *reads: str, linear: bool = True) -> Case:
+    return Case(seed=0, spec=spec, sources=sources, reads=list(reads), linear=linear)
 
 
 def _found(reason: str) -> Any:
@@ -109,9 +109,6 @@ REDUCED = [
             ),
             {'t': [1, 2], 'g': ['a']},
         ),
-        marks=_found(
-            '#2049 — a shift of a shift over a variable with a second dimension crashes polars: schema lengths differ'
-        ),
         id='nested shift over two dimensions',
     ),
     pytest.param(
@@ -123,9 +120,6 @@ REDUCED = [
                 variables={'x': _bounded('t', 'g'), 'y': _bounded('g')},
             ),
             {'t': [1, 2, 3], 'g': ['a']},
-        ),
-        marks=_found(
-            '#2049 — a shift over a sum with a term that does not carry the dimension raises an internal AssertionError'
         ),
         id='shift over a term without the dimension',
     ),
@@ -139,10 +133,53 @@ REDUCED = [
             ),
             {'t': [1, 2, 3], 'g': ['a']},
         ),
-        marks=_found(
-            '#2049 — a sum_back over a sum with a term that does not carry the dimension raises an internal AssertionError'
-        ),
         id='sum_back over a term without the dimension',
+    ),
+    *(
+        pytest.param(
+            _case(
+                _model(
+                    {**T, **G},
+                    f'{operator}(x + y, along=t, {amount}) <= 1',
+                    ['g', 't'],
+                    variables={'x': _bounded('t', 'g'), 'y': {**_bounded('g'), 'where': "g != 'b'", **missing}},
+                ),
+                {'t': [1, 2, 3], 'g': ['a', 'b']},
+            ),
+            id=f'{operator} over a {label} term without the dimension',
+        )
+        for operator, amount in [('shift', 'offset=1, edge=0'), ('sum_back', 'window=2')]
+        for label, missing in [('masked', {}), ('neutral', {'missing': 'neutral'})]
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'sum(x + y, over=t) <= 2',
+                ['g'],
+                variables={'x': {**_bounded('t', 'g'), 'where': 't != 2'}, 'y': _bounded('g')},
+            ),
+            {'t': [1, 2, 3], 'g': ['a', 'b']},
+        ),
+        id='sum over a term without the dimension beside a masked term',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'sum_back(x + y + q, along=t, window=w) <= 4',
+                ['g', 't'],
+                parameters={'w': {'dims': ['g'], 'dtype': 'int'}, 'q': {'dims': ['t']}},
+                variables={'x': _bounded('t', 'g'), 'y': {**_bounded('t'), 'where': 't != 2'}},
+            ),
+            {
+                't': [1, 2, 3],
+                'g': ['a', 'b'],
+                'w': pl.DataFrame({'g': ['a', 'b'], 'value': [1, 2]}),
+                'q': pl.DataFrame({'t': [1, 2, 3], 'value': [1.0, 0.5, 0.25]}),
+            },
+        ),
+        id='a parameter window over a masked term without its dimension',
     ),
     pytest.param(
         _case(
@@ -162,9 +199,6 @@ REDUCED = [
                 'r': pl.DataFrame({'k': ['k1', 'k2'], 'h': ['h1', 'h1']}),
             },
         ),
-        marks=_found(
-            '#2049 — an at() over a sum with a term that does not carry the looked-up column raises an internal AssertionError'
-        ),
         id='at over a term without the column',
     ),
     pytest.param(
@@ -178,9 +212,6 @@ REDUCED = [
             ),
             {'k': [1, 2], 'p': pl.DataFrame({'k': [1], 'value': [7]})},
             'p',
-        ),
-        marks=_found(
-            '#2048 — a float parameter supplied as an integer column reads `missing: 2.5` as 2 on the relational lane'
         ),
         id='a fractional missing value under an integer column',
     ),
@@ -196,10 +227,21 @@ REDUCED = [
             {'t': [1, 2], 'g': ['a', 'b'], 'p': pl.DataFrame({'t': [2], 'g': ['a'], 'value': [0.5]})},
             'shift(p, along=t, offset=1, edge=0)',
         ),
-        marks=_found(
-            '#2048 — a numeric shift edge over a parameter stands only where the parameter has a row in the other dimensions'
-        ),
         id='a shift edge where the parameter has no row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**T, **G},
+                'shift(x + p, along=t, offset=1, edge=0) <= v',
+                ['g', 't'],
+                parameters={'p': {'dims': ['t', 'g'], 'missing': 'absent'}},
+                variables={'v': _bounded('g', 't'), 'x': _bounded('g', 't')},
+            ),
+            {'t': [1, 2], 'g': ['a', 'b'], 'p': pl.DataFrame({'t': [2], 'g': ['a'], 'value': [0.5]})},
+            'shift(x + p, along=t, offset=1, edge=0)',
+        ),
+        id='a shift edge beside a variable where the parameter has no row',
     ),
     pytest.param(
         _case(
@@ -211,9 +253,6 @@ REDUCED = [
                 variables={'v': {'dims': [], 'bounds': {'lower': -5, 'upper': 10}}, 'w': _bounded('g')},
             ),
             {'g': ['g1'], 'p0': pl.DataFrame({'g': ['g1'], 'value': [0.0]}), 'p1': 2.0},
-        ),
-        marks=_found(
-            '#2048 — a row whose only coefficient is a data zero: the relational lane keeps `2 == 0`, the oracle drops it'
         ),
         id='a row whose coefficient is a data zero',
     ),
@@ -235,9 +274,6 @@ REDUCED = [
                 'r': pl.DataFrame({'k': ['k1'], 'b': ['b1']}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle crashes on a sum grouped by a column that an at() on the other side also adds'
-        ),
         id='oracle: a grouped sum beside a lookup of the same column',
     ),
     pytest.param(
@@ -255,10 +291,24 @@ REDUCED = [
                 'p': pl.DataFrame({'g': ['g1', 'g2'], 'h': ['h1', 'h2'], 'value': [1.0, 2.0]}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle reads `missing: <value>` on a parameter over two dimensions as `neutral`, and refuses the data'
-        ),
         id='oracle: a missing value over two dimensions',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {**G, 'h': {'dtype': 'str'}},
+                'v <= 1',
+                ['g', 'h'],
+                parameters={'p': {'dims': ['g', 'h'], 'missing': 0.0}},
+                variables={'v': _bounded('g', 'h') | {'where': 'p != 1'}},
+            ),
+            {
+                'g': ['g1', 'g2'],
+                'h': ['h1', 'h2'],
+                'p': pl.DataFrame({'g': ['g1', 'g2'], 'h': ['h1', 'h2'], 'value': [2.0, 3.0]}),
+            },
+        ),
+        id='oracle: a missing value over two dimensions in a where',
     ),
     pytest.param(
         _case(
@@ -271,10 +321,254 @@ REDUCED = [
             {'t': [1, 2], 'w': 0},
             'sum_back(v, along=t, window=w)',
         ),
-        marks=_found(
-            '#2048 — a window parameter of 0 is accepted, which a literal window is not, and the lanes read it apart'
-        ),
         id='a window parameter of zero',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'sum_back(v, along=t, window=w) + x <= 0.5',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}},
+                variables={'v': _bounded('t'), 'x': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0},
+        ),
+        id='a window of width zero beside another term',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'sum_back(v, along=t, window=w) <= 0.5',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}},
+                variables={'v': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0},
+        ),
+        id='a window of width zero alone in a row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'v <= sum_back(p, along=t, window=w)',
+                ['t'],
+                parameters={'w': {'dims': [], 'dtype': 'int'}, 'p': {'dims': ['t']}},
+                variables={'v': _bounded('t')},
+            ),
+            {'t': [1, 2], 'w': 0, 'p': pl.DataFrame({'t': [1, 2], 'value': [1.0, 2.0]})},
+            'sum_back(p, along=t, window=w)',
+        ),
+        id='a window of width zero over data',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                T,
+                'sum_back(p, along=t, window=1) <= x',
+                ['t'],
+                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                variables={'x': _bounded('t')},
+            ),
+            {'t': [1, 2], 'p': pl.DataFrame({'t': [2], 'value': [0.25]})},
+            'sum_back(p, along=t, window=1)',
+        ),
+        id='a window over a neutral parameter with no row in it',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'g': {'dtype': 'str'}, 'h': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 'neutral'}},
+                'variables': {
+                    'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}, 'where': "g != 'g6'"},
+                    'y': {'dims': ['k', 'h'], 'bounds': {'lower': -5, 'upper': 5}},
+                },
+                'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
+            },
+            {
+                'g': ['g6'],
+                'h': [9],
+                'k': [2],
+                'p': pl.DataFrame(
+                    {'g': [], 'h': [], 'value': []}, schema={'g': pl.String, 'h': pl.Int64, 'value': pl.Float64}
+                ),
+            },
+            '(y + x) / p',
+        ),
+        id='a read divided by a neutral parameter with no row, where the quotient is absent',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'h': {'dtype': 'int'}, 'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+                'relations': {'r': {'key': ['g', 'h'], 'missing': 'absent'}},
+                'parameters': {'p': {'dims': ['t', 'g']}},
+                'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 10}}},
+                'constraints': {'c': {'dims': ['g', 't'], 'expression': 'p <= sum(v, over=h, by=r[g])'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {
+                'h': [9],
+                'g': ['g7'],
+                't': [9],
+                'p': pl.DataFrame({'t': [9], 'g': ['g7'], 'value': [1.0]}),
+                'r': pl.DataFrame({'g': [], 'h': []}, schema={'g': pl.String, 'h': pl.Int64}),
+            },
+        ),
+        id='oracle: a sum through a bare relation that relates nothing',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'b': {'dtype': 'str'}},
+                'parameters': {'p': {'dims': ['b']}},
+                'variables': {
+                    'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 10}, 'where': "b != 'b4'"},
+                },
+                'objective': {'sense': 'maximize', 'expression': 'sum(sum(v) / p)'},
+            },
+            {'b': ['b4', 'b7'], 'p': pl.DataFrame({'b': ['b4', 'b7'], 'value': [0.0, 2.0]})},
+        ),
+        id='oracle: a zero divisor under a sum in the objective',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'h': {'dtype': 'int'}, 'b': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 5}}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {
+                'h': [0],
+                'b': ['b5'],
+                't': [-1],
+                'p': pl.DataFrame(
+                    {'t': [], 'h': [], 'value': []}, schema={'t': pl.Int64, 'h': pl.Int64, 'value': pl.Float64}
+                ),
+            },
+            'v / p - v / p',
+        ),
+        id='a read refused once per coordinate where two quotients by a missing row reach it',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'h': {'dtype': 'int', 'ordered': True}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'h': [10, 4], 'p': pl.DataFrame({'h': [10], 'value': [-0.5]})},
+            '-v / p + shift(shift(v, along=h, offset=1), along=h, offset=1, edge=0)',
+        ),
+        id='oracle: a read answered where a quotient by a missing row is absent beside a shift',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {'b': {'dtype': 'str'}},
+                'sum(v) + v * p <= 1',
+                ['b'],
+                parameters={'p': {'dims': ['b'], 'missing': 'neutral'}},
+                variables={'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 10}, 'where': "b != 'b8'"}},
+            ),
+            {'b': ['b5', 'b8'], 'p': pl.DataFrame({'b': ['b5'], 'value': [2.0]})},
+        ),
+        id='oracle: a neutral factor with no row beside a variable absent there',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'b': {'dtype': 'str'}},
+                'parameters': {'p': {'dims': ['b'], 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 1}}},
+                'expressions': {'e': {'dims': ['b'], 'expression': 'v / p'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'b': ['b5'], 'p': pl.DataFrame({'b': [], 'value': []}, schema={'b': pl.String, 'value': pl.Float64})},
+            'e',
+        ),
+        id='a declared expression read from a saved answer is refused by its own name',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': G,
+                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 'neutral'}},
+                'variables': {'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
+                'expressions': {'e': {'dims': ['g'], 'expression': 'sum(v, over=g) / p'}},
+                'constraints': {'c': {'dims': ['g'], 'expression': 'v == e'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'g': ['g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2]})},
+        ),
+        id='oracle: a divisor with no row where a variable beside the quotient takes the row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                G,
+                'v / sum(p, over=g) <= 1',
+                ['g'],
+                parameters={'p': {'dims': ['g'], 'missing': 'neutral'}},
+                variables={'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
+            ),
+            {'g': ['g0', 'g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2.0]})},
+        ),
+        id='oracle: a neutral parameter with no row summed inside a divisor',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'t': {'dtype': 'int'}, 'h': {'dtype': 'int', 'ordered': True}},
+                'relations': {'r': {'key': 'h', 'values': 't'}},
+                'parameters': {'p': {'dims': ['h', 't'], 'missing': 'absent'}},
+                'variables': {'v': {'dims': [], 'bounds': {'lower': 0, 'upper': 1}}},
+                'objective': {'sense': 'maximize', 'expression': 'v'},
+            },
+            {
+                't': [-2],
+                'h': [2],
+                'p': pl.DataFrame(
+                    {'h': [], 't': [], 'value': []}, schema={'h': pl.Int64, 't': pl.Int64, 'value': pl.Float64}
+                ),
+                'r': pl.DataFrame({'h': [2], 't': [-2]}),
+            },
+            'shift(p, along=h, offset=-1, edge=1.5, within=r[t])',
+        ),
+        id='oracle: a partitioned shift edge over data with no row',
+    ),
+    pytest.param(
+        _case(
+            _model(
+                {'t': {'dtype': 'int'}},
+                '3 / p <= v',
+                ['t'],
+                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                variables={
+                    'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 'neutral'}
+                },
+            ),
+            {'t': [0, 9], 'p': pl.DataFrame({'t': [0], 'value': [2.0]})},
+        ),
+        id='oracle: a divisor with no row beside a neutral variable masked there',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {**T, **G},
+                'parameters': {'w': {'dims': ['g'], 'dtype': 'int'}},
+                'variables': {'v': _bounded('g', 't')},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'t': [1, 2], 'g': ['a', 'b'], 'w': pl.DataFrame({'g': ['a', 'b'], 'value': [2, -1]})},
+            'sum_back(v, along=t, window=w)',
+        ),
+        id='a negative window parameter',
     ),
     pytest.param(
         _case(
@@ -290,7 +584,6 @@ REDUCED = [
             },
             {'k': [11], 'p0': pl.DataFrame({'k': [11], 'value': [0.0]})},
         ),
-        marks=_found('#2048 — the oracle drops the whole row, v1 with it, when a sum with no terms is divided by zero'),
         id='oracle: an empty sum over a zero divisor',
     ),
     pytest.param(
@@ -305,7 +598,6 @@ REDUCED = [
             {'h': [5, 6], 't': [1], 'p': pl.DataFrame({'h': [5, 6], 'value': [1.0, 2.0]})},
             'shift(v / p, along=h, offset=1, edge=0)',
         ),
-        marks=_found('#2049 — a quotient read under a shift with an edge crashes polars: schema lengths differ'),
         id='a quotient under a shift with an edge',
     ),
     pytest.param(
@@ -325,9 +617,6 @@ REDUCED = [
                 'r': pl.DataFrame({'t': [2], 'b': ['b3']}),
             },
         ),
-        marks=_found(
-            '#2049 — a sum through a relation over a sum with a term that does not carry the dimension raises an internal AssertionError'
-        ),
         id='sum by over a term without the dimension',
     ),
     pytest.param(
@@ -343,9 +632,6 @@ REDUCED = [
             {'b': ['b8'], 'g': ['g6', 'g7']},
             'x - y',
         ),
-        marks=_found(
-            '#2048 — a summand is absent where its masked operand is, but the relational lane keeps the term it broadcasts beside it'
-        ),
         id='an absent summand beside a broadcast term',
     ),
     pytest.param(
@@ -358,9 +644,6 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'v'},
             },
             {'h': [2], 'p': pl.DataFrame({'h': [], 'value': []}, schema={'h': pl.Int64, 'value': pl.Float64})},
-        ),
-        marks=_found(
-            '#2048 — a neutral divisor with no row is not refused on the relational lane when the dividend lacks its dimension'
         ),
         id='a neutral divisor beside a scalar dividend',
     ),
@@ -378,9 +661,6 @@ REDUCED = [
                 'g': ['a'],
                 'p': pl.DataFrame({'g': [], 'value': []}, schema={'g': pl.String, 'value': pl.Float64}),
             },
-        ),
-        marks=_found(
-            "#2049 — a neutral factor on a side with a variable is refused as a constant side, and the message names parameter ''"
         ),
         id='a neutral factor on a side with a variable',
     ),
@@ -406,9 +686,6 @@ REDUCED = [
                 'b': pl.DataFrame({'h': [7, 7, 5, 5], 't': [1, 2, 1, 2], 'value': [1, 2, 3, 4]}),
             },
         ),
-        marks=_found(
-            '#2049 — a cased divisor with a value at every coordinate is refused as short of rows on the relational lane'
-        ),
         id='a cased divisor',
     ),
     pytest.param(
@@ -420,9 +697,6 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'sum(v / p)'},
             },
             {'h': [1], 'p': pl.DataFrame({'h': [1], 'value': [0.0]})},
-        ),
-        marks=_found(
-            '#2049 — a zero divisor in the objective is refused as `objective:` on one lane and `the objective:` on the other'
         ),
         id='the words for a zero divisor in the objective',
     ),
@@ -437,8 +711,20 @@ REDUCED = [
             {'b': ['b1'], 'p': pl.DataFrame({'b': [], 'value': []}, schema={'b': pl.String, 'value': pl.Float64})},
             'p ** 0',
         ),
-        marks=_found('#2048 — the oracle reads an absent parameter to the power 0 as 1'),
         id='oracle: an absent base to the power 0',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': {'h': {'dtype': 'int'}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'variables': {'v': _bounded('h')},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'h': [1, 2], 'p': pl.DataFrame({'h': [1], 'value': [2.0]})},
+            'v / p',
+        ),
+        id='oracle: a read that divides by a neutral parameter with no row',
     ),
     pytest.param(
         _case(
@@ -452,7 +738,6 @@ REDUCED = [
             | {'constraints': {'c': {'dims': ['b', 'g'], 'expression': 'v <= 1', 'where': 'r'}}},
             {'b': ['b0'], 'g': ['g0'], 'r': pl.DataFrame({'g': ['g0'], 'b': ['b0']})},
         ),
-        marks=_found('#1897 — the oracle crashes on a where that reads a bare relation: reduce() of empty iterable'),
         id='oracle: a where that reads a bare relation',
     ),
     pytest.param(
@@ -470,10 +755,20 @@ REDUCED = [
                 'd': pl.DataFrame({'h': [10, 6], 'value': [0.0, 2.0]}),
             },
         ),
-        marks=_found(
-            '#2049 — the oracle divides by a zero that the where already excludes, and crashes on the infinity'
-        ),
         id='oracle: a zero divisor the where excludes',
+    ),
+    pytest.param(
+        _case(
+            {
+                'dimensions': T,
+                'parameters': {'p': {'dims': ['t']}},
+                'variables': {'v': _bounded('t')},
+                'constraints': {'c': {'dims': ['t'], 'expression': 'shift(v / p, along=t, offset=1) >= v'}},
+                'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+            },
+            {'t': [1, 2], 'p': pl.DataFrame({'t': [1, 2], 'value': [2.0, 0.0]})},
+        ),
+        id='oracle: a zero divisor a shift vacates',
     ),
     pytest.param(
         _case(
@@ -494,7 +789,6 @@ REDUCED = [
                 'r': pl.DataFrame({'g': ['g5'], 'k': [6]}),
             },
         ),
-        marks=_found('#2049 — the oracle crashes on an at() in a where whose frame also carries the column it reads'),
         id='oracle: an at() in a where over a frame with its column',
     ),
     pytest.param(
@@ -516,9 +810,6 @@ REDUCED = [
             {'k': [7], 'f': pl.DataFrame({'k': [7], 'value': [False]})},
             'e',
         ),
-        marks=_found(
-            '#2049 — a case whose when: counts, beside a quotient in otherwise:, crashes polars when it is read: no column __present__'
-        ),
         id='a counted case beside a quotient',
     ),
     pytest.param(
@@ -531,9 +822,6 @@ REDUCED = [
                 'objective': {'sense': 'minimize', 'expression': 'sum(v)'},
             },
             {'g': ['g3'], 'lo': -0.5},
-        ),
-        marks=_found(
-            '#2048 — an integer column with a lower bound of -0.5 solves optimal with no values here, and to -0.5 on the oracle'
         ),
         id='an integer column with a fractional lower bound',
     ),
@@ -551,9 +839,9 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'sum(-v * e)'},
             },
             {'k': [-2]},
-        ),
-        marks=_found(
-            '#2049 — the oracle crashes on a product with a case whose when: reads a variable: unsupported operand for *'
+            'e',
+            'sum(-v * e)',
+            linear=False,
         ),
         id='oracle: a product with a case over a variable',
     ),
@@ -566,9 +854,6 @@ REDUCED = [
                 'objective': {'sense': 'maximize', 'expression': 'sum(sum_back(at(v, by=r[t]), along=h, window=2))'},
             },
             {'h': [-1, 1], 't': [5, 1], 'r': pl.DataFrame({'h': [-1, 1], 't': [1, 5]})},
-        ),
-        marks=_found(
-            '#2049 — the oracle crashes on a sum_back over an at(): an auxiliary coordinate with conflicting values'
         ),
         id='oracle: a sum_back over a lookup',
     ),
@@ -593,9 +878,6 @@ REDUCED = [
                 'o': pl.DataFrame({'b': ['b0'], 'value': [1]}),
                 'q': pl.DataFrame({'k': [11, 11], 'h': [9, 10], 'value': [1.0, 2.0]}),
             },
-        ),
-        marks=_found(
-            '#2049 — a shift by a parameter offset over a term that lacks the offset dimension crashes polars: column not found'
         ),
         id='a parameter offset over a term without its dimension',
     ),

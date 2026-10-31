@@ -279,8 +279,14 @@ def _close(a: float, b: float) -> bool:
 
 
 def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]:
+    """Solve both lanes and compare what they built and reached.
+
+    The oracle is solved through HiGHS directly and with its zeros kept: under
+    ``sanitize_zeros`` and through an LP file linopy drops a row whose every
+    coefficient is zero, and the language keeps that row.
+    """
     m = specsolve_linopy.build(spec, dict(sources))
-    status, condition = m.solve(solver_name='highs', output_flag=False)
+    status, condition = m.solve(solver_name='highs', output_flag=False, io_api='direct', sanitize_zeros=False)
     oracle = float(m.objective.value) if status == 'ok' else math.nan
     program = lowered(spec)
     findings = []
