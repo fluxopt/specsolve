@@ -36,8 +36,8 @@ gurobi = [
     "scipy>=1.11",
 ]
 xpress = [
-    # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
-    "xpress>=9.5",
+    # 9.8 is the first release whose problem has `chgObjSense`, which the sink calls with `ObjSense`.
+    "xpress>=9.8",
 ]
 
 [project.urls]
@@ -103,6 +103,10 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # `choices` on a task argument arrived in 0.65.
 requires-pixi = ">=0.65"
+
+[tool.pixi.system-requirements]
+# Xpress 9.8, the floor of the `xpress` extra, ships its macOS arm64 libraries for macOS 14 and later.
+macos = "14.0"
 
 [tool.pixi.dependencies]
 python = "3.12.*"
@@ -311,7 +315,11 @@ testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = ["benchmem: pytest-benchmem settings for a benchmark (bench/, needs --group bench)"]
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # Xpress 10 warns once per process on the bundled Community licence, which CI and this suite run on.
+    "ignore:Using the Community license in this session",
+]
 
 [tool.coverage.run]
 branch = true
