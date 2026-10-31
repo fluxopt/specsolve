@@ -253,6 +253,7 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     groups = _grouped(over, np.asarray(array.indexes[over]), by) if by is not None else None
     terms: list[Any] = []
     reached: list[Any] = []
+    holed = False
     for lag in range(widest):
         lagged = (
             _gather_in_groups(array, over, lag, groups=groups, edge=probe)
