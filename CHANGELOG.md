@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(engine): models that crashed, were refused or were built unlike the file now build as written ([#2051](https://github.com/fluxopt/specsolve/pull/2051))
 - fix(engine): a parameter filled with its declared value builds the same model every time ([#2053](https://github.com/fluxopt/specsolve/pull/2053))
 - fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
 - feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))

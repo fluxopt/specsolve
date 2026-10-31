@@ -16,7 +16,7 @@ single-valued map — two columns, one of them the key — is one shape of it:
 - **two columns over one dimension** name a line's two ends in one table.
 
 Every optimum here is hand-derived, and the written LP file re-solves to it;
-the linopy lane refuses these shapes (`test_conditioned_relations.py` holds
+the linopy lane refuses most of these shapes (`test_conditioned_relations.py` holds
 what it builds).
 """
 
@@ -265,6 +265,20 @@ def test_a_bare_where_tests_that_a_row_exists(tmp_path):
     objective, primals = _solved(spec, _bare_sources(), tmp_path)
     assert sorted(primals['x']) == [('g1', 'a'), ('g1', 'b'), ('g2', 'b')], 'one column per related pair'
     assert objective == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
+
+
+def test_both_lanes_keep_the_pairs_a_bare_where_relates():
+    """The linopy lane reads `where: connection` as the relational lane does, rather than crashing (#1897)."""
+    from tests.differential import differential
+
+    spec = _bare_spec()
+    spec['parameters'] = {}
+    spec['variables'] = {'x': {'dims': ['generator', 'bus'], 'where': 'connection', 'bounds': {'lower': 0, 'upper': 1}}}
+    spec['constraints'] = {}
+    spec['objective'] = {'sense': 'maximize', 'expression': 'sum(x)'}
+    sources = {'generator': ['g1', 'g2'], 'bus': ['a', 'b'], 'connection': CONNECTION}
+    with differential(spec, sources) as run:
+        assert float(run.result.objective) == pytest.approx(3.0, rel=RTOL), 'one unit per related pair'
 
 
 #: A start covers its own snapshot and the next, and the last start covers itself alone.

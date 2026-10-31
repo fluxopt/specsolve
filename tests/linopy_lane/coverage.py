@@ -14,13 +14,19 @@ divisor" is answered once for both lanes.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
 import xarray as xr
 from mathspec import program
 
-from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve._messages import (
+    non_finite_message,
+    reported_divisor_message,
+    sparse_divisor_message,
+    uncovered_constant_message,
+)
 from specsolve.errors import DataError
 from tests.linopy_lane import absence
 from tests.linopy_lane.where import evaluate_where
@@ -126,6 +132,8 @@ def check_divisors_cover(
     ctx: EvaluationContext,
     mask: Any,
     evaluate: Callable[[program.Expression], Any],
+    *,
+    terms: bool = True,
 ) -> None:
     """A divisor must have a value, and one that is not zero, wherever this declaration divides by it.
 
@@ -141,8 +149,63 @@ def check_divisors_cover(
     0.0 at the parameter leaf, and from there the division yields an infinity
     and the row is masked out silently. A zero the data holds is asked after
     the gaps, of the divisor as *evaluate* reads it, so a divisor that adds up
-    to zero is found too.
+    to zero is found too. With *terms* false a zero under a dividend that
+    carries a variable is left to the row it lands in, which a constraint asks
+    once it is built.
     """
+    for quotient, params, needed in _quotients(expressions, ctx, mask):
+        _refuse_gaps(
+            name,
+            frozenset(_in_place(quotient.divisor, program.ParameterReference)),
+            needed,
+            ctx,
+            sparse_divisor_message,
+        )
+        if not terms and program.carries_variable(quotient.numerator):
+            continue
+        zeros = _zeros_under(evaluate(quotient.divisor), needed)
+        if zeros:
+            raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+
+
+def check_read_divisors_cover(
+    name: str, expression: program.Expression, ctx: EvaluationContext, evaluate: Callable[[EvaluationContext], Any]
+) -> None:
+    """A divisor must have a value at every coordinate where a quotient by it reaches the read.
+
+    The read is taken twice by *evaluate*: once with the divisors' missing
+    rows absent, and once with them read as one. A coordinate the second
+    answers and the first does not is one a quotient by a missing row reaches,
+    so another summand being absent there already keeps it out. A zero is not
+    asked: a read takes a quotient by zero as absent (:func:`absence.divisor`).
+    """
+    divisors = program.parameters_of(*(n.divisor for n in program.walk(expression) if isinstance(n, program.Divide)))
+    holed = sorted(p for p in divisors if not ctx.absent(p) and bool(ctx.dataset[p].isnull().any()))
+    if not holed:
+        return
+    filled = ctx.dataset.assign({p: ctx.dataset[p].fillna(1.0) for p in holed})
+    with_ones = evaluate(replace(ctx, dataset=filled))
+    without = evaluate(replace(ctx, absent_parameter=lambda a: a if a.name in holed else absence.coefficient(a)))
+    reached = int((xr.DataArray(with_ones).notnull() & xr.DataArray(without).isnull()).sum())
+    if reached:
+        raise DataError(f'{name}: {reported_divisor_message(", ".join(sorted(divisors)), reached)}')
+
+
+def _quotients(
+    expressions: tuple[program.Expression, ...], ctx: EvaluationContext, mask: Any
+) -> Iterator[tuple[program.Divide, frozenset[str], Any]]:
+    """Every quotient by a parameter under *expressions*, with its divisor's parameters and where it divides.
+
+    Where it divides is the region's mask and the mask of every variable in
+    the numerator at the quotient's own coordinate, either of which removes
+    the coordinate. A quotient that stands at the row's own coordinate is
+    also removed where a variable beside it there is absent, which takes the
+    row; that mask narrows the quotient's own coordinates and adds none, so
+    a count stays one of the quotient's coordinates. A variable declared ``missing: neutral`` is a zero where it is
+    masked, and removes nothing.
+    """
+    at_the_row = [node for e in expressions for node in _at_the_row(e)]
+    row_variables = {node.name for node in at_the_row if isinstance(node, program.VariableReference)}
     for expression in expressions:
         for quotient, region in _under_regions(expression, ctx, mask):
             if not isinstance(quotient, program.Divide):
@@ -151,16 +214,59 @@ def check_divisors_cover(
             if not params:
                 continue
             needed = region
-            for variable in sorted(program.variables_of(quotient.numerator)):
-                present = absence.present(ctx.model, variable)
-                needed = present if needed is None else (needed & present)
-            for param in sorted(p for p in params if not ctx.absent(p)):
-                missing = gaps_under(ctx.dataset[param], needed)
-                if missing:
-                    raise DataError(f'{name}: {sparse_divisor_message(param, missing)}')
-            zeros = _zeros_under(evaluate(quotient.divisor), needed)
-            if zeros:
-                raise DataError(f'{name}: {non_finite_message(", ".join(sorted(params)), zeros)}')
+            for variable in sorted(_in_place(quotient.numerator)):
+                if ctx.program.variables[variable].missing != 'neutral':
+                    present = absence.present(ctx.model, variable)
+                    needed = present if needed is None else (needed & present)
+            if any(quotient is node for node in at_the_row):
+                own = {d for p in params for d in ctx.dataset[p].dims} | set(getattr(needed, 'dims', ()))
+                for variable in sorted(row_variables):
+                    if ctx.program.variables[variable].missing != 'neutral':
+                        present = absence.present(ctx.model, variable)
+                        present = present.any([d for d in present.dims if d not in own])
+                        needed = present if needed is None else (needed & present)
+            yield quotient, params, needed
+
+
+def _in_place(
+    expression: program.Expression,
+    kind: type[program.VariableReference | program.ParameterReference] = program.VariableReference,
+) -> set[str]:
+    """The variables, or the parameters, under *expression* that stand at its own coordinate.
+
+    A sum, a window, a shift or a lookup moves a variable's slots elsewhere, so
+    its mask says nothing about where *expression* exists: `sum(v) / p` divides
+    at every coordinate of `p`. A parameter summed there is one summand fewer
+    where it has no row, never a gap in what it sums to.
+    """
+    if isinstance(expression, kind):
+        return {expression.name}
+    if isinstance(expression, program.Sum | program.WindowSum | program.Translate | program.Join):
+        return set()
+    return set().union(*(_in_place(child, kind) for child in program.children(expression)))
+
+
+def _at_the_row(expression: program.Expression) -> Iterator[program.Expression]:
+    """The nodes under *expression* that stand at its own coordinate, everywhere it has one.
+
+    Not under a sum, a window, a shift or a lookup, which move coordinates,
+    nor inside a ``cases:`` region, which holds only where it applies.
+    """
+    yield expression
+    if isinstance(expression, program.Sum | program.WindowSum | program.Translate | program.Join | program.Cases):
+        return
+    for child in program.children(expression):
+        yield from _at_the_row(child)
+
+
+def _refuse_gaps(
+    name: str, params: frozenset[str], needed: Any, ctx: EvaluationContext, message: Callable[[str, int], str]
+) -> None:
+    """Refuse the first of *params*, by name, that has no row where *needed* still admits the quotient."""
+    for param in sorted(p for p in params if not ctx.absent(p)):
+        missing = gaps_under(ctx.dataset[param], needed)
+        if missing:
+            raise DataError(f'{name}: {message(param, missing)}')
 
 
 def _zeros_under(divisor: Any, mask: Any) -> int:

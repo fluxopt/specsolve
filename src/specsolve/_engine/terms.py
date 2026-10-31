@@ -115,8 +115,9 @@ def refuse_a_term_without_the_dims(p: Term, dims: list[str], context: str, opera
     """Refuse a term an operator cannot act on, in the right class.
 
     A constant term lacking the dims is valid YAML this engine cannot build, so
-    it is a `SpecsolveError`; a linear term always carries the frame dims from load, so
-    one here is a malformed plan. *operator* is the spelling the user wrote.
+    it is a `SpecsolveError`; a linear term is repeated along every dim an
+    operator reads before the operator runs ([`spread_term`][]), so one here
+    is a malformed plan. *operator* is the spelling the user wrote.
     """
     if p.kind == 'constant':
         raise SpecsolveError(
@@ -128,6 +129,20 @@ def refuse_a_term_without_the_dims(p: Term, dims: list[str], context: str, opera
         )
     msg = f'in {context}: {operator} along {dims}, which the expression does not span'
     raise AssertionError(msg)
+
+
+def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
+    """*p* repeated at every label of each of *dims* it lacks, the same value at each.
+
+    Its presences leave with their keys spelled out, since the implied key,
+    the term's dims, now names columns their frames do not hold.
+    """
+    missing = [d for d in dims if d not in p.dims]
+    if not missing:
+        return p
+    out = scope.in_declaration_order((*p.dims, *missing))
+    frame = scope.spread(p.frame, missing).select(*out, *p.carried)
+    return replace(p, dims=out, frame=frame, presences=_keyed(p))
 
 
 #: The label columns each kind carries, in the order a projection keeps them.

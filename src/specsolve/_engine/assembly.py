@@ -197,10 +197,11 @@ class Assembly:
         self.n_cols = start + labelled.height
         self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
 
+        lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
+        if v.domain != 'continuous':
+            lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.compiler.bounds(labelled.lazy(), name, v).select(
-                'var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
-            )
+            bounds = self.compiler.bounds(labelled.lazy(), name, v).select('var_label', lb.alias('lb'), ub.alias('ub'))
             bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
@@ -464,6 +465,18 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
         pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
         pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
+
+
+def _whole(bound: pl.Expr, inward: pl.Expr) -> pl.Expr:
+    """An integer column's *bound* as a whole number: the nearest one within 1e-6, else *inward*, its rounding into the range.
+
+    HiGHS answers a fractional bound on an integer column as optimal with no
+    feasible values, so every sink is handed whole bounds. The 1e-6 is HiGHS's
+    default ``mip_feasibility_tolerance``: a bound that noise put just past a
+    whole number keeps that number rather than moving a whole step.
+    """
+    nearest = bound.round()
+    return pl.when((bound - nearest).abs() <= 1e-6).then(nearest).otherwise(inward)
 
 
 def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
