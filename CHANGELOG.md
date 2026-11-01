@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
+
 ## 0.11.0 (2026-10-31)
 
 **specsolve moves to mathspec 0.4.0, and solves on Xpress 10.** A model file
