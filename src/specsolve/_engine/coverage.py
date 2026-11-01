@@ -18,6 +18,7 @@ is infinite, has no reading either. It is asked at the same two moments.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -131,22 +132,32 @@ def constant_side(
     """One constraint's rows as ``(row, sense, rhs)``, every constant term covering the rows it is given.
 
     A coordinate a term has no row for contributes zero, and the coverage
-    check rides on the same pass. Only a term with a parameter under it is
-    owed: one whose parameters all stand beside a variable is a coefficient,
-    and its zero is not a bound. A term built under a ``cases:`` region is
-    owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
+    check rides on the same pass. Every term attached by position goes onto
+    the rows before any join, which keeps no order once the build streams.
+    Only a term with a parameter under it is owed: one whose parameters all
+    stand beside a variable is a coefficient, and its zero is not a bound. A
+    term built under a ``cases:`` region is owed only inside it. A gap a
+    reduction summed away is one summand fewer, as it is for a
+    ``missing: neutral`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant term with no value at a row it is owed.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: dict[str, frozenset[str]] = {}
-    carrier = rows
-    for i, (p, sign) in enumerate(terms):
+    built_rows = rows.pipe(collected)
+    whole = [set(p.dims) == set(c.dims) for p, _ in terms]
+    held = [
+        replace(p, frame=p.frame.pipe(collected).lazy()) if w else p for (p, _), w in zip(terms, whole, strict=True)
+    ]
+    aligned = [_aligned(built_rows, p) if w else None for p, w in zip(held, whole, strict=True)]
+    carrier = built_rows.lazy().with_columns(
+        values.alias(f'__const {i}__') for i, values in enumerate(aligned) if values is not None
+    )
+    for i, ((p, sign), term, values) in enumerate(zip(terms, held, aligned, strict=True)):
         column = f'__const {i}__'
-        aggregated = constant_scalar(p).rename({'cval': column})
-        carrier = join_on(carrier, aggregated, p.dims, 'left')
+        if values is None:
+            carrier = join_on(carrier, constant_scalar(term).rename({'cval': column}), p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         if not p.parameters:
             continue
@@ -173,3 +184,19 @@ def constant_side(
         names = ', '.join(sorted(frozenset[str]().union(*owed)))
         raise DataError(uncovered_constant_message(names, uncovered, subject))
     return built.drop(list(gaps))
+
+
+def _aligned(rows: pl.DataFrame, term: Term) -> pl.Series | None:
+    """*term*'s value per row, by position, where its coordinates are the rows' own, in the rows' order.
+
+    Asked only of a term over every dim of the constraint. The rows are one
+    per coordinate, so a match row for row leaves each row exactly one value,
+    and [`constant_scalar`][]'s sum and the join onto the rows change nothing but
+    the cost. A term over fewer dims can match on those dims and still hold a
+    row per label it summed away, each owed to the same row. ``None`` where the
+    coordinates differ in any way, for the join to answer.
+    """
+    frame = term.frame.pipe(collected)
+    if frame.height != rows.height or not frame.select(term.dims).equals(rows.select(term.dims)):
+        return None
+    return frame.get_column('cval')

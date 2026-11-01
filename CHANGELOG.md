@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a constant side whose values line up with the constraint's rows is read without a join ([#2036](https://github.com/fluxopt/specsolve/pull/2036))
+
 ## 0.11.0 (2026-10-31)
 
 **specsolve moves to mathspec 0.4.0, and solves on Xpress 10.** A model file
