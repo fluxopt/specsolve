@@ -179,7 +179,9 @@ constant term. A mask is a missing row, and broadcasting is a join.
 **Labels are dense `0..n-1`, row-major over the masked coordinate product.**
 So `var_label` is the solver column, `row` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
-onto a loaded solver by position.
+onto a loaded solver by position. Where an update changes only such numbers,
+at the coordinates they had, the engine keeps the labels and the matrix and
+reads again only the declarations they feed (`assembly.refilled`).
 
 **The plan is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes

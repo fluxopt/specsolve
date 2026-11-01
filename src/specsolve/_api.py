@@ -234,13 +234,14 @@ class Model:
         What the build read is kept for an archive: a one-shot iterator is
         spent by then, and a path may have been rewritten. With *changed*, the
         names an update replaced, a parameter that change leaves alone is not
-        read again. A failure forgets what was read, so the next update reads
-        every source again, the refused one included.
+        read again, and a change of numbers alone is not built again. A failure
+        forgets what was read, so the next update reads every source again, the
+        refused one included.
         """
         try:
             kept = kept_parameters(self._program, self._tidied, changed) if changed is not None else None
             self._tidied = tidy_sources(self._program, self._sources, kept)
-            self._engine.build(self._program, self._tidied)
+            self._engine.build(self._program, self._tidied, changed)
         except BaseException:
             self._tidied = {}
             self._engine.close()
