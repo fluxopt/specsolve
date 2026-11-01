@@ -7,11 +7,33 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+## 0.11.0 (2026-10-31)
+
+**specsolve moves to mathspec 0.4.0, and solves on Xpress 10.** A model file
+names its reusable conditions under `conditions:` rather than `masks:`. Models
+that crashed, were refused or were built unlike the file now build as written.
+This release breaks model files that 0.10.x reads.
+
+Breaks:
+
+- A model file is in the mathspec 0.4.0 language. `masks:` is now
+  `conditions:`, also under `given:`, and `where:` inside each entry is now
+  `condition:`. `<`, `<=`, `>` and `>=` on a `str` or `bool` value are refused
+  at load. The
+  [mathspec 0.4.0 notes](https://github.com/energy-models/mathspec/blob/main/CHANGELOG.md)
+  list every change to a file.
+- The `xpress` extra requires Xpress 9.8 or later.
+
+The language:
+
+- feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
+
+Fixes:
+
 - fix(engine): models that crashed, were refused or were built unlike the file now build as written ([#2051](https://github.com/fluxopt/specsolve/pull/2051))
 - fix(engine): a parameter filled with its declared value builds the same model every time ([#2053](https://github.com/fluxopt/specsolve/pull/2053))
-- fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
-- feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
 - fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
+- fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
 
 ## 0.10.0 (2026-10-19)
 
