@@ -128,36 +128,36 @@ def joins(frame: pl.LazyFrame) -> int:
 # ---------------------------------------------------------------------------
 
 
-def test_a_variable_compiles_to_one_term_piece_over_its_dims():
+def test_a_variable_compiles_to_one_linear_term_over_its_dims():
     compiled = compiler().expression(P, 'test')
-    assert len(compiled.terms) == 1
-    assert not compiled.consts
-    piece = compiled.terms[0]
-    assert piece.dims == ('snapshot', 'generator')
-    assert piece.kind == 'term'
-    assert columns(piece.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert len(compiled.linear) == 1
+    assert not compiled.constant
+    term = compiled.linear[0]
+    assert term.dims == ('snapshot', 'generator')
+    assert term.kind == 'linear'
+    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
 
 
-def test_a_parameter_is_a_constant_piece_not_a_term():
+def test_a_parameter_is_a_constant_term_not_a_linear_one():
     compiled = compiler().expression(COST, 'test')
-    assert not compiled.terms
-    assert compiled.consts[0].dims == ('generator',)
-    assert compiled.consts[0].kind == 'const'
-    assert columns(compiled.consts[0].frame) == ['generator', 'cval']
+    assert not compiled.linear
+    assert compiled.constant[0].dims == ('generator',)
+    assert compiled.constant[0].kind == 'constant'
+    assert columns(compiled.constant[0].frame) == ['generator', 'cval']
 
 
-def test_addition_concatenates_pieces_rather_than_joining():
+def test_addition_concatenates_terms_rather_than_joining():
     """An LP row is a sum of terms, so ``+`` needs no query at all."""
     compiled = compiler().expression(program.Add(P, P, dims=P.dims), 'test')
-    assert len(compiled.terms) == 2
+    assert len(compiled.linear) == 2
 
 
 def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     compiled = compiler().expression(program.Multiply(P, COST, dims=P.dims), 'test')
-    piece = compiled.terms[0]
-    assert piece.dims == ('snapshot', 'generator')
-    assert columns(piece.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
-    assert 'JOIN' in query(piece.frame)
+    term = compiled.linear[0]
+    assert term.dims == ('snapshot', 'generator')
+    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert 'JOIN' in query(term.frame)
 
 
 def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
@@ -176,12 +176,12 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 
 def test_sum_drops_the_dim_it_sums_over_without_aggregating():
-    """The aggregate lives in the terminal assembly, not in the piece."""
+    """The aggregate lives in the terminal assembly, not in the term."""
     compiled = compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
-    piece = compiled.terms[0]
-    assert piece.dims == ('snapshot',)
-    assert columns(piece.frame) == ['snapshot', 'var_label', 'coeff']
-    assert 'AGGREGATE' not in query(piece.frame)
+    term = compiled.linear[0]
+    assert term.dims == ('snapshot',)
+    assert columns(term.frame) == ['snapshot', 'var_label', 'coeff']
+    assert 'AGGREGATE' not in query(term.frame)
 
 
 def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
@@ -207,13 +207,13 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     compiled = Compiler(Scope(declared(), data, {'p': Labelled(slots, 0, 72)})).expression(
         program.Multiply(P, total, dims=P.dims), 'test'
     )
-    terms = compiled.terms[0].frame.collect()
+    terms = compiled.linear[0].frame.collect()
     assert terms.height == 72, 'one row per slot of p, not one per slot and snapshot'
     assert terms['coeff'].unique().to_list() == [24.0], 'every term carries the whole total'
 
 
 def masked_compiler() -> Compiler:
-    """A compiler over two masked variables, since a restriction only crosses between pieces."""
+    """A compiler over two masked variables, since a restriction only crosses between terms."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -230,20 +230,20 @@ def masked_compiler() -> Compiler:
     return Compiler(Scope(masked, attached(), frames))
 
 
-def test_a_reduction_carries_absence_between_pieces_and_not_into_the_one_it_came_from():
+def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_from():
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
-    Restricting a piece by its own coordinates returns the rows it was
+    Restricting a term by its own coordinates returns the rows it was
     given, so a lone masked term costs no join.
     """
     both = masked_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
-    assert [joins(t.frame) for t in both.terms] == [1, 1]
-    assert all('SEMI JOIN' in query(t.frame) for t in both.terms)
+    assert [joins(t.frame) for t in both.linear] == [1, 1]
+    assert all('SEMI JOIN' in query(t.frame) for t in both.linear)
 
     alone = masked_compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
-    assert joins(alone.terms[0].frame) == 0
+    assert joins(alone.linear[0].frame) == 0
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
@@ -251,38 +251,38 @@ def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     compiled = masked_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
-    assert 'UNIQUE' not in query(compiled.terms[0].frame)
+    assert 'UNIQUE' not in query(compiled.linear[0].frame)
 
 
 def test_sum_over_an_absent_dim_scales_by_that_dims_cardinality():
     """Linopy parity: summing a snapshot-only term over `generator` repeats it."""
     inner = program.Sum(P, (program.Axis('generator'),), dims=('snapshot',))
     compiled = compiler().expression(program.Sum(inner, (program.Axis('generator'),), dims=('snapshot',)), 'test')
-    assert '3' in query(compiled.terms[0].frame)
+    assert '3' in query(compiled.linear[0].frame)
 
 
 def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     onto = ('bus', 'snapshot')
     node = program.Sum(program.Join(P, GEN_BUS_JOIN, dims=onto), GEN_BUS_JOIN.axes, dims=onto)
-    piece = compiler().expression(node, 'test').terms[0]
-    assert piece.dims == ('snapshot', 'bus')
-    assert columns(piece.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
-    assert 'AGGREGATE' not in query(piece.frame)
-    assert joins(piece.frame) == 1
+    term = compiler().expression(node, 'test').linear[0]
+    assert term.dims == ('snapshot', 'bus')
+    assert columns(term.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
+    assert 'AGGREGATE' not in query(term.frame)
+    assert joins(term.frame) == 1
 
 
 def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
-    piece = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 'test').terms[0]
-    assert piece.dims == ('snapshot', 'generator')
-    assert columns(piece.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
-    assert joins(piece.frame) == 2
-    assert 'OVER' not in query(piece.frame)
+    term = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 'test').linear[0]
+    assert term.dims == ('snapshot', 'generator')
+    assert columns(term.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
+    assert joins(term.frame) == 2
+    assert 'OVER' not in query(term.frame)
 
 
 def test_wrapping_is_modulo_and_acyclic_is_not():
-    cyclic = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 't').terms[0]
-    acyclic = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=False, dims=P.dims), 't').terms[0]
+    cyclic = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 't').linear[0]
+    acyclic = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=False, dims=P.dims), 't').linear[0]
     assert '%' in query(cyclic.frame)
     assert '%' not in query(acyclic.frame)
 
@@ -439,10 +439,10 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     q = Compiler(Scope(PROGRAM, sources, VARIABLES))
     shifted = program.Translate(LOAD, 'snapshot', 1, wrap=False, fill=0.0, dims=LOAD.dims)
 
-    rows = q.expression(shifted, 'test').consts[0].frame.collect().sort('snapshot')
+    rows = q.expression(shifted, 'test').constant[0].frame.collect().sort('snapshot')
     assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
     assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
     bare = program.Translate(LOAD, 'snapshot', 1, wrap=False, fill=None, dims=LOAD.dims)
-    vacated = q.expression(bare, 'test').consts[0].frame.collect().sort('snapshot')
+    vacated = q.expression(bare, 'test').constant[0].frame.collect().sort('snapshot')
     assert vacated['snapshot'].to_list() == [1, 2], 'a bare shift vacates, and that is a gap on purpose'

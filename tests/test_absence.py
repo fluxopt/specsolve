@@ -144,28 +144,28 @@ RHS_DATA = {
     ('constraint', 'joined'),
     [
         pytest.param({'expression': 'x <= d'}, 0, id='coordinates are the rows'),
-        pytest.param({'expression': 'x <= d + d'}, 0, id='two pieces, both the rows'),
+        pytest.param({'expression': 'x <= d + d'}, 0, id='two terms, both the rows'),
         pytest.param({'expression': 'x <= e'}, 1, id='the rows in another order'),
         pytest.param({'expression': 'x <= c'}, 1, id='broadcast along k'),
         pytest.param({'expression': 'x <= d', 'where': 'd > 1.5'}, 1, id='a where keeps fewer rows'),
-        pytest.param({'expression': 'x <= d + c'}, 1, id='one piece of each'),
+        pytest.param({'expression': 'x <= d + c'}, 1, id='one term of each'),
     ],
 )
 def test_a_constant_side_is_attached_by_position_only_where_its_coordinates_are_the_rows(
     monkeypatch, tmp_path, constraint, joined
 ):
-    """Where a piece has one value per row, in row order, it is attached by position and gives the same file."""
+    """Where a term has one value per row, in row order, it is attached by position and gives the same file."""
     from specsolve._engine import coverage
 
     spec = override(RHS_SPEC, **{'constraints.cap': {'dims': ['t', 'k'], **constraint}})
     real = coverage.constant_scalar
     summed = []
-    monkeypatch.setattr(coverage, 'constant_scalar', lambda piece: summed.append(piece) or real(piece))
+    monkeypatch.setattr(coverage, 'constant_scalar', lambda term: summed.append(term) or real(term))
     with sps.build(spec, RHS_DATA) as model:
         model.write(tmp_path / 'positional.lp')
-    assert len(summed) == joined, f'{len(summed)} piece(s) went through the sum and the join'
+    assert len(summed) == joined, f'{len(summed)} term(s) went through the sum and the join'
 
-    monkeypatch.setattr(coverage, '_aligned', lambda rows, piece: None)
+    monkeypatch.setattr(coverage, '_aligned', lambda rows, term: None)
     with sps.build(spec, RHS_DATA) as model:
         model.write(tmp_path / 'joined.lp')
     assert (tmp_path / 'positional.lp').read_text() == (tmp_path / 'joined.lp').read_text(), (
@@ -174,9 +174,9 @@ def test_a_constant_side_is_attached_by_position_only_where_its_coordinates_are_
 
 
 def test_a_sum_on_the_constant_side_is_never_attached_by_position(monkeypatch, tmp_path):
-    """A piece summed to no dims can carry as many rows as the constraint, and each row is owed the whole sum.
+    """A term summed to no dims can carry as many rows as the constraint, and each row is owed the whole sum.
 
-    `sum(c, over=t)` over three values is a four-row piece, and `k` has four
+    `sum(c, over=t)` over three values is a four-row term, and `k` has four
     labels, so the counts agree while the coordinates say nothing.
     """
     from specsolve._engine import coverage
@@ -191,21 +191,21 @@ def test_a_sum_on_the_constant_side_is_never_attached_by_position(monkeypatch, t
     data = {'t': [0, 1, 2], 'k': [0, 1, 2, 3], 'c': pd.Series({0: 1.0, 1: 2.0, 2: 3.0})}
     with sps.build(spec, data) as model:
         model.write(tmp_path / 'built.lp')
-    monkeypatch.setattr(coverage, '_aligned', lambda rows, piece: None)
+    monkeypatch.setattr(coverage, '_aligned', lambda rows, term: None)
     with sps.build(spec, data) as model:
         model.write(tmp_path / 'joined.lp')
     assert (tmp_path / 'built.lp').read_text() == (tmp_path / 'joined.lp').read_text(), (
-        'a summed piece was laid on the rows one value per row'
+        'a summed term was laid on the rows one value per row'
     )
 
 
 def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
     """`sum(f, over=s)` keeps a row per `(t, s)` under dims `(t,)`, and `s` has as many labels as `k`.
 
-    So the piece's `t` column is the rows' `t` column, row for row, while each
+    So the term's `t` column is the rows' `t` column, row for row, while each
     row is owed the sum of two values rather than one of them. A position
-    match on the piece's own dims took it as aligned and gave each row one
-    summand, 66 for 132, until only a piece over every dim of the constraint
+    match on the term's own dims took it as aligned and gave each row one
+    summand, 66 for 132, until only a term over every dim of the constraint
     was asked.
     """
     spec = {
@@ -228,13 +228,13 @@ def test_a_partial_sum_on_the_constant_side_is_owed_the_whole_sum():
     )
 
 
-def test_a_piece_attached_by_position_after_a_joined_one_lands_on_its_own_rows():
+def test_a_term_attached_by_position_after_a_joined_one_lands_on_its_own_rows():
     """`x <= c + d` over more rows than the in-memory engine takes, so the build streams.
 
     `c` arrives in another order than the rows and is joined; `d` arrives in
     row order and is attached by position. The streaming join kept no row
     order, so `d` landed on other rows (row 0 got 75000) until every
-    positional piece went onto the rows before any join.
+    positional term went onto the rows before any join.
     """
     n = 300_000
     t = list(range(n))
@@ -256,8 +256,8 @@ def test_a_piece_attached_by_position_after_a_joined_one_lands_on_its_own_rows()
     assert rhs.to_list() == [2.0 * v for v in t], 'row t is owed c[t] + d[t] = 2t'
 
 
-def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
-    """A parameter added beside a variable term is a constant piece, and is checked (#1521).
+def test_a_constant_term_beside_a_linear_one_is_refused_on_both_lanes():
+    """A parameter added beside a variable term is a constant term, and is checked (#1521).
 
     Filled, `w * x + c <= 100` would read `w * x <= 100` where the file says
     `w * x <= 100 - c`.
@@ -266,8 +266,8 @@ def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
-def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
-    """Beside a constant piece, a sparse coefficient is still a zero (#1521).
+def test_a_sparse_coefficient_beside_a_constant_term_is_still_a_zero():
+    """Beside a constant term, a sparse coefficient is still a zero (#1521).
 
     `w` stands with a variable, so its missing row is a zero; only `c` is owed
     its coordinates.

@@ -152,20 +152,31 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     through a map onto the fine dimension's own dimension would otherwise
     leave as the labels it read: a self-map reads ``snapshot`` at
     ``snapshot``, and the row the value lands at is the one that read it, not
-    the one it read.
+    the one it read. **The labels it read are dropped**: a selection leaves
+    them behind as a coordinate over the fine dimension, and a term that
+    carries the read dimension, or a lag of the same read, then meets a
+    coordinate of the same name with other values.
     """
     mappings = _renamed(mappings, into)
     present = _present(mappings)
     fine = {str(d): mappings[0].coords[d] for d in mappings[0].dims}
+    read = [t for t in into if t not in fine]
     if bool(present.all()):
-        return array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine)
+        return _dropped(array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine), read)
 
     for t in into:
         if not array.sizes[t]:
             array = array.reindex({t: [_STAND_IN]})
     stood_in = tuple(m.fillna(array.coords[t].to_numpy()[0]) for m, t in zip(mappings, into, strict=True))
-    picked = array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine)
+    picked = _dropped(array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine), read)
     return picked.where(present)
+
+
+def _dropped(array: Any, names: list[str]) -> Any:
+    """*array* without the coordinates *names*, a ``Variable`` as an expression, which is what drops one."""
+    if not names:
+        return array
+    return (array.to_linexpr() if hasattr(array, 'to_linexpr') else array).drop_vars(names)
 
 
 #: The label a dimension with no labels takes for :func:`operator_at`, which reads it only at
@@ -225,11 +236,12 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
 
     A position the window cannot reach contributes a **zero**, never an
     absence: absence propagates, so an unreachable lag would annihilate the
-    whole row, and a window at the first position is short, not empty. The
-    window that reaches **nothing** is the exception — a zero there would
-    build a row about constants alone — so the fill is paired with the
-    positions any lag actually reached, and a window that reached none keeps
-    no row. A width of zero everywhere is that window at every position.
+    whole row, and a window at the first position is short, not empty. A
+    window that reaches nothing, a width of zero among them, is an empty sum
+    and reads zero; a row it leaves with no variable is not built. Over an
+    operand that is absent somewhere, a window that reaches no present slot is
+    absent instead, as the relational lane carries the operand's presence
+    through the window.
 
     ``by=`` stops the window at each group's edge. A width declared over the
     group's own dim is read through the relation first (:func:`_per_group`).
@@ -241,6 +253,7 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     groups = _grouped(over, np.asarray(array.indexes[over]), by) if by is not None else None
     terms: list[Any] = []
     reached: list[Any] = []
+    holed = False
     for lag in range(widest):
         lagged = (
             _gather_in_groups(array, over, lag, groups=groups, edge=probe)
@@ -248,11 +261,14 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
             else _gather_by_offset(array, over, lag, edge=probe)
         )
         live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
+        if lag == 0:
+            holed = not bool(live.all())
         if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term * (within > lag).astype(float)
+            live, term = live & (within > lag), term.where(within > lag, 0)
         terms.append(term)
         reached.append(live)
-    return _merged(terms).where(reduce(operator.or_, reached))
+    merged = _merged(terms)
+    return merged.where(reduce(operator.or_, reached)) if holed else merged
 
 
 def _widest(within: Any) -> int:
@@ -350,16 +366,11 @@ def _per_group(offset: Any, groups: Any) -> Any:
     the lag a coordinate moves by is its group's, read through that relation:
     the pullback ``at()`` already is. Every other offset is returned as it
     came.
-
-    The group's label is dropped rather than ridden along: a pullback leaves
-    what it read through as a coordinate, and a constraint built from one is
-    then reported as carrying a dimension the language says a shift does not
-    have.
     """
     target = getattr(groups, 'name', None)
     if not isinstance(offset, xr.DataArray) or target not in offset.dims:
         return offset
-    return operator_at(offset, (groups,), into=(str(target),)).drop_vars(str(target))
+    return operator_at(offset, (groups,), into=(str(target),))
 
 
 @dataclass(frozen=True)
