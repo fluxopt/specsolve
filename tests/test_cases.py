@@ -385,8 +385,8 @@ SUMMED_CASES_SOURCES = {
 def test_a_cased_quantity_summed_onto_a_constant_side_builds():
     """A region's claim survives the reduction that keeps the dims it reads.
 
-    After the sum over `t` the `a` piece has no row at `k = b` and the
-    `otherwise` piece none at `k = a`; neither is a hole.
+    After the sum over `t` the `a` term has no row at `k = b` and the
+    `otherwise` term none at `k = a`; neither is a hole.
     """
     with differential(SUMMED_CASES, _frames(SUMMED_CASES_SOURCES)) as run:
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
@@ -428,8 +428,8 @@ OUTAGE_FLOW = {
 def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
     """`otherwise: 0` adds nothing anywhere, so no row is short of it.
 
-    The zero was a constant piece claimed by the region where a line does not
-    stand. The pullback dropped that claim, so the piece was owed at every row
+    The zero was a constant term claimed by the region where a line does not
+    stand. The pullback dropped that claim, so the term was owed at every row
     and, with every line standing, had none: each row was refused as short of
     `share` and `cap`, which are short of nothing. `a` going out puts half its flow on `b`, so `s_b + s_a / 2 <= 10` and
     `s_a <= 10` with `s_b <= 10` alone; the most is `s_a = 10, s_b = 5`.
@@ -444,3 +444,29 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
     }
     with differential(OUTAGE_FLOW, _frames(sources)) as run:
         assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'
+
+
+def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_has_no_row():
+    """`b` answers for the steps where `a` is not positive, and has no row at 3, so the read divides by nothing there.
+
+    The flagged case has no row at 3 either, since it does not claim it. Read
+    as zero there, it would make the divisor zero and the quotient absent,
+    rather than refused for the missing row of `b`.
+    """
+    spec = {
+        'dimensions': {'h': {'dtype': 'int'}},
+        'parameters': {'a': {'dims': ['h']}, 'b': {'dims': ['h'], 'missing': 'neutral'}},
+        'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'expressions': {
+            'e': {'dims': ['h'], 'cases': {'flagged': {'when': 'a > 0', 'expression': 'a'}}, 'otherwise': 'b'}
+        },
+        'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
+    }
+    sources = _frames(
+        {'h': [1, 2, 3], 'a': {'h': [1, 2, 3], 'value': [2.0, -1.0, -1.0]}, 'b': {'h': [2], 'value': [4.0]}}
+    )
+    result = sps.solve(spec, sources)
+    with pytest.raises(
+        DataError, match=r"parameter 'a, b' is used as a divisor but has no row at 1 of the coordinates"
+    ):
+        result.evaluate('v / e')
