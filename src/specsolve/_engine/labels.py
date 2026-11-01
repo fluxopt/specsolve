@@ -11,9 +11,10 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 
-from specsolve._collect import collected
+from specsolve._collect import collected, collected_all
 from specsolve._engine.predicates import masked
 from specsolve._engine.scope import UNIT, ordinal
 
@@ -49,60 +50,62 @@ class Labelled:
         return self.frame.with_columns(self.share(values)).select(*dims, values.name)
 
 
-def frame(
-    scope: Scope,
-    dims: tuple[str, ...],
-    where: program.Mask | None,
-    label: str,
-    start: int,
-    restrictions: Sequence[Presence] = (),
-) -> pl.DataFrame:
-    """The masked coord product of *dims* with a dense *label* from *start*.
+#: The column a domain's coordinates are ordered by before they are numbered.
+POSITION = '#position'
+
+
+@dataclass(frozen=True)
+class Domain:
+    """The coordinates a declaration spans: the product of its dims, under its mask, inside its restrictions.
+
+    *restrictions* are the variable-presence semi-joins a constraint row must
+    be contained in; which rows they remove is unknown until data is read.
+    """
+
+    dims: tuple[str, ...]
+    where: program.Mask | None = None
+    restrictions: Sequence[Presence] = ()
+
+
+def frames(scope: Scope, domains: Sequence[Domain], label: str) -> list[pl.DataFrame]:
+    """Each of *domains*' coordinates with a dense *label* from 0, in the solver's order.
 
     A label is row-major over the dims' declared ordinals, so it is the
-    solver's own index with no remapping. *restrictions* are the
-    variable-presence semi-joins a constraint row must be contained in; which
-    rows they remove is unknown until data is read, so they take the counted
-    path.
+    solver's own index once its declaration's offset is added. A polars query
+    costs a fixed time that a small domain never earns back, so the domains
+    are collected in one pass, and in one pass before it for the masks
+    [`_factored`][] reads. Every path orders a domain's coordinates by
+    [`POSITION`][], and a label is the row in that order.
 
     Returns:
-        ``(dims…, label)`` in that column order and in label order; the next
-        free label is ``start`` plus its height. With no dims it is
-        ``([`UNIT`][], label)``, the column a reader keys a scalar on, since selecting
-        nothing drops the empty product's one row.
+        One frame per domain, ``(dims…, label)`` in that column order and in
+        label order. With no dims it is ``([`UNIT`][], label)``, the column a
+        reader keys a scalar on, since selecting nothing drops the empty
+        product's one row.
     """
-    if where is not None and not restrictions:
-        free = _free_prefix(dims, where.dims)
-        if free:
-            factored = _factored(scope, dims, free, where, label, start)
-            if factored is not None:
-                return factored
-
-    surviving = masked(scope, dims, where)
-    for restriction in restrictions:
-        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
-
-    dropped = where is not None or bool(restrictions)
-    numbering = _row_major(scope, dims)
-    if not dropped:
-        numbering = pl.lit(start, dtype=pl.Int64) + numbering
-    position = '#position' if dropped else label
-    materialised = in_position_order(
-        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).pipe(collected),
-        position,
-    )
-    if not dropped and dims:
-        materialised.replace_column(materialised.get_column_index(label), materialised.get_column(label).set_sorted())
-        return materialised
-    if dropped:
-        materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
-    return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
+    free = {
+        i: n
+        for i, d in enumerate(domains)
+        if d.where is not None and not d.restrictions and (n := _free_prefix(d.dims, d.where.dims))
+    }
+    ranked = collected_all(_ranked(scope, domains[i].dims[n:], domains[i].where) for i, n in free.items())
+    survivors = dict(zip(free, ranked, strict=True))
+    plans = [
+        _factored(scope, d.dims, free[i], survivors[i]) if i in survivors else _counted(scope, d)
+        for i, d in enumerate(domains)
+    ]
+    built = []
+    for d, positioned in zip(domains, collected_all(plans), strict=True):
+        ordered = in_position_order(positioned, POSITION)
+        numbered = pl.Series(label, np.arange(ordered.height, dtype=np.int64)).set_sorted()
+        built.append(pl.DataFrame([*(ordered.get_column(dim) for dim in d.dims or (UNIT,)), numbered]))
+    return built
 
 
 def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> int:
     """How many rows a declaration asks for: its coord product under its own mask.
 
-    Less [`frame`][]'s height, it is the rows a propagated absence removed.
+    Less the height [`frames`][] numbers for it, it is the rows a propagated absence removed.
     With a mask it costs a pass over the masked product.
     """
     if where is None:
@@ -110,42 +113,33 @@ def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | N
     return int(masked(scope, dims, where).select(pl.len()).pipe(collected).item())
 
 
-def _factored(
-    scope: Scope,
-    dims: tuple[str, ...],
-    free: int,
-    where: program.Mask,
-    label: str,
-    start: int,
-) -> pl.DataFrame | None:
-    """Labels for a mask that reads none of the first *free* dims.
+def _counted(scope: Scope, domain: Domain) -> pl.LazyFrame:
+    """A domain's coordinates, each beside its row-major [`POSITION`][] in the full product."""
+    surviving = masked(scope, domain.dims, domain.where)
+    for restriction in domain.restrictions:
+        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
+    return surviving.select(*(domain.dims or (UNIT,)), _row_major(scope, domain.dims).alias(POSITION))
+
+
+def _ranked(scope: Scope, kept: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
+    """The surviving coordinates of the dims a mask reads, ranked in declared order."""
+    return masked(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index('#rank')
+
+
+def _factored(scope: Scope, dims: tuple[str, ...], free: int, survivors: pl.DataFrame) -> pl.LazyFrame:
+    """A domain whose mask reads none of its first *free* dims, positioned without a pass over its product.
 
     The survivors are the full head product against one surviving suffix set,
-    so only the suffix is ranked, and the label is the number the counted path
-    gives. ``None`` when nothing survives, for the counted path to answer.
-    Which side of the cross join cycles is polars' choice, so
-    [`in_position_order`][] verifies it.
+    [`_ranked`][], so a coordinate's position is its head's row-major position
+    times the suffix count, plus its suffix's rank. Which side of the cross
+    join cycles is polars' choice, so [`frames`][] orders by position.
     """
-    head, kept = dims[:free], dims[free:]
-    rank = '#rank'
-    survivors = (
-        masked(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
-    )
-    width = survivors.height
-    if width == 0:
-        return None
-
-    position = '#position'
-    labelled = (
+    head = dims[:free]
+    return (
         survivors.lazy()
-        .join(masked(scope, head, None).select(*head, _row_major(scope, head).alias(position)), how='cross')
-        .select(
-            *dims,
-            (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
-        )
-        .pipe(collected)
+        .join(masked(scope, head, None).select(*head, _row_major(scope, head).alias(POSITION)), how='cross')
+        .select(*dims, (pl.col(POSITION) * survivors.height + pl.col('#rank')).alias(POSITION))
     )
-    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:

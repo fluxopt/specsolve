@@ -6,6 +6,7 @@ declaration built later reads what earlier ones produced.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, get_args
@@ -15,16 +16,18 @@ import polars as pl
 from mathspec import program
 
 from specsolve import _sinks as sinks
-from specsolve._collect import collected, in_memory
+from specsolve._collect import collected, collected_all, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Presence, Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -95,6 +98,41 @@ class BuiltModel:
     handoff: sinks.Handoff
 
 
+@dataclass(frozen=True)
+class _Constraint:
+    """One constraint compiled, with everything moved to its left: linear, quadratic and constant terms, each with its sign.
+
+    *restrictions* are the presences its rows must lie in, read off its terms.
+    """
+
+    name: str
+    declaration: program.Constraint
+    linear: list[tuple[Term, float]]
+    quadratic: list[tuple[Term, float]]
+    constant: list[tuple[Term, float]]
+    restrictions: list[Presence]
+
+    @classmethod
+    def compiled(cls, compiler: Compiler, name: str, c: program.Constraint) -> _Constraint:
+        """*c*'s two sides compiled, the right-hand side negated."""
+        admits = declares_quadratic(c)
+        lhs = compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
+        rhs = compiler.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
+        linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
+        quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
+        constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
+        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
+        return cls(name, c, linear, quadratic, constant, restrictions)
+
+    @property
+    def subject(self) -> str:
+        return f"constraint '{self.name}'"
+
+    @property
+    def domain(self) -> labels.Domain:
+        return labels.Domain(self.declaration.dims, self.declaration.where, self.restrictions)
+
+
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
@@ -107,7 +145,6 @@ class Assembly:
         self.scope = Scope(program, attached, self.variables)
         self.compiler = Compiler(self.scope)
         self.n_cols = 0
-        self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
@@ -119,35 +156,41 @@ class Assembly:
 
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
-        each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
-        [`IN_MEMORY_REACH`][] collects [`in_memory`][].
+        each half. Each constraint builds on rows of its own from 0, and its
+        block is moved onto the model's rows here, once every block knows which
+        of its rows it kept. The matrix and ``rows`` leave in ``(row, col)``
+        order, as ``Handoff`` promises its sinks. A build whose [`_reach`][] is
+        at most [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
+            cols = self._build_variables()
             sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-            built = [self._build_constraint(name, c) for name, c in ordered]
+            built = self._build_constraints(ordered)
             objective = self._build_objective(self.program.objective)
 
-        stacked = labels.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
-        matrix_starts = _row_starts(stacked, self.n_rows)
+        offsets = list(itertools.accumulate((rows.height for _, rows, _, _ in built), initial=0))
+        row_count = offsets[-1]
+        for (name, _), (frame, rows, _, _), offset in zip(ordered, built, offsets, strict=False):
+            self.constraints[name] = labels.Labelled(_moved(frame, 'row', offset).lazy(), offset, rows.height)
+        stacked = _on_model_rows([m for _, _, m, _ in built], offsets, _MATRIX)
+        matrix_starts = _row_starts(stacked, row_count)
         matrix = stacked.select('col', 'coeff').rechunk()
 
         self.measured.columns = self.n_cols
-        self.measured.rows = self.n_rows
+        self.measured.rows = row_count
         self.measured.nonzeros = matrix.height
         handoff = sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
-            qmatrix=labels.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), 'row'),
-            rows=labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
+            qmatrix=_on_model_rows([q for _, _, _, q in built], offsets, _QMATRIX),
+            rows=_on_model_rows([r for _, r, _, _ in built], offsets, _ROWS),
             matrix=matrix,
             sos=_stack(sets, _SOS),
             row_starts=matrix_starts,
             column_count=self.n_cols,
-            row_count=self.n_rows,
+            row_count=row_count,
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
@@ -166,7 +209,7 @@ class Assembly:
         )
 
     def _matrix_share(
-        self, frames: list[pl.LazyFrame], name: str, *expressions: program.Expression
+        self, stacked: pl.DataFrame, name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
@@ -174,7 +217,6 @@ class Assembly:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
@@ -183,28 +225,44 @@ class Assembly:
     # declarations
     # ------------------------------------------------------------------
 
-    def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
-        """One variable's labelled frame, and its share of ``cols``.
+    def _build_variables(self) -> list[pl.DataFrame]:
+        """Every variable's labelled frame, and its share of ``cols``, in declaration order.
 
-        The share leaves in label order: ``cols`` carries no ``col``, so a row's
-        position is its solver column index. The bounds are collected in memory:
-        they are parameters looked up onto labels already in memory, and polars
-        2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
-        than its in-memory one on the nodal benchmark at sizes m and l (#1857).
+        The labels are read in as few passes as [`_waves`][] allows and the
+        bounds in one more ([`labels.frames`][specsolve._engine.labels.frames]).
+        A share leaves in label order: ``cols`` carries no ``col``, so a row's
+        position is its solver column index. The bounds are collected in
+        memory: they are parameters looked up onto labels already in memory,
+        and polars 2.0's streaming engine runs that ordered join 4.6 to 5.5
+        times slower than its in-memory one on the nodal benchmark at sizes m
+        and l (#1857).
         """
-        start = self.n_cols
-        labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
-        self.n_cols = start + labelled.height
-        self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
+        declared = self.program.variables
+        for wave in _waves(declared):
+            domains = [labels.Domain(declared[name].dims, declared[name].where) for name in wave]
+            for name, labelled in zip(wave, labels.frames(self.scope, domains, 'var_label'), strict=True):
+                self.variables[name] = labels.Labelled(
+                    _moved(labelled, 'var_label', self.n_cols).lazy(), self.n_cols, labelled.height
+                )
+                self.n_cols += labelled.height
 
-        lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
-        if v.domain != 'continuous':
-            lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.compiler.bounds(labelled.lazy(), name, v).select('var_label', lb.alias('lb'), ub.alias('ub'))
-            bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
-        cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
+            bounds = collected_all(
+                self.compiler.bounds(self.variables[name].frame, name, v).select('var_label', *_bounds(v))
+                for name, v in declared.items()
+            )
+        return [
+            self._columns(name, v, labels.in_position_order(bounded, 'var_label'))
+            for (name, v), bounded in zip(declared.items(), bounds, strict=True)
+        ]
 
+    def _columns(self, name: str, v: program.Variable, bounded: pl.DataFrame) -> pl.DataFrame:
+        """One variable's share of ``cols``, from its bounds in label order.
+
+        Raises:
+            DataError: A bound with no value at a column.
+        """
+        cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
             bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
             raise DataError(null_bounds_message(name, bad))
@@ -251,52 +309,50 @@ class Assembly:
             self.n_sets = built.item(-1, 'set') + 1
         return built
 
-    def _build_constraint(
-        self, name: str, c: program.Constraint
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
-        """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
+    def _build_constraints(
+        self, ordered: list[tuple[str, program.Constraint]]
+    ) -> list[tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]]:
+        """Each constraint as [`_block`][] gives it, in *ordered*'s order.
 
-        The [`coverage`][] checks run in its table's order, before an aggregate
-        can hide a hole. A row is built where either matrix has a term, and the
-        labelled block narrows to the rows that survived.
+        Every constraint's labels are read in one pass, its constant side in a
+        second and its linear terms in a third
+        ([`labels.frames`][specsolve._engine.labels.frames]). The
+        [`coverage`][] checks run in each table's order, before an aggregate
+        can hide a hole. Each constraint's raw terms are let go as soon as its
+        block has summed them: held through every block, they raised the peak
+        memory of the network benchmark at 10M variables by about a fifth (#2022).
         """
-        admits = declares_quadratic(c)
-        lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
-        rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
-        linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
-        quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
-        constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
-        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        start = self.n_rows
-        declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
-        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
-        if declared is not None and declared > labelled.height:
-            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
-        self.n_rows = start + labelled.height
-        frame = labelled.lazy()
-        self.constraints[name] = labels.Labelled(frame, start, labelled.height)
-
-        subject = f"constraint '{name}'"
-        coverage.refuse_null_constants(
-            coverage.narrowed_to_rows(frame, [p for p, _ in constant]),
-            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
-            subject,
+        constraints = [_Constraint.compiled(self.compiler, name, c) for name, c in ordered]
+        frames = labels.frames(self.scope, [con.domain for con in constraints], 'row')
+        for con, frame in zip(constraints, frames, strict=True):
+            c, constant = con.declaration, [p for p, _ in con.constant]
+            if con.restrictions and (declared := labels.declared_height(self.scope, c.dims, c.where)) > frame.height:
+                self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - frame.height
+            divisors = program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs))
+            coverage.refuse_null_constants(coverage.narrowed_to_rows(frame.lazy(), constant), divisors, con.subject)
+        sides = collected_all(
+            coverage.constant_side(self.scope, frame.lazy(), con.constant, con.declaration)
+            for con, frame in zip(constraints, frames, strict=True)
         )
-        rows = coverage.constant_side(self.scope, frame, constant, c, subject)
+        linear = collected_all(self._linear(con, frame) for con, frame in zip(constraints, frames, strict=True))
+        return [
+            self._block(con, frame, coverage.refuse_uncovered(side, con.constant, con.subject), linear.pop(0))
+            for con, frame, side in zip(constraints, frames, sides, strict=True)
+        ]
 
-        if not linear and not quadratic:
-            none = pl.Series('row', [], dtype=_DTYPES['row'])
-            rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
-            return rows, None, None
-
+    def _linear(self, con: _Constraint, frame: pl.DataFrame) -> pl.LazyFrame:
+        """*con*'s linear terms as ``(row, col, coeff)``, on its own rows; no rows where it has none."""
+        if not con.linear:
+            return pl.LazyFrame(schema={name: _DTYPES[name] for name in _MATRIX})
+        c = con.declaration
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(con.linear) == 1 else None
+        dense = c.where is None and not con.restrictions
         frames = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not restrictions
-        for p, sign in linear:
+        for p, sign in con.linear:
             if dense and set(p.dims) == set(c.dims):
-                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+                placed = p.frame.with_columns(self._dense_row(c.dims).alias('row'))
             else:
-                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
+                placed = join_on(frame.lazy(), p.frame, p.dims, 'inner', maintain_order=carried_order)
             frames.append(
                 placed.select(
                     'row',
@@ -304,35 +360,42 @@ class Assembly:
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        matrix, term_rows = (
-            self._matrix_share(frames, subject, c.lhs, c.rhs)
-            if frames
-            else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
-        )
-        qmatrix = self._quadratic_share(frame, quadratic, name, c)
+        return pl.concat(frames)
+
+    def _block(
+        self, con: _Constraint, frame: pl.DataFrame, rows: pl.DataFrame, stacked: pl.DataFrame
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+        """One constraint as its labelled block, its ``rows``, its share of the matrix and its quadratic share.
+
+        All four are on the block's own rows, numbered from 0, which
+        [`run`][] moves onto the model's. A row is built where either matrix
+        has a term, and the labelled block narrows to the rows that survived.
+        """
+        c = con.declaration
+        matrix, term_rows = self._matrix_share(stacked, con.subject, c.lhs, c.rhs)
+        qmatrix = self._quadratic_share(frame, con.quadratic, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
-        rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
-        spread = _magnitude_range(matrix, 'coeff')
-        if spread is not None:
-            self.measured.coefficients[name] = spread
+        frame, rows, matrix, qmatrix = self._drop_termless_rows(con.name, frame, rows, matrix, qmatrix, term_rows)
+        if (spread := _magnitude_range(matrix, 'coeff')) is not None:
+            self.measured.coefficients[con.name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
-            self.measured.rhs[name] = sides
-        return rows, matrix, qmatrix
+            self.measured.rhs[con.name] = sides
+        return frame, rows, matrix, qmatrix
 
-    def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+    def _dense_row(self, dims: tuple[str, ...]) -> pl.Expr:
+        """The row a coordinate lands on in a block built over the whole product of *dims*.
 
         Such a block numbers its rows row-major over the declared ordinals
-        ([`labels.frame`][specsolve._engine.labels.frame]), so a term
+        ([`labels.frames`][specsolve._engine.labels.frames]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
         """
-        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
+        return self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
+        self, frame: pl.DataFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -342,7 +405,7 @@ class Assembly:
         if not quadratic:
             return None
         frames = [
-            join_on(frame, p.frame, p.dims, 'inner').select(
+            join_on(frame.lazy(), p.frame, p.dims, 'inner').select(
                 'row',
                 *_ordered_pair(),
                 (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
@@ -357,37 +420,33 @@ class Assembly:
     def _drop_termless_rows(
         self,
         name: str,
+        frame: pl.DataFrame,
         rows: pl.DataFrame,
         matrix: pl.DataFrame,
         qmatrix: pl.DataFrame | None,
         kept: pl.Series,
-        start: int,
-    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None, int]:
-        """Rows that kept no variable term are not built, and the block closes up.
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+        """Rows that kept no variable term are not built, and the block closes up: the labelled block, ``rows`` and both shares.
 
         *kept* is read before zeros are pruned, so a row whose every term is
-        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
-        because the dual read-back reads a block by position. Every row either
-        share holds is in *kept*, so each of its entries moves with its row.
+        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from 0,
+        because the dual read-back reads a block by position. Every row a share
+        holds is in *kept*, so each of its entries moves with its row.
         """
         if kept.len() == rows.height:
-            return rows, matrix, qmatrix, start + rows.height
+            return frame, rows, matrix, qmatrix
 
         surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
-        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        renumber = surviving.select('row').with_row_index('__new__')
         self.measured.omitted[name] = self.measured.omitted.get(name, 0) + rows.height - surviving.height
         remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
-        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
-        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        renumbered = pl.col('row').replace_strict(remap, return_dtype=_DTYPES['row'])
+        rows = surviving.with_columns(renumbered)
+        matrix = matrix.with_columns(renumbered)
         if qmatrix is not None:
-            qmatrix = qmatrix.with_columns(pl.col('row').replace_strict(remap))
-        kept_frame = (
-            self.constraints[name]
-            .frame.filter(pl.col('row').is_in(kept))
-            .with_columns(pl.col('row').replace_strict(remap))
-        )
-        self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
-        return rows, matrix, qmatrix, start + surviving.height
+            qmatrix = qmatrix.with_columns(renumbered)
+        frame = frame.filter(pl.col('row').is_in(kept)).with_columns(renumbered)
+        return frame, rows, matrix, qmatrix
 
     def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -465,6 +524,28 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
         pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
         pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
+
+
+def _waves(variables: Mapping[str, program.Variable]) -> list[list[str]]:
+    """*variables*' names in declaration order, cut before each one whose ``where`` reads a variable of its own wave.
+
+    A wave's labels are read in one pass, and a mask that reads a variable
+    reads that variable's labels, which must exist by then.
+    """
+    waves: list[list[str]] = [[]]
+    for name, v in variables.items():
+        if v.where is not None and v.where.names_read & set(waves[-1]):
+            waves.append([])
+        waves[-1].append(name)
+    return waves
+
+
+def _bounds(v: program.Variable) -> tuple[pl.Expr, pl.Expr]:
+    """*v*'s ``lb`` and ``ub`` as floats, each a whole number where *v* is not continuous ([`_whole`][])."""
+    lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
+    if v.domain != 'continuous':
+        lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
+    return lb.alias('lb'), ub.alias('ub')
 
 
 def _whole(bound: pl.Expr, inward: pl.Expr) -> pl.Expr:
@@ -598,6 +679,30 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
     starts = np.zeros(row_count + 1, dtype=np.int64)
     starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
     return np.cumsum(starts, out=starts)
+
+
+def _on_model_rows(blocks: list[pl.DataFrame | None], offsets: Sequence[int], columns: tuple[str, ...]) -> pl.DataFrame:
+    """*blocks*, each on its constraint's own rows, stacked onto the model's in row order: block *i* moves on by ``offsets[i]``.
+
+    A constraint without such a share is ``None``.
+    """
+    moved = [_moved(block, 'row', offset) for block, offset in zip(blocks, offsets, strict=False) if block is not None]
+    return labels.in_position_order(_stack(moved, columns), 'row')
+
+
+def _moved(frame: pl.DataFrame, column: str, offset: int) -> pl.DataFrame:
+    """*frame* with *offset* added to *column*, keeping its sorted flag.
+
+    Added to the Series, because a polars query costs a fixed time a small
+    frame never earns back.
+    """
+    if not offset:
+        return frame
+    given = frame.get_column(column)
+    moved = given + offset
+    if given.flags['SORTED_ASC']:
+        moved = moved.set_sorted()
+    return pl.DataFrame([moved if c.name == column else c for c in frame.get_columns()])
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:

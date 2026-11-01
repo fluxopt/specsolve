@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from specsolve._collect import collected, in_memory
+from specsolve._collect import collected, collected_all, in_memory
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -65,9 +65,12 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             at some coordinate.
     """
     with in_memory():
-        dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
-        relations = {name: sources[name].pipe(collected) for name in program.relations}
-        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+        frames = [_ordinal_frame(d, sources[d]) for d in program.dimensions]
+        frames += [sources[name] for name in (*program.relations, *program.parameters)]
+        read = iter(collected_all(frames))
+        dimensions = {d: next(read) for d in program.dimensions}
+        relations = {name: next(read) for name in program.relations}
+        parameters = {name: next(read) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():

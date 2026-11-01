@@ -70,7 +70,8 @@ class Scope:
         Each cross join keeps its left side's order, then its right's, so the
         product arrives row-major, which is label order, on either engine; the
         streaming engine otherwise picks which side it buffers from the
-        tables' sizes, and the order with it. [`labels.frame`][] verifies it.
+        tables' sizes, and the order with it. [`labels.frames`][specsolve._engine.labels.frames]
+        verifies it.
         The empty product is one real row carrying only [`UNIT`][], so a
         ``where`` on a scalar declaration has a row to filter.
         """

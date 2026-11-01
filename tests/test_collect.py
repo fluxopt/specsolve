@@ -82,11 +82,20 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
     engines = {}
     original = pl.LazyFrame.collect
 
+    original_all = pl.collect_all
+
     def recording(self, *args, **kwargs):
         engines.setdefault(tuple(self.collect_schema().names()), set()).add(kwargs.get('engine'))
         return original(self, *args, **kwargs)
 
+    def recording_all(frames, *args, **kwargs):
+        frames = list(frames)
+        for frame in frames:
+            engines.setdefault(tuple(frame.collect_schema().names()), set()).add(kwargs.get('engine'))
+        return original_all(frames, *args, **kwargs)
+
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
+    monkeypatch.setattr(pl, 'collect_all', recording_all)
     sps.solve(dispatch_yaml, dispatch_frame_inputs)
     assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
         f'every bounds collect names the in-memory engine: {engines}'
