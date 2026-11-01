@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): an update that gives a linear constraint's coefficients new numbers at the coordinates they had skips most of the build ([#2071](https://github.com/fluxopt/specsolve/pull/2071))
 - perf(engine): an update that gives a bound, a right-hand side or a cost new numbers at the coordinates it had skips most of the build ([#2070](https://github.com/fluxopt/specsolve/pull/2070))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
 
