@@ -165,8 +165,8 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
         assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
 
 
-def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
-    """Only a last-bit difference keeps the solver; a change the data made, however small, reaches it."""
+def test_a_coefficient_moved_by_one_part_in_a_billion_reaches_the_loaded_solver() -> None:
+    """Only a last-bit difference stays as loaded; a change the data made, however small, reaches the solver."""
     spec = {
         'dimensions': {'i': {'dtype': 'int'}},
         'parameters': {'cost': {'dims': ['i']}},
@@ -177,7 +177,8 @@ def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -
     cost = pl.DataFrame({'i': [0, 1, 2], 'value': [3.0, 4.0, 5.0]})
     with sps.build(spec, {'i': [0, 1, 2], 'cost': cost}) as model:
         model.solve()
-        model.update({'cost': cost.with_columns(pl.col('value') * (1 + 1e-9))}).solve()
-        assert model.diagnostics().loads == 2, (
-            'a coefficient moved by 1e-9 relative kept a solver that holds the old one'
-        )
+        moved = cost.with_columns(pl.col('value') * (1 + 1e-9))
+        model.update({'cost': moved}).solve()
+        held = sorted(model._engine._solver.handle.getLp().a_matrix_.value_)
+        assert held == moved['value'].to_list(), 'a coefficient moved by 1e-9 relative did not reach the solver'
+        assert model.diagnostics().loads == 1, 'the coefficient was taken in place, not loaded again'

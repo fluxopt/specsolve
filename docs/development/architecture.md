@@ -182,7 +182,8 @@ the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position. Where an update changes only such numbers,
 or a linear constraint's coefficients, at the coordinates they had, the engine
 keeps the labels and reads again only the declarations they feed
-(`assembly.refilled`). A changed coefficient still loads the solver again.
+(`assembly.refilled`). A loaded solver takes a linear row's changed
+coefficients in place.
 
 **The plan is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
@@ -277,8 +278,9 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Structure digest**
 : A digest of everything a re-solve may not change. A loaded solver keeps its
-  model while the digest holds and every coefficient is within 1e-12 relative
-  of the one it holds (`handoff.py`).
+  model while the digest holds and a quadratic constraint's linear part is
+  within 1e-12 relative of the one it holds, and takes a linear row's moved
+  coefficients in place (`handoff.py`, `solver.py`).
 
 **Kind**
 : One frame family of an answer: `primal`, `dual`, `expression`, and each
