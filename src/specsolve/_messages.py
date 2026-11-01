@@ -90,6 +90,17 @@ def sparse_divisor_message(name: str, missing: int) -> str:
     )
 
 
+def reported_divisor_message(name: str, missing: int) -> str:
+    """The message for a divisor parameter a reported expression reads short of a row."""
+    return (
+        f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
+        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
+        f'quotient is not dropped there, and there is no number to divide by.\n'
+        f'  Supply the missing rows.\n'
+        f'  Declare the parameter `missing: absent`, if the quotient has no value there.'
+    )
+
+
 def non_finite_message(divisors: str, count: int) -> str:
     """The message for values that are not finite, where the model divides by *divisors* or reads a value."""
     by = f" where the model divides by '{divisors}'" if divisors else ''
@@ -138,6 +149,16 @@ def short_groups_message(name: str, by: str, op: str, position: int, short: Sequ
         f'{position} within each group, and {len(short)} of them are shorter than '
         f'that: {list(short[:5])}. A boundary that names no coordinate leaves the rows it '
         f'was to seed unseeded.'
+    )
+
+
+def negative_window_message(name: str, widths: Sequence[int]) -> str:
+    """A ``sum_back`` window read from a parameter that holds the negative *widths*, sorted and each once."""
+    shown = ', '.join(map(str, widths[:5])) + (' …' if len(widths) > 5 else '')
+    return (
+        f"parameter '{name}' is the window of a sum_back, and holds {shown}. A window counts positions, "
+        f"so it is a whole number of at least 0, and a window of 0 sums nothing. Give every row of '{name}' "
+        f'a value of 0 or more.'
     )
 
 

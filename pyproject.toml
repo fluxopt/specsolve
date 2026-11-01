@@ -175,6 +175,15 @@ description = "Every expression to depth three, both lanes, solved and read at a
 args = [{ arg = "shard", default = "0/1" }]
 cmd = "pytest tests/test_expression_sweep.py tests/test_expression_at_a_point.py -q -n auto --sweep-depth 3 --sweep-shard {{ shard }}"
 
+[tool.pixi.tasks.fuzz]
+description = "Random models and their data on both lanes; fail where the findings differ from the baseline, seed by seed"
+cmd = "python -m tests.fuzz --seeds 0:1000 --baseline tests/fuzz/baseline.json"
+
+[tool.pixi.tasks.fuzz-fresh]
+description = "Seeds the baseline never ran; fail only on a kind of finding tests/fuzz/kinds.json does not name, and write each kind's reproduction"
+args = [{ arg = "seeds", default = "1000:4000" }]
+cmd = "python -m tests.fuzz --seeds {{ seeds }} --known tests/fuzz/kinds.json --out fuzz-findings"
+
 # `python -m` puts the project root on sys.path, which `tools.mdx_github_math` needs.
 [tool.pixi.feature.docs.tasks]
 docs = { cmd = "python -m zensical serve", description = "The site at 127.0.0.1:8000, live-reloading" }
@@ -285,6 +294,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 "differential/**/*.py" = ["T20", "D"]
 "tests/**/*.py" = ["D"]
 "tests/typeset/golden/__main__.py" = ["T20", "D"]
+"tests/fuzz/run.py" = ["T20", "D"]
 
 [tool.ruff.format]
 quote-style = "single"

@@ -19,8 +19,8 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.pieces import Piece, Presence, absence_restrictions
 from specsolve._engine.scope import Scope, join_on
+from specsolve._engine.terms import Presence, Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
@@ -100,28 +100,29 @@ class BuiltModel:
 
 @dataclass(frozen=True)
 class _Constraint:
-    """One constraint compiled, with everything moved to its left: terms, quadratic terms and constants, each with its sign.
+    """One constraint compiled, with everything moved to its left: linear, quadratic and constant terms, each with its sign.
 
     *restrictions* are the presences its rows must lie in, read off its terms.
     """
 
     name: str
     declaration: program.Constraint
-    terms: list[tuple[Piece, float]]
-    quads: list[tuple[Piece, float]]
-    consts: list[tuple[Piece, float]]
+    linear: list[tuple[Term, float]]
+    quadratic: list[tuple[Term, float]]
+    constant: list[tuple[Term, float]]
     restrictions: list[Presence]
 
     @classmethod
     def compiled(cls, compiler: Compiler, name: str, c: program.Constraint) -> _Constraint:
         """*c*'s two sides compiled, the right-hand side negated."""
-        quadratic = declares_quadratic(c)
-        lhs = compiler.expression(c.lhs, f"constraint '{name}' lhs", quadratic=quadratic)
-        rhs = compiler.expression(c.rhs, f"constraint '{name}' rhs", quadratic=quadratic)
-        terms = [(p, 1.0) for p in lhs.terms] + [(p, -1.0) for p in rhs.terms]
-        quads = [(p, 1.0) for p in lhs.quads] + [(p, -1.0) for p in rhs.quads]
-        consts = [(p, 1.0) for p in rhs.consts] + [(p, -1.0) for p in lhs.consts]
-        return cls(name, c, terms, quads, consts, absence_restrictions([p for p, _ in (*terms, *quads, *consts)]))
+        admits = declares_quadratic(c)
+        lhs = compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
+        rhs = compiler.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
+        linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
+        quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
+        constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
+        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
+        return cls(name, c, linear, quadratic, constant, restrictions)
 
     @property
     def subject(self) -> str:
@@ -246,9 +247,7 @@ class Assembly:
 
         with in_memory():
             bounds = collected_all(
-                self.compiler.bounds(self.variables[name].frame, name, v).select(
-                    'var_label', pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
-                )
+                self.compiler.bounds(self.variables[name].frame, name, v).select('var_label', *_bounds(v))
                 for name, v in declared.items()
             )
         return [
@@ -325,42 +324,42 @@ class Assembly:
         constraints = [_Constraint.compiled(self.compiler, name, c) for name, c in ordered]
         frames = labels.frames(self.scope, [con.domain for con in constraints], 'row')
         for con, frame in zip(constraints, frames, strict=True):
-            c, pieces = con.declaration, [p for p, _ in con.consts]
+            c, constant = con.declaration, [p for p, _ in con.constant]
             if con.restrictions and (declared := labels.declared_height(self.scope, c.dims, c.where)) > frame.height:
                 self.measured.omitted[con.name] = self.measured.omitted.get(con.name, 0) + declared - frame.height
             divisors = program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs))
-            coverage.refuse_null_constants(coverage.narrowed_to_rows(frame.lazy(), pieces), divisors, con.subject)
+            coverage.refuse_null_constants(coverage.narrowed_to_rows(frame.lazy(), constant), divisors, con.subject)
         sides = collected_all(
-            coverage.constant_side(self.scope, frame.lazy(), con.consts, con.declaration)
+            coverage.constant_side(self.scope, frame.lazy(), con.constant, con.declaration)
             for con, frame in zip(constraints, frames, strict=True)
         )
-        terms = collected_all(self._terms(con, frame) for con, frame in zip(constraints, frames, strict=True))
+        linear = collected_all(self._linear(con, frame) for con, frame in zip(constraints, frames, strict=True))
         return [
-            self._block(con, frame, coverage.refuse_uncovered(side, con.consts, con.subject), terms.pop(0))
+            self._block(con, frame, coverage.refuse_uncovered(side, con.constant, con.subject), linear.pop(0))
             for con, frame, side in zip(constraints, frames, sides, strict=True)
         ]
 
-    def _terms(self, con: _Constraint, frame: pl.DataFrame) -> pl.LazyFrame:
+    def _linear(self, con: _Constraint, frame: pl.DataFrame) -> pl.LazyFrame:
         """*con*'s linear terms as ``(row, col, coeff)``, on its own rows; no rows where it has none."""
-        if not con.terms:
+        if not con.linear:
             return pl.LazyFrame(schema={name: _DTYPES[name] for name in _MATRIX})
         c = con.declaration
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(con.terms) == 1 else None
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(con.linear) == 1 else None
         dense = c.where is None and not con.restrictions
-        pieces = []
-        for p, sign in con.terms:
+        frames = []
+        for p, sign in con.linear:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.frame.with_columns(self._dense_row(c.dims).alias('row'))
             else:
                 placed = join_on(frame.lazy(), p.frame, p.dims, 'inner', maintain_order=carried_order)
-            pieces.append(
+            frames.append(
                 placed.select(
                     'row',
                     pl.col('var_label').cast(_DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
-        return pl.concat(pieces)
+        return pl.concat(frames)
 
     def _block(
         self, con: _Constraint, frame: pl.DataFrame, rows: pl.DataFrame, stacked: pl.DataFrame
@@ -373,7 +372,7 @@ class Assembly:
         """
         c = con.declaration
         matrix, term_rows = self._matrix_share(stacked, con.subject, c.lhs, c.rhs)
-        qmatrix = self._quadratic_share(frame, con.quads, con.name, c)
+        qmatrix = self._quadratic_share(frame, con.quadratic, con.name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
         frame, rows, matrix, qmatrix = self._drop_termless_rows(con.name, frame, rows, matrix, qmatrix, term_rows)
@@ -395,24 +394,24 @@ class Assembly:
         return self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.DataFrame, quads: list[tuple[Piece, float]], name: str, c: program.Constraint
+        self, frame: pl.DataFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
         Pairs are ordered by column index for [`_objective_quadratic`][]'s
         reason.
         """
-        if not quads:
+        if not quadratic:
             return None
-        pieces = [
+        frames = [
             join_on(frame.lazy(), p.frame, p.dims, 'inner').select(
                 'row',
                 *_ordered_pair(),
                 (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
             )
-            for p, sign in quads
+            for p, sign in quadratic
         ]
-        stacked = pl.concat(pieces).pipe(collected)
+        stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
         return share
@@ -457,40 +456,40 @@ class Assembly:
         """
         if o is None:
             return None
-        comp = self.compiler.expression(o.expression, 'objective', quadratic=True)
+        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True)
         coverage.refuse_null_constants(
-            [p.frame for p in comp.consts], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
+            [p.frame for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )
-        for p in comp.consts:
+        for p in comp.constant:
             assert not p.dims, (
-                f'objective constant part has dims {list(p.dims)} — the language refuses a '
-                f'variable-free part of an objective that carries any'
+                f'objective constant term has dims {list(p.dims)} — the language refuses a '
+                f'variable-free term of an objective that carries any'
             )
             self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
-        self.quad = self._objective_quadratic(comp.quads, o.expression)
-        if not comp.terms:
+        self.quad = self._objective_quadratic(comp.quadratic, o.expression)
+        if not comp.linear:
             return None
-        pieces = [
-            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.terms
+        frames = [
+            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.linear
         ]
-        stacked = pl.concat(pieces).pipe(collected)
+        stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
         return objective
 
-    def _objective_quadratic(self, quads: tuple[Piece, ...], expression: program.Expression) -> pl.DataFrame | None:
+    def _objective_quadratic(self, quadratic: tuple[Term, ...], expression: program.Expression) -> pl.DataFrame | None:
         """The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
 
         One row per unordered pair, at the coefficient the file wrote, not
         halved; each sink converts. It leaves sorted, because
         [`structure`][specsolve._sinks.handoff.Handoff.structure] hashes it.
         """
-        if not quads:
+        if not quadratic:
             return None
-        pieces = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quads]
-        stacked = pl.concat(pieces).pipe(collected)
+        frames = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quadratic]
+        stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
         return quad
@@ -524,6 +523,26 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
         pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
         pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
+
+
+def _bounds(v: program.Variable) -> tuple[pl.Expr, pl.Expr]:
+    """*v*'s ``lb`` and ``ub`` as floats, each a whole number where *v* is not continuous ([`_whole`][])."""
+    lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
+    if v.domain != 'continuous':
+        lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
+    return lb.alias('lb'), ub.alias('ub')
+
+
+def _whole(bound: pl.Expr, inward: pl.Expr) -> pl.Expr:
+    """An integer column's *bound* as a whole number: the nearest one within 1e-6, else *inward*, its rounding into the range.
+
+    HiGHS answers a fractional bound on an integer column as optimal with no
+    feasible values, so every sink is handed whole bounds. The 1e-6 is HiGHS's
+    default ``mip_feasibility_tolerance``: a bound that noise put just past a
+    whole number keeps that number rather than moving a whole step.
+    """
+    nearest = bound.round()
+    return pl.when((bound - nearest).abs() <= 1e-6).then(nearest).otherwise(inward)
 
 
 def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
