@@ -724,7 +724,7 @@ def test_every_shape_operator_declares_its_fan_in():
     """
     from mathspec import program
 
-    from specsolve._engine.pieces import fan_in
+    from specsolve._engine.terms import fan_in
 
     x = program.VariableReference('x', dims=('g', 't'))
     on_bus = program.VariableReference('x', dims=('bus', 't'))

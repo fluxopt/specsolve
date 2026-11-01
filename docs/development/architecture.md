@@ -133,26 +133,26 @@ writes and what the relational query does with it. The oracle's call is in
 subclasses.
 
 **Fan-in** says how an output row's slots relate to the input's
-(`pieces.fan_in`). Anything but one-to-one mixes several slots into one row, so
+(`terms.fan_in`). Anything but one-to-one mixes several slots into one row, so
 absence is pushed into the operand first
 ([#1142](https://github.com/fluxopt/specsolve/issues/1142)).
 
 | plan node | the file writes | fan-in | the relational query |
 | --- | --- | --- | --- |
-| `Constant` | a number | one-to-one | a one-row const piece |
+| `Constant` | a number | one-to-one | a one-row constant term |
 | `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a const piece with the same presence, a zero at every absent slot under `missing: neutral` |
-| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a const piece present exactly where a row stands |
+| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
+| `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a constant term present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
-| `Add` | `x + y`, `x - y` | one-to-one | the two piece lists concatenated |
-| `Multiply` | `x * y` | one-to-one | a join on the shared dims, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic piece |
+| `Add` | `x + y`, `x - y` | one-to-one | the two lists of terms concatenated |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dims, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic term |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dims traded for the added ones, and a bare relation fans a member out to every group |
 | `Join` | `at(x, by=r[d])` | one-to-one | the relation's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
-| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the piece lists concatenated |
+| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the lists of terms concatenated |
 | `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 **The engine only builds.** Every refusal about the shape of a file is made
@@ -174,7 +174,7 @@ leaves no model.
 
 **Tables are tidy.** Parameters are `(dims…, value)`. A variable table is
 `(dims…, var_label)`. A linear expression is `(dims…, var_label, coeff)` plus a
-constant part. A mask is a missing row, and broadcasting is a join.
+constant term. A mask is a missing row, and broadcasting is a join.
 
 **Labels are dense `0..n-1`, row-major over the masked coordinate product.**
 So `var_label` is the solver column, `row` is the solver row, and a build is
@@ -220,7 +220,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/relations.py` | a relation's table as a walk reads it |
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/predicates.py` | a `where:` mask as a boolean query |
-| `_engine/pieces.py` | the additive pieces an expression compiles to |
+| `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
@@ -259,10 +259,10 @@ The names the code uses for its own parts. The names a caller meets are in
 : The tidy tables as every query reads them: a dimension as `(val, ord)`, a
   label column as an `Enum` in declared order.
 
-**Piece**, **presence** and **region**
-: One additive part of a compiled expression, over its dims; where the
-  variable under it exists; the part of a `cases:` block it covers
-  (`pieces.py`).
+**Term**, **presence** and **region**
+: One additive term of a compiled expression, over its own dims: linear,
+  quadratic or constant; where the variable under it exists; the part of a
+  `cases:` block it covers (`terms.py`).
 
 **Label**
 : The solver's index of one column or row (`labels.py`).

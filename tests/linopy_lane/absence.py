@@ -27,7 +27,9 @@ __all__ = [
     'divisor',
     'filled',
     'holes',
+    'power',
     'present',
+    'quotient',
     'unmapped',
     'vacated',
     'variable_term',
@@ -110,11 +112,43 @@ def combined(op: Callable[[Any, Any], Any], left: Any, right: Any, *, neutral: f
     return result.where(~absent)
 
 
+def power(base: Any, exponent: Any) -> Any:
+    """``base ** exponent``, absent wherever either side is.
+
+    IEEE answers ``nan ** 0`` and ``1 ** nan`` with 1, and the language
+    answers an absent operand with absence, so the holes are put back after
+    the power is taken.
+    """
+    raised = base**exponent
+    for side in (base, exponent):
+        if (gap := holes(side)) is not None:
+            raised = raised.where(~gap)
+    return raised
+
+
+def quotient(numerator: Any, divisor: Any) -> Any:
+    """``numerator / divisor`` as a build divides, a term's zero constant staying zero over a zero divisor.
+
+    linopy divides a term's constant with its coefficients, and ``0 / 0`` is
+    the NaN that marks an absent slot, so a term with no constant there — a sum
+    with no terms among them — would be absent and take its row. The
+    coefficients keep the infinity or NaN a zero divisor leaves: whether one
+    reaches a row the build keeps is the builder's question.
+    """
+    result = combined(operator.truediv, numerator, divisor, neutral=1.0)
+    if not hasattr(result, 'const') or not isinstance(divisor, xr.DataArray):
+        return result
+    before = numerator.to_linexpr().const if hasattr(numerator, 'to_linexpr') else numerator.const
+    const = result.const.where(~((before == 0) & (divisor == 0)), 0.0)
+    return type(result)(result.data.assign(const=const), result.model)
+
+
 def divisor(value: Any) -> Any:
     """A divisor as a read takes it: absent where it is zero, since a reported quotient by zero has no value (#1776).
 
-    A build keeps the plain divisor: a zero in it is refused before the build
-    divides (`check_divisors_cover`), as the relational engine refuses it.
+    A build divides by the plain divisor (:func:`quotient`), and a zero in it
+    is refused where the quotient reaches what the build keeps, as the
+    relational engine refuses it.
     """
     if hasattr(value, 'where'):
         return value.where(value != 0)
@@ -131,10 +165,12 @@ def vacated(shifted: Any, operand: Any, over: str, vacated: Any, fill: float) ->
     ``fillna`` alone cannot spell it: by the time it runs, the edge the shift
     just made and a coordinate *operand* never had are both absent, and filling
     the second builds a row asserting ``x <= 0`` where the model said nothing.
-    So the fill lands where the shift vacated **and** the operand carries the
-    coordinate, and every other slot keeps the absence it arrived with.
+    So over a term the fill lands where the shift vacated **and** the operand
+    carries the coordinate, and every other slot keeps the absence it arrived
+    with. Over data it lands at every vacated position, as an unpartitioned
+    ``DataArray.shift`` fills it.
     """
-    carried = (~operand.isnull()).any(over)
+    carried = True if isinstance(operand, xr.DataArray) else (~operand.isnull()).any(over)
     keep = carried & (~shifted.isnull() | vacated)
     return filled(shifted, fill).where(keep)
 
