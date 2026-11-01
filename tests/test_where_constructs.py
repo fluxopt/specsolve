@@ -159,3 +159,25 @@ def test_the_end_a_shift_vacates_is_false_rather_than_wrapped():
     admitted = both(spec(['unit', 'step'], 'shift(live, along=step, offset=-1)'), sources())
 
     assert admitted == pytest.approx(3.0, rel=RTOL), "the successors that run are a's 0 and 1, and b's 1"
+
+
+def test_a_variable_whose_where_reads_another_variable_exists_where_that_one_does():
+    """`run` exists only at the coordinates where `pick` exists, which `live` decides.
+
+    Every variable's labels were read in one pass, so `run`'s mask asked for
+    `pick`'s labels before they existed, and the build raised `KeyError`.
+    """
+    model = BASE | {
+        'variables': {
+            'pick': {'dims': ['unit', 'step'], 'where': 'live', 'bounds': {'lower': 0, 'upper': 1}},
+            'run': {'dims': ['unit', 'step'], 'where': 'pick', 'bounds': {'lower': 0, 'upper': 1}},
+        },
+        'objective': {
+            'sense': 'maximize',
+            'expression': 'sum(sum(pick, over=unit), over=step) + sum(sum(run, over=unit), over=step)',
+        },
+    }
+    with differential(model, sources()) as run:
+        assert run.oracle == pytest.approx(2 * sum(LIVE.values()), rel=RTOL), (
+            'each live coordinate holds one pick and one run, both at their upper bound'
+        )

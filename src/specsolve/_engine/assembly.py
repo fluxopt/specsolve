@@ -26,7 +26,7 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
@@ -228,8 +228,8 @@ class Assembly:
     def _build_variables(self) -> list[pl.DataFrame]:
         """Every variable's labelled frame, and its share of ``cols``, in declaration order.
 
-        The labels of every variable are read in one pass and their bounds in
-        another ([`labels.frames`][specsolve._engine.labels.frames]).
+        The labels are read in as few passes as [`_waves`][] allows and the
+        bounds in one more ([`labels.frames`][specsolve._engine.labels.frames]).
         A share leaves in label order: ``cols`` carries no ``col``, so a row's
         position is its solver column index. The bounds are collected in
         memory: they are parameters looked up onto labels already in memory,
@@ -238,12 +238,13 @@ class Assembly:
         and l (#1857).
         """
         declared = self.program.variables
-        domains = [labels.Domain(v.dims, v.where) for v in declared.values()]
-        for name, labelled in zip(declared, labels.frames(self.scope, domains, 'var_label'), strict=True):
-            self.variables[name] = labels.Labelled(
-                _moved(labelled, 'var_label', self.n_cols).lazy(), self.n_cols, labelled.height
-            )
-            self.n_cols += labelled.height
+        for wave in _waves(declared):
+            domains = [labels.Domain(declared[name].dims, declared[name].where) for name in wave]
+            for name, labelled in zip(wave, labels.frames(self.scope, domains, 'var_label'), strict=True):
+                self.variables[name] = labels.Labelled(
+                    _moved(labelled, 'var_label', self.n_cols).lazy(), self.n_cols, labelled.height
+                )
+                self.n_cols += labelled.height
 
         with in_memory():
             bounds = collected_all(
@@ -523,6 +524,20 @@ def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
         pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
         pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
+
+
+def _waves(variables: Mapping[str, program.Variable]) -> list[list[str]]:
+    """*variables*' names in declaration order, cut before each one whose ``where`` reads a variable of its own wave.
+
+    A wave's labels are read in one pass, and a mask that reads a variable
+    reads that variable's labels, which must exist by then.
+    """
+    waves: list[list[str]] = [[]]
+    for name, v in variables.items():
+        if v.where is not None and v.where.names_read & set(waves[-1]):
+            waves.append([])
+        waves[-1].append(name)
+    return waves
 
 
 def _bounds(v: program.Variable) -> tuple[pl.Expr, pl.Expr]:
