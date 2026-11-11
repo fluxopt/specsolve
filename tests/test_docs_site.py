@@ -191,7 +191,7 @@ def test_the_plan_table_names_every_expression_node():
     """
     from mathspec import program
 
-    from specsolve._engine.pieces import fan_in
+    from specsolve._engine.terms import fan_in
 
     page = (DOCS / 'development' / 'architecture.md').read_text()
     section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]

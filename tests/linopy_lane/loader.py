@@ -222,8 +222,7 @@ def load_parameters(
         if pdef.dims:
             if pdef.missing == 'refused':
                 _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)
-            onto = {d: master_coords[d] for d in pdef.dims}
-            arr = arr.reindex(onto, fill_value=_fill(pdef, arr.dtype == bool))
+            arr = _onto(arr, {d: master_coords[d] for d in pdef.dims}, pdef)
         arrays[pname] = arr
     return xr.Dataset(arrays)
 
@@ -245,6 +244,19 @@ def given_rows(
             held = _from_tidy(tidy[pname].collect(), pdef.dims).reindex({d: master_coords[d] for d in pdef.dims})
             given[pname] = held.notnull()
     return given
+
+
+def _onto(arr: xr.DataArray, onto: Mapping[str, pd.Index], pdef: program.Parameter) -> xr.DataArray:
+    """*arr* over the master coordinates, every coordinate the data has no row for read as :func:`_fill` says.
+
+    A row can be missing in two ways: a label the data never names, which the
+    reindex adds, and over two dimensions or more a combination of labels it
+    does name, which the array already holds as a NaN. The fill reaches both.
+    """
+    flag = pdef.dtype == 'bool'
+    fill = _fill(pdef, flag)
+    arr = arr.reindex(onto, fill_value=fill).fillna(fill)
+    return arr.astype(bool) if flag else arr
 
 
 def _fill(pdef: program.Parameter, flag: bool) -> Any:

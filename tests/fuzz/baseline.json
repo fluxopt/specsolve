@@ -1,0 +1,85 @@
+{
+ "154": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "211": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "231": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "238": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "308": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "380": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "382": [
+  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
+ ],
+ "391": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "400": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "46": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "490": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "540": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "546": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "555": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "585": [
+  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
+ ],
+ "601": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "628": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "654": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "73": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "764": [
+  "build: only the linopy lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral row is read as _, and on the constant side that zero is a bound rather than an absence \u2014 the row "
+ ],
+ "786": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "789": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "841": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "856": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "882": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "889": [
+  "solve: the lanes build a different number of columns or rows",
+  "solve: the lanes reach different objectives",
+  "solve: the written LP file re-solves to a different objective"
+ ],
+ "982": [
+  "wording: the lanes refuse the data in different words"
+ ]
+}

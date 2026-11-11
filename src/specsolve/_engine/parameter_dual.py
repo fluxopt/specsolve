@@ -19,10 +19,10 @@ from specsolve._collect import collected
 from specsolve._engine import labels
 from specsolve._engine.assembly import declares_quadratic
 from specsolve._engine.compiler import Compiler, varied_label
-from specsolve._engine.pieces import absence_restrictions
 from specsolve._engine.predicates import masked
 from specsolve._engine.readback import _as_strings
 from specsolve._engine.scope import UNIT, Scope, join_on
+from specsolve._engine.terms import absence_restrictions
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
 from specsolve.errors import SpecsolveError
@@ -30,7 +30,7 @@ from specsolve.errors import SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from specsolve._engine.pieces import CompiledExpression, Piece
+    from specsolve._engine.terms import CompiledExpression, Term
 
 #: The varied leaf's label while a parameter dual adds up its rates.
 _VARIED = '__varied label__'
@@ -139,20 +139,20 @@ def _lagrangian_rates(compiler: Compiler, name: str, values: pl.LazyFrame) -> li
     model = compiler.scope.program
     parts: list[pl.LazyFrame] = []
     if model.objective is not None and _reads(name, model.objective.expression):
-        compiled = compiler.expression(model.objective.expression, 'the objective', quadratic=True)
+        compiled = compiler.expression(model.objective.expression, 'the objective', admits_quadratic=True)
         parts += _gradient(compiled, None, 1.0, values)
     for constraint, c in model.constraints.items():
         if not _reads(name, c.lhs, c.rhs):
             continue
-        dual = compiler.expression(program.Dual(constraint, dims=c.dims), f"the dual of '{constraint}'").consts[0]
+        dual = compiler.expression(program.Dual(constraint, dims=c.dims), f"the dual of '{constraint}'").constant[0]
         for side, sign in ((c.lhs, -1.0), (c.rhs, 1.0)):
-            compiled = compiler.expression(side, f"constraint '{constraint}'", quadratic=True)
+            compiled = compiler.expression(side, f"constraint '{constraint}'", admits_quadratic=True)
             parts += _gradient(compiled, dual, sign, values)
     return parts
 
 
 def _gradient(
-    compiled: CompiledExpression, weight: Piece | None, sign: float, values: pl.LazyFrame
+    compiled: CompiledExpression, weight: Term | None, sign: float, values: pl.LazyFrame
 ) -> list[pl.LazyFrame]:
     """*compiled*'s rate in each label of its terms, times *weight* where it lands and *sign*, as ``(label, value)``.
 
@@ -160,13 +160,13 @@ def _gradient(
     term narrower than its row is owed at every row it lands on.
     """
     parts = []
-    for piece in (*compiled.terms, *compiled.quads):
-        frame = piece.frame
+    for term in (*compiled.linear, *compiled.quadratic):
+        frame = term.frame
         rate = sign * pl.col('coeff')
         if weight is not None:
-            frame = join_on(weight.frame, frame, piece.dims, 'inner')
+            frame = join_on(weight.frame, frame, term.dims, 'inner')
             rate = rate * pl.col('cval')
-        if piece.kind == 'term':
+        if term.kind == 'linear':
             parts.append(frame.select(pl.col('var_label').cast(pl.Int64).alias(_VARIED), rate.alias(VALUE)))
             continue
         for label, other in (('var_label', 'var_label_2'), ('var_label_2', 'var_label')):
@@ -524,7 +524,7 @@ def _rows_switched(
         return
 
     if off.height:
-        dual = compiler.expression(program.Dual(constraint, dims=c.dims), f"the dual of '{constraint}'").consts[0]
+        dual = compiler.expression(program.Dual(constraint, dims=c.dims), f"the dual of '{constraint}'").constant[0]
         priced_off = (
             join_on(off.lazy(), dual.frame, c.dims, 'inner').filter(pl.col('cval').abs() > _ZERO).pipe(collected)
         )
@@ -579,11 +579,11 @@ def _row_coordinates(scope: Scope, constraint: str, c: program.Constraint) -> pl
     """The coordinates constraint *c* builds rows at under *scope*, as a build would."""
     build = Compiler(scope)
     quadratic = declares_quadratic(c)
-    lhs = build.expression(c.lhs, f"constraint '{constraint}' lhs", quadratic=quadratic)
-    rhs = build.expression(c.rhs, f"constraint '{constraint}' rhs", quadratic=quadratic)
-    pieces = [*lhs.terms, *lhs.quads, *lhs.consts, *rhs.terms, *rhs.quads, *rhs.consts]
+    lhs = build.expression(c.lhs, f"constraint '{constraint}' lhs", admits_quadratic=quadratic)
+    rhs = build.expression(c.rhs, f"constraint '{constraint}' rhs", admits_quadratic=quadratic)
+    terms = [*lhs.linear, *lhs.quadratic, *lhs.constant, *rhs.linear, *rhs.quadratic, *rhs.constant]
     keys = c.dims or (UNIT,)
-    return labels.frame(scope, c.dims, c.where, '__row__', 0, absence_restrictions(pieces)).select(*keys)
+    return labels.frame(scope, c.dims, c.where, '__row__', 0, absence_restrictions(terms)).select(*keys)
 
 
 def _rows_at(
@@ -608,10 +608,10 @@ def _rows_at(
     theta = values.rename({_VARIED: '__p label__', VALUE: '__p__'})
     parts = []
     for side, sign in ((c.lhs, 1.0), (c.rhs, -1.0)):
-        compiled = build.expression(side, f"constraint '{constraint}'", quadratic=True)
-        for piece in (*compiled.terms, *compiled.quads, *compiled.consts):
-            frame = join_on(rows.lazy(), piece.frame, piece.dims, 'inner')
-            if piece.kind == 'const':
+        compiled = build.expression(side, f"constraint '{constraint}'", admits_quadratic=True)
+        for term in (*compiled.linear, *compiled.quadratic, *compiled.constant):
+            frame = join_on(rows.lazy(), term.frame, term.dims, 'inner')
+            if term.kind == 'constant':
                 parts.append(
                     frame.select(
                         *keys,
@@ -621,7 +621,7 @@ def _rows_at(
                     )
                 )
                 continue
-            if piece.kind == 'term':
+            if term.kind == 'linear':
                 frame = frame.with_columns(pl.col('var_label').cast(pl.Int64).alias('__l__'))
                 variable = frame.filter(pl.col('__l__') >= 0)
                 parameter = frame.filter(pl.col('__l__') < 0).join(theta, left_on='__l__', right_on='__p label__')

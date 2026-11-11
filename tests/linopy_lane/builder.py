@@ -17,13 +17,14 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve._messages import null_bounds_message
+from specsolve._messages import negative_window_message, non_finite_message, null_bounds_message
 from specsolve._sinks.capabilities import Capabilities, Capability, spelled
 from specsolve.errors import DataError, SpecsolveError
 from tests.linopy_lane import absence
@@ -40,7 +41,7 @@ from tests.linopy_lane.operators import (
 from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_relation, evaluate_where
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     import linopy
     import pandas as pd
@@ -85,9 +86,12 @@ def _build_variables(ctx: EvaluationContext) -> None:
 
             _check_bounds_are_defined(name, vdef, ctx, mask)
 
+            lower, upper = _bound(vdef.lower, ctx, -math.inf), _bound(vdef.upper, ctx, math.inf)
+            if vdef.domain != 'continuous':
+                lower, upper = _whole(lower, np.ceil), _whole(upper, np.floor)
             ctx.model.add_variables(
-                lower=_bound(vdef.lower, ctx, -math.inf),
-                upper=_bound(vdef.upper, ctx, math.inf),
+                lower=lower,
+                upper=upper,
                 coords=coords,
                 name=name,
                 mask=as_linopy_mask(mask),
@@ -130,6 +134,20 @@ def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: 
         return values.fillna(open_side) if ctx.absent(bound.name) else values
     msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
+
+
+def _whole(bound: Any, inward: Callable[[Any], Any]) -> Any:
+    """An integer variable's bound as the whole number it admits: the nearest within 1e-6, else rounded *inward*.
+
+    linopy hands HiGHS a fractional bound on an integer column as it is, and
+    HiGHS answers it with a value that is not whole.
+    """
+    nearest = np.round(bound)
+    with np.errstate(invalid='ignore'):  # an open side is infinite, and inf - inf is NaN, which is not close
+        close = abs(bound - nearest) <= 1e-6
+    if isinstance(bound, xr.DataArray):
+        return nearest.where(close, inward(bound))
+    return nearest if close else inward(bound)
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +212,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             mask = evaluate_where(row.where, ctx)
             context = f"constraint '{name}'"
 
-            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx))
+            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx), terms=False)
             check_constant_side_covers(context, row, ctx, mask)
 
             if mask is not None and not bool(np.asarray(mask).any()):
@@ -209,7 +227,55 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 mask, other = mask & ~gap, other.fillna(0.0)
                 if not bool(np.asarray(mask).any()):
                     continue
+            term, other = _refuse_a_coefficient_that_is_not_finite(context, row, term, other, mask)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
+
+
+def _refuse_a_coefficient_that_is_not_finite(
+    context: str, row: program.Constraint, term: Any, other: Any, mask: Any
+) -> tuple[Any, Any]:
+    """Refuse a quotient by zero that reaches a row the build keeps, and clear one that reaches none.
+
+    A zero under a term is asked of the row rather than of the divisor's own
+    coordinates: a ``where``, a mask on the dividend, a shift and a sum with
+    no terms each decide whether the quotient lands in a row, and the built
+    row is where all four have answered. Asked only of a row that divides, so
+    an infinite limit on a side with no divisor stays the limit that never
+    binds. linopy refuses an infinity even in a row it then masks, so what
+    reaches no row is cleared: a coefficient to zero, a constant to absent.
+
+    Raises:
+        DataError: A coefficient, or a term's constant, that is not finite in
+            a row the build keeps.
+    """
+    from linopy.constants import TERM_DIM
+
+    divisors = program.parameters_of(
+        *(node.divisor for node in program.walk(row.lhs, row.rhs) if isinstance(node, program.Divide))
+    )
+    if not divisors:
+        return term, other
+    whole = (term - other).data
+    kept = mask & whole.const.notnull() & (whole.vars != -1).any(TERM_DIM)
+    sides = [side.to_linexpr() if hasattr(side, 'to_linexpr') else side for side in (term, other)]
+    terms = [side for side in sides if hasattr(side, 'nterm')]
+    entries = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
+    constants = sum(int((np.isinf(s.const) & kept).sum()) for s in terms)
+    if entries or constants:
+        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), entries or constants)}')
+    return tuple(_cleared(side, ~kept) for side in sides)
+
+
+def _cleared(side: Any, unbuilt: xr.DataArray) -> Any:
+    """*side* with every value that is not finite at an *unbuilt* row made one linopy takes."""
+    if hasattr(side, 'nterm'):
+        data = side.data
+        coeffs = data.coeffs.where(~(unbuilt & (data.vars != -1) & ~np.isfinite(data.coeffs)), 0.0)
+        const = data.const.where(~(unbuilt & np.isinf(data.const)))
+        return type(side)(data.assign(coeffs=coeffs, const=const), side.model)
+    if isinstance(side, xr.DataArray):
+        return side.where(~(unbuilt & np.isinf(side)), 0.0)
+    return side
 
 
 def _linear_where_squares_vanish(side: Any, context: str) -> Any:
@@ -293,7 +359,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
     if odef is None:
         return
     with note('while building the objective'):
-        check_divisors_cover('the objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
+        check_divisors_cover('objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
 
         expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)
@@ -355,15 +421,17 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return absence.combined(operator.add, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Multiply):
-        return absence.combined(operator.mul, _eval(node.left, ctx), _eval(node.right, ctx))
+        left, right = _eval(node.left, ctx), _eval(node.right, ctx)
+        return _unsupplied_left_out(absence.combined(_times, left, right), node, (left, right), ctx)
 
     if isinstance(node, program.Divide):
-        divisor = _eval(node.divisor, ctx)
-        divisor = absence.divisor(divisor) if ctx.solved else divisor
-        return absence.combined(operator.truediv, _eval(node.numerator, ctx), divisor, neutral=1.0)
+        numerator, divisor = _eval(node.numerator, ctx), _eval(node.divisor, ctx)
+        if ctx.solved:
+            return absence.combined(operator.truediv, numerator, absence.divisor(divisor), neutral=1.0)
+        return absence.quotient(numerator, divisor)
 
     if isinstance(node, program.Power):
-        return _eval(node.base, ctx) ** _eval(node.exponent, ctx)
+        return absence.power(_eval(node.base, ctx), _eval(node.exponent, ctx))
 
     if isinstance(node, program.Sum) and isinstance(node.operand, program.Join) and node.operand.columns.axes:
         return _grouped_sum(_eval(node.operand.operand, ctx), node.operand.columns, ctx)
@@ -390,6 +458,8 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         )
 
     if isinstance(node, program.WindowSum):
+        if isinstance(node.width, str):
+            _refuse_a_negative_window(node.width, ctx)
         return operator_sum_back(
             _eval(node.operand, ctx),
             over=node.along,
@@ -405,6 +475,54 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return _eval(node.body, ctx)
 
     assert_never(node)
+
+
+def _times(left: Any, right: Any) -> Any:
+    """``left * right``, the factor with more terms first.
+
+    linopy multiplies an expression by a factor of one term at most, and
+    refuses a wider one even where the other factor has a single term — a
+    ``cases:`` block, an addition or a sum each makes one — so the order is
+    what lets the product be taken.
+    """
+    if _terms(right) > _terms(left):
+        return right * left
+    return left * right
+
+
+def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any, Any], ctx: EvaluationContext) -> Any:
+    """*product* contributing nothing where its value factor is zero only because a ``neutral`` parameter has no row.
+
+    A missing ``neutral`` row leaves no term to multiply, so a row it leaves
+    with none is not built (the absence page), while a zero the data gave is a
+    term whose row stands. Filled with zero, the two read alike, so the factor
+    is evaluated again with the missing rows kept NaN to tell them apart. A
+    slot already absent stays absent.
+    """
+    if not _terms(product):
+        return product
+    for operand, value in zip((node.left, node.right), sides, strict=True):
+        if _terms(value) or not isinstance(value, xr.DataArray) or not _reads_a_neutral_parameter(operand, ctx):
+            continue
+        raw = _eval(operand, replace(ctx, absent_parameter=lambda arr: arr))
+        unsupplied = raw.isnull() & (value == 0) & ~product.isnull()
+        if bool(unsupplied.any()):
+            product = product.where(~unsupplied, 0)
+    return product
+
+
+def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
+    return any(
+        isinstance(n, program.ParameterReference) and ctx.program.parameters[n.name].missing == 'neutral'
+        for n in program.walk(node)
+    )
+
+
+def _terms(side: Any) -> int:
+    """How many terms *side* holds: a variable one, a value none."""
+    if hasattr(side, 'to_linexpr'):
+        return 1
+    return getattr(side, 'nterm', 0)
 
 
 def _dual(name: str, ctx: EvaluationContext) -> xr.DataArray:
@@ -467,6 +585,14 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
+def _refuse_a_negative_window(name: str, ctx: EvaluationContext) -> None:
+    """A width below zero counts no positions, so the data is refused, as the other lane refuses it."""
+    widths = np.asarray(ctx.dataset[name], dtype=float).ravel()
+    negative = sorted({int(w) for w in widths[widths < 0]})
+    if negative:
+        raise DataError(negative_window_message(name, negative))
+
+
 def _grouped_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:
     """``sum(x, over=a, by=relation[b])``: the join and the sum over the axes it opens, as one grouping.
 
@@ -491,8 +617,9 @@ def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationConte
     """A sum through the rows of a relation: every row carries its dropped columns' term to its added ones.
 
     The operand's dims become the relation's roles, so two roles over one
-    dimension stay apart; the membership array multiplies in, the dropped
-    roles sum out, and the added roles take their dimensions back.
+    dimension stay apart; the membership array multiplies in, a pair it does
+    not relate leaves no term rather than a zero one, the dropped roles sum
+    out, and the added roles take their dimensions back.
 
     Raises:
         OracleCannotBuildError: The call joins on or groups by a value
@@ -507,7 +634,8 @@ def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationConte
         )
     entering = {columns.dim(r): r for r in columns.joined if columns.dim(r) != r}
     leaving = {r: columns.dim(r) for r in columns.grouped if columns.dim(r) != r}
-    summed = operand.rename(entering) * _membership(columns, ctx)
+    membership = _membership(columns, ctx)
+    summed = (operand.rename(entering) * membership).where(membership != 0, 0)
     for role in columns.dropped:
         summed = operator_sum(summed, role)
     return summed.rename(leaving)

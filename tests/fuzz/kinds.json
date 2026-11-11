@@ -1,0 +1,17 @@
+{
+ "build: only the linopy lane refuses: _ value(s) are not finite where the model divides by _: a divisor is zero there, or": "#2049",
+ "build: only the linopy lane refuses: parameter _ covers _ fewer coordinates than the rows built here. A missing neutral ": "#2049",
+ "build: only the linopy lane refuses: parameter _ is used as a divisor but covers _ fewer coordinates than it is indexed ": "#2048",
+ "build: only the relational lane refuses: _ value(s) are not finite where the model divides by _: a divisor is zero there": "#2048",
+ "build: only the relational lane refuses: parameter _ covers _ fewer coordinates than the rows built here. A missing neut": "#2049",
+ "build: only the relational lane refuses: parameter _ is used as a divisor but covers _ fewer coordinates than it is inde": "#2049",
+ "build: the lanes build a variable over different coordinates: the saved answer_v_' frame does not cover every coordinate": "#2049",
+ "read: the lanes read an expression differently at one point": "#2048",
+ "read: the relational lane refuse(s) a read the other answers or words it differently: parameter _ is used as a divisor b": "#2049",
+ "solve: the lanes build a different number of columns or rows": "#2048",
+ "solve: the lanes end the solve differently": "#2048",
+ "solve: the lanes reach different objectives": "#2048",
+ "solve: the lanes write different coefficients": "#2048",
+ "solve: the written LP file re-solves to a different objective": "#2048",
+ "wording: the lanes refuse the data in different words": "#2049"
+}

@@ -123,8 +123,8 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         )
 
 
-def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
-    """A parameter added beside a variable term is a constant piece, and is checked (#1521).
+def test_a_constant_term_beside_a_linear_one_is_refused_on_both_lanes():
+    """A parameter added beside a variable term is a constant term, and is checked (#1521).
 
     Filled, `w * x + c <= 100` would read `w * x <= 100` where the file says
     `w * x <= 100 - c`.
@@ -133,8 +133,8 @@ def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
     both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
 
 
-def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
-    """Beside a constant piece, a sparse coefficient is still a zero (#1521).
+def test_a_sparse_coefficient_beside_a_constant_term_is_still_a_zero():
+    """Beside a constant term, a sparse coefficient is still a zero (#1521).
 
     `w` stands with a variable, so its missing row is a zero; only `c` is owed
     its coordinates.

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from specsolve._engine.attaching import AttachedSources
     from specsolve._engine.labels import Labelled
-    from specsolve._engine.pieces import Piece
+    from specsolve._engine.terms import Term
 
 
 def join_on(
@@ -149,9 +149,9 @@ class Scope:
             frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
         return frame
 
-    def spanned(self, pieces: Sequence[Piece]) -> tuple[str, ...]:
-        """The dims *pieces* carry between them, in declaration order."""
-        return self.in_declaration_order(d for p in pieces for d in p.dims)
+    def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:
+        """The dims *terms* carry between them, in declaration order."""
+        return self.in_declaration_order(d for p in terms for d in p.dims)
 
     def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.

@@ -65,7 +65,7 @@ Three files pass `check` and build on one side only.
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
 - **A relation that is not a single-valued map** builds only in specsolve,
   because the oracle holds each relation as one dense array.
-- **An operator along a dimension a constant part does not carry**, such as
+- **An operator along a dimension a constant term does not carry**, such as
   `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
   refusal says to declare the parameter over the dimension
   ([#1137](https://github.com/fluxopt/specsolve/issues/1137)).

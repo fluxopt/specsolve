@@ -269,10 +269,17 @@ def _relation_has_a_row(node: program.RelationDefined, ctx: EvaluationContext) -
 
     The arrays are padded to the key's whole product, so a key the table leaves
     out is null in every column; a row it does hold carries at least one value,
-    a column left null in it being a value the model reads as absent.
+    a column left null in it being a value the model reads as absent. A bare
+    relation has no value column to ask, and arrives as its membership over
+    the key's roles instead, which the frame reads at its dimensions.
     """
-    columns = ctx.program.relations[node.name].values
-    return reduce(operator.or_, (bound_relation(node.name, column, ctx.relations).notnull() for column in columns))
+    relation = ctx.program.relations[node.name]
+    if not relation.values:
+        membership = bound_relation(node.name, '', ctx.relations)
+        return membership.rename({role: relation.dim(role) for role in relation.key if relation.dim(role) != role}) > 0
+    return reduce(
+        operator.or_, (bound_relation(node.name, column, ctx.relations).notnull() for column in relation.values)
+    )
 
 
 def unbound_relation_message(name: str) -> str:

@@ -46,7 +46,7 @@ DATA = law_data()
 CENSUS_STEP = 20
 #: Of the 56 cases that samples, what answered and what a lane refused when the
 #: floor and the ceiling were measured (#1213). Every refusal is the asymmetry
-#: #1137 settled: a `sum` acting along a dimension a constant part of the
+#: #1137 settled: a `sum` acting along a dimension a constant term of the
 #: expression does not carry, which the linopy lane builds and the relational
 #: one refuses by name.
 ANSWERS = 38

@@ -36,6 +36,7 @@ rather than its prior value.
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -51,6 +52,7 @@ from specsolve._inputs import declared, lower, lowered
 from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
+from tests.linopy_lane.coverage import check_read_divisors_cover
 from tests.linopy_lane.loader import (
     dimension_coords,
     given_rows,
@@ -134,7 +136,8 @@ def evaluate(
     Raises:
         LanguageError: A construct the language does not accept, in the file or
             in the expression, or a name *spec* does not declare.
-        DataError: A source that does not fit the file.
+        DataError: A source that does not fit the file, or a divisor parameter
+            with no row where the expression divides.
         SpecsolveError: A lowered ``Program`` as *spec*, or an expression that
             reads a dual where the solve left none.
     """
@@ -148,6 +151,8 @@ def evaluate(
         dataset = load_parameters(program, tidy, master_coords)
         given = given_rows(program, tidy, master_coords)
         context = EvaluationContext(dataset, master_coords, built, relations, program, solved=True, given=given)
+        named = expression if isinstance(expression, str) and expression in program.expressions else 'the expression'
+        check_read_divisors_cover(f"named expression '{named}'", node, context, functools.partial(_eval, node))
         value = _eval(node, context)
         if isinstance(value, xarray.DataArray):
             return value

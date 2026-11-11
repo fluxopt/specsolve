@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, in_memory
-from specsolve._messages import coordinate_text, missing_row_message
+from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
 
@@ -28,8 +28,9 @@ if TYPE_CHECKING:
 class AttachedSources:
     """The data a program is built against, after attaching.
 
-    ``parameters`` are tidy ``(dims…, value)``, a parameter that declares a
-    value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    ``parameters`` are tidy ``(dims…, value)``, a ``float`` parameter's value
+    a ``Float64`` whatever column it arrived in, and a parameter that declares
+    a value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
@@ -78,6 +79,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     for name, p in program.parameters.items():
         frame = _plain_strings(parameters[name], p.dims)
         casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
+        if p.dtype == 'float':
+            casts.append(pl.col(VALUE).cast(pl.Float64))
         parameters[name] = frame.with_columns(casts) if casts else frame
 
     for name, relation in program.relations.items():
@@ -109,6 +112,17 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     )
 
 
+def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
+    """Refuse parameter *name*, the window of a ``sum_back``, where a row holds a negative width.
+
+    Raises:
+        DataError: Naming *name* and each negative width it holds.
+    """
+    negative = data.parameters[name].filter(pl.col(VALUE) < 0).select(pl.col(VALUE).unique().sort()).pipe(collected)
+    if negative.height:
+        raise DataError(negative_window_message(name, negative[VALUE].to_list()))
+
+
 def _product(
     columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.LazyFrame:
@@ -116,7 +130,7 @@ def _product(
     frames = [dimensions[dim(column)].lazy().select(pl.col('val').alias(column)) for column in columns]
     product = frames[0]
     for frame in frames[1:]:
-        product = product.join(frame, how='cross')
+        product = product.join(frame, how='cross', maintain_order='left_right')
     return product
 
 
@@ -146,11 +160,17 @@ def _refuse_a_missing_row(
 def _filled(
     frame: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.DataFrame:
-    """*frame* with a row at every coordinate of *dims*, *value* where the data has none."""
+    """*frame* with a row at every coordinate of *dims*, *value* where the data has none.
+
+    The rows come back in label order, so a sum over them adds its terms in
+    the same order at every build.
+    """
     if not dims:
         return frame if frame.height else pl.DataFrame({VALUE: [value]}, schema={VALUE: frame.schema[VALUE]})
     product = _product(dims, lambda d: d, dimensions)
-    filled = product.join(frame.lazy(), on=list(dims), how='left').with_columns(pl.col(VALUE).fill_null(value))
+    filled = product.join(frame.lazy(), on=list(dims), how='left', maintain_order='left').with_columns(
+        pl.col(VALUE).fill_null(value)
+    )
     return filled.select(*dims, pl.col(VALUE).cast(frame.schema[VALUE])).pipe(collected)
 
 

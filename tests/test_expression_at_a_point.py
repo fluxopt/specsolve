@@ -106,7 +106,7 @@ def _answer(agreed: Read, expression: str | Mapping[str, Any]) -> pl.DataFrame |
     """The agreed frame, or None where the relational lane refuses a construct it cannot build.
 
     That refusal is #1137's: a ``sum`` or ``shift`` along a dimension a
-    constant part of the expression does not carry. The linopy lane reads it,
+    constant term of the expression does not carry. The linopy lane reads it,
     so it is a gap already settled, not a disagreement.
     """
     try:
