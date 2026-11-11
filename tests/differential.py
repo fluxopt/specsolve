@@ -128,7 +128,7 @@ def at_a_point(
 
     No solver runs. Each variable takes a seeded value at every coordinate it
     exists at, the linopy lane reads it as ``.solution`` and the relational
-    lane through ``Model._evaluator``, so ``read(expression)`` values the
+    lane through ``Model._readers``, so ``read(expression)`` values the
     expression on both and returns the relational frame once the two are the
     same frame: the same coordinates, the same values to ``RTOL``.
 
