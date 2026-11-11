@@ -213,7 +213,7 @@ def _both_builds(spec: Spec, sources: Mapping[str, Any]) -> tuple[tuple[Any, Any
 
 def _reads(spec: Spec, case: Case, model: Any, relational: Any) -> list[Finding]:
     point = _hold(model)
-    read, e = _attempt(lambda: relational._evaluator(point, None, 'a chosen point has no duals'))
+    read, e = _attempt(lambda: relational._readers(point, None, 'a chosen point has no duals')[0])
     if e is not None:
         return [Finding('build', f'the lanes build a variable over different coordinates: {_first(e)}', _trace(e))]
     findings = []
@@ -420,8 +420,8 @@ def _shuffled(spec: Spec, case: Case) -> list[Finding]:
     findings = []
     with sps.build(spec, dict(case.sources)) as before, sps.build(spec, shuffled) as after:
         try:
-            first = before._evaluator(point, None, 'no duals')
-            second = after._evaluator(point, None, 'no duals')
+            first = before._readers(point, None, 'no duals')[0]
+            second = after._readers(point, None, 'no duals')[0]
         except MathSpecError:
             return findings
         for expression in case.reads:

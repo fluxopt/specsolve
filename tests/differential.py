@@ -128,7 +128,7 @@ def at_a_point(
 
     No solver runs. Each variable takes a seeded value at every coordinate it
     exists at, the linopy lane reads it as ``.solution`` and the relational
-    lane through ``Model._evaluator``, so ``read(expression)`` values the
+    lane through ``Model._readers``, so ``read(expression)`` values the
     expression on both and returns the relational frame once the two are the
     same frame: the same coordinates, the same values to ``RTOL``.
 
@@ -141,7 +141,7 @@ def at_a_point(
     m = specsolve_linopy.build(model, dict(sources))
     point = _hold(m)
     with sps.build(model, dict(sources)) as built:
-        relational = built._evaluator(point, None, 'a chosen point has no duals')
+        relational = built._readers(point, None, 'a chosen point has no duals')[0]
 
         def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
             ours = relational(expression)

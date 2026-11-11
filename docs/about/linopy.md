@@ -56,6 +56,12 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
 - **Data is attached by name, and the spec says what a missing row means.**
   A model holds only the rows that exist, which is what keeps a sparse model
   small.
+- **A rate comes back per row of the data.** The model keeps the parameter
+  behind each coefficient, so
+  [`result.parameter_dual('p_max')`](../reference/api.md#specsolve.types.Result.parameter_dual)
+  is the rate of the objective in each row of `p_max`. linopy sees only the
+  numbers, so the same answer is a sum you build from the duals by hand
+  ([what a change is worth](../howto/prices.md)).
 - **linopy is not a dependency.** Only the test suite uses it, to build every
   file a second time and compare
   ([verification](../development/verification.md#the-oracle)).

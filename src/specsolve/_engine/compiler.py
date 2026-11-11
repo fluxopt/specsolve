@@ -99,11 +99,15 @@ class Compiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
     ``solution`` is set on the compiler a read builds and on no other: with it
-    every variable and every ``dual(c)`` compiles to a value.
+    every variable and every ``dual(c)`` compiles to a value. ``varied`` is set
+    beside it by a parameter dual, and names the one leaf that stays a term: a
+    variable at its own columns, or a parameter with each of its rows a column
+    of its own ([`_varied_term`][]).
     """
 
     scope: Scope
     solution: Solution | None = None
+    varied: str | None = None
 
     # ------------------------------------------------------------------
     # bounds
@@ -323,9 +327,11 @@ class Compiler:
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
                 return CompiledExpression((), (Term((), frame, 'constant'),))
             if isinstance(e, program.ParameterReference):
+                if e.name == self.varied:
+                    return CompiledExpression((self._varied_term(e.name),), ())
                 return CompiledExpression((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
-                if self.solution is None:
+                if self.solution is None or e.name == self.varied:
                     return CompiledExpression((self._variable_term(e.name),), ())
                 return CompiledExpression((), (self._solved_term(e.name),))
             if isinstance(e, program.Dual):
@@ -392,6 +398,21 @@ class Compiler:
         present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
         return Term(dims, frame, 'constant', presences=presences, parameters=frozenset({name}))
+
+    def _varied_term(self, name: str) -> Term:
+        """A parameter as a linear term with unit coefficients, its label each row's [`varied_label`][].
+
+        Every other leaf of a parameter dual's read is a value, so the coefficient a
+        term adds up to is the expression's rate in that row. Present only at
+        its rows under ``missing: absent``, as [`_parameter_term`][] is.
+        """
+        dims = self.scope.program.parameters[name].dims
+        frame = self.scope.data.parameters[name].select(
+            *dims, varied_label(self.scope, dims).alias('var_label'), pl.lit(1.0, dtype=pl.Float64).alias('coeff')
+        )
+        present = frame.select(*dims) if dims else frame.select(pl.col('var_label').is_not_null().alias(PRESENT))
+        presences = (Presence(present, dims),) if self.scope.absent(name) else ()
+        return Term(dims, frame, 'linear', presences=presences)
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
@@ -637,6 +658,15 @@ class Compiler:
         """Trade the dims *columns* drops for the ones it adds, through its relation."""
         frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
         return Term(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+
+
+def varied_label(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
+    """A parameter row's label as a parameter dual's term: one less than minus its row-major position.
+
+    Unique because duplicates are refused at the door, and negative so that a
+    compile holding both this term and a variable's never confuses the two.
+    """
+    return -1 - scope.row_major(dims, scope.ordinal_of)
 
 
 def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:

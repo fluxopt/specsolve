@@ -47,7 +47,8 @@ print(pl.DataFrame(rows))
 ```
 
 Each step of 40 saves less than the one before, because more of the wind is
-left over when the load is low.
+left over when the load is low. The saving of a small step needs no re-solve:
+[What a change is worth](howto/prices.md) reads it off one solve.
 
 `diagnostics` counts what the model did:
 
