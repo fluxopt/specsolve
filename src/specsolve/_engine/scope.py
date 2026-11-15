@@ -39,6 +39,10 @@ def join_on(
     return left.join(right, how='cross', maintain_order=maintain_order)
 
 
+#: The column a join keyed by row-major position ([`Scope.parameter_join`][]) carries its key in,
+#: named with a space so no dimension a file declares can share it.
+_POSITION = '__row-major position__'
+
 #: Carries the single row of the empty coordinate product, since polars cannot
 #: hold a frame with one row and no columns.
 UNIT = '__unit__'
@@ -107,7 +111,25 @@ class Scope:
         if not declaration.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
+        if self._keyed_by_position(declaration.dims):
+            key = self.row_major(declaration.dims, self.ordinal_of).alias(_POSITION)
+            keyed = table.select(key, alias)
+            return (
+                frame.with_columns(key)
+                .join(keyed, on=_POSITION, how=how, maintain_order=maintain_order)
+                .drop(_POSITION)
+            )
         return join_on(frame, table, declaration.dims, how, maintain_order)
+
+    def _keyed_by_position(self, dims: tuple[str, ...]) -> bool:
+        """Whether a join on *dims* can take their row-major position as its one key.
+
+        The position is cheap only where every dim reads its ordinal off the
+        column itself; elsewhere [`ordinal_of`][] looks each label up, which
+        costs more than the join it would save. It fits an Int64 wherever a
+        label does, since labels are row-major positions over at least these dims.
+        """
+        return len(dims) > 1 and all(self.data.is_enum_encoded(d) or d in self.data.consecutive for d in dims)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.

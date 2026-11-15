@@ -1520,6 +1520,85 @@ class TestThePositionalHandoff:
         neutral = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'neutral'})
         assert _aligned_for(neutral, holey, monkeypatch) == {'avail': False}
 
+    @pytest.mark.parametrize(
+        ('t_labels', 'keyed'),
+        [
+            pytest.param([0, 1, 2], True, id='consecutive integers and a string'),
+            pytest.param([0, 5, 10], False, id='integers with gaps'),
+        ],
+    )
+    def test_a_joined_bound_keyed_by_position_writes_the_same_model(self, monkeypatch, tmp_path, t_labels, keyed):
+        """A bound the variable's mask keeps from attaching by position is joined on one Int64 key or on its columns.
+
+        The key is the coordinate's row-major position, read off the Enum or the
+        run of integers. A dim whose labels have gaps has no such ordinal, so it
+        keeps the join on columns, and so does a parameter over one dim, which
+        already joins on one column. Either way the file is the one the join on
+        columns writes.
+        """
+        from specsolve._engine import scope as scope_module
+
+        relabel = dict(zip([0, 1, 2], t_labels, strict=True))
+        spec = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0 and cost > 0'})
+        avail = SHUFFLED_BOUND.with_columns(pl.col('t').replace_strict(relabel))
+        data = {'t': t_labels, 'n': ['a', 'b'], 'avail': avail, 'cost': FLAT_COST}
+
+        real = scope_module.Scope._keyed_by_position
+        decided = {}
+
+        def spy(self, dims):
+            decided[dims] = real(self, dims)
+            return decided[dims]
+
+        monkeypatch.setattr(scope_module.Scope, '_keyed_by_position', spy)
+        with sps.build(spec, data) as model:
+            model.write(tmp_path / 'built.lp')
+        assert decided.get(('t', 'n')) is keyed, f'the (t, n) bound join chose {decided}'
+        assert decided.get(('n',)) is False, f'the where on cost over n alone chose {decided}'
+
+        monkeypatch.setattr(scope_module.Scope, '_keyed_by_position', lambda self, dims: False)
+        with sps.build(spec, data) as model:
+            model.write(tmp_path / 'columns.lp')
+        assert (tmp_path / 'built.lp').read_text() == (tmp_path / 'columns.lp').read_text(), (
+            'the join on one key wrote another model than the join on columns'
+        )
+
+    def test_a_dimension_named_like_the_join_key_keeps_its_column(self, monkeypatch):
+        """A bound joined on one key, over a dimension whose name is any a file may write.
+
+        `p` is masked, so its bound `c` is joined, and both dims are runs of
+        integers, so the join takes the one key. The key's column was named
+        `__position__`, a name a file may give a dimension: the join replaced
+        that dimension's column and then dropped it.
+        """
+        from specsolve._engine import scope as scope_module
+
+        spec = {
+            'dimensions': {'__position__': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+            'parameters': {'c': {'dims': ['__position__', 't']}, 'on': {'dims': ['__position__', 't']}},
+            'variables': {
+                'p': {'dims': ['__position__', 't'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 'c'}}
+            },
+            'objective': {'sense': 'maximize', 'expression': 'sum(sum(p, over=t), over=__position__)'},
+        }
+        coordinates = {'__position__': [0, 1, 0, 1], 't': [1, 0, 0, 1]}
+        data = {
+            '__position__': [0, 1],
+            't': [0, 1],
+            'c': pl.DataFrame(coordinates | {'value': [3.0, 4.0, 5.0, 6.0]}),
+            'on': pl.DataFrame(coordinates | {'value': [0.0, 1.0, 1.0, 1.0]}),
+        }
+        real = scope_module.Scope._keyed_by_position
+        keyed = []
+        monkeypatch.setattr(
+            scope_module.Scope, '_keyed_by_position', lambda self, dims: keyed.append(real(self, dims)) or keyed[-1]
+        )
+        with sps.solve(spec, data) as result:
+            assert result.objective == pytest.approx(4.0 + 5.0 + 6.0, rel=RTOL), (
+                'the three kept coordinates at their own bounds'
+            )
+        assert any(keyed), 'the bound join took the one key'
+
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
     """Data for the model above, carrying only what that model declares.
