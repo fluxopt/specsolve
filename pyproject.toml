@@ -25,14 +25,14 @@ dependencies = [
     "mathspec>=0.4.0,<0.5",
     "polars>=1.33.1",
     "numpy>=1.26",
-    # 1.13 is the first highspy with the bulk `changeRowsBounds`.
-    "highspy>=1.13",
+    # 1.13 is the first highspy with the bulk `changeRowsBounds`; 1.16.0 fails four tests of the suite.
+    "highspy>=1.13,!=1.16.0",
 ]
 
 [project.optional-dependencies]
 gurobi = [
-    # 11 is the release whose status codes the sink maps.
-    "gurobipy>=11",
+    # 11 is the release whose status codes the sink maps; 14 solves a nonconvex row under `QCPDual` without its prices.
+    "gurobipy>=11,<14",
     "scipy>=1.11",
 ]
 xpress = [
