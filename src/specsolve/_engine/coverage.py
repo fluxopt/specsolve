@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected, collected_all
+from specsolve._collect import collected_all
 from specsolve._engine.predicates import masked
 from specsolve._engine.scope import join_on
 from specsolve._engine.terms import constant_scalar
@@ -126,22 +126,19 @@ def constant_side(
     rows: pl.LazyFrame,
     terms: Sequence[tuple[Term, float]],
     c: program.Constraint,
-    subject: str,
-) -> pl.DataFrame:
-    """One constraint's rows as ``(row, sense, rhs)``, every constant term covering the rows it is given.
+) -> pl.LazyFrame:
+    """One constraint's rows as ``(row, sense, rhs)``, and where a constant term left a row uncovered.
 
-    A coordinate a term has no row for contributes zero, and the coverage
-    check rides on the same pass. Only a term with a parameter under it is
-    owed: one whose parameters all stand beside a variable is a coefficient,
-    and its zero is not a bound. A term built under a ``cases:`` region is
-    owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
-
-    Raises:
-        DataError: A constant term with no value at a row it is owed.
+    A coordinate a term has no row for contributes zero. Only a term with a
+    parameter under it is owed: one whose parameters all stand beside a
+    variable is a coefficient, and its zero is not a bound. A term built under
+    a ``cases:`` region is owed only inside it. The plan carries one gap column
+    per owed term, which [`refuse_uncovered`][] reads. A gap a reduction summed
+    away is one summand fewer, as it is for a ``missing: neutral`` row anywhere
+    inside a sum.
     """
     accumulated = pl.lit(0.0, dtype=pl.Float64)
-    gaps: dict[str, frozenset[str]] = {}
+    gaps: list[str] = []
     carrier = rows
     for i, (p, sign) in enumerate(terms):
         column = f'__const {i}__'
@@ -156,15 +153,24 @@ def constant_side(
             claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
-        carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
-        gaps[f'__gap {i}__'] = p.parameters
+        carrier = carrier.with_columns(gap.alias(_gap_column(i)))
+        gaps.append(_gap_column(i))
 
-    built = carrier.select(
+    return carrier.select(
         'row',
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *gaps,
-    ).pipe(collected)
+    )
+
+
+def refuse_uncovered(built: pl.DataFrame, terms: Sequence[tuple[Term, float]], subject: str) -> pl.DataFrame:
+    """*built*, a [`constant_side`][] read over *terms*, without its gap columns, once no row is left uncovered.
+
+    Raises:
+        DataError: A constant term with no value at a row it is owed.
+    """
+    gaps = {_gap_column(i): p.parameters for i, (p, _) in enumerate(terms) if p.parameters}
     if not gaps:
         return built
     owed = [parameters for column, parameters in gaps.items() if built.get_column(column).any()]
@@ -173,3 +179,8 @@ def constant_side(
         names = ', '.join(sorted(frozenset[str]().union(*owed)))
         raise DataError(uncovered_constant_message(names, uncovered, subject))
     return built.drop(list(gaps))
+
+
+def _gap_column(i: int) -> str:
+    """The column [`constant_side`][] marks the rows term *i* leaves uncovered in."""
+    return f'__gap {i}__'

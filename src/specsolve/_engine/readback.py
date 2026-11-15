@@ -350,7 +350,8 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     context = f"named expression '{name}'"
     terms = compiler.expression(expr, context, reported=True).constant
     dims = compiler.scope.spanned(terms)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    domain = labels.Domain(dims, None, absence_restrictions(terms))
+    carrier = labels.frames(compiler.scope, [domain], _EXPRESSION_ROW)[0].lazy()
 
     coverage.refuse_null_constants(
         [_holed(carrier, terms), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in terms)],

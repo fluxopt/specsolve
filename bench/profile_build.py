@@ -1,7 +1,8 @@
 """Attribute build wall time to the queries that spend it.
 
-Wraps ``LazyFrame.collect`` and tags every collection with the build step that
-issued it, so the output is a ranked list of queries.
+Wraps ``LazyFrame.collect`` and ``pl.collect_all`` and tags every collection
+with the build step that issued it, so the output is a ranked list of queries.
+A batch is one entry, named by its first plan and the number it ran.
 
     pixi run -e bench python -m bench.profile_build dispatch l
     pixi run -e bench python -m bench.profile_build transport m
@@ -22,10 +23,10 @@ from bench import cases as bench_cases
 #: What a collection is attributed to, as ``(module path, owner or None, name)``
 #: — a method on the class that owns it, or a module-level function.
 STEPS = (
-    ('specsolve._engine.assembly', 'Assembly', '_build_variable'),
-    ('specsolve._engine.assembly', 'Assembly', '_build_constraint'),
+    ('specsolve._engine.assembly', 'Assembly', '_build_variables'),
+    ('specsolve._engine.assembly', 'Assembly', '_build_constraints'),
     ('specsolve._engine.assembly', 'Assembly', '_build_objective'),
-    ('specsolve._engine.labels', None, 'frame'),
+    ('specsolve._engine.labels', None, 'frames'),
     ('specsolve._engine.attaching', None, 'attach'),
 )
 
@@ -41,19 +42,31 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
     import polars as pl
 
     original_collect = pl.LazyFrame.collect
+    original_collect_all = pl.collect_all
+
+    def record(plan: str, elapsed: float) -> None:
+        entry = timings.setdefault((phase['now'], plan[:88]), [0.0, 0])
+        entry[0] += elapsed
+        entry[1] += 1
 
     def collect(self, *args, **kwargs):
         started = time.perf_counter()
         try:
             return original_collect(self, *args, **kwargs)
         finally:
-            elapsed = time.perf_counter() - started
-            key = (phase['now'], ' '.join(self.explain(optimized=False).split())[:88])
-            entry = timings.setdefault(key, [0.0, 0])
-            entry[0] += elapsed
-            entry[1] += 1
+            record(' '.join(self.explain(optimized=False).split()), time.perf_counter() - started)
+
+    def collect_all(frames, *args, **kwargs):
+        frames = list(frames)
+        started = time.perf_counter()
+        try:
+            return original_collect_all(frames, *args, **kwargs)
+        finally:
+            first = ' '.join(frames[0].explain(optimized=False).split()) if frames else ''
+            record(f'collect_all of {len(frames)}: {first}', time.perf_counter() - started)
 
     pl.LazyFrame.collect = collect
+    pl.collect_all = collect_all
 
     for module_path, class_name, name in STEPS:
         module = importlib.import_module(module_path)
