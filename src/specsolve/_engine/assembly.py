@@ -193,9 +193,14 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
+        if self._over_nothing(v.dims):
+            labelled = labels.nothing(self.scope, v.dims, 'var_label')
+        else:
+            labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
         self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
+        if not labelled.height:
+            return _stack([], _COLS)
 
         lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
         if v.domain != 'continuous':
@@ -258,8 +263,15 @@ class Assembly:
 
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
-        labelled block narrows to the rows that survived.
+        labelled block narrows to the rows that survived. A constraint whose
+        ``where`` admits no row is not compiled.
         """
+        start = self.n_rows
+        if self._over_nothing(c.dims):
+            return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
+        admitted = labels.frame(self.scope, c.dims, c.where, 'row', start)
+        if not admitted.height:
+            return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
         rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
@@ -267,11 +279,9 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        start = self.n_rows
-        declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
-        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
-        if declared is not None and declared > labelled.height:
-            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
+        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions) if restrictions else admitted
+        if admitted.height > labelled.height:
+            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + admitted.height - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
@@ -319,6 +329,22 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
+
+    def _over_nothing(self, dims: tuple[str, ...]) -> bool:
+        """Whether a declaration over *dims* spans a dimension without a label, so it holds nothing whatever its data."""
+        return any(not self.attached.cardinality[d] for d in dims)
+
+    def _without_a_row(
+        self, name: str, labelled: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+        """A constraint that holds no row, left uncompiled.
+
+        Its terms could only narrow its rows further, so compiling them would
+        change nothing but the cost: each query a compile plans costs a fixed
+        time that a declaration without a row never earns back.
+        """
+        self.constraints[name] = labels.Labelled(labelled.lazy(), start, 0)
+        return _stack([], _ROWS), None, None
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
