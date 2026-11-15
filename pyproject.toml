@@ -25,8 +25,8 @@ dependencies = [
     "mathspec>=0.4.0,<0.5",
     "polars>=1.33.1",
     "numpy>=1.26",
-    # 1.13 is the first highspy with the bulk `changeRowsBounds`.
-    "highspy>=1.13",
+    # 1.13 is the first highspy with the bulk `changeRowsBounds`; 1.16.0 fails four tests of the suite.
+    "highspy>=1.13,!=1.16.0",
 ]
 
 [project.optional-dependencies]

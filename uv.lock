@@ -1580,7 +1580,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11" },
-    { name = "highspy", specifier = ">=1.13" },
+    { name = "highspy", specifier = ">=1.13,!=1.16.0" },
     { name = "mathspec", specifier = ">=0.4.0,<0.5" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.33.1" },
