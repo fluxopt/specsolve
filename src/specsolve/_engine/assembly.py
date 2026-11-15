@@ -500,7 +500,8 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     The hand-off a full build of the same data gives, where [`numbers_only`][]
     holds: the labels, the matrix, the quadratic rows and the sets are
     *built*'s, and each recomputed share is spliced over the run of labels its
-    declaration owns. *measured* is *built*'s, updated for what was read.
+    declaration owns. A declaration that owns no label has no share to read,
+    so it is not compiled. *measured* is *built*'s, updated for what was read.
 
     Raises:
         DataError: A bound, constant side or objective the new data leaves
@@ -517,10 +518,14 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
         for name in _fed(plan.variables, changed, _bound_parameters):
             held = built.variables[name]
+            if not held.height:
+                continue
             share = assembly._columns(name, plan.variables[name], held.frame)
             cols = _spliced(cols, held.start, held.start + held.height, share)
         for name in _fed(plan.constraints, changed, _constraint_parameters):
             held = built.constraints[name]
+            if not held.height:
+                continue
             c = plan.constraints[name]
             share = labels.in_position_order(
                 assembly._constant_side(name, c, held.frame, assembly._compiled(name, c)[2]), 'row'
