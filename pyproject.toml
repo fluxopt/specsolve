@@ -31,8 +31,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gurobi = [
-    # 11 is the release whose status codes the sink maps.
-    "gurobipy>=11",
+    # 11 is the release whose status codes the sink maps; 14 solves a nonconvex row under `QCPDual` without its prices.
+    "gurobipy>=11,<14",
     "scipy>=1.11",
 ]
 xpress = [
