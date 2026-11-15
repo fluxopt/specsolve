@@ -116,3 +116,35 @@ def test_a_model_with_declarations_that_hold_no_row_is_the_model_without_them(tm
         'a declaration without a row changed the written model'
     )
     assert sps.solve(SPEC, SOURCES).objective == pytest.approx(2.0), 'each x is capped at 1 by `live` alone'
+
+
+#: `limit` has a row at one of the four coordinates of `g` and `h`, so `capped` holds
+#: one row and has no `where` to admit it early.
+SPARSE_SPEC = {
+    'dimensions': {'g': {}, 'h': {}},
+    'parameters': {'limit': {'dims': ['g', 'h'], 'missing': 'absent'}},
+    'variables': {'z': {'dims': ['g', 'h'], 'bounds': {'lower': 0}}},
+    'constraints': {'capped': {'dims': ['g', 'h'], 'expression': 'z <= limit'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(z)'},
+}
+
+SPARSE_SOURCES = {
+    'g': ['a', 'b'],
+    'h': ['p', 'q'],
+    'limit': pl.DataFrame({'g': ['a'], 'h': ['p'], 'value': [4.0]}),
+}
+
+
+def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(monkeypatch):
+    """A sparse absence narrows such a constraint, and labelling it unrestricted first would hold the full product of its dims."""
+    frame, unrestricted = labels.frame, []
+
+    def spied_frame(scope, dims, where, label, start, restrictions=()):
+        if label == 'row' and where is None and not restrictions:
+            unrestricted.append(tuple(dims))
+        return frame(scope, dims, where, label, start, restrictions)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
+        assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
+    assert not unrestricted, f'`capped` was labelled over its full product {unrestricted} before its restriction'

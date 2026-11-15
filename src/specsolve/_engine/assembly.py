@@ -264,13 +264,15 @@ class Assembly:
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
         labelled block narrows to the rows that survived. A constraint whose
-        ``where`` admits no row is not compiled.
+        ``where`` admits no row is not compiled. One without a ``where`` is
+        labelled only once its restrictions are known, so a sparse absence
+        never meets the full product of its dims.
         """
         start = self.n_rows
         if self._over_nothing(c.dims):
             return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
-        admitted = labels.frame(self.scope, c.dims, c.where, 'row', start)
-        if not admitted.height:
+        admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
+        if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
         lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
@@ -279,9 +281,14 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions) if restrictions else admitted
-        if admitted.height > labelled.height:
-            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + admitted.height - labelled.height
+        if admitted is None or restrictions:
+            labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+        else:
+            labelled = admitted
+        if restrictions:
+            declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
+            if declared > labelled.height:
+                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
