@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- perf(engine): a model whose declarations mostly hold no row, such as PyPSA's, builds faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
+- perf(engine): a model whose declarations mostly build nothing, such as PyPSA's, builds up to five times faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
 
 ## 0.11.0 (2026-10-31)
 
