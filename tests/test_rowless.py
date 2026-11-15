@@ -189,3 +189,32 @@ def test_a_count_over_a_dimension_without_a_label_is_zero_without_a_query(monkey
             f'a count over nothing is 0, so `{where}` holds at {columns} of 3'
         )
     assert not counted, f'counted over {counted}, a dimension without a label, with a query'
+
+
+#: `e` with labels and `size` over them, so `y`, `over_nothing` and `sized` hold rows.
+GROWN = {'e': ['p', 'q'], 'size': pl.DataFrame({'e': ['p', 'q'], 'value': [0.5, 0.25]})}
+
+
+@pytest.mark.parametrize(
+    ('first', 'then'),
+    [
+        pytest.param(SOURCES, SOURCES | GROWN, id='a-dimension-gains-labels'),
+        pytest.param(SOURCES | GROWN, SOURCES, id='a-dimension-loses-its-labels'),
+        pytest.param(
+            SOURCES, SOURCES | {'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [200.0, 3.0]})}, id='a-where-gains-a-row'
+        ),
+    ],
+)
+def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp_path: Path, first, then):
+    """A skip is decided on the data a build reads, so `update` decides it again.
+
+    `cap > 100` admits no row of `admits_nothing` until the update moves `cap`'s
+    numbers alone: no dimension changes, so it is the case a refill could keep.
+    """
+    with sps.build(SPEC, first) as model:
+        model.update(then)
+        model.write(tmp_path / 'updated.lp')
+    sps.write(SPEC, then, tmp_path / 'fresh.lp')
+    assert (tmp_path / 'updated.lp').read_text() == (tmp_path / 'fresh.lp').read_text(), (
+        'the update kept a skip that its new data undoes'
+    )
