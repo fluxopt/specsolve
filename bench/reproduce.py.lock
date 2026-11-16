@@ -17,7 +17,7 @@ requirements = [
     { name = "pyomo", specifier = ">=6.7" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-benchmem", specifier = ">=0.5" },
-    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=fbc735a5b" },
+    { name = "specsolve", extras = ["gurobi"], git = "https://github.com/fluxopt/specsolve?rev=54abba801" },
 ]
 
 [[package]]
@@ -348,16 +348,16 @@ wheels = [
 
 [[package]]
 name = "mathspec"
-version = "0.2.1"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/e7/ec27d31d40a19232393ca7f6ef0fe8f0aab0302c149ce9c1261346716cf1/mathspec-0.2.1.tar.gz", hash = "sha256:18bfeff047ebb675a62f1a98bf9623154aac7dd99b66dc38660685cf1da2b097", size = 171966, upload-time = "2026-10-01T12:52:14.891Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/bb/1e366dafeb11858332d0e47e11b57aa6e61bc2b2f0be46a017dba6f4421a/mathspec-0.4.0.tar.gz", hash = "sha256:183822f956dcd3a0eb1aefba5bbdee2715ba5f5e9230fab301d9636fe26bc972", size = 180003, upload-time = "2026-10-22T11:52:28.679Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/d8/36bf56eb6aa5475a6c6b8f146fdf7b8d707fdbe79d3823b8e9307e16dd51/mathspec-0.2.1-py3-none-any.whl", hash = "sha256:0f05dace4d460e50589c17c35621aff769de764572b868f529c89a511131b279", size = 179991, upload-time = "2026-10-01T12:52:13.24Z" },
+    { url = "https://files.pythonhosted.org/packages/80/b6/8b3c314d6124bf4b81289eb469fcb9e78c6e785374daf0c45686aa626924/mathspec-0.4.0-py3-none-any.whl", hash = "sha256:17f6c64ab0023b8d3f28e60438fea1e288c712a4e91055c8c9babad2f9f4edc8", size = 187812, upload-time = "2026-10-22T11:52:27.296Z" },
 ]
 
 [[package]]
@@ -1085,8 +1085,8 @@ wheels = [
 
 [[package]]
 name = "specsolve"
-version = "0.9.1.dev31+gfbc735a5b"
-source = { git = "https://github.com/fluxopt/specsolve?rev=fbc735a5b#fbc735a5b972ffdc9699a0db19ec620ae623deaa" }
+version = "0.11.1"
+source = { git = "https://github.com/fluxopt/specsolve?rev=54abba801#54abba80134a899094bf01de13b858d3f99ffdef" }
 dependencies = [
     { name = "highspy" },
     { name = "mathspec" },
