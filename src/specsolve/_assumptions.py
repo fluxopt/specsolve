@@ -52,12 +52,15 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
     """One coordinate the assumption does not hold at, or ``None`` where it holds everywhere.
 
     A predicate with no value at a coordinate does not hold there. The empty
-    string answers a failing assumption over no dims.
+    string answers a failing assumption over no dims. One over a dimension
+    without a label has no coordinate to fail at, so it is not read.
     """
     failing = ~assumption.holds
     if assumption.where is not None:
         failing = failing & assumption.where
     dims = scope.in_declaration_order(failing.dims)
+    if any(not scope.data.cardinality[d] for d in dims):
+        return None
     offending = masked(scope, dims, failing).head(1).pipe(collected)
     if not offending.height:
         return None

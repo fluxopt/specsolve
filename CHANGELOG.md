@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a model whose declarations mostly build nothing, such as PyPSA's, builds up to five times faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
+
 ## 0.11.0 (2026-10-31)
 
 **specsolve moves to mathspec 0.4.0, and solves on Xpress 10.** A model file
