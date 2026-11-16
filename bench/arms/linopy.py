@@ -56,7 +56,6 @@ def _built(prepared: Prepared) -> Any:
 
     from bench.models import formulation
 
-    linopy.options['semantics'] = 'v1'
     tables = {name: pd.read_parquet(path) for name, path in prepared.paths.items()}
     return formulation(prepared.case_name, DIALECT).build(tables)
 

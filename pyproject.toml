@@ -88,7 +88,7 @@ dev = [
     "typst>=0.15.0",
     "pyomo>=6.7",
     # The test oracle. Exact: 0.10.0 is the first release with linopy's v1 arithmetic convention (#463).
-    "linopy==0.10.0",
+    "linopy @ git+https://github.com/PyPSA/linopy@bda47bc7f35f90af6572eccb80fdfedb28e5b4fa",
     "xarray>=2024.2.0",
     "pandas>=2.2",
 ]
@@ -222,7 +222,7 @@ description = "One sink of the published ladder, a process per case and ladder"
 args = [{ arg = "sink" }, { arg = "cases", default = "dispatch nodal network sector" }]
 # `bash -c` because the pixi shell has no `for`.
 # `--builds` only on highs, because `test_rebuild` does not vary by sink.
-cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve linopy" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
 
 [tool.pixi.feature.bench.tasks.ladder-smoke]
 description = "One rung, to prove the machinery rather than to measure anything"
