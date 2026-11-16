@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a condition that counts along a dimension without a label is decided without reading data ([#2083](https://github.com/fluxopt/specsolve/pull/2083))
 - perf(engine): a model whose declarations mostly build nothing, such as PyPSA's, builds up to five times faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
 
 ## 0.11.0 (2026-10-31)

@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
-from specsolve._engine import labels
+from specsolve._engine import labels, predicates
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -148,6 +148,47 @@ def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(m
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
     assert not unrestricted, f'`capped` was labelled over its full product {unrestricted} before its restriction'
+
+
+#: `e` has no label, so `count(on, over=e)` is 0 at every `g`.
+COUNTED_SPEC = {
+    'dimensions': {'g': {}, 'e': {}},
+    'parameters': {'on': {'dims': ['g', 'e'], 'dtype': 'bool'}},
+    'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+COUNTED_SOURCES = {
+    'g': ['a', 'b', 'c'],
+    'e': [],
+    'on': pl.DataFrame(schema={'g': pl.String, 'e': pl.String, 'value': pl.Boolean}),
+}
+
+
+@pytest.mark.parametrize(
+    ('where', 'columns'),
+    [
+        pytest.param('count(on, over=e) > 0', 0, id='more-than-none-admits-no-row'),
+        pytest.param('count(on, over=e) == 0', 3, id='exactly-none-admits-every-row'),
+        pytest.param('count(on, over=e) < 1', 3, id='fewer-than-one-admits-every-row'),
+    ],
+)
+def test_a_count_over_a_dimension_without_a_label_is_zero_without_a_query(monkeypatch, where, columns):
+    """`breakpoint` is empty for most of PyPSA's components, and each curve's assumptions count along it."""
+    counted = []
+    real = predicates._counted
+
+    def spied(scope, p, alias):
+        counted.append(p.over)
+        return real(scope, p, alias)
+
+    monkeypatch.setattr(predicates, '_counted', spied)
+    spec = {**COUNTED_SPEC, 'variables': {'x': {**COUNTED_SPEC['variables']['x'], 'where': where}}}
+    with sps.build(spec, COUNTED_SOURCES) as model:
+        assert model.diagnostics().columns == columns, (
+            f'a count over nothing is 0, so `{where}` holds at {columns} of 3'
+        )
+    assert not counted, f'counted over {counted}, a dimension without a label, with a query'
 
 
 #: `e` with labels and `size` over them, so `y`, `over_nothing` and `sized` hold rows.
