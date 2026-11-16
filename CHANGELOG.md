@@ -1,14 +1,17 @@
 # Changelog
 
-Each pull request adds its line under `## Upcoming version`. A release pull
-request renames that heading to the version and the day, such as
-`## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
-it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
+Each pull request adds its line under `## Upcoming version
 
-## Upcoming version
+## 0.11.1 (2026-11-16)
 
-- perf(engine): a condition that counts along a dimension without a label is decided without reading data ([#2083](https://github.com/fluxopt/specsolve/pull/2083))
+**A model whose declarations mostly hold no row builds faster.** PyPSA's spec
+declares every component, and a network has rows for few of them; specsolve now
+skips those declarations rather than compiling each. specsolve no longer
+installs highspy 1.16.0, and the `gurobi` extra requires gurobipy below 14
+([#2082](https://github.com/fluxopt/specsolve/pull/2082)).
+
 - perf(engine): a model whose declarations mostly build nothing, such as PyPSA's, builds up to five times faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
+- perf(engine): a condition that counts along a dimension without a label is decided without reading data ([#2083](https://github.com/fluxopt/specsolve/pull/2083))
 
 ## 0.11.0 (2026-10-31)
 
