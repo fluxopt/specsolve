@@ -70,33 +70,24 @@ def _totalled(p: Term) -> pl.LazyFrame:
 
 
 def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
-    """Constant *terms* over one set of dims added up to one term, else *terms* as they are.
+    """Constant *terms* over one set of dims added up to one term ([`_totalled`][]), else *terms* as they are.
 
     Multiplied as they stand, each term pairs with every variable term of the
     other factor, and the matrix sums the copies back at assembly: a
     difference such as ``bp_x - shift(bp_x)`` doubles a chord row's terms.
-    The sum is what that pairing would give: a term without a row there adds
-    nothing, and a null value stays null for the coverage refusal. A term
-    under a presence keeps its own pairing, since the presence restricts
-    where the product may count.
+    The total is what that pairing would give: a term without a row there is
+    not in the stack, and a null value keeps the total null for the coverage
+    refusal. A term under a presence keeps its own pairing, since the
+    presence restricts where the product may count.
     """
     if len(terms) < 2:
         return terms
     dims = terms[0].dims
-    if not dims or any(set(p.dims) != set(dims) or p.presences for p in terms):
+    if any(set(p.dims) != set(dims) or p.presences for p in terms):
         return terms
-    keys = list(dims)
-    joined: pl.LazyFrame | None = None
-    for i, p in enumerate(terms):
-        side = p.frame.select(*keys, pl.col('cval').alias(f'__value {i}__'), pl.lit(True).alias(f'__row {i}__'))
-        joined = side if joined is None else joined.join(side, on=keys, how='full', coalesce=True)
-    assert joined is not None
-    total = pl.sum_horizontal(
-        [pl.when(pl.col(f'__row {i}__')).then(pl.col(f'__value {i}__')).otherwise(0.0) for i in range(len(terms))],
-        ignore_nulls=False,
-    )
+    stacked = Term(dims, pl.concat([p.frame.select(*dims, 'cval') for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
-    return (Term(dims, joined.select(*keys, total.alias('cval')), 'constant', parameters=parameters),)
+    return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
