@@ -1,5 +1,12 @@
 # Benchmarks
 
+!!! warning "Probe preview, not the published benchmarks"
+
+    These numbers come from one GitHub-hosted runner, not the benchmark box,
+    HiGHS only, and only three arms: specsolve, linopy 0.10.0 and linopy master
+    at `bda47bc`, measured in one job. The prose below still describes the
+    published run. [Run 44055644472](https://github.com/fluxopt/specsolve/actions/runs/44055644472).
+
 Time and memory to build each model and hand it to the solver, in specsolve and
 four other libraries. Nothing is solved, and CI checks that every library builds
 the same model
@@ -43,9 +50,9 @@ the same model
     "highlight": "specsolve",
     "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
     "internal": ["specsolve-in-memory"],
-    "domain": ["specsolve", "linopy", "pyomo", "gurobipy-loop", "specsolve-in-memory", "gurobipy-matrix", "highspy-matrix"],
-    "ink": ["var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--floor)", "var(--floor)"],
-    "paint": ["var(--s1)", "var(--p3)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--floor)", "var(--floor)"]
+    "domain": ["specsolve", "linopy-master", "linopy-0.10.0", "pyomo", "gurobipy-loop", "specsolve-in-memory", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s3)", "var(--s4)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p3)", "var(--p4)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -116,10 +123,9 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.51 s</td><td class="own">0.47 s</td><td class="own">0.49 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.009">0.46 s · 1.0x</td><td data-ratio="0.977">0.50 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td><td data-ratio="0.956">0.47 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.088">0.96 s · 2.1x</td><td data-ratio="2.141">1.10 s · 2.1x</td><td data-ratio="1.969">0.92 s · 2.0x</td><td data-ratio="1.935">0.95 s · 1.9x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.500">0.69 s · 1.5x</td><td data-ratio="1.735">0.89 s · 1.7x</td><td data-ratio="1.449">0.68 s · 1.4x</td><td data-ratio="1.507">0.74 s · 1.5x</td></tr>
+<tr><td>specsolve</td><td class="own">0.43 s</td><td class="own">0.51 s</td><td class="own">0.43 s</td><td class="own">0.43 s</td></tr>
+<tr><td>linopy-master</td><td data-ratio="1.538">0.66 s · 1.5x</td><td data-ratio="1.490">0.76 s · 1.5x</td><td data-ratio="1.544">0.66 s · 1.5x</td><td data-ratio="1.674">0.72 s · 1.7x</td></tr>
+<tr><td>linopy-0.10.0</td><td data-ratio="2.275">0.98 s · 2.3x</td><td data-ratio="2.091">1.07 s · 2.1x</td><td data-ratio="2.259">0.96 s · 2.3x</td><td data-ratio="2.209">0.95 s · 2.2x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
