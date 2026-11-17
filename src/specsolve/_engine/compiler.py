@@ -69,8 +69,8 @@ def _totalled(p: Term) -> pl.LazyFrame:
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
-def _one_coefficient(factor: CompiledExpression) -> CompiledExpression:
-    """A variable-free factor's constant terms over one set of dims added up to one, else *factor* as it is.
+def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
+    """Constant *terms* over one set of dims added up to one term, else *terms* as they are.
 
     Multiplied as they stand, each term pairs with every variable term of the
     other factor, and the matrix sums the copies back at assembly: a
@@ -80,12 +80,11 @@ def _one_coefficient(factor: CompiledExpression) -> CompiledExpression:
     under a presence keeps its own pairing, since the presence restricts
     where the product may count.
     """
-    terms = factor.constant
-    if factor.linear or factor.quadratic or len(terms) < 2:
-        return factor
+    if len(terms) < 2:
+        return terms
     dims = terms[0].dims
     if not dims or any(set(p.dims) != set(dims) or p.presences for p in terms):
-        return factor
+        return terms
     keys = list(dims)
     joined: pl.LazyFrame | None = None
     for i, p in enumerate(terms):
@@ -97,9 +96,7 @@ def _one_coefficient(factor: CompiledExpression) -> CompiledExpression:
         ignore_nulls=False,
     )
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
-    return CompiledExpression(
-        (), (Term(dims, joined.select(*keys, total.alias('cval')), 'constant', parameters=parameters),)
-    )
+    return (Term(dims, joined.select(*keys, total.alias('cval')), 'constant', parameters=parameters),)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -209,8 +206,11 @@ class Compiler:
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
             """``a * b``, every pairing of both operands' terms formed once, both mixed products included.
 
-            A constant term owes a factor's parameters only where the other
-            factor carries no variable ([`Term.parameters`][]).
+            A variable meets the other factor's constants added up
+            ([`_one_coefficient`][]); a constant meets them one by one, since
+            the coverage check reads those products term by term and region by
+            region. A constant term owes a factor's parameters only where the
+            other factor carries no variable ([`Term.parameters`][]).
             """
             assert not ((a.quadratic and b.linear) or (b.quadratic and a.linear) or (a.quadratic and b.quadratic)), (
                 f'in {context}: a product of degree 3 reached the compiler'
@@ -218,11 +218,12 @@ class Compiler:
             assert admits_quadratic or not (a.linear and b.linear), (
                 f'in {context}: a quadratic product in a position compiled as affine'
             )
+            a_one, b_one = _one_coefficient(a.constant), _one_coefficient(b.constant)
             quadratic = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
-            quadratic += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b.constant)
-            quadratic += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a.constant)
-            linear = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b.constant)
-            linear += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a.constant)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b_one)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a_one)
+            linear = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b_one)
+            linear += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a_one)
             a_carries, b_carries = bool(a.linear or a.quadratic), bool(b.linear or b.quadratic)
             constant = tuple(
                 replace(
@@ -234,20 +235,6 @@ class Compiler:
                 for c in b.constant
             )
             return CompiledExpression(linear, constant, quadratic)
-
-        def folded_product(coefficient: CompiledExpression, other: CompiledExpression) -> CompiledExpression | None:
-            """``coefficient * other`` with *coefficient*'s terms added up for *other*'s variables, else ``None``.
-
-            Only the products with a variable take the one coefficient
-            ([`_one_coefficient`][]). A constant of *other* still meets each
-            term on its own: the coverage check reads those products term by
-            term, region by region.
-            """
-            one = _one_coefficient(coefficient)
-            if one is coefficient:
-                return None
-            variables = product(one, CompiledExpression(other.linear, (), other.quadratic))
-            return CompiledExpression(variables.linear, product(coefficient, other).constant, variables.quadratic)
 
         def quotient(e: program.Divide) -> CompiledExpression:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
@@ -386,8 +373,7 @@ class Compiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
-                left, right = (self._factor(ev(f), f) for f in (e.left, e.right))
-                return folded_product(left, right) or folded_product(right, left) or product(left, right)
+                return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
                 return quotient(e)
             if isinstance(e, program.Power):

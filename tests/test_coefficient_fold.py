@@ -75,7 +75,7 @@ def test_a_folded_coefficient_writes_the_model_the_distributed_product_writes(
     monkeypatch, tmp_path: Path, constraint: dict
 ) -> None:
     folded = _written(constraint, tmp_path / 'folded.lp')
-    monkeypatch.setattr(compiler, '_one_coefficient', lambda factor: factor)
+    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
     distributed = _written(constraint, tmp_path / 'distributed.lp')
     assert folded == distributed, 'adding the parameters up first changed the written model'
 
@@ -138,6 +138,22 @@ def test_a_factor_with_a_constant_beside_its_variable_builds_as_distributed(
     """
     spec = {**SPEC, 'expressions': {**SPEC['expressions'], **expressions}, 'constraints': {'row': constraint}}
     folded = _outcome(spec, tmp_path / 'folded.lp')
-    monkeypatch.setattr(compiler, '_one_coefficient', lambda factor: factor)
+    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
     distributed = _outcome(spec, tmp_path / 'distributed.lp')
     assert folded == distributed, 'folding beside a constant changed what the build does'
+
+
+def test_a_quadratic_times_a_folded_sum_writes_the_model_the_distributed_product_writes(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """`x * x` meets `a - b` as the linear terms do, added up once."""
+    spec = {
+        **SPEC,
+        'constraints': {'row': {'dims': ['i'], 'expression': 'x >= 1'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(x * x * (a - b))'},
+    }
+    sps.write(spec, SOURCES, tmp_path / 'folded.lp')
+    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
+    sps.write(spec, SOURCES, tmp_path / 'distributed.lp')
+    folded, distributed = ((tmp_path / f'{n}.lp').read_text() for n in ('folded', 'distributed'))
+    assert folded == distributed, 'adding the parameters up first changed the quadratic objective'
