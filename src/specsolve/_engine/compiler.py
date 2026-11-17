@@ -69,6 +69,27 @@ def _totalled(p: Term) -> pl.LazyFrame:
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
+def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
+    """Constant *terms* over one set of dims added up to one term ([`_totalled`][]), else *terms* as they are.
+
+    Multiplied as they stand, each term pairs with every variable term of the
+    other factor, and the matrix sums the copies back at assembly: a
+    difference such as ``bp_x - shift(bp_x)`` doubles a chord row's terms.
+    The total is what that pairing would give: a term without a row there is
+    not in the stack, and a null value keeps the total null for the coverage
+    refusal. A term under a presence keeps its own pairing, since the
+    presence restricts where the product may count.
+    """
+    if len(terms) < 2:
+        return terms
+    dims = terms[0].dims
+    if any(set(p.dims) != set(dims) or p.presences for p in terms):
+        return terms
+    stacked = Term(dims, pl.concat([p.frame.select(*dims, 'cval') for p in terms]), 'constant')
+    parameters = frozenset[str]().union(*(p.parameters for p in terms))
+    return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
+
+
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
     """The coordinates a declaration's rows exist at.
 
@@ -176,8 +197,11 @@ class Compiler:
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
             """``a * b``, every pairing of both operands' terms formed once, both mixed products included.
 
-            A constant term owes a factor's parameters only where the other
-            factor carries no variable ([`Term.parameters`][]).
+            A variable meets the other factor's constants added up
+            ([`_one_coefficient`][]); a constant meets them one by one, since
+            the coverage check reads those products term by term and region by
+            region. A constant term owes a factor's parameters only where the
+            other factor carries no variable ([`Term.parameters`][]).
             """
             assert not ((a.quadratic and b.linear) or (b.quadratic and a.linear) or (a.quadratic and b.quadratic)), (
                 f'in {context}: a product of degree 3 reached the compiler'
@@ -185,11 +209,12 @@ class Compiler:
             assert admits_quadratic or not (a.linear and b.linear), (
                 f'in {context}: a quadratic product in a position compiled as affine'
             )
+            a_one, b_one = _one_coefficient(a.constant), _one_coefficient(b.constant)
             quadratic = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
-            quadratic += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b.constant)
-            quadratic += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a.constant)
-            linear = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b.constant)
-            linear += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a.constant)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in a.quadratic for c in b_one)
+            quadratic += tuple(times_constant(q, c, 'quadratic') for q in b.quadratic for c in a_one)
+            linear = tuple(times_constant(t, c, t.kind) for t in a.linear for c in b_one)
+            linear += tuple(times_constant(t, c, t.kind) for t in b.linear for c in a_one)
             a_carries, b_carries = bool(a.linear or a.quadratic), bool(b.linear or b.quadratic)
             constant = tuple(
                 replace(
