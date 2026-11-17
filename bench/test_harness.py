@@ -809,7 +809,9 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
+@pytest.mark.parametrize(
+    'case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector', 'curves']
+)
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
@@ -875,6 +877,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
+# Not `curves`: linopy writes each segment row divided by its x-step, the expansion multiplies through by it.
 @pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:

@@ -17,6 +17,8 @@ Each case stresses a different SQL shape:
 ``fleet``      the same variable total spread over many declarations.
 ``declarations`` ``fleet``'s question as a sweep over the declaration count,
                with its model YAML generated per rung (``_declarations_spec``).
+``curves``     ``dispatch`` with each unit's cost bounded below by its own convex
+               piecewise curve, as ``method: lp`` segment lines over ``bp``.
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
 ``network``    buses joined by lines, a store at every bus and a portfolio
@@ -409,6 +411,49 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
         },
         dest,
     )
+
+
+# --------------------------------------------------------------------------
+# curves
+
+#: Breakpoints per curve, the curve's own ends included.
+CURVE_POINTS = 5
+
+
+def _curves_spec(shape: Shape) -> str:
+    """``piecewise.yaml`` with its curve expanded into rows, the only form specsolve builds."""
+    from mathspec import to_spec
+
+    del shape
+    return to_spec(str(MODELS / 'curves' / 'piecewise.yaml')).expand('piecewise').to_yaml()
+
+
+def _curves_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``curves`` ladder.
+
+    Each unit's curve runs from 0 to its ``p_max`` in equal steps, with slopes
+    drawn and sorted ascending, so it is convex and ``method: lp`` accepts it.
+    Load is drawn against the fleet total, so it is feasible.
+    """
+    rng = _seed(shape)
+    n_snap, n_unit = shape.sizes['snapshot'], shape.sizes['unit']
+    units = [f'u{i:05d}' for i in range(n_unit)]
+    p_max = rng.uniform(50.0, 150.0, n_unit)
+    slopes = np.sort(rng.uniform(10.0, 100.0, (n_unit, CURVE_POINTS - 1)), axis=1)
+    x = p_max[:, None] * np.linspace(0.0, 1.0, CURVE_POINTS)[None, :]
+    y = np.concatenate([np.zeros((n_unit, 1)), np.cumsum(slopes * np.diff(x, axis=1), axis=1)], axis=1)
+    load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
+    curve = {'unit': np.repeat(units, CURVE_POINTS), 'bp': np.tile(np.arange(CURVE_POINTS), n_unit)}
+    frames = {
+        'p_max': pd.DataFrame({'unit': units, 'value': p_max}),
+        'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
+        'bp_x': pd.DataFrame({**curve, 'value': x.ravel()}),
+        'bp_y': pd.DataFrame({**curve, 'value': y.ravel()}),
+        'unit': pd.DataFrame({'unit': units}),
+        'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        'bp': pd.DataFrame({'bp': np.arange(CURVE_POINTS)}),
+    }
+    return _dump(frames, dest)
 
 
 # --------------------------------------------------------------------------
@@ -933,6 +978,12 @@ CASES: dict[str, Case] = {
         write=_sector_data,
         coefficient='produces',
         about='each technology delivers one of five carriers, such as heat or hydrogen',
+    ),
+    'curves': Case(
+        name='curves',
+        generate_spec=_curves_spec,
+        ladder=_ladder({'unit': 50}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
+        write=_curves_data,
     ),
     'profiled': Case(
         name='profiled',
