@@ -62,7 +62,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bench.arms import gurobipy_loop, gurobipy_matrix, highspy_matrix, linopy, pyomo, specsolve, specsolve_in_memory
+from bench.arms import (
+    gurobipy_loop,
+    gurobipy_matrix,
+    highspy_matrix,
+    linopy,
+    linopy_from_spec,
+    pyomo,
+    specsolve,
+    specsolve_in_memory,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -76,6 +85,7 @@ ARMS: dict[str, ModuleType] = {
     'specsolve': specsolve,
     'specsolve-in-memory': specsolve_in_memory,
     'linopy': linopy,
+    'linopy-from-spec': linopy_from_spec,
     'pyomo': pyomo,
     'gurobipy-loop': gurobipy_loop,
     'gurobipy-matrix': gurobipy_matrix,

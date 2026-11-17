@@ -1,10 +1,12 @@
 name: linopy 0.10.0 against master, on one hosted runner
 
 # A probe, not for merging. Both passes run in one job, so on one machine:
-# linopy 0.10.0 first, then linopy master; specsolve runs in both as the control.
+# linopy 0.10.0 first, then linopy master hand-written and through Model.from_spec;
+# specsolve runs in both as the control.
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [probe/bench-linopy-master]
 
 permissions:
   contents: read
@@ -33,6 +35,7 @@ jobs:
         run: |
           git show origin/main:bench/arms/linopy.py > bench/arms/linopy.py
           sed -i 's|    "linopy @ git+https://github.com/PyPSA/linopy@[0-9a-f]*",|    "linopy==0.10.0",|' pyproject.toml
+          sed -i 's|"specsolve linopy linopy-from-spec"|"specsolve linopy"|' pyproject.toml
           grep -n '"linopy' pyproject.toml
           pixi install -e bench
           pixi run -e bench python -c "import linopy; print('linopy', linopy.__version__)"
