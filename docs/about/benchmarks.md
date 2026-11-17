@@ -2,10 +2,13 @@
 
 !!! warning "Probe preview, not the published benchmarks"
 
-    These numbers come from one GitHub-hosted runner, not the benchmark box,
-    HiGHS only, and only three arms: specsolve, linopy 0.10.0 and linopy master
-    at `bda47bc`, measured in one job. The prose below still describes the
-    published run. [Run 44055644472](https://github.com/fluxopt/specsolve/actions/runs/44055644472).
+    These numbers come from one GitHub-hosted runner (Intel Xeon 6975P-C), not
+    the benchmark box, HiGHS only, measured in one job: specsolve, linopy
+    0.10.0 and linopy master at `bda47bc`, hand-written and through
+    `Model.from_spec` (the faded line), on mathspec main at `cc53115`. `curves`
+    is the piecewise case from #2089. The prose below still describes the
+    published run.
+    [Run 44080909294](https://github.com/fluxopt/specsolve/actions/runs/44080909294).
 
 Time and memory to build each model and hand it to the solver, in specsolve and
 four other libraries. Nothing is solved, and CI checks that every library builds
@@ -49,10 +52,10 @@ the same model
     "refused": "refused",
     "highlight": "specsolve",
     "floor": { "label": "matrix floor", "members": ["gurobipy-matrix", "highspy-matrix"] },
-    "internal": ["specsolve-in-memory"],
-    "domain": ["specsolve", "linopy-master", "linopy-0.10.0", "pyomo", "gurobipy-loop", "specsolve-in-memory", "gurobipy-matrix", "highspy-matrix"],
-    "ink": ["var(--s1)", "var(--s3)", "var(--s4)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--floor)", "var(--floor)"],
-    "paint": ["var(--s1)", "var(--p3)", "var(--p4)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--floor)", "var(--floor)"]
+    "internal": ["specsolve-in-memory", "linopy-from-spec"],
+    "domain": ["specsolve", "linopy-master", "linopy-0.10.0", "pyomo", "gurobipy-loop", "specsolve-in-memory", "linopy-from-spec", "gurobipy-matrix", "highspy-matrix"],
+    "ink": ["var(--s1)", "var(--s3)", "var(--s4)", "var(--s2)", "var(--s4)", "var(--s1)", "var(--s3)", "var(--floor)", "var(--floor)"],
+    "paint": ["var(--s1)", "var(--p3)", "var(--p4)", "var(--p2)", "var(--p4)", "var(--p1)", "var(--p3)", "var(--floor)", "var(--floor)"]
   }
 }
 </script>
@@ -91,18 +94,18 @@ one per value that exists. Every variable and constraint also runs over
 
 <!-- bench:models -->
 
-| | dispatch | network | nodal | sector |
-| --- | --- | --- | --- | --- |
-| for | bounds and one balance: the shape an array library suits best | a small PyPSA model: lines, stores, solar and wind, and pooled caps | dispatch at nodes, where a technology exists only where it is installed | each technology delivers one of five carriers, such as heat or hydrogen |
-| variables | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
-| constraints | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
-| grouped sums | — | line → bus, store → bus, bus × tech → pool | — | — |
-| dimensions | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
-| density | 100% | 25% | 25% | 25% |
-| snapshots | 2–100k | 2–25k | 2–20k | 2–20k |
-| columns per snapshot | 100 | 400 | 150 | 150 |
-| rows per snapshot | 1 | 150 | 50 | 125 |
-| nonzeros per snapshot | 100 | 800 | 150 | 150 |
+| | curves | dispatch | network | nodal | sector |
+| --- | --- | --- | --- | --- | --- |
+| for | — | bounds and one balance: the shape an array library suits best | a small PyPSA model: lines, stores, solar and wind, and pooled caps | dispatch at nodes, where a technology exists only where it is installed | each technology delivers one of five carriers, such as heat or hydrogen |
+| variables | — | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
+| constraints | — | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
+| grouped sums | — | — | line → bus, store → bus, bus × tech → pool | — | — |
+| dimensions | unit 50 | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
+| density | 100% | 100% | 25% | 25% | 25% |
+| snapshots | 2–10k | 2–100k | 2–25k | 2–20k | 2–20k |
+| columns per snapshot | 100 | 100 | 400 | 150 | 150 |
+| rows per snapshot | 301 | 1 | 150 | 50 | 125 |
+| nonzeros per snapshot | 550 | 100 | 800 | 150 | 150 |
 
 <!-- bench:/models -->
 
@@ -121,11 +124,12 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <!-- bench:fresh -->
 
 <div class="bench"><div class="bench-table"><table class="bench-heat">
-<thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
+<thead><tr><th>launch to exit</th><th>curves<br>10k columns</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.43 s</td><td class="own">0.51 s</td><td class="own">0.43 s</td><td class="own">0.43 s</td></tr>
-<tr><td>linopy-master</td><td data-ratio="1.538">0.66 s · 1.5x</td><td data-ratio="1.490">0.76 s · 1.5x</td><td data-ratio="1.544">0.66 s · 1.5x</td><td data-ratio="1.674">0.72 s · 1.7x</td></tr>
-<tr><td>linopy-0.10.0</td><td data-ratio="2.275">0.98 s · 2.3x</td><td data-ratio="2.091">1.07 s · 2.1x</td><td data-ratio="2.259">0.96 s · 2.3x</td><td data-ratio="2.209">0.95 s · 2.2x</td></tr>
+<tr><td>specsolve</td><td class="own">0.47 s</td><td class="own">0.42 s</td><td class="own">0.44 s</td><td class="own">0.42 s</td><td class="own">0.42 s</td></tr>
+<tr><td>linopy-master</td><td data-ratio="1.346">0.64 s · 1.3x</td><td data-ratio="1.515">0.63 s · 1.5x</td><td data-ratio="1.537">0.68 s · 1.5x</td><td data-ratio="1.498">0.63 s · 1.5x</td><td data-ratio="1.479">0.63 s · 1.5x</td></tr>
+<tr><td>linopy-from-spec</td><td data-ratio="1.717">0.81 s · 1.7x</td><td data-ratio="1.925">0.81 s · 1.9x</td><td data-ratio="1.884">0.83 s · 1.9x</td><td data-ratio="1.893">0.79 s · 1.9x</td><td data-ratio="1.871">0.79 s · 1.9x</td></tr>
+<tr><td>linopy-0.10.0</td><td data-ratio="1.920">0.91 s · 1.9x</td><td data-ratio="2.008">0.84 s · 2.0x</td><td data-ratio="2.212">0.98 s · 2.2x</td><td data-ratio="1.936">0.81 s · 1.9x</td><td data-ratio="1.983">0.84 s · 2.0x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->

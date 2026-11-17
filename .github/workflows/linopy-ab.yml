@@ -5,8 +5,7 @@ name: linopy 0.10.0 against master, on one hosted runner
 # specsolve runs in both as the control.
 
 on:
-  push:
-    branches: [probe/bench-linopy-master]
+  workflow_dispatch:
 
 permissions:
   contents: read

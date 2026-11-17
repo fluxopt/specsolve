@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 12.0,
   "stopped_by": "memory",
-  "reason": "linopy-master took 1.8 GB on network/m, so the next rung projects to 18 GB \u2014 over the 12 GB budget"
+  "reason": "linopy-master took 1.77 GB on network/m, so the next rung projects to 17.7 GB \u2014 over the 12 GB budget"
  },
  {
   "record": "ceiling",
@@ -21,6 +21,6 @@
   "budget": 30.0,
   "memory_budget": 12.0,
   "stopped_by": "memory",
-  "reason": "linopy-0.10.0 took 1.81 GB on network/m, so the next rung projects to 18.1 GB \u2014 over the 12 GB budget"
+  "reason": "linopy-0.10.0 took 1.77 GB on network/m, so the next rung projects to 17.7 GB \u2014 over the 12 GB budget"
  }
 ]

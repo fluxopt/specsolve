@@ -1,0 +1,50 @@
+[
+ {
+  "record": "ceiling",
+  "arm": "specsolve",
+  "case": "curves",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m",
+  "budget": 30.0,
+  "memory_budget": 12.0,
+  "stopped_by": "memory",
+  "reason": "specsolve took 1.71 GB on curves/m, so the next rung projects to 17.1 GB \u2014 over the 12 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy-master",
+  "case": "curves",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m5",
+  "budget": 30.0,
+  "memory_budget": 12.0,
+  "stopped_by": "memory",
+  "reason": "linopy-master took 3.14 GB on curves/m5, so the next rung projects to 12.6 GB \u2014 over the 12 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy-from-spec",
+  "case": "curves",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m5",
+  "budget": 30.0,
+  "memory_budget": 12.0,
+  "stopped_by": "memory",
+  "reason": "linopy-from-spec took 3.43 GB on curves/m5, so the next rung projects to 13.7 GB \u2014 over the 12 GB budget"
+ },
+ {
+  "record": "ceiling",
+  "arm": "linopy-0.10.0",
+  "case": "curves",
+  "ladder": "size",
+  "sink": "highs",
+  "size": "m5",
+  "budget": 30.0,
+  "memory_budget": 12.0,
+  "stopped_by": "memory",
+  "reason": "linopy-0.10.0 took 3.9 GB on curves/m5, so the next rung projects to 15.6 GB \u2014 over the 12 GB budget"
+ }
+]
