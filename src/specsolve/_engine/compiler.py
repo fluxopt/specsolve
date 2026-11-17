@@ -69,6 +69,39 @@ def _totalled(p: Term) -> pl.LazyFrame:
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
+def _one_coefficient(factor: CompiledExpression) -> CompiledExpression:
+    """A variable-free factor's constant terms over one set of dims added up to one, else *factor* as it is.
+
+    Multiplied as they stand, each term pairs with every variable term of the
+    other factor, and the matrix sums the copies back at assembly: a
+    difference such as ``bp_x - shift(bp_x)`` doubles a chord row's terms.
+    The sum is what that pairing would give: a term without a row there adds
+    nothing, and a null value stays null for the coverage refusal. A term
+    under a presence keeps its own pairing, since the presence restricts
+    where the product may count.
+    """
+    terms = factor.constant
+    if factor.linear or factor.quadratic or len(terms) < 2:
+        return factor
+    dims = terms[0].dims
+    if not dims or any(set(p.dims) != set(dims) or p.presences for p in terms):
+        return factor
+    keys = list(dims)
+    joined: pl.LazyFrame | None = None
+    for i, p in enumerate(terms):
+        side = p.frame.select(*keys, pl.col('cval').alias(f'__value {i}__'), pl.lit(True).alias(f'__row {i}__'))
+        joined = side if joined is None else joined.join(side, on=keys, how='full', coalesce=True)
+    assert joined is not None
+    total = pl.sum_horizontal(
+        [pl.when(pl.col(f'__row {i}__')).then(pl.col(f'__value {i}__')).otherwise(0.0) for i in range(len(terms))],
+        ignore_nulls=False,
+    )
+    parameters = frozenset[str]().union(*(p.parameters for p in terms))
+    return CompiledExpression(
+        (), (Term(dims, joined.select(*keys, total.alias('cval')), 'constant', parameters=parameters),)
+    )
+
+
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
     """The coordinates a declaration's rows exist at.
 
@@ -339,7 +372,12 @@ class Compiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
-                return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
+                left, right = (self._factor(ev(f), f) for f in (e.left, e.right))
+                if left.linear or left.quadratic:
+                    right = _one_coefficient(right)
+                if right.linear or right.quadratic:
+                    left = _one_coefficient(left)
+                return product(left, right)
             if isinstance(e, program.Divide):
                 return quotient(e)
             if isinstance(e, program.Power):
