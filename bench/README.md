@@ -568,6 +568,7 @@ verdict off the SQL"), not to cover the language:
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no linopy cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 | `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP of the comparison, so integrality reaches every sink at scale |
+| `curves` | dispatch with each unit's cost bounded below by its own convex piecewise curve, five breakpoints, `method: lp` | a `shift` along `bp` in every segment row, and the curve's assumptions: PyPSA's spec declares 27 curves. specsolve builds the expansion of `piecewise.yaml`, linopy `add_piecewise_formulation(method='lp')`. The two agree on counts and objective, not row by row: linopy divides each segment row by its step in `p`, the expansion multiplies by it |
 | `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a relation's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
