@@ -25,7 +25,7 @@ pixi run refresh
 # or a rung at a time — the same five tasks `refresh` depends on, in order
 pixi run ladder        # --sizes 3xs 2xs 2xs5 xs xs5 … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
-pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
+pixi run declarations  # --sizes n002 … n128, n008m n128m n008e -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
 pixi run plot          #                           -> the chart page
 
@@ -622,6 +622,17 @@ alone, with no row-count change mixed into it. The density sweep answers the
 other half of the question, how much a mask *keeps*, and cannot answer this
 one: the mask that isolates the per-declaration cost is the one that keeps
 everything.
+
+**A third pairing prices declarations that hold no row.** `n008e` is `n008`
+plus 60 declarations of each kind that holds no row in PyPSA's spec: a variable
+and its constraint over `store`, a dimension without a label; a variable and
+its constraint whose `where:` admits nothing (`p_max > 1000`, drawn below 150);
+and an assumption that counts along `store`. PyPSA's spec declares every
+component and a network has rows for few of them, so most of its declarations
+are of these kinds. None of the 300 reaches the matrix, and the rung draws its
+twin's numbers, so the pair writes one LP file and the difference is what the
+empty declarations cost, with nothing else mixed in. No other case has a
+declaration that holds no row.
 
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
