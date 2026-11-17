@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- perf(engine): a variable times a sum of parameters, as in a piecewise curve, builds about 40% faster ([#2091](https://github.com/fluxopt/specsolve/pull/2091))
 - docs(benchmarks): the published benchmarks are re-measured on 0.11.1 ([#2086](https://github.com/fluxopt/specsolve/pull/2086))
 
 ## 0.11.1 (2026-11-16)
