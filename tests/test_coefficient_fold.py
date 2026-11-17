@@ -101,3 +101,43 @@ def test_a_divisor_hole_under_a_folded_coefficient_is_still_refused() -> None:
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a + b / e) <= 10'}}}
     with pytest.raises(DataError, match='used as a divisor'):
         sps.build(spec, SOURCES).close()
+
+
+def _outcome(spec: dict, path: Path) -> str:
+    """The written model, or the class and first line of the refusal."""
+    try:
+        sps.write(spec, SOURCES, path)
+    except DataError as error:
+        return f'{type(error).__name__}: {str(error).splitlines()[0]}'
+    return path.read_text()
+
+
+@pytest.mark.parametrize(
+    ('expressions', 'constraint'),
+    [
+        pytest.param(
+            {},
+            {'dims': ['i'], 'expression': '(x + s) * (a + e) <= 10'},
+            id='a-constant-beside-the-variable-reads-each-term',
+        ),
+        pytest.param(
+            {'k': {'dims': ['i'], 'cases': {'flagged': {'when': 'flag', 'expression': 'a + b'}}, 'otherwise': 0}},
+            {'dims': ['i'], 'expression': 'x + (x + s) * k <= 10'},
+            id='a-constant-beside-the-variable-keeps-each-region',
+        ),
+    ],
+)
+def test_a_factor_with_a_constant_beside_its_variable_builds_as_distributed(
+    monkeypatch, tmp_path: Path, expressions: dict, constraint: dict
+) -> None:
+    """`s * e` has no value at 1, and the coverage check reads each constant product on its own.
+
+    Folded, `s * (a + e)` read `a` there and built where the distributed
+    product is refused; and a folded region lost the claim that lets
+    `s * k` stand outside it, refusing a model that builds.
+    """
+    spec = {**SPEC, 'expressions': {**SPEC['expressions'], **expressions}, 'constraints': {'row': constraint}}
+    folded = _outcome(spec, tmp_path / 'folded.lp')
+    monkeypatch.setattr(compiler, '_one_coefficient', lambda factor: factor)
+    distributed = _outcome(spec, tmp_path / 'distributed.lp')
+    assert folded == distributed, 'folding beside a constant changed what the build does'

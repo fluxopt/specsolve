@@ -235,6 +235,20 @@ class Compiler:
             )
             return CompiledExpression(linear, constant, quadratic)
 
+        def folded_product(coefficient: CompiledExpression, other: CompiledExpression) -> CompiledExpression | None:
+            """``coefficient * other`` with *coefficient*'s terms added up for *other*'s variables, else ``None``.
+
+            Only the products with a variable take the one coefficient
+            ([`_one_coefficient`][]). A constant of *other* still meets each
+            term on its own: the coverage check reads those products term by
+            term, region by region.
+            """
+            one = _one_coefficient(coefficient)
+            if one is coefficient:
+                return None
+            variables = product(one, CompiledExpression(other.linear, (), other.quadratic))
+            return CompiledExpression(variables.linear, product(coefficient, other).constant, variables.quadratic)
+
         def quotient(e: program.Divide) -> CompiledExpression:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
 
@@ -373,11 +387,7 @@ class Compiler:
                 return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
                 left, right = (self._factor(ev(f), f) for f in (e.left, e.right))
-                if left.linear or left.quadratic:
-                    right = _one_coefficient(right)
-                if right.linear or right.quadratic:
-                    left = _one_coefficient(left)
-                return product(left, right)
+                return folded_product(left, right) or folded_product(right, left) or product(left, right)
             if isinstance(e, program.Divide):
                 return quotient(e)
             if isinstance(e, program.Power):
