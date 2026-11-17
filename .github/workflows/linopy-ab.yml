@@ -39,10 +39,11 @@ jobs:
           grep -n '"linopy' pyproject.toml
           pixi install -e bench
           pixi run -e bench python -c "import linopy; print('linopy', linopy.__version__)"
-          rm -f bench/results/latest*.json
+          rm -f bench/results/latest*.json bench/results/declarations.json
           sleep 60
-          pixi run -e bench ladder-ci highs || echo "pass A: some files did not finish"
-          mkdir -p ab/a && cp bench/results/latest*.json ab/a/
+          pixi run -e bench ladder-ci highs "dispatch nodal network sector curves" || echo "pass A: some files did not finish"
+          pixi run -e bench pytest bench/test_ladder.py --cases declarations --sizes n008 n008e --arms specsolve linopy --sinks highs -k test_emit -q --benchmark-memory --benchmark-json=bench/results/declarations.json || echo "pass A: the declaration pair did not finish"
+          mkdir -p ab/a && cp bench/results/latest*.json bench/results/declarations.json ab/a/
 
       - name: pass B, linopy master
         if: ${{ !cancelled() }}
@@ -51,10 +52,11 @@ jobs:
           grep -n '"linopy' pyproject.toml
           pixi install -e bench
           pixi run -e bench python -c "import linopy; print('linopy', linopy.__version__)"
-          rm -f bench/results/latest*.json
+          rm -f bench/results/latest*.json bench/results/declarations.json
           sleep 60
-          pixi run -e bench ladder-ci highs || echo "pass B: some files did not finish"
-          mkdir -p ab/b && cp bench/results/latest*.json ab/b/
+          pixi run -e bench ladder-ci highs "dispatch nodal network sector curves" || echo "pass B: some files did not finish"
+          pixi run -e bench pytest bench/test_ladder.py --cases declarations --sizes n008 n008e --arms specsolve linopy linopy-from-spec --sinks highs -k test_emit -q --benchmark-memory --benchmark-json=bench/results/declarations.json || echo "pass B: the declaration pair did not finish"
+          mkdir -p ab/b && cp bench/results/latest*.json bench/results/declarations.json ab/b/
 
       - uses: actions/upload-artifact@v7
         if: always()

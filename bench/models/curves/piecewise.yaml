@@ -1,0 +1,53 @@
+# Each unit's operating cost is bounded below by its own convex piecewise curve
+# over `bp`: PyPSA's `marginal_cost` curve as `method: lp` writes it, a row per
+# segment line and no weights. The rest is `dispatch`: bounds and one balance.
+# specsolve builds the rows a curve expands into, so the case builds this file
+# expanded (`bench.cases._curves_spec`), as PyPSA's expanded spec arrives.
+dimensions:
+  snapshot:
+    dtype: int
+    ordered: true
+  unit:
+    dtype: str
+  bp:
+    dtype: int
+    ordered: true
+
+parameters:
+  p_max:
+    dims: [unit]
+  load:
+    dims: [snapshot]
+  bp_x:
+    dims: [unit, bp]
+  bp_y:
+    dims: [unit, bp]
+
+variables:
+  p:
+    dims: [snapshot, unit]
+    bounds:
+      lower: 0
+      upper: p_max
+  op_cost:
+    dims: [snapshot, unit]
+    bounds:
+      lower: 0
+
+piecewise:
+  cost_curve:
+    dims: [snapshot, unit]
+    along: bp
+    links:
+      power: [p, bp_x]
+      cost: [op_cost, bp_y, '>=']
+    method: lp
+
+constraints:
+  power_balance:
+    dims: [snapshot]
+    expression: sum(p, over=unit) == load
+
+objective:
+  sense: minimize
+  expression: sum(op_cost)
