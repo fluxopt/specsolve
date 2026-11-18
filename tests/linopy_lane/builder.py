@@ -451,7 +451,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_shift(
             _eval(node.operand, ctx),
             over=node.along,
-            offset=_amount(node.offset, ctx),
+            offset=_offset(node.offset, ctx),
             wrap=node.wrap,
             fill=node.fill,
             by=_partition(node, ctx),
@@ -583,6 +583,11 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     nobody supplied is a step of nothing, which is what a zero offset means.
     """
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
+
+
+def _offset(amount: int | str, ctx: EvaluationContext) -> Any:
+    """A shift's offset as :func:`_amount` reads it, a ``missing: absent`` row kept NaN for the shift to carry."""
+    return ctx.dataset[amount] if isinstance(amount, str) and ctx.absent(amount) else _amount(amount, ctx)
 
 
 def _refuse_a_negative_window(name: str, ctx: EvaluationContext) -> None:
