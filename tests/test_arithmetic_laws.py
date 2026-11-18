@@ -557,6 +557,21 @@ def test_a_zero_divisor_on_a_constant_side_is_refused_on_both_lanes(patch, data)
     assert message.startswith("constraint 'c'"), 'the refusal names the constraint'
 
 
+@pytest.mark.parametrize(
+    ('expression', 'expected'),
+    [
+        pytest.param('x <= 2 ** e', 5.0, id='on-a-constant-side'),
+        pytest.param('x * 2 ** e <= 10', 12.5, id='beside-a-variable'),
+    ],
+)
+@pytest.mark.xfail(strict=True, reason='an exponent a case makes 0')
+def test_an_exponent_a_case_makes_zero_raises_to_one(expression, expected):
+    """`e` is 0 at `b`, so `2 ** e` is 1 there."""
+    spec = override(DIVISOR_SPEC, **{'expressions.e': CASED_ZERO, 'constraints.c.expression': expression})
+    with differential(spec, ZERO_D, lp=True) as run:
+        assert run.oracle == pytest.approx(expected, rel=RTOL), 'f=a raises 2 to d, which is 2, and f=b raises it to 0'
+
+
 def test_an_infinite_value_on_a_constant_side_is_a_limit_that_never_binds():
     """`x <= inf` holds for every `x`: data such as PyPSA's `e_sum_max` holds `inf` to mean "no limit".
 
