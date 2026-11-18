@@ -481,23 +481,32 @@ SCALAR_R = {'parameters.r': {'dims': []}}
 ZERO_R = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f')), 'r': 0.0}
 
 
+#: ``e`` is the literal ``0`` where ``d < 1``, at ``b``, and ``d`` elsewhere.
+CASED_ZERO = {'dims': ['f'], 'cases': {'small': {'when': 'd < 1', 'expression': '0'}}, 'otherwise': 'd'}
+
+
 @pytest.mark.parametrize(
-    'expression',
+    'patch',
     [
-        pytest.param('x / d <= 10', id='a-term'),
-        pytest.param('x * d / d <= 10', id='a-term-zero-over-zero'),
-        pytest.param('x / (2 - d) <= 10', id='a-divisor-that-adds-up-to-zero'),
+        pytest.param({'constraints.c.expression': 'x / d <= 10'}, id='a-term'),
+        pytest.param({'constraints.c.expression': 'x * d / d <= 10'}, id='a-term-zero-over-zero'),
+        pytest.param({'constraints.c.expression': 'x / (2 - d) <= 10'}, id='a-divisor-that-adds-up-to-zero'),
+        pytest.param(
+            {'expressions.e': CASED_ZERO, 'constraints.c.expression': 'x / e <= 10'},
+            id='a-case-worth-zero',
+            marks=pytest.mark.xfail(strict=True, reason='#2064'),
+        ),
     ],
 )
-def test_a_zero_divisor_under_a_variable_is_refused_on_both_lanes(expression):
+def test_a_zero_divisor_under_a_variable_is_refused_on_both_lanes(patch):
     """A zero divisor under a variable leaves no coefficient, so it is refused, not solved (#1892).
 
     Both lanes handed the solver an infinite or NaN coefficient with no error:
     `x * r / r >= 1` reported `infeasible`.
     """
-    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': expression})
-    message = both_lanes_refuse(spec, ZERO_D, match="where the model divides by 'd'")
+    message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), ZERO_D, match="where the model divides by 'd'")
     assert '1 value(s) are not finite' in message, 'the message counts the one coordinate the zero reaches'
+    assert 'missing rows' not in message, 'd has a row at every coordinate, so none is asked for'
 
 
 def test_a_zero_divisor_in_the_objective_is_refused_on_both_lanes():
