@@ -494,7 +494,6 @@ CASED_ZERO = {'dims': ['f'], 'cases': {'small': {'when': 'd < 1', 'expression': 
         pytest.param(
             {'expressions.e': CASED_ZERO, 'constraints.c.expression': 'x / e <= 10'},
             id='a-case-worth-zero',
-            marks=pytest.mark.xfail(strict=True, reason='#2064'),
         ),
     ],
 )
@@ -502,7 +501,9 @@ def test_a_zero_divisor_under_a_variable_is_refused_on_both_lanes(patch):
     """A zero divisor under a variable leaves no coefficient, so it is refused, not solved (#1892).
 
     Both lanes handed the solver an infinite or NaN coefficient with no error:
-    `x * r / r >= 1` reported `infeasible`.
+    `x * r / r >= 1` reported `infeasible`. A case worth the literal 0 builds
+    no term, so the relational lane read its coordinates as missing rows of
+    `d` and asked for them, though `d` has every row (#2064).
     """
     message = both_lanes_refuse(override(DIVISOR_SPEC, **patch), ZERO_D, match="where the model divides by 'd'")
     assert '1 value(s) are not finite' in message, 'the message counts the one coordinate the zero reaches'
@@ -543,6 +544,11 @@ def test_an_infinite_value_as_a_coefficient_is_refused():
         pytest.param({**WITH_H, 'constraints.c.expression': 'x <= h / d'}, ZERO_D | H, id='a-constant-over-zero'),
         pytest.param({**WITH_H, 'constraints.c.expression': 'x <= h / d'}, ZERO_D | H_ZERO_AT_B, id='zero-over-zero'),
         pytest.param({**SCALAR_R, 'constraints.c.expression': 'x <= 10 / r'}, ZERO_R, id='no-dimensions'),
+        pytest.param(
+            {**WITH_H, 'expressions.e': CASED_ZERO, 'constraints.c.expression': 'x <= h / e'},
+            ZERO_D | H,
+            id='a-case-worth-zero',
+        ),
     ],
 )
 def test_a_zero_divisor_on_a_constant_side_is_refused_on_both_lanes(patch, data):
