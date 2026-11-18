@@ -503,10 +503,10 @@ class Compiler:
         not distribute over ``/`` or ``**``. At a build, *absent* is what a
         parameter with no row adds ([`summed_onto`][]): a divisor ``spreads``,
         so the null coefficient is refused naming the parameter, and a power's
-        operand reads it as ``zero``. A divisor term built under a ``cases:``
-        region is added up even alone: a region worth the literal zero builds
-        no term, so the coordinates it claims read as a zero divisor rather
-        than a null refused as a missing row. At a read, several terms add up
+        operand reads it as ``zero``. A term built under a ``cases:`` region
+        is added up even alone: a region worth the literal zero builds no term,
+        so the coordinates it claims read zero rather than a null, which a
+        divisor would refuse as a missing row. At a read, several terms add up
         null where no term has a value, so a divisor's hole is reported rather
         than divided by an invented zero. An operand carrying a variable passes
         through, for the plan-boundary assert behind it.
@@ -514,7 +514,7 @@ class Compiler:
         if compiled.linear or compiled.quadratic:
             return compiled
         terms = compiled.constant
-        if len(terms) == 1 and (absent != 'spreads' or terms[0].region is None):
+        if len(terms) == 1 and terms[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return compiled
             return CompiledExpression((), (replace(terms[0], frame=_totalled(terms[0])),))
