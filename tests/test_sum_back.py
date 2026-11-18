@@ -494,3 +494,28 @@ def test_a_width_with_no_dimensions_is_one_window_for_every_position(width):
         assert run.oracle == pytest.approx(2.0), (
             'x[1] and x[3] cover every two-wide window, as a literal width of 2 does'
         )
+
+
+#: The issue's case: the first two windows reach only masked slots (#2092).
+ONLY_ABSENT_TERMS = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'live': {'dims': ['t'], 'dtype': 'bool'}},
+    'variables': {
+        'x': {'dims': ['t'], 'where': 'live', 'bounds': {'lower': 0, 'upper': 10}},
+        'y': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'window': {'dims': ['t'], 'expression': 'y <= sum_back(x, along=t, window=2)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(y, over=t)'},
+}
+
+
+@pytest.mark.xfail(strict=True, reason='#2092')
+def test_a_window_over_only_absent_terms_is_zero_and_its_row_stands():
+    """A window of only absent terms is an empty sum, 0, and the row stands, as under `sum`."""
+    sources = {
+        't': pd.Index([0, 1, 2], name='t'),
+        'live': pd.Series([False, False, True], index=pd.Index([0, 1, 2], name='t')),
+    }
+    with differential(ONLY_ABSENT_TERMS, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'every snapshot holds its window row, absent terms or not'
+        assert run.oracle == pytest.approx(10.0), 'y[0] and y[1] are held at 0 by a window of nothing'
