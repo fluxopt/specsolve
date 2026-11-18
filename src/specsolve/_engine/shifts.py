@@ -113,8 +113,10 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for. A window
-    vacates nothing, so an operand with no presence gains one only under a
-    partition, for the coordinates in no group.
+    is a sum, so the operand's presence does not travel: an absent slot is one
+    summand fewer, and a window of only absent slots is an empty sum whose row
+    stands. The one absence it reports is a coordinate a partition places in
+    no group, which has no window at all.
     """
     if s.along not in p.dims:
         refuse_a_term_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
@@ -140,18 +142,9 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
         widths, keys = _named_amount(scope, order, width_name, _WIDTH)
         return join_on(frame, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
 
-    remap = partial(order.remap, moved=moved, prepared=lagged)
-
-    def travelled(presence: Presence) -> Presence:
-        keyed_by, source = presence.keyed_by, presence.frame
-        if keyed_by is not None and not set(walked_dims(scope, s)).issubset(keyed_by):
-            source, keyed_by = scope.widen(source, keyed_by, p.dims), None
-        return Presence(remap(source, [], p.dims if keyed_by is None else keyed_by).unique(), keyed_by)
-
-    frame = remap(p.frame, p.carried, p.dims)
-    if not p.presences and order.grouping.partial:
-        return replace(p, frame=frame, presences=(Presence(order.grouping.placed(), order.grouping.keys),))
-    return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
+    frame = order.remap(p.frame, p.carried, p.dims, moved=moved, prepared=lagged)
+    unplaced = (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
+    return replace(p, frame=frame, presences=unplaced)
 
 
 def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *, over_a_variable: bool) -> Term:

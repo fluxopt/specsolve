@@ -234,17 +234,17 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     the data asks for — a bound read from data, sound because it decides how
     many *terms* are added rather than what the plan does.
 
-    A position the window cannot reach contributes a **zero**, never an
-    absence: absence propagates, so an unreachable lag would annihilate the
-    whole row, and a window at the first position is short, not empty. A
-    window that reaches nothing, a width of zero among them, is an empty sum
-    and reads zero; a row it leaves with no variable is not built. Over an
-    operand that is absent somewhere, a window that reaches no present slot is
-    absent instead, as the relational lane carries the operand's presence
-    through the window.
+    A position the window cannot reach, or an absent slot it reaches,
+    contributes a **zero**, never an absence: a window is a sum, so an absent
+    summand is one summand fewer and a window at the first position is short,
+    not empty. A window that reaches nothing, a width of zero or only absent
+    slots, is an empty sum and reads zero; a row it leaves with no variable is
+    not built.
 
-    ``by=`` stops the window at each group's edge. A width declared over the
-    group's own dim is read through the relation first (:func:`_per_group`).
+    ``by=`` stops the window at each group's edge, and a coordinate the
+    relation places in no group has no window, so it is absent. A width
+    declared over the group's own dim is read through the relation first
+    (:func:`_per_group`).
     """
     within = _per_group(within, by) if by is not None else within
     asked = _widest(within)
@@ -252,23 +252,18 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     probe = _Edge(wrap=wrap, fill=None)
     groups = _grouped(over, np.asarray(array.indexes[over]), by) if by is not None else None
     terms: list[Any] = []
-    reached: list[Any] = []
-    holed = False
     for lag in range(widest):
         lagged = (
             _gather_in_groups(array, over, lag, groups=groups, edge=probe)
             if groups is not None
             else _gather_by_offset(array, over, lag, edge=probe)
         )
-        live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
-        if lag == 0:
-            holed = not bool(live.all())
+        term = absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term.where(within > lag, 0)
+            term = term.where(within > lag, 0)
         terms.append(term)
-        reached.append(live)
     merged = _merged(terms)
-    return merged.where(reduce(operator.or_, reached)) if holed else merged
+    return merged if groups is None or bool(groups.grouped.all()) else merged.where(groups.grouped)
 
 
 def _widest(within: Any) -> int:
