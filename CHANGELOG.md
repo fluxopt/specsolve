@@ -5,6 +5,10 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
+## Upcoming version
+
+- feat(language): a model in the language of mathspec main builds and solves ([#2099](https://github.com/fluxopt/specsolve/pull/2099))
+
 ## 0.11.2 (2026-11-19)
 
 **Absent terms and amounts build the rows the language says, and piecewise
