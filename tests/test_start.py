@@ -406,8 +406,7 @@ def _swept_at_the_root(solver_name: str, start: Any, executor: Any = None) -> sp
     return sps.solve_over(
         KNAPSACK,
         {},
-        DRAWS,
-        key_name='draw',
+        sps.EachSlice(DRAWS, key_name='draw'),
         solver_name=solver_name,
         solver_options=ROOT_ONLY[solver_name],
         start=start,
@@ -427,7 +426,7 @@ def test_each_slice_starts_from_its_slice_of_an_earlier_sweep(how: str | None) -
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 
-    earlier = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw')
+    earlier = sps.solve_over(KNAPSACK, {}, sps.EachSlice(DRAWS, key_name='draw'))
     if how is None:
         sweep = _swept_at_the_root('highs', earlier)
     else:
@@ -520,9 +519,11 @@ EMPTY_HANDED = {**knapsack_sources(), 'capacity': pl.DataFrame({'value': [-1.0]}
 @pytest.mark.parametrize(
     'start',
     [
-        pytest.param(lambda: sps.solve_over(KNAPSACK, {}, DRAWS[:1], key_name='draw'), id='a-sweep-short-of-a-key'),
         pytest.param(
-            lambda: sps.solve_over(KNAPSACK, {}, [DRAWS[0], ('b', EMPTY_HANDED)], key_name='draw'),
+            lambda: sps.solve_over(KNAPSACK, {}, sps.EachSlice(DRAWS[:1], key_name='draw')), id='a-sweep-short-of-a-key'
+        ),
+        pytest.param(
+            lambda: sps.solve_over(KNAPSACK, {}, sps.EachSlice([DRAWS[0], ('b', EMPTY_HANDED)], key_name='draw')),
             id='a-sweep-with-a-slice-that-left-no-values',
         ),
         pytest.param(
@@ -534,7 +535,7 @@ def test_a_slice_its_start_leaves_no_row_starts_from_nothing_with_a_warning(star
     """A missing start costs the slice its head start, not the sweep its answer."""
     given = start()
     with pytest.warns(SpecsolveWarning, match=r"start= gives the slices \['b'\] no row"):
-        sweep = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=given)
+        sweep = sps.solve_over(KNAPSACK, {}, sps.EachSlice(DRAWS, key_name='draw'), start=given)
     assert sweep.records['has_primal'].to_list() == [True, True], 'both draws solve, the second from nothing'
 
 
@@ -598,7 +599,7 @@ def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.Monkey
 
 def test_a_slice_after_one_that_left_no_values_carries_on_and_solves() -> None:
     draws = [DRAWS[0], ('b', EMPTY_HANDED), ('c', knapsack_sources())]
-    sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw')
+    sweep = sps.solve_over(KNAPSACK, {}, sps.EachSlice(draws, key_name='draw'))
     assert sweep.records['has_primal'].to_list() == [True, False, True], (
         "the middle draw cannot be packed, and 'c' solves on the solver it left"
     )
@@ -620,7 +621,7 @@ def test_previous_under_an_executor_starts_every_slice_from_nothing(monkeypatch:
     ('call', 'match'),
     [
         pytest.param(
-            lambda: sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start='prev'),
+            lambda: sps.solve_over(KNAPSACK, {}, sps.EachSlice(DRAWS, key_name='draw'), start='prev'),
             "takes 'previous' as a word, and not 'prev'",
             id='another-word',
         ),
@@ -650,4 +651,4 @@ def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
 
     monkeypatch.setattr(driver, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
     with pytest.raises(SpecsolveError, match=match):
-        sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=start)
+        sps.solve_over(KNAPSACK, {}, sps.EachSlice(DRAWS, key_name='draw'), start=start)

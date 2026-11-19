@@ -547,7 +547,7 @@ def test_a_hand_built_axis_answers_keyed_by_what_it_was_told():
     sources = horizon_sources(12)
     windows = sps.EachWindow('snapshot', steps=3, lookahead=3).slices(WINDOW, sources)
 
-    runs = sps.solve_over(WINDOW, sources, windows, key_name='window')
+    runs = sps.solve_over(WINDOW, sources, sps.EachSlice(windows, key_name='window'))
     assert runs.primal('soc').columns == ['window', 'snapshot', 'value'], 'a hand-built axis keys by what it was told'
     assert runs.primal('soc').height == 21, 'every row every slice solved, since nothing says which a slice owns'
 
@@ -555,7 +555,7 @@ def test_a_hand_built_axis_answers_keyed_by_what_it_was_told():
 def _hand_built(tmp_path):
     sources = horizon_sources(12)
     windows = sps.EachWindow('snapshot', steps=3, lookahead=3).slices(WINDOW, sources)
-    return sps.solve_over(WINDOW, sources, windows, key_name='window', spill_to=tmp_path / 'runs')
+    return sps.solve_over(WINDOW, sources, sps.EachSlice(windows, key_name='window'), spill_to=tmp_path / 'runs')
 
 
 @pytest.mark.parametrize(
@@ -1136,6 +1136,8 @@ def test_an_axis_that_carries_is_still_hashable(axis):
     [
         pytest.param(sps.EachLabel('period'), id='label'),
         pytest.param(sps.EachLabel('period', carry={'existing': 'total'}), id='label-carrying'),
+        pytest.param(sps.EachLabel('period', key_name='year'), id='label-naming-its-key'),
+        pytest.param(replace(WINDOW_AXIS, key_name='window'), id='window-naming-its-key'),
         pytest.param(WINDOW_AXIS, id='window'),
         pytest.param(sps.EachWindow('snapshot', steps=(2, 4), lookahead=1), id='window-of-listed-steps'),
         pytest.param(replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), id='window-carrying'),
@@ -1176,7 +1178,7 @@ def test_an_archive_holds_the_dict_of_its_axis(tmp_path):
         pytest.param({'each': 'slice', 'dim': 'snapshot'}, "\\(got 'slice'\\)", id='an-each-that-names-no-axis'),
         pytest.param(
             {'each': 'label', 'dim': 'period', 'carries': {}},
-            "takes 'each' and \\['dim', 'carry'\\].*\\['carries'\\] is not one of them",
+            "takes 'each' and \\['dim', 'carry', 'key_name'\\].*\\['carries'\\] is not one of them",
             id='a-key-the-axis-does-not-take',
         ),
         pytest.param(
@@ -1532,7 +1534,7 @@ def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
     """Refused rather than widened: the caller's own labels are not ours to change."""
     sources = scenario_sources()
     with pytest.raises(sps.errors.SpecsolveError, match='more than one type'):
-        sps.solve_over(DISPATCH, sources, [(1, sources), (2.5, sources)], key_name='draw')
+        sps.solve_over(DISPATCH, sources, sps.EachSlice([(1, sources), (2.5, sources)], key_name='draw'))
 
 
 @pytest.mark.parametrize(
@@ -1561,7 +1563,9 @@ def test_a_key_that_cannot_name_one_slice_by_its_text_is_refused_before_a_slice_
     sources = {**base, 'load': _draw(base, 'low')}
     out = tmp_path / 'spill'
     with pytest.raises(sps.errors.SpecsolveError, match=match):
-        sps.solve_over(DISPATCH, sources, [(key, sources) for key in keys], key_name='draw', spill_to=out)
+        sps.solve_over(
+            DISPATCH, sources, sps.EachSlice([(key, sources) for key in keys], key_name='draw'), spill_to=out
+        )
     assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
 
 
@@ -1660,19 +1664,19 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
             read('q')
 
 
-def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
-    """`over` also takes a plain list of `(key, sources)`.
+def test_slices_written_by_hand_are_solved_as_written_under_the_key_they_name():
+    """`EachSlice` takes `(key, sources)` pairs.
 
-    The list cannot say what its keys are coordinates *of*, so `key=` is
-    required there.
+    The pairs cannot say what their keys are labels *of*, so `key_name=` has
+    no default there.
     """
     base = scenario_sources()
     slices = [(name, {**base, 'load': _draw(base, name)}) for name in ('low', 'high')]
 
-    with pytest.raises(sps.errors.SpecsolveError, match='hand-built axis needs key_name='):
-        sps.solve_over(DISPATCH, base, slices)
+    with pytest.raises(TypeError, match='key_name'):
+        sps.EachSlice(slices)  # pyrefly: ignore[missing-argument] — the refusal under test
 
-    runs = sps.solve_over(DISPATCH, base, over=slices, key_name='draw')
+    runs = sps.solve_over(DISPATCH, base, over=sps.EachSlice(slices, key_name='draw'))
     assert runs.keys == ['low', 'high']
     assert runs.records.columns[0] == 'draw'
     assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
@@ -1699,7 +1703,9 @@ def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second
 
     def fold(executor: object) -> object:
         try:
-            return sps.solve_over(DISPATCH, base, slices, key_name='draw', executor=executor).objective.to_dicts()
+            return sps.solve_over(
+                DISPATCH, base, sps.EachSlice(slices, key_name='draw'), executor=executor
+            ).objective.to_dicts()
         except sps.errors.DataError as exc:
             return str(exc)
 
@@ -1707,25 +1713,59 @@ def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second
         assert fold(None) == fold(pool), 'a sweep answers the slice it was given, not the one before it'
 
 
-def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
+def test_an_axis_key_name_overrides_what_it_derived_and_refuses_a_collision():
     """The derived name is right by default and the caller's word wins.
 
     A key that is a declared dimension would collide with a column the frames
     carry.
     """
-    runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), key_name='case')
+    runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name='case'))
     assert runs.records.columns[0] == 'case'
     assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
 
     with pytest.raises(sps.errors.SpecsolveError, match=r"key_name='generator' is a dimension the spec declares"):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), key_name='generator')
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name='generator'))
+
+
+def test_a_window_key_name_names_the_column_each_window_is_read_under():
+    """A window's key is where it started, called `<dim>_start` unless the axis names it."""
+    named = sps.solve_over(WINDOW, horizon_sources(8), replace(WINDOW_AXIS, key_name='window'))
+    assert named.primal('soc', per_window=True).columns == ['window', 'snapshot', 'value'], (
+        'the key column takes the name the axis gives it'
+    )
+    assert named.primal('soc').columns == ['snapshot', 'value'], 'and the stitched answer carries no key'
+
+
+def test_an_archive_runs_again_under_the_key_name_the_sweep_ran_with(tmp_path):
+    """The key name was an argument of the call, so the axis an archive held ran again keyed by its default."""
+    axis = sps.EachLabel('scenario', key_name='draw')
+    sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'study')
+    study = sps.load_archive(tmp_path / 'study')
+    assert study.axis == axis, 'the axis reads back with the key name it was given'
+    assert sps.solve_over(study.spec, study.sources, study.axis).key_name == 'draw'
+
+
+@pytest.mark.parametrize(
+    'over',
+    [
+        pytest.param([('low', {}), ('high', {})], id='pairs-in-no-axis'),
+        pytest.param('scenario', id='the-name-of-a-dimension'),
+    ],
+)
+def test_an_over_that_is_no_axis_is_refused_before_anything_is_read(over):
+    """Anything else reached the first attribute an axis has, and raised an `AttributeError` from inside."""
+    with pytest.raises(
+        sps.errors.SpecsolveError, match=r'over= takes an EachLabel, an EachWindow or an EachSlice'
+    ) as raised:
+        sps.solve_over(DISPATCH, scenario_sources(), over)
+    assert f'(got {type(over).__name__})' in str(raised.value), 'the refusal names what it was given'
 
 
 @pytest.mark.parametrize('key_name', ['specsolve_case', 'Specsolve_case', 'SPECSOLVE_CASE'], ids=str)
 def test_a_slice_key_with_the_reserved_prefix_is_refused_in_any_letter_case(key_name):
     """A capital passed the reserved prefix, though a query engine reads `Specsolve_run` as `specsolve_run`."""
     with pytest.raises(sps.errors.SpecsolveError, match=rf"key_name='{key_name}' starts with 'specsolve_'"):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), key_name=key_name)
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name=key_name))
 
 
 def test_duals_come_back_keyed_by_slice_and_are_never_combined(sweep):
@@ -1916,7 +1956,7 @@ def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
 def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
     """`EachLabel` squeezes its dim out of every source, so a declared dimension would be left with no data."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"EachLabel\('generator'\) squeezes 'generator'"):
-        sps.solve_over(WINDOW, horizon_sources(8), sps.EachLabel('generator'), key_name='g')
+        sps.solve_over(WINDOW, horizon_sources(8), sps.EachLabel('generator', key_name='g'))
 
 
 # ---------------------------------------------------------------------------
@@ -2010,7 +2050,7 @@ def test_a_failing_slice_is_named(make_executor):
         _entered(make_executor() if make_executor else None) as executor,
         pytest.raises(sps.errors.DataError) as raised,
     ):
-        sps.solve_over(DISPATCH, base, slices, key_name='draw', executor=executor)
+        sps.solve_over(DISPATCH, base, sps.EachSlice(slices, key_name='draw'), executor=executor)
     assert any("slice 'bad'" in note and '3 of 3' in note for note in raised.value.__notes__), (
         'the note names the slice by key and by position'
     )
@@ -2022,7 +2062,7 @@ def test_a_key_that_collides_with_a_fixed_column_is_refused(key_name):
     in `objective` — where the key would silently replace the column rather
     than join it."""
     with pytest.raises(sps.errors.SpecsolveError, match=f'key_name={key_name!r} .* column'):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), key_name=key_name)
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name=key_name))
 
 
 @pytest.mark.parametrize('key_name', ['columns', 'rows', 'solves', 'loads', 'build_seconds'], ids=str)
@@ -2034,7 +2074,7 @@ def test_a_key_named_like_a_metrics_column_is_refused_before_a_slice_is_solved(k
     `DuplicateError`, and again on every read of a spilled sweep.
     """
     with pytest.raises(sps.errors.SpecsolveError, match=f'key_name={key_name!r} .* column'):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), key_name=key_name)
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name=key_name))
 
 
 @pytest.mark.parametrize('make_executor', EXECUTORS[:2])
@@ -2079,7 +2119,7 @@ def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
         assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), 'one window builds alone'
 
     by_axis = sps.solve_over(WINDOW, sources, axis)
-    by_hand = sps.solve_over(WINDOW, sources, slices, key_name='snapshot_start')
+    by_hand = sps.solve_over(WINDOW, sources, sps.EachSlice(slices, key_name='snapshot_start'))
     assert answer_of(by_hand).equals(answer_of(by_axis))
     assert by_hand.primal('soc').equals(by_axis.primal('soc', per_window=True))
 
@@ -2220,13 +2260,13 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     good = [(k, {**base, 'load': _draw(base, k)}) for k in ('low', 'mid', 'high')]
     bad = [*good[:2], ('high', {**good[0][1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})})]
     with pytest.raises(sps.errors.DataError):
-        sps.solve_over(DISPATCH, base, bad, key_name='draw', spill_to=tmp_path)
+        sps.solve_over(DISPATCH, base, sps.EachSlice(bad, key_name='draw'), spill_to=tmp_path)
 
     built = builds(driver)
-    resumed = sps.solve_over(DISPATCH, base, good, key_name='draw', spill_to=tmp_path)
+    resumed = sps.solve_over(DISPATCH, base, sps.EachSlice(good, key_name='draw'), spill_to=tmp_path)
     assert len(built) == 1, 'only the slice that failed is built again'
 
-    fresh = sps.solve_over(DISPATCH, base, good, key_name='draw')
+    fresh = sps.solve_over(DISPATCH, base, sps.EachSlice(good, key_name='draw'))
     assert answer_of(resumed).equals(answer_of(fresh))
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 

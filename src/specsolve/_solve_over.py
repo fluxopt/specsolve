@@ -26,7 +26,7 @@ import polars as pl
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, sources_with_column
+from specsolve._axes import Axis, EachSlice, EachWindow, Slice, axis_from, sources_with_column
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
@@ -119,14 +119,14 @@ class _CarryRule:
         return picked
 
 
-def _archiving(archive: str | Path | None, axis: Axis | HandBuilt) -> tuple[Path, Axis] | None:
+def _archiving(archive: str | Path | None, axis: Axis | EachSlice) -> tuple[Path, Axis] | None:
     """Where the archive goes and the axis that re-runs it, or ``None`` for no archive."""
     if archive is None:
         return None
     if not isinstance(axis, Axis):
         raise SpecsolveError(
             'archive= takes a sweep cut by EachLabel or EachWindow, which say how one set of sources '
-            'was cut and so how the archive can be re-run. A hand-built list is a set of sources per '
+            'was cut and so how the archive can be re-run. An EachSlice is a set of sources per '
             'slice, which are unrelated questions — archive one solve each.'
         )
     out = Path(archive)
@@ -137,9 +137,8 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt) -> tuple[Path
 def solve_over(
     spec: SpecLike,
     sources: Mapping[str, Source],
-    over: Axis | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    over: Axis | Mapping[str, Any] | EachSlice,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
-    key_name: str | None = None,
     executor: Executor | None = None,
     shared_filesystem: bool | None = None,
     solver_options: Mapping[str, object] | None = None,
@@ -161,11 +160,10 @@ def solve_over(
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
         over: The axis: [`EachLabel`][], [`EachWindow`][], either as the
-            plain data its ``to_dict`` writes, or a list of ``(key, sources)``
-            written by hand. An axis's ``carry=`` chains its slices; a
-            hand-built list carries nothing.
-        key_name: What to call the slice column; a class axis names its own,
-            a hand-built list has to be told.
+            plain data its ``to_dict`` writes, or an [`EachSlice`][] of
+            ``(key, sources)`` written by hand. An axis's ``carry=`` chains
+            its slices, and its ``key_name=`` names the slice column; an
+            ``EachSlice`` carries nothing.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
             slices in order on one model. A process pool must be ``spawn``
             or ``forkserver`` — a forked worker hangs.
@@ -192,8 +190,8 @@ def solve_over(
             copies the spill file for file, so a sweep too large to hold is
             archived without being held; the archive is a second copy of the
             answers on disk.
-            A sliced source is archived whole. Refused for a
-            hand-built axis, which is a set of sources per slice: archive one
+            A sliced source is archived whole. Refused for an
+            ``EachSlice``, which is a set of sources per slice: archive one
             solve each.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
             every slice. The sweep, its spill and its archive carry these and
@@ -203,7 +201,7 @@ def solve_over(
             [`solve`][specsolve._api.Model.solve] takes it: an earlier answer,
             an earlier sweep, or a [`Start`][specsolve.types.Start] of tables.
             Each table is cut by the axis as a source is: one that carries the
-            sliced dimension, or a hand-built axis's key column, gives each
+            sliced dimension, or an ``EachSlice``'s key column, gives each
             slice its own rows, and one without reaches every slice whole. An
             earlier sweep is its answer, so each slice starts from the earlier
             slice of its key, and each window from the hours it covers.
@@ -217,8 +215,8 @@ def solve_over(
         The sweep, which reads its answer.
 
     Raises:
-        SpecsolveError: Before a slice is taken: an axis given as a mapping
-            whose keys name no axis; a carry that cannot line up,
+        SpecsolveError: Before a slice is taken: an *over* that is no axis,
+            or a mapping whose keys name none; a carry that cannot line up,
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
             with a column the frames carry; an axis the program does not
@@ -237,6 +235,11 @@ def solve_over(
             from nothing.
     """
     axis = axis_from(over) if isinstance(over, Mapping) else over
+    if not isinstance(axis, Axis | EachSlice):
+        raise SpecsolveError(
+            f"over= takes an EachLabel, an EachWindow or an EachSlice, or the mapping an axis's to_dict "
+            f'writes (got {type(over).__name__}).'
+        )
     carry: Mapping[str, str] = axis.carry if isinstance(axis, Axis) else {}
     if carry and executor is not None:
         raise SpecsolveError(
@@ -251,14 +254,14 @@ def solve_over(
     asked = checked_outputs(outputs)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in carry.items()}
-    key_name = _key_column(axis, key_name, program)
+    key_name = _key_column(axis, program)
 
     if isinstance(axis, Axis):
         _check_the_carry(plan, axis, sources)
         axis._check_the_program(program, sources)
         slices, stitch = axis._slice(program, sources, key_name)
     else:
-        slices = [Slice(*entry) for entry in axis]
+        slices = [Slice(*entry) for entry in axis.slices]
         stitch = None
     if not slices:
         raise DataError('the axis produced no slices')
@@ -505,20 +508,9 @@ def _run_slice(
         return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})
 
 
-def _key_column(
-    axis: Axis | HandBuilt,
-    key_name: str | None,
-    program: Program,
-) -> str:
-    """What to call the column holding the slice key; never a column the frames already carry."""
-    if key_name is None:
-        if not isinstance(axis, Axis):
-            raise SpecsolveError(
-                'a hand-built axis needs key_name=: a list of slices does not say what its keys are '
-                "labels of, and 'slice' would be this library naming your axis for you. Pass "
-                "key_name='draw', key_name='period', or whatever the keys actually are."
-            )
-        key_name = axis._key_name()
+def _key_column(axis: Axis | EachSlice, program: Program) -> str:
+    """What *axis* calls the column holding the slice key; never a column the frames already carry."""
+    key_name = axis._key_name()
     refuse_reserved(key_name, f'key_name={key_name!r}')
     if key_name in program.dimensions:
         raise SpecsolveError(

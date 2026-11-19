@@ -4,7 +4,8 @@ An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
 into windows of its labels, and also says how each window's frames are
-stitched back over that dimension.
+stitched back over that dimension. An [`EachSlice`][] cuts nothing: its slices
+are written by hand.
 """
 
 from __future__ import annotations
@@ -107,7 +108,7 @@ class EachLabel:
     A *dim* the spec declares is refused, and so is an index that carries it.
     Every other source passes through untouched. Slices run in sorted label
     order, and the answer lifts each label back as the key column, named
-    *dim*.
+    *dim* unless ``key_name=`` names it.
 
     ``carry={parameter: variable}`` chains them in that order: each slice's
     answer is copied into the next slice's data, and the first slice takes
@@ -118,6 +119,9 @@ class EachLabel:
     #: ``{parameter: variable}`` handed from each slice to the next; empty for
     #: slices that do not depend on one another.
     carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
+    #: What to call the key column in every table of the answer; ``None``
+    #: takes the default the class documents.
+    key_name: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, 'carry', dict(self.carry))
@@ -126,22 +130,19 @@ class EachLabel:
         """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
-        holds a ``carry`` key only where the axis carries something.
+        holds ``carry`` and ``key_name`` only where the axis sets them.
         """
-        out: dict[str, object] = {'each': 'label', 'dim': self.dim}
-        if self.carry:
-            out[CARRY] = dict(self.carry)
-        return out
+        return {'each': 'label', 'dim': self.dim, **_where_set(self)}
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what ``over=`` takes hand-built.
+        """The ``(key, sources)`` list this axis would run on *spec* — what [`EachSlice`][] takes.
 
         For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
         """
         return _slices(self, spec, sources)
 
     def _key_name(self) -> str:
-        return self.dim
+        return self.dim if self.key_name is None else self.key_name
 
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
         """Refuse a *dim* the spec declares, and an index that carries it.
@@ -215,6 +216,9 @@ class EachWindow:
     different dimensions, the dropped one is *dim*, and the row at the last
     label the window owns is handed on. The first window takes the parameter
     from the sources as its seed.
+
+    ``per_window=True`` reads each window under the key column, named
+    ``<dim>_start`` unless ``key_name=`` names it.
     """
 
     dim: str
@@ -223,14 +227,17 @@ class EachWindow:
     #: ``{parameter: variable}`` handed from each window to the next; empty for
     #: windows that do not depend on one another.
     carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
+    #: What to call the key column in every table of the answer; ``None``
+    #: takes the default the class documents.
+    key_name: str | None = field(default=None, kw_only=True)
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what ``over=`` takes hand-built.
+        """The ``(key, sources)`` list this axis would run on *spec* — what [`EachSlice`][] takes.
 
         For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
-        The pairs carry no ownership: solved as a list, the slices need
-        ``key_name=``, the answer is keyed by slice rather than stitched, and
-        nothing is carried between them.
+        The pairs carry no ownership: solved through [`EachSlice`][], the
+        answer is keyed by slice rather than stitched, and nothing is carried
+        between them.
         """
         return _slices(self, spec, sources)
 
@@ -252,17 +259,14 @@ class EachWindow:
         """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
-        holds a ``carry`` key only where the axis carries something.
+        holds ``carry`` and ``key_name`` only where the axis sets them.
         """
         steps = self.steps if isinstance(self.steps, int) else list(self.steps)
-        out: dict[str, object] = {'each': 'window', 'dim': self.dim, 'steps': steps, 'lookahead': self.lookahead}
-        if self.carry:
-            out[CARRY] = dict(self.carry)
-        return out
+        return {'each': 'window', 'dim': self.dim, 'steps': steps, 'lookahead': self.lookahead, **_where_set(self)}
 
     def _key_name(self) -> str:
         """Where the window started, never ``dim``, which every frame of the window already carries."""
-        return f'{self.dim}_start'
+        return f'{self.dim}_start' if self.key_name is None else self.key_name
 
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
         """Refuse a window the program's rows cannot be whole inside, before one is taken.
@@ -359,9 +363,35 @@ Axis = EachLabel | EachWindow
 _EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'window': EachWindow}
 
 
-#: Slices written by hand, one ``(key, sources)`` pair each; ``over=`` takes
-#: this beside an [`Axis`][].
-type HandBuilt = Sequence[tuple[Label, Mapping[str, Source]]]
+@dataclass(frozen=True, eq=False)
+class EachSlice:
+    """One slice per ``(key, sources)`` pair, written by hand.
+
+    Each pair is a whole set of sources, solved as its own model, so nothing
+    is cut, carried or stitched, and the answer is keyed by slice. The pairs
+    are unrelated questions to an archive, which refuses them.
+    """
+
+    #: The pairs, each a key and the whole sources of one model.
+    slices: Sequence[tuple[Label, Mapping[str, Source]]]
+    #: What the keys are labels of: the key column in every table of the answer.
+    key_name: str = field(kw_only=True)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'slices', tuple(self.slices))
+
+    def _key_name(self) -> str:
+        return self.key_name
+
+
+def _where_set(axis: Axis) -> dict[str, object]:
+    """The keys an axis's ``to_dict`` writes only where the axis sets them."""
+    out: dict[str, object] = {}
+    if axis.carry:
+        out[CARRY] = dict(axis.carry)
+    if axis.key_name is not None:
+        out['key_name'] = axis.key_name
+    return out
 
 
 def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
@@ -391,7 +421,7 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
 
 
 def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs ``over=`` takes hand-built."""
+    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs [`EachSlice`][] takes."""
     program = lowered(spec)
     axis._check_the_program(program, sources)
     return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]

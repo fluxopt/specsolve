@@ -53,6 +53,10 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
+::: specsolve.EachSlice
+    options:
+      heading_level: 4
+
 ### What comes back
 
 ::: specsolve.types.Model

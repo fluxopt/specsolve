@@ -1647,11 +1647,11 @@ def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> 
     assert not unlike, f'sources that differ from what load_archive gives back: {unlike}'
 
 
-def test_a_hand_built_axis_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """A list of `(key, sources)` is refused, and sent to one archive per solve."""
+def test_slices_written_by_hand_are_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
+    """An `EachSlice` is a set of sources per slice, so it is refused, and sent to one archive per solve."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     with pytest.raises(sps.errors.SpecsolveError, match='archive one solve each'):
-        sps.solve_over(dispatch_yaml, sources, [('a', sources)], key_name='case', archive='never.zip')
+        sps.solve_over(dispatch_yaml, sources, sps.EachSlice([('a', sources)], key_name='case'), archive='never.zip')
 
 
 def _by_scenario(names: list[str]) -> pl.DataFrame:

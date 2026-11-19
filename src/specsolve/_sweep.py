@@ -306,7 +306,7 @@ class Sweep:
     shapes, and each returns **the answer** by default. An [`EachWindow`][]
     sweep is read over the dimension it sliced: each coordinate comes from
     the window that owns it, and the lookahead rows are dropped. An
-    [`EachLabel`][] or hand-built sweep is keyed by slice, the key
+    [`EachLabel`][] or [`EachSlice`][] sweep is keyed by slice, the key
     prepended, each slice being a whole answer. Nothing is combined across
     slices.
 
