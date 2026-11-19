@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import polars as pl
 
-from specsolve._axes import Axis, EachWindow
+from specsolve._axes import Axis
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._messages import unknown_name_message
@@ -160,9 +160,8 @@ def slice_starts(
     table without the sliced column reaches every slice whole.
 
     Raises:
-        SpecsolveError: A word other than ``'previous'``; a name
-            [`refuse_unknown_start`][] refuses; or a table over an EachWindow
-            sweep's local index alone.
+        SpecsolveError: A word other than ``'previous'``, or a name
+            [`refuse_unknown_start`][] refuses.
 
     Warns:
         SpecsolveWarning: A slice the cut leaves nothing, which starts from
@@ -174,12 +173,6 @@ def slice_starts(
     column = axis.dim if isinstance(axis, Axis) else key_name
     tables = _start_tables(start, column)
     refuse_unknown_start(cast('Start', tables), program)
-    if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
-        raise SpecsolveError(
-            f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
-            f'table would lay the same {axis.dim!r} onto every window. Write it over {axis.dim!r}, as a source is, '
-            f'and each window takes the rows it covers.'
-        )
     starts: list[Start | None] = []
     empty: list[Label] = []
     for current in slices:
@@ -225,17 +218,6 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
     if isinstance(start, Sweep):
         return {reader: dict(named) for reader, named in start._start(column).items()}
     return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, Source]]', start).items()}
-
-
-def _over_the_local_index(tables: Mapping[str, Mapping[str, Source]], axis: EachWindow) -> list[str]:
-    """The names of *tables* over *axis*'s local index and not its sliced dimension, which no window can place."""
-    over = {
-        name: frame.collect_schema().names()
-        for named in tables.values()
-        for name, obj in named.items()
-        if (frame := as_frame(obj)) is not None
-    }
-    return sorted(name for name, columns in over.items() if axis.into in columns and axis.dim not in columns)
 
 
 def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

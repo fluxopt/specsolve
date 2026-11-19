@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 4
+ANSWER_LAYOUT = 5
 FORMAT_FILE = 'format.json'
 
 
@@ -122,26 +122,21 @@ REASONS_FILE = 'reasons.parquet'
 
 
 def consolidated(under: Path, file: str) -> pl.DataFrame:
-    """The table *file* names under *under*, whichever shape wrote it, as one frame.
+    """The table a sweep writes one file per slice of, under the directory named for *file*, as one frame in slice order.
 
-    Either the file itself, or one file per slice under the directory named for
-    it — ``record/`` beside ``record.parquet`` — concatenated in slice order.
+    ``record/`` holds what a single solve writes as ``record.parquet``.
 
     Raises:
-        LayoutError: Neither shape is under *under*.
+        LayoutError: No such directory under *under*.
     """
     apart = file.removesuffix('.parquet')
-    if (single := under / file).is_file():
-        frames = [parquet.read(single)]
-    elif (many := under / apart).is_dir():
-        frames = [parquet.read(path) for path in sorted(many.glob('*.parquet'))]
-    else:
+    if not (under / apart).is_dir():
         raise LayoutError(
-            f'{str(under)!r} holds no {file!r} and no {apart!r} beside it, so it is not a sweep or a saved '
-            f'answer this package wrote. Every record here is written as the fold goes — one file, or one '
-            f'per slice — whether or not a slice produced values.'
+            f'{str(under)!r} holds no {apart!r} directory, so it is not a sweep this package wrote. Every '
+            f'record here is written as the fold goes, one file per slice, whether or not a slice produced '
+            f'values.'
         )
-    return pl.concat(frames)
+    return pl.concat([parquet.read(path) for path in sorted((under / apart).glob('*.parquet'))])
 
 
 def clear_the_answer(directory: Path) -> None:

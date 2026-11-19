@@ -36,7 +36,7 @@ from specsolve._inputs import lower_expression
 from specsolve._names import RUN
 from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
-from specsolve._sweep import Sweep, archived_sweep, with_key
+from specsolve._sweep import Sweep, load_sweep, scan_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -85,14 +85,12 @@ class SweepArchive:
     Attributes:
         spec: The spec as written.
         sources: What the sweep was given, uncut, as [`ResultArchive`][]
-            holds them. A source the axis cuts holds the axis column first; a
-            parameter given as one number over a window's local index is held
-            over the axis, so each slice cuts from it what it attached.
+            holds them. A source an EachCoordinate axis cuts holds the axis
+            column first.
         axis: What cut them, with the ``carry=`` it chained the slices with.
         sweep: The archived answer, in memory from [`load_archive`][], on
-            disk from [`scan_archive`][]. ``per_window=True`` reads an
-            EachWindow sweep's windows where ``keep_windows=True`` kept them,
-            and is refused otherwise.
+            disk from [`scan_archive`][], as [`load_sweep`][] and
+            [`scan_sweep`][] read a saved sweep.
     """
 
     spec: Spec
@@ -218,7 +216,7 @@ def _read(under: Path, archive: Path, *, eager: bool) -> ResultArchive | SweepAr
         answer = _attach_readers((load_result if eager else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers(archived_sweep(saved, eager=eager), spec, sources, inputs.axis)
+    answer = _attach_sweep_readers((load_sweep if eager else scan_sweep)(saved), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)
 
 
@@ -296,7 +294,7 @@ def _per_slice(
 ) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
     """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt from its cut of the sources."""
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
-    for key, slice_sources in axis.slices(sources):
+    for key, slice_sources in axis.slices(spec, sources):
         frames = solved.get(key, {})
         if not frames.get('primal'):
             continue

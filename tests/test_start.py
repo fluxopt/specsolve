@@ -466,13 +466,18 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
     )
 
 
-def test_a_table_over_the_windows_local_index_alone_is_refused() -> None:
+def test_a_table_covering_one_window_starts_that_window_and_says_which_start_from_nothing() -> None:
+    """A window's own frame is over the dimension's labels, so it is cut like any other table."""
     from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     first = earlier.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 0).drop('snapshot_start')
-    with pytest.raises(SpecsolveError, match="over the windows' local index 't' and not over 'snapshot'"):
-        sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': {'soc': first}})
+    with (
+        pytest.warns(sps.errors.SpecsolveWarning, match='a partial start of values for an LP'),
+        pytest.warns(sps.errors.SpecsolveWarning, match=r'start= gives the slices \[4, 8\] no row'),
+    ):
+        again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': {'soc': first}})
+    assert again.records['has_primal'].all(), 'a start changes how a slice gets to its optimum, never whether'
 
 
 def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_covers(

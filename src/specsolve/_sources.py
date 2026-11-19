@@ -99,7 +99,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
+        sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
         sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
 
@@ -211,6 +211,17 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     _check_labels_are_present(dim, labels[dim])
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
+
+
+def index_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
+    """*dim*'s labels as the door reads its index out of *data*, in index order.
+
+    Raises:
+        DataError: No index for *dim*, or one the door refuses.
+    """
+    if dim not in data:
+        raise DataError(_no_index_source_message(dim))
+    return _labels_of(dim, _index(data[dim], dim, program.dimensions[dim].dtype))
 
 
 def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
@@ -467,7 +478,7 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
 # ---------------------------------------------------------------------------
 
 
-def _parameter_frame(
+def parameter_frame(
     name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy frame, whatever shape it took.
@@ -506,7 +517,7 @@ def read_values(
         DataError: A table a parameter over the same dims would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
+    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -524,7 +535,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
     else:
         least = (
-            _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
+            parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
         )
     return 0 if least is None else int(least)
 

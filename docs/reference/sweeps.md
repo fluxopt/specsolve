@@ -16,7 +16,11 @@ An axis says how the sources split into slices:
 | [`EachWindow`](api.md#specsolve.EachWindow) | one per window of consecutive labels |
 | a sequence of `(key, sources)` pairs | as written. It must pass `key_name=`, and its answer is keyed by slice. |
 
-`EachWindow`'s `into` has no default, and a seam's `where: "t == 0"` matches on it.
+**`EachCoordinate` cuts a column the model does not declare**, and
+**`EachWindow` a dimension it does.** A window is the model over its own
+labels, so the spec and the sources are the ones a single solve takes. A rule
+for a window's first row is written `where: "position(snapshot) == 0"`, since
+a position counts within the window.
 
 **A datetime axis is held in microseconds**, as
 [a label is](data.md#where-coordinates-come-from). A key finer than a
@@ -26,8 +30,8 @@ microsecond is refused.
 `lookahead` is one number, whatever the blocks.
 
 ```python
-sps.EachWindow('snapshot', steps=[24, 24, 168, 168, 720], lookahead=12, into='t')
-sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48, into='t')
+sps.EachWindow('snapshot', steps=[24, 24, 168, 168, 720], lookahead=12)
+sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48)
 ```
 
 **A sequence that stops short of the axis is refused:**
@@ -38,11 +42,11 @@ the last 5 would be solved by no window. List a block for them, or pass an int t
 repeat one size to the end.
 ```
 
-**`axis.slices(sources)` is the list the axis would run**, as `(key, sources)`
+**`axis.slices(spec, sources)` is the list the axis would run**, as `(key, sources)`
 pairs:
 
 ```python
-slices = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t').slices(sources)
+slices = sps.EachWindow('snapshot', steps=24, lookahead=24).slices('window.yaml', sources)
 sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that was infeasible
 ```
 
@@ -52,7 +56,7 @@ holds the same mapping. A mapping with a key the axis does not take, or without
 one it needs, is refused, and the message names the keys the axis takes.
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis.to_dict())
 ```
 
@@ -83,8 +87,8 @@ resumed.
 included, on every reader:
 
 ```python
-sweep.primal('soc', per_window=True)  # (snapshot_start, t, value) — every row every window solved
-sweep.to_dataarray('balance', 'dual', per_window=True)  # (snapshot_start, t)
+sweep.primal('soc', per_window=True)  # (snapshot_start, snapshot, value) — every row every window solved
+sweep.to_dataarray('balance', 'dual', per_window=True)  # (snapshot_start, snapshot)
 ```
 
 **A sweep not cut into windows refuses `per_window=True`:**
@@ -108,9 +112,9 @@ with `per_window=True`.
 |---|---|
 | **duals are keyed, never combined** | A slice with an integer variable contributes no duals, and `sweep.records` says which. |
 | **no aggregate objective** | `sweep.records` is keyed by slice, with the objective as one column. |
-| **the lookahead is `t >= step`** | What each window owns is `sweep.primal('soc', per_window=True).filter(pl.col('t') < step)`. |
+| **a window owns its first `steps` labels** | The rows after them are lookahead. The answer keeps the owned rows, and `per_window=True` reads them all. |
 | **a slice that did not solve contributes no rows** | `record` still holds one row per slice, with a null objective where a slice reached none. |
-| **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` re-indexes to `into`. Per window, the key column `snapshot_start` holds where each window began. |
+| **a window keys as `<dim>_start`** | Per window, the key column `snapshot_start` holds the label each window began at, beside the window's own `snapshot`. |
 | **`key_name=` names the key** | On any axis. A name that collides with a table column, or starts with `specsolve_`, is refused. |
 | **`sweep.metrics` says what each slice took** | One [`Metrics`](api.md#specsolve.types.Metrics) per slice, keyed like `record`. |
 | **on disk, the slice is two text columns** | `slice_axis` holds the key name and `slice` the key as text. Two keys of one text are refused. |
@@ -123,9 +127,7 @@ with `per_window=True`.
 one slice:
 
 ```python
-sweep = sps.solve_over(
-    'window.yaml', sources, sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'), spill_to='runs/'
-)
+sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', steps=24, lookahead=24), spill_to='runs/')
 sweep.scan('soc')  # a LazyFrame: (snapshot, value), the answer
 sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, the same keywords
 ```
@@ -147,16 +149,15 @@ sweep runs again from the file alone ([archiving](../howto/archiving.md)):
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t'),
+    sps.EachWindow('snapshot', steps=24, lookahead=24),
     archive='roll.zip',
-    keep_windows=True,
 )
 ```
 
 | Rule | |
 |---|---|
-| **an archive holds the answer** | At `answer/<kind>/<name>.parquet`, as for a single solve. A name with no answer is left out, and the reader raises its reason. |
-| **`keep_windows=True` keeps each window's frames** | Without them, a `per_window=True` read of the archive is refused. It needs `EachWindow` and `archive=`. |
+| **an archive holds a sweep as a spill does** | `answer/` is the layout `spill_to=` and `save` write: `answer/<kind>/<name>/<position>.parquet`, with `specsolve_run` added to each table. |
+| **every reader answers off the archive** | `per_window=True` included, since every window is there. |
 
 ## Carrying state between slices
 
@@ -168,7 +169,7 @@ list carries nothing.
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'}),
 )
 ```
 
@@ -200,7 +201,7 @@ cold = sps.solve_over('dispatch.yaml', sources, axis, start=None)
 |---|---|
 | **an earlier sweep starts each slice from the slice of its key** | Under an executor too. |
 | **`'previous'`, the default, starts each slice from the one before** | The first slice, a slice that loads the solver again, and every slice under an `executor` begin from nothing. |
-| **a start is checked before a slice is built** | A table over an `EachWindow` sweep's local index alone is refused. A slice its start leaves no row warns and starts from nothing. |
+| **a start is checked before a slice is built** | A slice its start leaves no row warns and starts from nothing. |
 
 ## Running slices in parallel
 

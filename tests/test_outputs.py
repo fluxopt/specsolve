@@ -284,7 +284,6 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
         replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         outputs=ACTIVITY,
         archive=tmp_path / 'run',
-        keep_windows=True,
     )
     loads = horizon_sources(12)['load']
     stitched = sweep.activity('balance').sort('snapshot')

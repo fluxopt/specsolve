@@ -133,7 +133,7 @@ def test_a_window_keeps_its_size(over_time: tuple[dict[str, Any], str]) -> None:
 def test_a_window_without_lookahead_empties_the_battery(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
     windows = namespace['windows']
-    ends = windows.primal('soc').filter(pl.col('hour') % 3 == 2)['value'].to_list()
+    ends = windows.primal('soc').filter(pl.col('snapshot') % 3 == 2)['value'].to_list()
     assert ends == pytest.approx([0.0] * 4), 'the page says every window ends with the battery empty'
     gap = namespace['schedule_cost'](windows) / namespace['whole'].objective - 1
     assert gap == pytest.approx(0.12, abs=0.005), 'the page says the windows cost 12% more'

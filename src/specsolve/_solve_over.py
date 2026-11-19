@@ -5,7 +5,7 @@ driver above [`specsolve._api`][], built from the public verbs.
 
     scenario / sweep    ``EachCoordinate('scenario')``            independent
     myopic pathway      ``EachCoordinate('period', carry=...)``
-    rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, into='t', carry=...)``
+    rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
 [`specsolve._sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
@@ -18,7 +18,6 @@ from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -27,7 +26,7 @@ import polars as pl
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
+from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, sources_with_column
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
@@ -99,42 +98,29 @@ class _CarryRule:
         return cls(variable, dropped[0] if dropped else None)
 
     def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, owns: int | None
+        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, seam: Label | None
     ) -> pl.DataFrame:
         """What this rule hands the next slice, read out of one slice's primals.
 
-        The coordinate handed on is ``owns - 1``, the last one the slice keeps,
+        The row handed on is the one at *seam*, the last label the slice owns,
         never a lookahead row.
         """
         frame = frames[self.variable]
         if self.dropped is None:
             return frame
-        assert owns is not None, 'a carry that drops a dimension is refused unless the axis owns it'
-        seam = owns - 1
+        assert seam is not None, 'a carry that drops a dimension is refused unless the axis windows it'
         picked = frame.filter(pl.col(self.dropped) == seam).drop(self.dropped)
         if picked.is_empty():
             raise SpecsolveError(
                 f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {seam}, the last coordinate it owns, so there is no '
+                f'{self.variable!r} at {self.dropped} == {seam!r}, the last label it owns, so there is no '
                 f'value there to hand forward.'
             )
         return picked
 
 
-def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windows: bool) -> tuple[Path, Axis] | None:
+def _archiving(archive: str | Path | None, axis: Axis | HandBuilt) -> tuple[Path, Axis] | None:
     """Where the archive goes and the axis that re-runs it, or ``None`` for no archive."""
-    if keep_windows and archive is None:
-        raise SpecsolveError(
-            'keep_windows=True says what an archive keeps beside the answer, and there is no archive=. The '
-            'sweep in memory reads its windows through per_window=True already. Pass archive=, or drop '
-            'keep_windows.'
-        )
-    if keep_windows and not isinstance(axis, EachWindow):
-        raise SpecsolveError(
-            "keep_windows=True keeps an EachWindow sweep's frames per window beside its answer, and this axis "
-            'does not cut windows: its answer already is one frame per slice, which the archive holds. Drop '
-            'keep_windows.'
-        )
     if archive is None:
         return None
     if not isinstance(axis, Axis):
@@ -161,7 +147,6 @@ def solve_over(
     solver_name: str = 'highs',
     spill_to: str | Path | None = None,
     archive: str | Path | None = None,
-    keep_windows: bool = False,
     outputs: Iterable[Output] = (),
     start: Sweep | Result | Start | Literal['previous'] | None = 'previous',
 ) -> Sweep:
@@ -200,21 +185,16 @@ def solve_over(
             the axis that cut them and every slice's answer, so that
             ``sps.load_archive`` gives all four back and the sweep runs again
             from the file alone. A ``.zip`` suffix packs it into one file;
-            anything else is a directory. The answer is one file per name at
-            ``answer/<kind>/<name>.parquet``, as for a single solve; a name
-            with no answer, such as a quantity reduced over an EachWindow
-            sweep's windowed dimension, is left out and
-            ``answer/reasons.parquet`` says why. Beside *spill_to* the archive
-            packs the spill, so a sweep too large to hold is archived without
-            being held; the archive is a second copy of the answers on disk.
-            A sliced source is archived whole, and one number over
-            a window's local index as a table over the axis. Refused for a
+            anything else is a directory. The answer is in the layout
+            *spill_to* writes, one file per slice of each name under
+            ``answer/<kind>/<name>/``, so [`Sweep.save`][], a spill and an
+            archive hold a sweep the same way. Beside *spill_to* the archive
+            copies the spill file for file, so a sweep too large to hold is
+            archived without being held; the archive is a second copy of the
+            answers on disk.
+            A sliced source is archived whole. Refused for a
             hand-built axis, which is a set of sources per slice: archive one
             solve each.
-        keep_windows: Also archive an [`EachWindow`][] sweep's frames per
-            window, lookahead rows included, under ``answer/windows/``, so
-            that ``per_window=True`` reads off the archive. Refused for any
-            other axis, and without *archive*.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
             every slice. The sweep, its spill and its archive carry these and
             nothing else; a *spill_to* directory solved with others is
@@ -242,21 +222,19 @@ def solve_over(
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
             with a column the frames carry; an axis the program does not
-            allow; a *spill_to* directory holding another sweep;
-            *keep_windows* without *archive* or on an axis that does not cut
-            windows; *outputs* that [`solve`][specsolve._api.Model.solve]
+            allow; a *spill_to* directory holding another sweep; *outputs* that [`solve`][specsolve._api.Model.solve]
             refuses; a *start* word other than ``'previous'`` — each answerable from the declarations alone; keys of more than one
-            type, or two keys of one text; a *start* table over an EachWindow
-            sweep's local index alone, or one
+            type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
-        DataError: No source carries the axis, an index of another
-            dimension carries it, or the axis produced no slices.
+        DataError: No source carries an EachCoordinate axis, an index
+            carries it, an EachWindow axis's dimension has no index, or the
+            axis produced no slices.
 
     Warns:
-        SpecsolveWarning: A source carrying the axis that is short of a
-            coordinate another has — that slice builds it empty — a position
-            the model counts, which every window restarts, or a *start* that
-            leaves a slice no row, which starts that slice from nothing.
+        SpecsolveWarning: A source carrying an EachCoordinate axis that is
+            short of a coordinate another has — that slice builds it empty —
+            or a *start* that leaves a slice no row, which starts that slice
+            from nothing.
     """
     if isinstance(axis, Mapping):
         axis = axis_from(axis)
@@ -270,7 +248,7 @@ def solve_over(
         parquet.require('archive=' if archive is not None else 'spill_to=')
     document = as_spec(spec)
     sources = _materialised(sources)
-    archiving = _archiving(archive, axis, keep_windows=keep_windows)
+    archiving = _archiving(archive, axis)
     asked = checked_outputs(outputs)
     program = check(document)
     plan = {p: _CarryRule.resolved(program, p, v) for p, v in carry.items()}
@@ -278,9 +256,8 @@ def solve_over(
 
     if isinstance(axis, Axis):
         _check_the_carry(plan, axis, sources)
-        check_no_index_is_cut(program, sources, axis)
         axis._check_the_program(program, sources)
-        slices, stitch = axis._slice(sources, key_name)
+        slices, stitch = axis._slice(program, sources, key_name)
     else:
         slices = [Slice(*entry) for entry in axis]
         stitch = None
@@ -303,7 +280,7 @@ def solve_over(
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if archiving is not None:
         out, cut = archiving
-        _archive_the_sweep(out, document, program, cut, sources, folded, slices[0].sources, keep_windows)
+        _archive_the_sweep(out, document, program, cut, sources, folded, slices[0].sources)
     return folded
 
 
@@ -324,63 +301,27 @@ def _archive_the_sweep(
     sources: Mapping[str, Source],
     folded: Sweep,
     one_slice: Mapping[str, Source],
-    keep_windows: bool,
 ) -> None:
     """Write the sweep's question and its answer to *out*.
 
-    Each source's tidy table comes from *one_slice*, except the ones
-    [`_uncut`][] and [`_spread_over_the_axis`][] give.
+    A windowed sweep's sources are the ones a single solve attaches, so they
+    are tidied whole. A coordinate sweep's are tidied from *one_slice*, except
+    the ones the axis cut, which [`_uncut`][] gives.
     """
-    tidied = with_positions(program, tidy_sources(program, one_slice))
-    sliced = sources_with_column(sources, axis.dim)
-    cut = {name: _uncut(program, axis, name, table) for name, table in sliced.items()}
-    held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, sliced), **cut}
-    tables = {name: held[name] for name in sources}
-    write_archive(
-        out, spec, tables, axis=axis.to_dict(), answer=partial(folded._write_answer, keep_windows=keep_windows)
-    )
+    if isinstance(axis, EachWindow):
+        tables = with_positions(program, tidy_sources(program, sources))
+    else:
+        tidied = with_positions(program, tidy_sources(program, one_slice))
+        cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
+        held = {**tidied, **cut}
+        tables = {name: held[name] for name in sources}
+    write_archive(out, spec, tables, axis=axis.to_dict(), answer=folded._save)
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
-    """A source the axis cuts, as its tidy columns with the axis column first.
-
-    A window's local index is not a column of the uncut table: the axis
-    column stands where it would be.
-    """
+    """A source a coordinate sweep cuts, as its tidy columns with the axis column first."""
     declared = [*program.parameters[name].dims, VALUE] if name in program.parameters else program.relations[name].roles
-    local = axis.into if isinstance(axis, EachWindow) else None
-    return table.select(list(dict.fromkeys([axis.dim, *(column for column in declared if column != local)])))
-
-
-def _spread_over_the_axis(
-    program: Program,
-    axis: Axis,
-    sources: Mapping[str, Source],
-    tidied: Mapping[str, pl.LazyFrame],
-    sliced: Mapping[str, pl.LazyFrame],
-) -> dict[str, pl.LazyFrame]:
-    """Each parameter given as one number over a window's local index, as a table over the axis.
-
-    The local index has one label per coordinate a window holds, so no one
-    window's table is what a window of another length read; over the axis,
-    each window cuts what its own solve read. Every other source attaches as
-    one table in every slice, so the archive holds the first slice's.
-    """
-    if not isinstance(axis, EachWindow):
-        return {}
-    numbers = [
-        name
-        for name, declared in program.parameters.items()
-        if axis.into in declared.dims and isinstance(sources[name], (bool, int, float))
-    ]
-    coordinates = pl.concat([table.select(axis.dim) for table in sliced.values()], how='vertical_relaxed')
-    coordinates = coordinates.unique().sort(axis.dim)
-    return {
-        name: coordinates.join(
-            tidied[name].drop(axis.into).unique(maintain_order=True), how='cross', maintain_order='left_right'
-        )
-        for name in numbers
-    }
+    return table.select(axis.dim, *declared)
 
 
 def _check_the_carry(
@@ -388,7 +329,7 @@ def _check_the_carry(
     axis: Axis,
     first: Mapping[str, Source],
 ) -> None:
-    """Refuse a carry with no seed, or one that collapses a dimension other than [`EachWindow.into`][].
+    """Refuse a carry with no seed, or one that collapses a dimension other than the one an [`EachWindow`][] cuts.
 
     Reads no source: the seed is a key of *first*, and the owned dimension is
     the axis's own.
@@ -401,9 +342,9 @@ def _check_the_carry(
             )
         if rule.dropped is None:
             continue
-        if isinstance(axis, EachWindow) and rule.dropped == axis.into:
+        if isinstance(axis, EachWindow) and rule.dropped == axis.dim:
             continue
-        owned = f'this axis advances along {axis.into!r}' if isinstance(axis, EachWindow) else 'this axis owns none'
+        owned = f'this axis advances along {axis.dim!r}' if isinstance(axis, EachWindow) else 'this axis owns none'
         raise SpecsolveError(
             f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {owned}: a carry hands '
             f'on the last coordinate a slice owns, so it can only collapse the dimension the sweep advances '
@@ -479,7 +420,7 @@ def _carried(
             f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
             f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
         )
-    return {p: rule.value_from(primals, p, current.key, current.owns) for p, rule in plan.items()}
+    return {p: rule.value_from(primals, p, current.key, current.seam) for p, rule in plan.items()}
 
 
 @contextmanager
