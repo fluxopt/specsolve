@@ -32,7 +32,7 @@ from specsolve._engine.attaching import attach
 from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
-from specsolve._result import ConstraintRow, Diagnostics, Result
+from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -322,7 +322,6 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
-        expressions, evaluate = self._readers(answer.primal, answer.dual, no_duals, lower)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
@@ -331,8 +330,7 @@ class Engine:
                 'dual': duals,
                 **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
             },
-            _expressions=expressions,
-            _evaluate=evaluate,
+            _expressions=self._expressions(answer.primal, answer.dual, no_duals, lower),
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
@@ -441,27 +439,25 @@ class Engine:
             for name, v in model.program.variables.items()
         }
 
-    def _readers(
+    def _expressions(
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
         no_duals: str | None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-    ) -> tuple[
-        dict[str, Callable[[], pl.DataFrame]],
-        Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
-    ]:
-        """What [`evaluate`][specsolve._result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
+    ) -> Expressions:
+        """What [`evaluate`][specsolve._result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
 
-        Both close over a snapshot the result owns, including a copy of the
-        variable registry, so they keep answering after an update or ``close()``.
+        The readers close over a snapshot the result owns, including a copy of
+        the variable registry, so they keep answering after an update or
+        ``close()``. A solve that left no primal has none.
         """
         if primal is None:
-            return {}, None
+            return Expressions()
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
         compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
-        return readback.readers(compiler, model.program.expressions, lower)
+        return readback.expressions(compiler, model.program.expressions, lower)
 
     def reconstruct(
         self,
@@ -488,8 +484,7 @@ class Engine:
             if duals is not None
             else None
         )
-        _, evaluate = self._readers(primal, dual, no_duals, lower)
-        return evaluate
+        return self._expressions(primal, dual, no_duals, lower).undeclared
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
@@ -533,11 +528,11 @@ def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataTy
     )
 
 
-def expression_readers(
+def expressions_of(
     program: program.Program,
     sources: Mapping[str, pl.LazyFrame],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
+) -> Expressions:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
     Args:
@@ -549,11 +544,10 @@ def expression_readers(
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
-        One deferred reader per declared named expression, and the ad-hoc
-        evaluator; either compiles on call.
+        The readers, each of which compiles on call.
     """
     compiler = Compiler(Scope(program, attach(program, sources), {}))
-    return readback.readers(compiler, program.expressions, lower)
+    return readback.expressions(compiler, program.expressions, lower)
 
 
 def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:

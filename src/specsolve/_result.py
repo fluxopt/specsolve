@@ -8,7 +8,7 @@ laid out over the build's coordinates. [`Result.save`][] writes one to disk;
 from __future__ import annotations
 
 import importlib.util
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -323,25 +323,35 @@ def _named(frames: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyF
         raise KeyError(unknown_name_message(kind, name, frames)) from None
 
 
-def evaluated(
-    declared: Mapping[str, Callable[[], pl.DataFrame]],
-    evaluator: Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
-    expression: str | Mapping[str, object],
-) -> pl.DataFrame:
-    """*expression* valued: by the declared reader that holds it, else lowered by *evaluator*.
+@dataclass(frozen=True)
+class Expressions:
+    """How an answer values an expression: a reader per name the spec declares, and the reader of one it does not.
 
-    A declared name is served by its own reader first, so it answers off an
-    archive that retains no model.
-
-    Raises:
-        SpecsolveError: *expression* is not a declared name and *evaluator* is
-            ``None``.
+    Nothing is computed until a reader is called.
     """
-    if isinstance(expression, str) and expression in declared:
-        return declared[expression]()
-    if evaluator is None:
-        raise SpecsolveError(no_model_behind_this_answer_message())
-    return evaluator(expression)
+
+    #: One deferred reader per declared named expression.
+    declared: Mapping[str, Callable[[], pl.DataFrame]] = field(default_factory=dict)
+    #: Values an expression the file never named. ``None`` where there is no
+    #: spec as written to lower one against: an answer read back off disk, or
+    #: a build off an already-lowered ``Program``.
+    undeclared: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
+
+    def value(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
+        """*expression* valued: by the declared reader that holds it, else as an undeclared one.
+
+        A declared name is served by its own reader first, so it answers off an
+        archive that retains no model.
+
+        Raises:
+            SpecsolveError: *expression* is not a declared name, and there is
+                nothing to lower it against.
+        """
+        if isinstance(expression, str) and expression in self.declared:
+            return self.declared[expression]()
+        if self.undeclared is None:
+            raise SpecsolveError(no_model_behind_this_answer_message())
+        return self.undeclared(expression)
 
 
 @dataclass
@@ -364,11 +374,8 @@ class Result:
     #: left nothing maps to nothing. ``None`` after [`close`][], which is what
     #: "closed" means.
     _frames: Mapping[str, Mapping[str, pl.LazyFrame]] | None
-    #: One deferred reader per declared named expression, and the ad-hoc
-    #: evaluator. ``_evaluate`` is ``None`` where there is no spec as written:
-    #: a build off an already-lowered ``Program``, or an answer read off disk.
-    _expressions: Mapping[str, Callable[[], pl.DataFrame]] | None = None
-    _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
+    #: What [`evaluate`][] reads through. ``None`` after [`close`][].
+    _expressions: Expressions | None = field(default_factory=Expressions)
     #: Why there are no duals, when a solve that left values still has none.
     #: ``None`` whenever [`_frames`][] holds them.
     _no_duals: str | None = None
@@ -704,7 +711,12 @@ class Result:
                 read.
         """
         self._readable('primal', 'an expression')
-        return evaluated(self._expressions or {}, self._evaluate, expression)
+        return self._held_expressions().value(expression)
+
+    def _held_expressions(self) -> Expressions:
+        """The expression readers of a result that is not closed, which every caller has checked."""
+        assert self._expressions is not None, 'close() releases the expression readers together with the frames'
+        return self._expressions
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
@@ -732,7 +744,7 @@ class Result:
         if kind in OUTPUT_KINDS:
             return tuple(self._carried(kind, 'anything'))
         self._readable('primal', 'the expressions')
-        return tuple(self._expressions or {})
+        return tuple(self._held_expressions().declared)
 
     def to_pandas(self, name: str, kind: str = 'primal') -> pd.DataFrame:
         """One name's values as a tidy `pandas.DataFrame`.
@@ -824,14 +836,15 @@ class Result:
         Raises:
             SpecsolveError: This result was closed.
         """
+        held = self._unclosed('the solution')
         expressions: dict[str, pl.DataFrame] = {}
         no_expressions: dict[str, str] = {}
-        for name, reader in (self._expressions or {}).items():
+        for name, reader in self._held_expressions().declared.items():
             try:
                 expressions[name] = reader()
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
-        return {**self._unclosed('the solution'), 'expression': expressions}, no_expressions
+        return {**held, 'expression': expressions}, no_expressions
 
     def close(self) -> None:
         """Release this result's frames, and its hold on the build's label frames, early. Optional.
@@ -840,7 +853,6 @@ class Result:
         [`Model`][specsolve._api.Model]'s to close.
         """
         self._frames = self._expressions = self._dual_rays = None
-        self._evaluate = None
 
     def __enter__(self) -> Result:
         return self
@@ -928,7 +940,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
         status,
         objective,
         {kind: saved_frames(out / kind, whole=whole) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
-        expressions,
+        Expressions(expressions),
         _no_duals=no_duals,
         _spec=read_spec(out),
         _solved_at=record.solved_at,

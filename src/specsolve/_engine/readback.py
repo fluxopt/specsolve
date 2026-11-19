@@ -12,7 +12,7 @@ from specsolve._engine import coverage, labels
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import VALUE
-from specsolve._result import ConstraintRow, InfeasibleSubsystem
+from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, settled
 from specsolve.errors import SpecsolveError
@@ -306,16 +306,15 @@ def _aligned(
     return joined[VALUE].rename(_SOLUTION)
 
 
-def readers(
+def expressions(
     compiler: Compiler,
     named: Mapping[str, program.NamedExpression],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
+) -> Expressions:
     """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one compiler.
 
-    One deferred reader per declared name, and an ad-hoc evaluator. Nothing
-    compiles until a reader is called. Without *lower* there is no spec as
-    written to lower against, so the ad-hoc evaluator is ``None``.
+    Nothing compiles until a reader is called. Without *lower* there is no
+    spec as written to lower against, so an undeclared expression has no reader.
     """
 
     def reader(name: str, expression: program.Expression) -> Callable[[], pl.DataFrame]:
@@ -323,13 +322,13 @@ def readers(
 
     declared = {name: reader(name, e.expression) for name, e in named.items()}
     if lower is None:
-        return declared, None
+        return Expressions(declared)
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         name = written if isinstance(written, str) and written in named else 'the expression'
         return expression_frame(name, lower(written), compiler)
 
-    return declared, evaluate
+    return Expressions(declared, evaluate)
 
 
 def expression_frame(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:

@@ -33,9 +33,9 @@ from specsolve import _parquet as parquet
 from specsolve._answer_layout import METRICS_FILE, METRICS_SCHEMA, Provenance, checked_outputs, installed
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._collect import collected
-from specsolve._engine.engine import Engine, expression_readers
+from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_spec, lower_expression, lowered
-from specsolve._result import Result, evaluated
+from specsolve._result import Result
 from specsolve._sinks import solver, writer
 from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
 from specsolve._start import read_start, refuse_unknown_start_word
@@ -168,10 +168,8 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
     document = as_spec(spec)
     program = lowered(document)
     _refuse_a_decision(program)
-    readers, evaluator = expression_readers(
-        program, tidy_sources(program, sources), lambda written: lower_expression(document, written)
-    )
-    return evaluated(readers, evaluator, expression)
+    tidied = tidy_sources(program, sources)
+    return expressions_of(program, tidied, lambda written: lower_expression(document, written)).value(expression)
 
 
 class Model:

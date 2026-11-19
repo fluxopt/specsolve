@@ -273,7 +273,7 @@ def _attach_readers(answer: Result, spec: SpecLike, sources: Mapping[str, Source
             built.append(build(spec, sources)._evaluator(primals, duals, no_duals))
         return built[0](written)
 
-    return replace(answer, _evaluate=evaluate)
+    return replace(answer, _expressions=replace(answer._held_expressions(), undeclared=evaluate))
 
 
 def _attach_sweep_readers(
