@@ -1893,6 +1893,26 @@ def test_a_window_over_a_dimension_the_spec_does_not_declare_is_refused_by_name(
     )
 
 
+def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
+    """A window is a run of consecutive labels, and only an ordered dimension says which labels are consecutive.
+
+    Nothing in the dispatch model steps along `snapshot`, so the coupling
+    check passes it, and the windows would follow the row order of the index.
+    """
+    unordered = override(DISPATCH, **{'dimensions.snapshot': {'dtype': 'int'}})
+    sources = {
+        **STATIC,
+        'snapshot': range(4),
+        'load': pl.DataFrame({'snapshot': range(4), 'value': [5.0, 6.0, 7.0, 8.0]}),
+    }
+    with pytest.raises(
+        sps.errors.SpecsolveError,
+        match=r"EachWindow\('snapshot'\) reads the order of 'snapshot', which is not declared ordered",
+    ) as refused:
+        sps.solve_over(unordered, sources, sps.EachWindow('snapshot', steps=2, lookahead=0))
+    assert "'snapshot: {ordered: true}'" in str(refused.value), 'the refusal names the rewrite'
+
+
 def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
     """`EachLabel` squeezes its dim out of every source, so a declared dimension would be left with no data."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"EachLabel\('generator'\) squeezes 'generator'"):

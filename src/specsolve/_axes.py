@@ -184,7 +184,7 @@ class EachLabel:
 
 @dataclass(frozen=True)
 class EachWindow:
-    """One slice per window of consecutive labels of *dim*, a dimension the spec declares.
+    """One slice per window of consecutive labels of *dim*, an ordered dimension the spec declares.
 
     Each window keeps *dim* and is the model over its own labels: the index
     of *dim* is narrowed to them, and every parameter and relation over *dim*
@@ -275,6 +275,12 @@ class EachWindow:
                 f'EachWindow({self.dim!r}) windows a dimension the spec declares, and it declares no '
                 f'{self.dim!r}. {did_you_mean(self.dim, program.dimensions)} A dimension the model does '
                 f'not declare is sliced with EachLabel.'
+            )
+        if not program.dimensions[self.dim].ordered:
+            raise SpecsolveError(
+                f'EachWindow({self.dim!r}) reads the order of {self.dim!r}, which is not declared ordered, so '
+                f'the windows would come from the row order of the data. Declare '
+                f"'{self.dim}: {{ordered: true}}' under dimensions:."
             )
         verdict = program.separability[self.dim]
         named = {reach.name for reach in verdict.undecided if reach.kind == 'offset'}

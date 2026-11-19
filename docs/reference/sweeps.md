@@ -23,6 +23,9 @@ is the model over its own labels, so the spec and the sources are the ones a
 single solve takes. A rule for a window's first row is written
 `where: "position(snapshot) == 0"`, since a position counts within the window.
 
+**A windowed dimension is declared `ordered: true`.** Any other is refused,
+since its windows would follow the row order of the data.
+
 **A datetime axis is held in microseconds**, as
 [a label is](data.md#where-coordinates-come-from). A key finer than a
 microsecond is refused.
