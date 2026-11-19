@@ -222,12 +222,13 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
 
 #: `flag` has no row and `cap` none above 3, so a `where` that needs either admits
 #: nothing; each is over `g` alone, a sixth of the product a declaration over
-#: `g` and `t` spans.
+#: `g` and `t` spans. `e` has no label, so a count along it is 0.
 TABLED_SPEC = {
-    'dimensions': {'g': {}, 't': {}},
+    'dimensions': {'g': {}, 't': {}, 'e': {}},
     'parameters': {
         'flag': {'dims': ['g'], 'dtype': 'bool', 'missing': 'absent'},
         'cap': {'dims': ['g']},
+        'on': {'dims': ['g', 'e'], 'dtype': 'bool', 'missing': 'absent'},
     },
     'conditions': {'flagged': {'condition': 'flag'}},
     'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
@@ -239,6 +240,8 @@ TABLED_SOURCES = {
     't': [1, 2, 3],
     'flag': pl.DataFrame(schema={'g': pl.String, 'value': pl.Boolean}),
     'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 3.0]}),
+    'e': [],
+    'on': pl.DataFrame(schema={'g': pl.String, 'e': pl.String, 'value': pl.Boolean}),
 }
 
 
@@ -264,15 +267,20 @@ def _labelled_wheres(monkeypatch: pytest.MonkeyPatch, spec: dict) -> tuple[int, 
         pytest.param('cap > 3', 0, id='a-comparison-no-row-passes'),
         pytest.param('flagged', 0, id='a-named-condition-read-as-its-body'),
         pytest.param('cap > 1 AND flag', 0, id='one-condition-of-an-and'),
+        pytest.param('flag OR cap > 3', 0, id='both-sides-of-an-or'),
+        pytest.param('count(on, over=e) > 0', 0, id='a-count-along-a-dimension-without-a-label'),
         pytest.param('NOT flag', 6, id='a-negation-of-a-parameter-without-a-row-admits-every-row'),
+        pytest.param('flag OR cap > 2', 3, id='an-or-one-side-of-which-admits-rows'),
+        pytest.param('count(on, over=e) == 0', 6, id='a-count-along-a-dimension-without-a-label-that-holds'),
         pytest.param('cap > 2', 3, id='a-comparison-one-label-passes-admits-its-rows'),
     ],
 )
-def test_a_where_one_parameter_empties_is_decided_from_its_table(monkeypatch, where, rows):
-    """PyPSA's spec gates most unit-by-snapshot declarations on a per-unit flag no unit of a network sets.
+def test_a_where_that_admits_nothing_is_decided_without_its_product(monkeypatch, where, rows):
+    """PyPSA's spec gates most unit-by-snapshot declarations on a per-unit flag no unit of a network sets, or on a curve no unit has.
 
-    The flag's table answers whether the declaration holds a row; labelling the
-    product of its dims to find none read the whole product.
+    The flag's table, or the empty dimension the curve counts along, answers
+    whether the declaration holds a row; labelling the product of its dims to
+    find none read the whole product.
     """
     spec = {**TABLED_SPEC, 'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}}}
     _, built, labelled = _labelled_wheres(monkeypatch, spec)
