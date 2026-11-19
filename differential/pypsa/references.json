@@ -24187,7 +24187,7 @@
           "Generator-marginal_cost_piecewise_binary_order": {
             "kind": "rows",
             "pypsa": 16,
-            "reason": "a row per pair of consecutive segments, where linopy also writes one at the last segment of each curve, with nothing after it",
+            "reason": "a row per pair of consecutive segments, where linopy also writes one at the last segment of a curve shorter than the longest, where the segment after it is padding",
             "specsolve": {
               "Generator_marginal_cost_incremental_binary_order": 12
             }
@@ -24203,7 +24203,7 @@
           "Generator-marginal_cost_piecewise_fill_order": {
             "kind": "rows",
             "pypsa": 16,
-            "reason": "a row per pair of consecutive segments, where linopy also writes one at the last segment of each curve, with nothing after it",
+            "reason": "a row per pair of consecutive segments, where linopy also writes one at the last segment of a curve shorter than the longest, where the segment after it is padding",
             "specsolve": {
               "Generator_marginal_cost_incremental_fill_order": 12
             }
@@ -24447,8 +24447,8 @@
       "mismatch": [],
       "recorded": {
         "Generator-marginal_cost_piecewise_active_bound": "a row per segment of a curve the status gates, where linopy also writes `delta <= 1` for a curve no status gates, which the variable's bound states, and a row at each padded segment of a curve shorter than the longest",
-        "Generator-marginal_cost_piecewise_binary_order": "the expanded curve keys the order of two segments by the later one, linopy by the earlier, and linopy also writes a row at the last segment of each curve, with nothing after it",
-        "Generator-marginal_cost_piecewise_fill_order": "the expanded curve keys the order of two segments by the later one, linopy by the earlier, and linopy also writes a row at the last segment of each curve, with nothing after it",
+        "Generator-marginal_cost_piecewise_binary_order": "the expanded curve keys the order of two segments by the later one, linopy by the earlier, and linopy also writes a row at the last segment of a curve shorter than the longest, where the segment after it is padding",
+        "Generator-marginal_cost_piecewise_fill_order": "the expanded curve keys the order of two segments by the later one, linopy by the earlier, and linopy also writes a row at the last segment of a curve shorter than the longest, where the segment after it is padding",
         "Generator-marginal_cost_piecewise_link": "the expanded curve keys the output's link by the curve's first breakpoint, where linopy keys it by the variable it links",
         "Generator-marginal_cost_piecewise_output_link": "the expanded curve keys the cost's link by the curve's first breakpoint, where linopy writes one row per unit and snapshot",
         "Generator-shut_down": "the cap is a row here, where PyPSA bounds the variable at 1 as well \u2014 a 0-1 binary, or a share in [0, 1] under the linearized relaxation",
