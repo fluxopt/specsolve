@@ -3,8 +3,8 @@
 A plan cannot contain a loop; a process may loop over plans. This is the
 driver above [`specsolve._api`][], built from the public verbs.
 
-    scenario / sweep    ``EachCoordinate('scenario')``            independent
-    myopic pathway      ``EachCoordinate('period', carry=...)``
+    scenario / sweep    ``EachLabel('scenario')``            independent
+    myopic pathway      ``EachLabel('period', carry=...)``
     rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
@@ -125,7 +125,7 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt) -> tuple[Path
         return None
     if not isinstance(axis, Axis):
         raise SpecsolveError(
-            'archive= takes a sweep cut by EachCoordinate or EachWindow, which say how one set of sources '
+            'archive= takes a sweep cut by EachLabel or EachWindow, which say how one set of sources '
             'was cut and so how the archive can be re-run. A hand-built list is a set of sources per '
             'slice, which are unrelated questions — archive one solve each.'
         )
@@ -160,7 +160,7 @@ def solve_over(
         sources: As [`build`][specsolve._api.build] takes them, every shape
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
-        axis: [`EachCoordinate`][], [`EachWindow`][], either as the plain
+        axis: [`EachLabel`][], [`EachWindow`][], either as the plain
             data its ``to_dict`` writes, or a list of ``(key, sources)``
             written by hand. An axis's ``carry=`` chains its slices; a
             hand-built list carries nothing.
@@ -226,13 +226,13 @@ def solve_over(
             refuses; a *start* word other than ``'previous'`` — each answerable from the declarations alone; keys of more than one
             type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
-        DataError: No source carries an EachCoordinate axis, an index
+        DataError: No source carries an EachLabel axis, an index
             carries it, an EachWindow axis's dimension has no index, or the
             axis produced no slices.
 
     Warns:
-        SpecsolveWarning: A source carrying an EachCoordinate axis that is
-            short of a coordinate another has — that slice builds it empty —
+        SpecsolveWarning: A source carrying an EachLabel axis that is
+            short of a label another has — that slice builds it empty —
             or a *start* that leaves a slice no row, which starts that slice
             from nothing.
     """
@@ -305,7 +305,7 @@ def _archive_the_sweep(
     """Write the sweep's question and its answer to *out*.
 
     A windowed sweep's sources are the ones a single solve attaches, so they
-    are tidied whole. A coordinate sweep's are tidied from *one_slice*, except
+    are tidied whole. An [`EachLabel`][] sweep's are tidied from *one_slice*, except
     the ones the axis cut, which [`_uncut`][] gives.
     """
     if isinstance(axis, EachWindow):
@@ -319,7 +319,7 @@ def _archive_the_sweep(
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
-    """A source a coordinate sweep cuts, as its tidy columns with the axis column first."""
+    """A source an [`EachLabel`][] sweep cuts, as its tidy columns with the axis column first."""
     declared = [*program.parameters[name].dims, VALUE] if name in program.parameters else program.relations[name].roles
     return table.select(axis.dim, *declared)
 
@@ -347,7 +347,7 @@ def _check_the_carry(
         owned = f'this axis advances along {axis.dim!r}' if isinstance(axis, EachWindow) else 'this axis owns none'
         raise SpecsolveError(
             f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {owned}: a carry hands '
-            f'on the last coordinate a slice owns, so it can only collapse the dimension the sweep advances '
+            f'on the last label a slice owns, so it can only collapse the dimension the sweep advances '
             f'along. Reduce {rule.dropped!r} in the YAML — a derived variable is where the oracle can see the '
             f'math — so that {parameter!r} and {rule.variable!r} are over the same dimensions.'
         )
@@ -516,7 +516,7 @@ def _key_column(
         if not isinstance(axis, Axis):
             raise SpecsolveError(
                 'a hand-built axis needs key_name=: a list of slices does not say what its keys are '
-                "coordinates of, and 'slice' would be this library naming your axis for you. Pass "
+                "labels of, and 'slice' would be this library naming your axis for you. Pass "
                 "key_name='draw', key_name='period', or whatever the keys actually are."
             )
         key_name = axis._key_name()

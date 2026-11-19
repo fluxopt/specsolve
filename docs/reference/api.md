@@ -45,7 +45,7 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.EachCoordinate
+::: specsolve.EachLabel
     options:
       heading_level: 4
 

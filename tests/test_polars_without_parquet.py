@@ -60,7 +60,7 @@ def test_polars_has_parquet_where_it_was_built_with_it(polars_parquet):
 def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_frame_inputs):
     result = sps.solve(dispatch_yaml, dispatch_frame_inputs)
     assert result.termination_condition == 'optimal'
-    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_frame_inputs), sps.EachCoordinate('scenario'))
+    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_frame_inputs), sps.EachLabel('scenario'))
     assert sweep.records['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
 
 
@@ -68,7 +68,7 @@ def _saved(dispatch_yaml: Path, inputs: dict[str, object], tmp_path: Path) -> di
     """One of each thing on disk a reader takes, written while parquet still works."""
     sps.solve(dispatch_yaml, inputs).save(tmp_path / 'result')
     sps.solve(dispatch_yaml, inputs, archive=tmp_path / 'archive')
-    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
+    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
     inputs['load'].write_parquet(tmp_path / 'load.parquet')
     return {
         'result': tmp_path / 'result',
@@ -95,23 +95,23 @@ CALLS: list[tuple[str, Callable[..., object], str]] = [
     (
         'solve-over-archive',
         lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), archive=tmp / 'new'
+            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp / 'new'
         ),
         'archive=',
     ),
     (
         'solve-over-spill',
         lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), spill_to=tmp / 'new'
+            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), spill_to=tmp / 'new'
         ),
         'spill_to=',
     ),
     ('result-save', lambda yaml, inputs, saved, tmp: sps.solve(yaml, inputs).save(tmp / 'new'), 'Result.save'),
     (
         'sweep-save',
-        lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario')
-        ).save(tmp / 'new'),
+        lambda yaml, inputs, saved, tmp: sps.solve_over(yaml, _by_scenario(inputs), sps.EachLabel('scenario')).save(
+            tmp / 'new'
+        ),
         'Sweep.save',
     ),
     ('load-result', lambda yaml, inputs, saved, tmp: sps.load_result(saved['result']), 'reading a saved answer'),

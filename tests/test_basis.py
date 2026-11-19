@@ -157,7 +157,7 @@ SHAPES = [pytest.param(how, id=how) for how in ('held', 'process-pool', 'spilled
 def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Sweep:
     from tests.test_solve_over import DISPATCH, scenario_sources
 
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')
@@ -186,7 +186,7 @@ def test_a_sweep_of_slices_that_ended_on_no_basis_says_why(tmp_path: Path) -> No
     sweep = sps.solve_over(
         DISPATCH,
         scenario_sources(),
-        sps.EachCoordinate('scenario'),
+        sps.EachLabel('scenario'),
         solver_options=NO_CROSSOVER['highs'],
         outputs=BASIS,
     )

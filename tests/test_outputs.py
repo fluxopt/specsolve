@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 ACTIVITY: frozenset[Output] = frozenset({'activity'})
 NONE: frozenset[Output] = frozenset()
-SCENARIO = sps.EachCoordinate('scenario')
+SCENARIO = sps.EachLabel('scenario')
 LOAD = [5.0, 6.0, 7.0, 8.0]
 ONE = {
     **STATIC,

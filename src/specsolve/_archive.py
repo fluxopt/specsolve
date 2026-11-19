@@ -85,7 +85,7 @@ class SweepArchive:
     Attributes:
         spec: The spec as written.
         sources: What the sweep was given, uncut, as [`ResultArchive`][]
-            holds them. A source an EachCoordinate axis cuts holds the axis
+            holds them. A source an EachLabel axis cuts holds the axis
             column first.
         axis: What cut them, with the ``carry=`` it chained the slices with.
         sweep: The archived answer, in memory from [`load_archive`][], on

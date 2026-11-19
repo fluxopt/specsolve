@@ -314,9 +314,7 @@ def test_a_directory_that_already_holds_something_is_refused(
     [
         pytest.param(lambda spec, sources: sps.build(spec, sources), id='build'),
         pytest.param(lambda spec, sources: sps.solve(spec, sources), id='solve'),
-        pytest.param(
-            lambda spec, sources: sps.solve_over(spec, sources, sps.EachCoordinate('generator')), id='solve_over'
-        ),
+        pytest.param(lambda spec, sources: sps.solve_over(spec, sources, sps.EachLabel('generator')), id='solve_over'),
     ],
 )
 def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_frame_inputs) -> None:
@@ -349,7 +347,7 @@ def test_the_archive_lands_whole(dispatch_yaml: Path, dispatch_frame_inputs, tmp
         pytest.param(lambda spec, sources, out: _archived(spec, sources, out), id='solve'),
         pytest.param(
             lambda spec, sources, out: sps.solve_over(
-                spec, {**sources, 'load': _by_scenario(['low', 'high'])}, sps.EachCoordinate('scenario'), archive=out
+                spec, {**sources, 'load': _by_scenario(['low', 'high'])}, sps.EachLabel('scenario'), archive=out
             ),
             id='solve_over',
         ),
@@ -444,7 +442,7 @@ def test_a_sweep_archive_holds_the_sources_it_was_cut_from(
     whole = tmp_path / 'load.parquet'
     _by_scenario(['low', 'high']).write_parquet(whole)
     sources = {**dispatch_frame_inputs, 'load': whole}
-    sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+    sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
     study = sps.load_archive(tmp_path / 'study')
 
     assert isinstance(study, sps.types.SweepArchive), 'the archive carries an axis, or this is testing the other type'
@@ -466,7 +464,7 @@ def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
     did not hold.
     """
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high']), 'generator': iter(DISPATCH_GENERATORS)}
-    sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+    sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
 
     held = pl.read_parquet(tmp_path / 'study' / 'sources' / 'generator.parquet')
     assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in index order'
@@ -599,7 +597,7 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     out, sources = tmp_path / 'case', _cataloged_sources(north)
     if sweep:
         load = pl.concat([sources['load'].with_columns(scenario=pl.lit(name)) for name in ('low', 'high')])
-        sps.solve_over(to_spec(_CATALOGED), {**sources, 'load': load}, sps.EachCoordinate('scenario'), archive=out)
+        sps.solve_over(to_spec(_CATALOGED), {**sources, 'load': load}, sps.EachLabel('scenario'), archive=out)
     else:
         _archived(to_spec(_CATALOGED), sources, out)
     catalog = pl.read_parquet(out / 'catalog.parquet')
@@ -632,7 +630,7 @@ def test_every_parquet_file_an_archive_holds_carries_the_run(sweep: bool, tmp_pa
         sps.solve_over(
             to_spec(integer),
             {**sources, 'load': load},
-            sps.EachCoordinate('scenario'),
+            sps.EachLabel('scenario'),
             archive=out,
             outputs={'activity'},
         )
@@ -663,8 +661,8 @@ def _unpacked(packed: Path, into: Path) -> Path:
     [
         pytest.param(True, 'answer/primal/soc', 'snapshot', 'snapshot', id='a-rolling-horizon-answer'),
         pytest.param(True, 'sources/load.parquet', 'snapshot', 'snapshot', id='a-rolling-horizon-cut-source'),
-        pytest.param(False, 'answer/primal/p', 'scenario', 'scenario', id='a-coordinate-sweep-answer'),
-        pytest.param(False, 'sources/load.parquet', 'scenario', 'scenario', id='a-coordinate-sweep-cut-source'),
+        pytest.param(False, 'answer/primal/p', 'scenario', 'scenario', id='a-label-sweep-answer'),
+        pytest.param(False, 'sources/load.parquet', 'scenario', 'scenario', id='a-label-sweep-cut-source'),
     ],
 )
 def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_written(
@@ -672,7 +670,7 @@ def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_writt
 ) -> None:
     """The catalog was built from the spec, so a sweep archive's files did not hold what it listed.
 
-    A coordinate sweep's files hold a ``scenario`` column the catalog did not
+    A label sweep's files hold a ``scenario`` column the catalog did not
     list, and a rolling horizon's the key that says where each window began.
     """
     if windowed:
@@ -681,7 +679,7 @@ def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_writt
     else:
         out = tmp_path / 'study'
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-        sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out)
+        sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out)
     catalog = pl.read_parquet(out / 'catalog.parquet')
 
     for (held,), rows in catalog.group_by('path'):
@@ -831,7 +829,7 @@ def test_every_archive_records_each_solve_in_the_same_columns(
     out = tmp_path / 'run'
     if sweep:
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high', 'mid'])}
-        sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out)
+        sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out)
     else:
         with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out):
             pass
@@ -872,7 +870,7 @@ def test_every_table_an_archive_holds_says_which_run_it_came_from(
     out = tmp_path / 'nightly-2026-09-10.zip'
     if sweep:
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-        live = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out).primal('p')
+        live = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out).primal('p')
     else:
         with sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=out) as solved:
             live = solved.primal('p')
@@ -922,7 +920,7 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
     """`load_archive` gives a held `Sweep`, `scan_archive` one that reads off the unpacked files."""
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
 
@@ -949,7 +947,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
     """The axis travels with the sweep's sources, which the archive holds whole."""
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     runs = sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
     study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
@@ -1021,7 +1019,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     )
 
 
-@pytest.mark.parametrize('windowed', [False, True], ids=['a-coordinate-sweep', 'a-rolling-horizon'])
+@pytest.mark.parametrize('windowed', [False, True], ids=['a-label-sweep', 'a-rolling-horizon'])
 def test_a_sweep_archive_holds_its_answer_as_a_saved_sweep_does(
     windowed: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -1031,7 +1029,7 @@ def test_a_sweep_archive_holds_its_answer_as_a_saved_sweep_does(
     else:
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
         out = tmp_path / 'study.zip'
-        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
+        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out), 'p'
     saved = runs.save(tmp_path / 'saved')
     with zipfile.ZipFile(out) as packed:
         archived = {member.removeprefix('answer/') for member in packed.namelist() if member.startswith('answer/')}
@@ -1242,7 +1240,7 @@ def test_a_kind_with_no_answer_over_the_window_names_what_it_left_out(archived: 
         sweep.to_dataset(kind='expression')
 
 
-@pytest.mark.parametrize('windowed', [False, True], ids=['a-coordinate-sweep', 'a-rolling-horizon'])
+@pytest.mark.parametrize('windowed', [False, True], ids=['a-label-sweep', 'a-rolling-horizon'])
 def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     windowed: bool, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
@@ -1257,7 +1255,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     else:
         sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
         out = tmp_path / 'study.zip'
-        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=out), 'p'
+        runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out), 'p'
     resaved = sps.load_archive(out, tmp_path / 'loaded').sweep.save(tmp_path / 'resaved')
     saved = sps.load_sweep(resaved)
     stamped = [
@@ -1280,12 +1278,12 @@ def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) ->
     )
 
 
-def test_a_coordinate_sweep_archive_evaluates_an_undeclared_expression_per_slice(
+def test_a_label_sweep_archive_evaluates_an_undeclared_expression_per_slice(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A coordinate sweep's answer is its slices, so the archive alone puts each slice back against its model."""
+    """A label sweep's answer is its slices, so the archive alone puts each slice back against its model."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    runs = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'), archive=tmp_path / 'study')
+    runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
     for read in (sps.load_archive, sps.scan_archive):
         valued = read(tmp_path / 'study').sweep.evaluate('sum(p, over=generator)')
         by_hand = runs.primal('p').group_by('scenario', 'snapshot').agg(pl.col('value').sum())
@@ -1307,7 +1305,7 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     runs = tmp_path / 'runs'
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=runs / 'single').close()
     sweep_sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    sps.solve_over(dispatch_yaml, sweep_sources, sps.EachCoordinate('scenario'), archive=runs / 'scenarios')
+    sps.solve_over(dispatch_yaml, sweep_sources, sps.EachLabel('scenario'), archive=runs / 'scenarios')
     sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=runs / 'rolling')
 
     solves = runs / '*' / ANSWER_DIR / f'{table}.parquet'
@@ -1331,7 +1329,7 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
 def test_a_sweep_carries_the_spec_it_answered_once(dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path) -> None:
     """Every slice answers one spec, so the sweep holds it once rather than a copy per slice."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    runs = sps.solve_over(dispatch_yaml, sources, sps.EachCoordinate('scenario'))
+    runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'))
 
     assert runs.spec == sps.solve(dispatch_yaml, dispatch_frame_inputs).spec, (
         'the spec one solve of the same file carries'
@@ -1671,7 +1669,7 @@ def test_a_sweep_refuses_a_lowered_program_before_it_solves_a_slice(dispatch_yam
     """A sweep refuses it at the same door, and before the first slice is taken."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
     with pytest.raises(sps.errors.SpecsolveError, match='was lowered from'):
-        sps.solve_over(sps.check(dispatch_yaml), sources, sps.EachCoordinate('scenario'), archive='never.zip')
+        sps.solve_over(sps.check(dispatch_yaml), sources, sps.EachLabel('scenario'), archive='never.zip')
 
 
 def test_two_writers_to_one_target_stage_in_separate_places(tmp_path: Path) -> None:
@@ -1758,7 +1756,7 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
     sweep = sps.solve_over(
         dispatch_yaml,
         sources,
-        sps.EachCoordinate('scenario'),
+        sps.EachLabel('scenario'),
         solver_options={'mip_max_nodes': 1000},
         also_record=['mip_max_nodes'],
     )

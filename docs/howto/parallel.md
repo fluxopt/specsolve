@@ -19,7 +19,7 @@ import specsolve as sps
 def main():
     ctx = multiprocessing.get_context('spawn')  # or 'forkserver'
     with ProcessPoolExecutor(4, mp_context=ctx) as pool:
-        sweep = sps.solve_over('spec.yaml', sources, sps.EachCoordinate('scenario'), executor=pool)
+        sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=pool)
     print(sweep.records)
 
 
@@ -36,7 +36,7 @@ paths. Without `shared_filesystem=True`, the paths are read here and shipped:
 
 ```python
 sources = {'load': '/shared/load.parquet', 'cost': '/shared/cost.parquet', 'p_max': '/shared/p_max.parquet'}
-sweep = sps.solve_over('spec.yaml', sources, sps.EachCoordinate('scenario'), executor=client, shared_filesystem=True)
+sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client, shared_filesystem=True)
 ```
 
 ## Read the sweep back

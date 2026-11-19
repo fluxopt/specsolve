@@ -1,9 +1,10 @@
-"""How a sweep cuts its sources into slices: one per coordinate, or one per window.
+"""How a sweep cuts its sources into slices: one per label, or one per window.
 
-An [`EachCoordinate`][] axis cuts on a column the model does not declare, and
-each slice is a whole answer. An [`EachWindow`][] axis cuts a dimension the
-model does declare into windows of its labels, and also says how each window's
-frames are stitched back over that dimension.
+An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
+slice is the sources at one label, without its column, and a whole answer. An
+[`EachWindow`][] axis keeps a dimension the model does declare and cuts it
+into windows of its labels, and also says how each window's frames are
+stitched back over that dimension.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from specsolve._inputs import Label, Source, SpecLike
 
 
-#: The key [`EachCoordinate.to_dict`][] and [`EachWindow.to_dict`][] write an axis's carry under.
+#: The key [`EachLabel.to_dict`][] and [`EachWindow.to_dict`][] write an axis's carry under.
 CARRY = 'carry'
 
 
@@ -96,13 +97,17 @@ def bulleted(entries: Mapping[str, str]) -> str:
 
 
 @dataclass(frozen=True)
-class EachCoordinate:
-    """One slice per coordinate of *dim*, a column the sources carry: scenarios, draws, investment periods.
+class EachLabel:
+    """One slice per label of *dim*, a dimension the sources carry and the spec does not declare.
 
-    Parameters and relations carrying *dim* are filtered to one coordinate and
-    the column dropped, so the model never mentions it; a *dim* the spec
-    declares is refused, and so is an index that carries it. Every other
-    source passes through untouched. Slices run in sorted coordinate order.
+    Scenarios, draws and investment periods are such dimensions.
+
+    Each slice squeezes *dim*: the parameters and relations carrying it are
+    cut to one label and the column dropped, so the model never mentions it.
+    A *dim* the spec declares is refused, and so is an index that carries it.
+    Every other source passes through untouched. Slices run in sorted label
+    order, and the answer lifts each label back as the key column, named
+    *dim*.
 
     ``carry={parameter: variable}`` chains them in that order: each slice's
     answer is copied into the next slice's data, and the first slice takes
@@ -123,7 +128,7 @@ class EachCoordinate:
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds a ``carry`` key only where the axis carries something.
         """
-        out: dict[str, object] = {'each': 'coordinate', 'dim': self.dim}
+        out: dict[str, object] = {'each': 'label', 'dim': self.dim}
         if self.carry:
             out[CARRY] = dict(self.carry)
         return out
@@ -141,23 +146,23 @@ class EachCoordinate:
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
         """Refuse a *dim* the spec declares, and an index that carries it.
 
-        Every source drops *dim*, so nothing would supply a dimension of that
-        name. An index says which labels the model has, and a sweep cuts the
-        tables that carry the axis, so a carried index would make each slice a
-        model over other labels.
+        Every slice squeezes *dim* out of its sources, so nothing would supply
+        a dimension of that name. An index says which labels the model has,
+        and a sweep cuts the tables that carry the axis, so a carried index
+        would make each slice a model over other labels.
         """
         if self.dim in program.dimensions:
             raise SpecsolveError(
-                f'EachCoordinate({self.dim!r}) drops {self.dim!r} from every source, and the spec declares '
-                f'it, so each slice would build a dimension nothing supplies. A coordinate sweep slices an '
-                f'axis the model does not have; to slice one it does, window it.'
+                f'EachLabel({self.dim!r}) squeezes {self.dim!r} out of every source, and the spec declares '
+                f'it, so each slice would build a dimension nothing supplies. EachLabel cuts a dimension the '
+                f'model does not have; EachWindow cuts one it does, and keeps it.'
             )
         for dim in program.dimensions:
             table = as_frame(sources[dim]) if dim in sources else None
             if table is None or self.dim not in table.collect_schema().names():
                 continue
             raise DataError(
-                f"index for dimension '{dim}' carries a '{self.dim}' column, and EachCoordinate"
+                f"index for dimension '{dim}' carries a '{self.dim}' column, and EachLabel"
                 f"('{self.dim}') cuts every table that carries '{self.dim}'. An index is not cut: it lists "
                 f"the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
                 f"slice has in a parameter or a relation over ('{dim}', '{self.dim}'), where a missing row "
@@ -167,12 +172,12 @@ class EachCoordinate:
     def _slice(
         self, program: Program, sources: Mapping[str, Source], key_name: str
     ) -> tuple[list[Slice], Stitch | None]:
-        """One slice per coordinate, keyed by it, and no [`Stitch`][]: the slices are the answer."""
+        """One slice per label, keyed by it, and no [`Stitch`][]: the slices are the answer."""
         del program, key_name
-        carrying, coordinates = _coordinates(sources, self.dim)
+        carrying, labels = _labels_carried(sources, self.dim)
         out: list[Slice] = []
-        for key in coordinates:
-            cut = partial(_one_coordinate, self.dim, key)
+        for key in labels:
+            cut = partial(_one_label, self.dim, key)
             out.append(Slice(key, {**sources, **{name: cut(table) for name, table in carrying.items()}}, cut=cut))
         return out, None
 
@@ -181,11 +186,11 @@ class EachCoordinate:
 class EachWindow:
     """One slice per window of consecutive labels of *dim*, a dimension the spec declares.
 
-    Each window is the model over its own labels: the index of *dim* is
-    narrowed to them, and every parameter and relation over *dim* is cut to
-    the rows they hold. Nothing is renamed or re-indexed, so the spec and the
-    sources are the ones a single solve takes, and every frame comes back over
-    *dim*'s own labels.
+    Each window keeps *dim* and is the model over its own labels: the index
+    of *dim* is narrowed to them, and every parameter and relation over *dim*
+    is cut to the rows they hold. Nothing is squeezed or renamed, so the spec
+    and the sources are the ones a single solve takes, and every frame comes
+    back over *dim*'s own labels.
 
     Each window keeps ``steps`` labels and sees ``lookahead`` beyond them, so
     a ``lookahead`` above zero is overlap. An ``int`` keeps the same number
@@ -234,7 +239,7 @@ class EachWindow:
         if not blocks:
             raise ValueError('steps is empty, so no window would keep anything — pass an int, or one size per window')
         if short := [block for block in blocks if block < 1]:
-            raise ValueError(f'every window must keep at least one coordinate (got steps with {short})')
+            raise ValueError(f'every window must keep at least one label (got steps with {short})')
         if self.lookahead < 0:
             raise ValueError(
                 f'lookahead={self.lookahead} is negative; zero is contiguous windows, and above it overlaps'
@@ -268,8 +273,8 @@ class EachWindow:
         if self.dim not in program.dimensions:
             raise SpecsolveError(
                 f'EachWindow({self.dim!r}) windows a dimension the spec declares, and it declares no '
-                f'{self.dim!r}. {did_you_mean(self.dim, program.dimensions)} A column the model does not '
-                f'declare is sliced with EachCoordinate.'
+                f'{self.dim!r}. {did_you_mean(self.dim, program.dimensions)} A dimension the model does '
+                f'not declare is sliced with EachLabel.'
             )
         verdict = program.separability[self.dim]
         named = {reach.name for reach in verdict.undecided if reach.kind == 'offset'}
@@ -290,7 +295,7 @@ class EachWindow:
             )
         if self.lookahead < verdict.ahead:
             raise SpecsolveError(
-                f'EachWindow(lookahead={self.lookahead}) looks ahead by {self.lookahead} coordinate(s), and '
+                f'EachWindow(lookahead={self.lookahead}) looks ahead by {self.lookahead} label(s), and '
                 f"the model reads {verdict.ahead} ahead along '{self.dim}' — a row near a window's end would "
                 f'read past it. Raise lookahead to at least {verdict.ahead}.'
             )
@@ -327,7 +332,7 @@ class EachWindow:
             blocks = list(self.steps)
             if sum(blocks) < total:
                 raise DataError(
-                    f'steps keeps {sum(blocks)} coordinate(s) across {len(blocks)} window(s), and '
+                    f'steps keeps {sum(blocks)} label(s) across {len(blocks)} window(s), and '
                     f"'{self.dim}' has {total} — the last {total - sum(blocks)} would be solved by no window. "
                     f'List a block for them, or pass an int to repeat one size to the end.'
                 )
@@ -342,10 +347,10 @@ class EachWindow:
 
 
 #: An axis that cuts one set of sources into slices.
-Axis = EachCoordinate | EachWindow
+Axis = EachLabel | EachWindow
 
 #: Each axis by the name ``to_dict`` writes under ``each``.
-_EACH: dict[str, type[EachCoordinate] | type[EachWindow]] = {'coordinate': EachCoordinate, 'window': EachWindow}
+_EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'window': EachWindow}
 
 
 #: Slices written by hand, one ``(key, sources)`` pair each; ``axis=`` takes
@@ -354,7 +359,7 @@ type HandBuilt = Sequence[tuple[Label, Mapping[str, Source]]]
 
 
 def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
-    """The axis *given* as plain data, as [`EachCoordinate.to_dict`][] and [`EachWindow.to_dict`][] write it.
+    """The axis *given* as plain data, as [`EachLabel.to_dict`][] and [`EachWindow.to_dict`][] write it.
 
     Raises:
         SpecsolveError: An ``each`` that names no axis, or a key the axis
@@ -386,8 +391,8 @@ def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[t
     return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]
 
 
-def _one_coordinate(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
-    """*table*'s rows at coordinate *key* of *dim*, without the column."""
+def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
+    """*table* squeezed at label *key* of *dim*: its rows there, without the column."""
     return _in_microseconds(table, [dim]).filter(pl.col(dim) == key).drop(dim)
 
 
@@ -437,34 +442,35 @@ def _within(
 
 
 def _in_microseconds(table: pl.LazyFrame, columns: Sequence[str]) -> pl.LazyFrame:
-    """*table* with each datetime column of *columns* held in microseconds, as attach holds a label, so a coordinate matches its rows."""
+    """*table* with each datetime column of *columns* held in microseconds, as attach holds a label, so a label matches its rows."""
     return table.with_columns((cs.by_name(columns) & cs.datetime()).dt.cast_time_unit('us'))
 
 
 def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
-    """The sources that carry a column called *dim*, by name; a coordinate sweep and its archive both cut these."""
+    """The sources that carry a column called *dim*, by name; an [`EachLabel`][] sweep and its archive both cut these."""
     tables = {name: table for name, obj in sources.items() if (table := as_frame(obj)) is not None}
     return {name: table for name, table in tables.items() if dim in table.collect_schema().names()}
 
 
-def _coordinates(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, pl.LazyFrame], list[Label]]:
-    """The sources a coordinate sweep has to filter, by name, and the coordinates to slice, sorted by value.
+def _labels_carried(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, pl.LazyFrame], list[Label]]:
+    """The sources an [`EachLabel`][] sweep has to cut, by name, and the labels of *dim* they carry, sorted by value.
 
-    A datetime axis is held in microseconds, as attach holds a label, so a
-    coordinate read out as a python datetime matches its rows.
+    A datetime column is held in microseconds, as attach holds a label, so a
+    label read out as a python datetime matches its rows.
     """
     carrying = sources_with_column(sources, dim)
     if not carrying:
         raise DataError(
             f"no source carries a '{dim}' column, so there is nothing to slice over. "
-            f'EachCoordinate names a column the data has; a span of consecutive labels of a dimension is EachWindow.'
+            f'EachLabel names a dimension the data has and the spec does not; a span of consecutive labels '
+            f'of a dimension the spec declares is EachWindow.'
         )
     unique = {name: table.select(pl.col(dim).unique()).pipe(collected) for name, table in carrying.items()}
     held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
     carrying = {name: _in_microseconds(table, [dim]) for name, table in carrying.items()}
-    coordinates = sorted(set().union(*held.values()))
+    labels = sorted(set().union(*held.values()))
     for name, mine in held.items():
-        if missing := sorted(set(coordinates) - mine):
+        if missing := sorted(set(labels) - mine):
             other = next(o for o, theirs in held.items() if missing[0] in theirs)
             warnings.warn(
                 f"'{name}' has no rows for {dim} {missing[0]!r}, which '{other}' has, so the slice at "
@@ -473,4 +479,4 @@ def _coordinates(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, pl.
                 SpecsolveWarning,
                 stacklevel=4,
             )
-    return carrying, coordinates
+    return carrying, labels

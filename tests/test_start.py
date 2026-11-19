@@ -563,7 +563,7 @@ def _forgotten(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     return forgotten
 
 
-SCENARIOS = sps.EachCoordinate('scenario')
+SCENARIOS = sps.EachLabel('scenario')
 
 
 def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(

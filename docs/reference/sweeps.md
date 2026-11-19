@@ -12,15 +12,16 @@ An axis says how the sources split into slices:
 
 | Axis | Slices |
 |---|---|
-| [`EachCoordinate`](api.md#specsolve.EachCoordinate) | one per label of a dimension |
-| [`EachWindow`](api.md#specsolve.EachWindow) | one per window of consecutive labels |
+| [`EachLabel`](api.md#specsolve.EachLabel) | one per label of a dimension the model does not declare |
+| [`EachWindow`](api.md#specsolve.EachWindow) | one per window of consecutive labels of a dimension it declares |
 | a sequence of `(key, sources)` pairs | as written. It must pass `key_name=`, and its answer is keyed by slice. |
 
-**`EachCoordinate` cuts a column the model does not declare**, and
-**`EachWindow` a dimension it does.** A window is the model over its own
-labels, so the spec and the sources are the ones a single solve takes. A rule
-for a window's first row is written `where: "position(snapshot) == 0"`, since
-a position counts within the window.
+**`EachLabel` squeezes a dimension the model does not declare**, and
+**`EachWindow` keeps one it does.** A label's slice holds that label's rows
+without the column, and the answer lifts the label back as the key. A window
+is the model over its own labels, so the spec and the sources are the ones a
+single solve takes. A rule for a window's first row is written
+`where: "position(snapshot) == 0"`, since a position counts within the window.
 
 **A datetime axis is held in microseconds**, as
 [a label is](data.md#where-coordinates-come-from). A key finer than a
@@ -37,7 +38,7 @@ sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48)
 **A sequence that stops short of the axis is refused:**
 
 ```text
-DataError: steps keeps 7 coordinate(s) across 2 window(s), and 'snapshot' has 12 —
+DataError: steps keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
 the last 5 would be solved by no window. List a block for them, or pass an int to
 repeat one size to the end.
 ```
@@ -63,7 +64,7 @@ sps.solve_over('window.yaml', sources, axis.to_dict())
 **Sources cross a slice in every shape `build` takes.** A parameter or relation
 whose table carries the axis is filtered. Every other source passes through. An
 index of another dimension that carries the axis is refused. A table carrying
-the axis that is short of a coordinate another table has warns, naming both.
+the axis that is short of a label another table has warns, naming both.
 
 ## Reading a sweep
 
@@ -74,7 +75,7 @@ the axis that is short of a coordinate another table has warns, naming both.
 answer is over the real labels of the sliced dimension, each from the window
 that owns it. Any other answer is keyed by slice.
 
-**You name the extra dimension.** `EachCoordinate('scenario')` keys on
+**You name the extra dimension.** `EachLabel('scenario')` keys on
 `scenario`, so `sweep.to_dataarray('p')` is `(scenario, snapshot, generator)`.
 
 **A sweep holds only the outputs you ask for**, such as
@@ -162,7 +163,7 @@ sweep = sps.solve_over(
 ## Carrying state between slices
 
 **An axis's `carry={parameter: variable}` copies one slice's answer into the
-next slice's data.** `EachCoordinate` and `EachWindow` take it. A hand-built
+next slice's data.** `EachLabel` and `EachWindow` take it. A hand-built
 list carries nothing.
 
 ```python
@@ -173,14 +174,14 @@ sweep = sps.solve_over(
 )
 ```
 
-**You name no coordinate.** The row handed on is the last one the slice owns:
+**You name no label.** The row handed on is the last one the slice owns:
 label 23 of a window keeping 24, not label 47 of the 48 it solved.
 
 | Rule | |
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
 | **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole frame. |
-| **that dimension must be `EachWindow`'s `into`** | Any other is refused. A carry on `EachCoordinate` collapses nothing. |
+| **that dimension must be the one `EachWindow` windows** | Any other is refused. A carry on `EachLabel` collapses nothing. |
 | **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` at `t == 0`. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |
 | **the first slice needs a seed** | It takes the parameter from `sources`. A sweep whose sources lack it is refused. |
 | **a carry is checked before any source is read** | Two collapsed dimensions, a parameter over more dimensions than the variable, the wrong dimension and no seed all raise first. `check` cannot see a carry, because it is not part of the spec. |
@@ -230,5 +231,5 @@ encoded once. `df.lazy()` pickles larger than the table.
 | | |
 |---|---|
 | **one model, updated per slice** | A serial sweep builds once and [updates](api.md#specsolve.types.Model.update); under `executor=` each slice builds its own. A [remote Gurobi](api.md#specsolve.types.Model.solve) opens one session per serial sweep, and a new one at each slice that loads again. |
-| **the model is asked before it is sliced** | `EachWindow` refuses a window the model's coupling cannot bear. `EachCoordinate` is not asked. |
+| **the model is asked before it is sliced** | `EachWindow` refuses a window the model's coupling cannot bear. `EachLabel` is not asked. |
 | **a slice is total** | A slice supplies what the whole model attaches, not what changed. A hand-built list has to keep this rule. |
