@@ -23,7 +23,7 @@ from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from polars._typing import JoinStrategy
 
@@ -81,42 +81,47 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
 
 
 def admits_nothing(scope: Scope, where: program.Mask, dims: tuple[str, ...]) -> bool:
-    """Whether *where* admits no row over *dims*, decided from one parameter's own rows.
+    """Whether *where* admits no row over *dims*, decided without the product of *dims*.
 
-    A parameter that a bare name or a comparison on the ``AND`` spine tests, a
-    named condition read as its body, makes the mask false wherever it has no
-    row that passes the test. When none passes, the mask admits nothing, and
-    that is read off the parameter's table instead of the product of *dims*: a
-    per-unit flag over a unit-by-snapshot declaration is read once per unit.
-    A table at least as large as the product is not read, since the full mask
-    costs no more. ``False`` is no claim that a row survives.
+    ``False`` is no claim that a row survives. [`_holds_nowhere`][] is the rule.
     """
-    cells = math.prod(scope.data.cardinality[d] for d in dims)
-    for atom in _spine(where.root):
-        if not isinstance(atom, program.ParameterDefined | program.ParameterComparison):
-            continue
-        rows = scope.data.parameter_rows[atom.name]
-        if not rows:
-            return True
-        if rows >= cells:
-            continue
-        keys = tuple(atom.dims)
-        base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
-        carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys)
-        if not carrier.filter(falsy_if_null(condition)).head(1).pipe(collected).height:
-            return True
-    return False
+    return _holds_nowhere(scope, where.root, math.prod(scope.data.cardinality[d] for d in dims))
 
 
-def _spine(node: program.Condition) -> Iterator[program.Condition]:
-    """The conditions *node* joins by ``AND``, a named condition read as its body; each is necessary for *node*."""
+def _holds_nowhere(scope: Scope, node: program.Condition, cells: int) -> bool:
+    """Whether *node* is false at every coordinate, read off the data its leaves name rather than a product.
+
+    An ``AND`` holds nowhere when either side does, an ``OR`` when both do,
+    and a named condition when its body does. A count along a dimension
+    without a label is zero, so its comparison is a constant. A bare name or a
+    comparison of a parameter is false wherever the parameter has no row that
+    passes the test, so it holds nowhere when none does: read off the
+    parameter's table, once per unit for a per-unit flag under a
+    unit-by-snapshot declaration. A table at least as large as the *cells* of
+    the declaration is not read, since the full mask costs no more. Any other
+    leaf, and a ``NOT``, is not decided here.
+    """
     if isinstance(node, program.And):
-        yield from _spine(node.left)
-        yield from _spine(node.right)
-    elif isinstance(node, program.ConditionReference):
-        yield from _spine(node.body)
-    else:
-        yield node
+        return _holds_nowhere(scope, node.left, cells) or _holds_nowhere(scope, node.right, cells)
+    if isinstance(node, program.Or):
+        return _holds_nowhere(scope, node.left, cells) and _holds_nowhere(scope, node.right, cells)
+    if isinstance(node, program.ConditionReference):
+        return _holds_nowhere(scope, node.body, cells)
+    if isinstance(node, program.CountComparison):
+        if scope.data.cardinality[node.over]:
+            return False
+        return not pl.select(_COLUMN_COMPARISONS[node.op](pl.lit(0), pl.lit(node.value))).item()
+    if not isinstance(node, program.ParameterDefined | program.ParameterComparison):
+        return False
+    rows = scope.data.parameter_rows[node.name]
+    if not rows:
+        return True
+    if rows >= cells:
+        return False
+    keys = tuple(node.dims)
+    base = scope.data.parameters[node.name].select(*keys) if keys else scope.product(())
+    carrier, condition = compile_predicate(scope, base, program.Mask(node), keys)
+    return not carrier.filter(falsy_if_null(condition)).head(1).pipe(collected).height
 
 
 def compile_predicate(
