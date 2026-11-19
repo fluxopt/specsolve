@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._answer_layout import NO_BASIS
+from specsolve._outputs import NO_BASIS
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

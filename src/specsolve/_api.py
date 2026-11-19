@@ -30,11 +30,13 @@ import polars as pl
 from mathspec import advice
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import METRICS_FILE, METRICS_SCHEMA, Provenance, checked_outputs, installed
+from specsolve._answer_layout import METRICS_FILE
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_spec, lower_expression, lowered
+from specsolve._outputs import checked_outputs
+from specsolve._records import METRICS_SCHEMA, Provenance, installed
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
 from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
@@ -46,7 +48,8 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve._answer_layout import FrameWriter, Output
+    from specsolve._answer_layout import FrameWriter
+    from specsolve._outputs import Output
     from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem
     from specsolve._start import Start
 
@@ -288,7 +291,7 @@ class Model:
                 ``.zip`` suffix packs it into one file; anything else is a
                 directory. What the build and its solves spent goes in beside
                 the answer, as
-                [`Metrics`][specsolve._answer_layout.Metrics]. Each
+                [`Metrics`][specsolve._records.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
             outputs: Each [`Output`][specsolve.types.Output] the answer

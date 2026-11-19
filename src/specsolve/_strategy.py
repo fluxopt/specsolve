@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import Metrics, Record, checked_outputs
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
@@ -33,6 +32,8 @@ from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
 from specsolve._names import VALUE, refuse_reserved
+from specsolve._outputs import checked_outputs
+from specsolve._records import Metrics, Record
 from specsolve._sources import numbered, tidy_sources
 from specsolve._start import slice_starts
 from specsolve._sweep import SliceAnswer, Spill, Sweep, one_key_type
@@ -44,9 +45,9 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import Output
     from specsolve._api import Model
     from specsolve._inputs import Label, Source, SpecLike
+    from specsolve._outputs import Output
     from specsolve._result import Diagnostics, Result
     from specsolve._start import Start
 

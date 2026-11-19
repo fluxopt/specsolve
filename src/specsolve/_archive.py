@@ -20,7 +20,7 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, Metrics, other_layout, row_of
+from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, other_layout, row_of
 from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -34,6 +34,7 @@ from specsolve._axes import axis_from
 from specsolve._collect import collected
 from specsolve._inputs import lower_expression
 from specsolve._names import RUN
+from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
 from specsolve._sweep import Sweep, archived_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
@@ -65,7 +66,7 @@ class ResultArchive:
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
         metrics: What reaching the answer took, as one
-            [`Metrics`][specsolve._answer_layout.Metrics].
+            [`Metrics`][specsolve._records.Metrics].
     """
 
     spec: Spec

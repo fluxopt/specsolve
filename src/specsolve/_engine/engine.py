@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve import _sinks as sinks
-from specsolve._answer_layout import kinds_of
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -32,6 +31,7 @@ from specsolve._engine.attaching import attach
 from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
+from specsolve._outputs import kinds_of
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import PolarsDataType
 
-    from specsolve._answer_layout import Output
+    from specsolve._outputs import Output
     from specsolve._result import InfeasibleSubsystem
     from specsolve._sinks.solver import SolveAnswer
     from specsolve._status import SolveStatus
@@ -234,7 +234,7 @@ class Engine:
                 for [`evaluate`][specsolve._result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
             outputs: Which of
-                [`OUTPUTS`][specsolve._answer_layout.OUTPUTS] the
+                [`OUTPUTS`][specsolve._outputs.OUTPUTS] the
                 result carries, already checked.
             start: ``'previous'``, to carry on from the last solve while its
                 solver stays loaded and begin from nothing otherwise; ``None``,
@@ -402,7 +402,7 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)

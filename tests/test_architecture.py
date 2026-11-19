@@ -79,7 +79,20 @@ def _imported(
 
 
 #: The streaming lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
-LANE = frozenset({'_answer_layout', '_collect', '_engine', '_names', '_parquet', '_result', '_sinks', '_status'})
+LANE = frozenset(
+    {
+        '_answer_layout',
+        '_collect',
+        '_engine',
+        '_names',
+        '_outputs',
+        '_parquet',
+        '_records',
+        '_result',
+        '_sinks',
+        '_status',
+    }
+)
 
 
 def _lane_modules() -> list[Path]:

@@ -227,6 +227,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/readback.py` | a row, a solve and a named expression, read back by label |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
 | `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
+| `_outputs.py` | what an answer carries: the kinds of frame, and the outputs a solve is asked for |
+| `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
 | `_sinks/handoff.py` | what every sink reads |
@@ -235,8 +237,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 
 **The lane imports nothing else from the package but `errors.py` and
 `_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer_layout.py`,
-`_collect.py`, `_names.py`, `_parquet.py`, `_result.py` and `_status.py`
-(`LANE`). No module imports linopy, and none imports xarray at module
+`_collect.py`, `_names.py`, `_outputs.py`, `_parquet.py`, `_records.py`,
+`_result.py` and `_status.py` (`LANE`). No module imports linopy, and none imports xarray at module
 level.
 
 ## Internal names

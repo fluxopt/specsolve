@@ -23,20 +23,11 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import _strategy as strategy
-from specsolve._answer_layout import (
-    ANSWER_LAYOUT,
-    METRICS_FILE,
-    Metrics,
-    Output,
-    Provenance,
-    Record,
-    read_reasons,
-    write_reasons,
-    write_whole,
-)
+from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve._names import RUN
+from specsolve._records import Metrics, Provenance, Record
 from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable, tidy_sources
 from tests.conftest import (
@@ -59,6 +50,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from mathspec.spec import Spec
+
+    from specsolve._outputs import Output
 
 
 def _question(archive: sps.types.ResultArchive | sps.types.SweepArchive) -> tuple[Spec, Mapping[str, object]]:

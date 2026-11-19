@@ -19,21 +19,10 @@ import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
-    BASES,
-    KINDS,
     METRICS_FILE,
-    METRICS_SCHEMA,
-    NO_BASIS,
-    OUTPUT_KINDS,
-    PRICED,
     RECORD_FILE,
-    RECORD_SCHEMA,
-    Metrics,
-    Record,
     check_format,
-    checked_kind,
     consolidated,
-    not_requested_message,
     read_outputs,
     read_reasons,
     read_spec,
@@ -48,6 +37,8 @@ from specsolve._axes import Stitch, bulleted
 from specsolve._collect import collected
 from specsolve._messages import no_model_behind_this_answer_message
 from specsolve._names import RUN
+from specsolve._outputs import BASES, KINDS, NO_BASIS, OUTPUT_KINDS, PRICED, checked_kind, not_requested_message
+from specsolve._records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record
 from specsolve._result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 from specsolve.errors import LayoutError, SpecsolveError
 
@@ -58,11 +49,12 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter, Output
+    from specsolve._answer_layout import FrameWriter
     from specsolve._inputs import Label
+    from specsolve._outputs import Output
 
 
-#: What each of the [`KINDS`][specsolve._answer_layout.KINDS] is a frame of, as a message names it.
+#: What each of the [`KINDS`][specsolve._outputs.KINDS] is a frame of, as a message names it.
 _LABELS: Mapping[str, str] = MappingProxyType(
     {
         'primal': 'variable',
@@ -87,7 +79,7 @@ class SliceAnswer:
     record: Record
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
-    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._answer_layout.KINDS]:
+    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._outputs.KINDS]:
     #: every variable, every constraint's dual, every declared named
     #: expression evaluated at this slice's solution, and each output the
     #: sweep was asked for. A kind the slice produced nothing of is absent.
@@ -289,7 +281,7 @@ class Sweep:
     """
 
     key_name: str
-    #: One [`Record`][specsolve._answer_layout.Record] per slice, in slice
+    #: One [`Record`][specsolve._records.Record] per slice, in slice
     #: order — how every slice terminated, whether or not it produced an
     #: answer. The key column comes first, as its own type, so the table joins
     #: to the frames; ``slice_axis`` and ``slice`` name the slice again as
@@ -297,7 +289,7 @@ class Sweep:
     #: slice that reached no objective holds null there rather than ``nan``,
     #: so the column aggregates over the slices that solved.
     records: pl.DataFrame
-    #: One [`Metrics`][specsolve._answer_layout.Metrics] per slice, keyed as
+    #: One [`Metrics`][specsolve._records.Metrics] per slice, keyed as
     #: [`records`][] is and in slice order — [`diagnostics`][specsolve._api.Model.diagnostics]
     #: one dimension wider, its counts and clocks only. Each row is the slice's
     #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
@@ -327,7 +319,7 @@ class Sweep:
     #: Whether the per-window frames are there to read: not on an archive
     #: written without ``keep_windows=True``.
     _windows: bool = field(repr=False, default=True)
-    #: Each [`Output`][specsolve._answer_layout.Output] the sweep was
+    #: Each [`Output`][specsolve._outputs.Output] the sweep was
     #: asked for, and so carries.
     _outputs: frozenset[Output] = field(repr=False, default=frozenset())
     #: What [`evaluate`][] lowers an undeclared expression through; ``None``
@@ -425,7 +417,7 @@ class Sweep:
             raise SpecsolveError(NO_WINDOWS)
 
     def _check_requested(self, kind: str, name: str) -> None:
-        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the sweep was not asked for."""
+        """Refuse a kind of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS] the sweep was not asked for."""
         if kind in OUTPUT_KINDS and OUTPUT_KINDS[kind].output not in self._outputs:
             raise SpecsolveError(not_requested_message(kind, name))
 

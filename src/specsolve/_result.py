@@ -15,22 +15,9 @@ from typing import TYPE_CHECKING, Literal
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
-    BASES,
-    NO_BASIS,
-    NO_PROVENANCE,
-    OUTPUT_KINDS,
-    PRICED,
     RECORD_FILE,
-    RECORD_SCHEMA,
-    Metrics,
-    Provenance,
-    Record,
     check_format,
-    checked_kind,
     clear_the_answer,
-    kinds_of,
-    not_requested_message,
-    outputs_of,
     read_outputs,
     read_reasons,
     read_spec,
@@ -43,6 +30,17 @@ from specsolve._answer_layout import (
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve._names import VALUE
+from specsolve._outputs import (
+    BASES,
+    NO_BASIS,
+    OUTPUT_KINDS,
+    PRICED,
+    checked_kind,
+    kinds_of,
+    not_requested_message,
+    outputs_of,
+)
+from specsolve._records import NO_PROVENANCE, RECORD_SCHEMA, Metrics, Provenance, Record
 from specsolve.errors import LayoutError, NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -297,7 +295,7 @@ class Diagnostics:
     def metrics(self) -> Metrics:
         """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
 
-        [`Metrics`][specsolve._answer_layout.Metrics] says what each
+        [`Metrics`][specsolve._records.Metrics] says what each
         field means. A phase this build never entered reads zero, and
         ``specsolve_run`` is null.
         """
@@ -369,7 +367,7 @@ class Result:
     _objective: float
     #: ``{kind: {name: frame}}``: one ``(dims…, value)`` frame per declaration,
     #: lazy and in label order, under ``primal``, ``dual`` and each of the
-    #: [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the solve asked
+    #: [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS] the solve asked
     #: for. Its keys are what this answer carries; a kind of which the solve
     #: left nothing maps to nothing. ``None`` after [`close`][], which is what
     #: "closed" means.
@@ -666,15 +664,15 @@ class Result:
         return given
 
     def _output(self, kind: str, name: str) -> pl.DataFrame:
-        """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS]: what each output's reader returns."""
+        """*name*'s frame of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS]: what each output's reader returns."""
         return _named(self._carried(kind, name), name, OUTPUT_KINDS[kind].per).pipe(collected)
 
     def _carried(self, kind: str, name: str) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], or why they cannot be read.
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
         that exists only where the duals do, the duals' reason, and for a basis,
-        [`NO_BASIS`][specsolve._answer_layout.NO_BASIS] where the
+        [`NO_BASIS`][specsolve._outputs.NO_BASIS] where the
         solve ended on none.
         """
         what = f"the {kind.replace('_', ' ')} of '{name}'"
@@ -775,7 +773,7 @@ class Result:
         """Every kind this solve answered with, one file per name, into *directory*.
 
         ``record.parquet`` holds the
-        [`Record`][specsolve._answer_layout.Record], with a null
+        [`Record`][specsolve._records.Record], with a null
         rather than ``nan`` objective where none was reached, and
         ``spec.yaml`` the [`spec`][] it answered. Beside them are
         ``primal/<name>.parquet`` per variable, ``dual/<name>.parquet`` per
