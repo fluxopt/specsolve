@@ -61,7 +61,7 @@ def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_y
     result = sps.solve(dispatch_yaml, dispatch_frame_inputs)
     assert result.termination_condition == 'optimal'
     sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_frame_inputs), sps.EachCoordinate('scenario'))
-    assert sweep.record['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
+    assert sweep.records['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
 
 
 def _saved(dispatch_yaml: Path, inputs: dict[str, object], tmp_path: Path) -> dict[str, Path]:

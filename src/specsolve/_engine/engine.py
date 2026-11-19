@@ -171,11 +171,11 @@ class Engine:
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
-        self.check(suffix)
+        self.check_sink(suffix)
         with _clocked(self._seconds, 'write'):
             chosen.write(self._model.handoff, path)
 
-    def check(self, sink: str) -> None:
+    def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
         Read off the hand-off, so a square the data prices at zero or an
@@ -200,7 +200,7 @@ class Engine:
         kept forgets its last run unless *carry_on*. Counts toward neither
         ``solves`` nor ``loads``, so timing this alone leaves them true.
         """
-        self.check(solver_name)
+        self.check_sink(solver_name)
         self._solved = None
         with _clocked(self._seconds, 'handoff'):
             held = self._solver

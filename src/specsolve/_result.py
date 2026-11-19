@@ -446,7 +446,7 @@ class Result:
     def record(self) -> Record:
         """How this solve terminated, as the one row [`save`][] writes for it.
 
-        A sweep keeps the same row per slice in [`record`][specsolve._sweep.Sweep.record].
+        A sweep keeps the same row per slice in [`records`][specsolve._sweep.Sweep.records].
         ``objective`` is ``None`` rather than ``nan`` where there are no
         values.
         """

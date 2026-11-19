@@ -248,7 +248,7 @@ def builds(monkeypatch):
 
 def answer_of(runs: sweep_module.Sweep) -> pl.DataFrame:
     """A sweep's record without `solved_at` and `specsolve_run`, which belong to a *run* rather than an answer."""
-    return runs.record.drop('solved_at', 'specsolve_run')
+    return runs.records.drop('solved_at', 'specsolve_run')
 
 
 def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
@@ -257,7 +257,7 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
 
     assert len(runs) == 3
     assert runs.keys == ['high', 'low', 'mid'], 'keys come back sorted, not in data order'
-    assert runs.record.columns == [
+    assert runs.records.columns == [
         'scenario',
         'status',
         'termination_condition',
@@ -276,8 +276,8 @@ def test_a_scenario_sweep_solves_each_slice_and_keys_the_answers(sweep):
     assert set(runs.primal('p').columns) == {'scenario', 'snapshot', 'generator', 'value'}
     assert runs.primal('p').height == 3 * 4 * 2
 
-    assert runs.record['solver'].to_list() == ['highs'] * 3, 'every slice names the solver that answered it'
-    by_key = dict(zip(runs.record['scenario'], runs.record['objective'], strict=True))
+    assert runs.records['solver'].to_list() == ['highs'] * 3, 'every slice names the solver that answered it'
+    by_key = dict(zip(runs.records['scenario'], runs.records['objective'], strict=True))
     assert by_key['low'] < by_key['mid'] < by_key['high'], 'a bigger load is a costlier dispatch'
 
 
@@ -285,31 +285,31 @@ _OPTIONS = {'time_limit': math.inf, 'presolve': 'on'}
 
 
 def _serial(tmp_path) -> pl.DataFrame:
-    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), solver_options=_OPTIONS).record
+    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), solver_options=_OPTIONS).records
 
 
 def _pooled(tmp_path) -> pl.DataFrame:
     with ThreadPoolExecutor(2) as pool:
         axis = sps.EachCoordinate('scenario')
-        return sps.solve_over(DISPATCH, scenario_sources(), axis, executor=pool, solver_options=_OPTIONS).record
+        return sps.solve_over(DISPATCH, scenario_sources(), axis, executor=pool, solver_options=_OPTIONS).records
 
 
 def _rolling(tmp_path) -> pl.DataFrame:
     carry = {'soc_initial': 'soc'}
-    return sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry=carry), solver_options=_OPTIONS).record
+    return sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry=carry), solver_options=_OPTIONS).records
 
 
 def _scanned(tmp_path) -> pl.DataFrame:
     axis = sps.EachCoordinate('scenario')
     sps.solve_over(DISPATCH, scenario_sources(), axis, spill_to=tmp_path / 'spill', solver_options=_OPTIONS)
-    return sps.scan_sweep(tmp_path / 'spill').record
+    return sps.scan_sweep(tmp_path / 'spill').records
 
 
 def _loaded(tmp_path) -> pl.DataFrame:
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), solver_options=_OPTIONS).save(
         tmp_path / 'saved'
     )
-    return sps.load_sweep(tmp_path / 'saved').record
+    return sps.load_sweep(tmp_path / 'saved').records
 
 
 def _archived(tmp_path) -> pl.DataFrame:
@@ -385,7 +385,7 @@ def test_a_pooled_fold_builds_per_slice(builds):
 
 def test_each_slice_matches_solving_that_slice_alone(sweep):
     """The fold must not change the answer — the oracle is `solve` itself."""
-    folded = dict(zip(sweep.record['scenario'], sweep.record['objective'], strict=True))
+    folded = dict(zip(sweep.records['scenario'], sweep.records['objective'], strict=True))
 
     for scenario, expected in folded.items():
         one = scenario_sources()
@@ -417,7 +417,7 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
     runs = sps.solve_over(DISPATCH, sources, sps.EachCoordinate('scenario'))
 
     assert len(runs) == 3, 'an unsolvable slice is still a row of the record'
-    assert runs.record['objective'].null_count() == 3, 'no slice reached one, and none is written as nan'
+    assert runs.records['objective'].null_count() == 3, 'no slice reached one, and none is written as nan'
     with pytest.raises(sps.errors.SpecsolveError, match='holds no variable frames at all') as raised:
         runs.primal('p')
     assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
@@ -435,9 +435,9 @@ def test_a_slice_that_reached_no_objective_does_not_poison_the_sweep():
     )
     runs = sps.solve_over(DISPATCH, sources, sps.EachCoordinate('scenario'))
 
-    assert runs.record['objective'].null_count() == 1, 'the one slice that came back infeasible'
-    assert runs.record['objective'].is_nan().sum() == 0, 'written as no value rather than as nan'
-    assert runs.record['objective'].mean() == pytest.approx(runs.record.filter('has_primal')['objective'].mean()), (
+    assert runs.records['objective'].null_count() == 1, 'the one slice that came back infeasible'
+    assert runs.records['objective'].is_nan().sum() == 0, 'written as no value rather than as nan'
+    assert runs.records['objective'].mean() == pytest.approx(runs.records.filter('has_primal')['objective'].mean()), (
         'so the mean over the sweep is the mean over the slices that solved'
     )
 
@@ -460,7 +460,7 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
     assert set(runs.primal('soc', per_window=True).columns) == {'snapshot_start', 't', 'value'}, (
         'per window the rows are indexed by `t`, so the key column cannot be called `snapshot`'
     )
-    assert runs.record['objective'].to_list() == pytest.approx([2270.0, 2770.0, 2655.0])
+    assert runs.records['objective'].to_list() == pytest.approx([2270.0, 2770.0, 2655.0])
 
 
 def test_overlapping_windows_advance_by_step_and_look_ahead_by_length(overlapping):
@@ -588,7 +588,7 @@ def test_per_window_keeps_every_row_the_answer_drops(overlapping):
     runs = overlapping
     assert runs.primal('soc').height == 12, 'the answer holds only the rows each window owns'
     assert runs.primal('soc', per_window=True).height == 21, 'per window keeps every row every window solved'
-    assert runs.record.join(runs.primal('soc', per_window=True), on=runs.key_name).height == 21, (
+    assert runs.records.join(runs.primal('soc', per_window=True), on=runs.key_name).height == 21, (
         'per window is keyed by the same column as `objective`, so the two still join'
     )
 
@@ -805,10 +805,10 @@ def test_a_window_key_column_never_shadows_the_dimension_it_replaced(sweep):
     soc = runs.primal('soc', per_window=True)
     assert 'snapshot' not in soc.columns
     assert soc.columns[0] == 'snapshot_start'
-    assert runs.record.columns[0] == 'snapshot_start', 'both frames key the same way'
+    assert runs.records.columns[0] == 'snapshot_start', 'both frames key the same way'
     assert sorted(soc['snapshot_start'].unique().to_list()) == [0, 4, 8]
 
-    assert sweep.record.columns[0] == 'scenario', (
+    assert sweep.records.columns[0] == 'scenario', (
         'EachCoordinate keeps the plain name: there the key really is a coordinate of it'
     )
 
@@ -860,7 +860,7 @@ def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(blocks):
 
     assert stitched['snapshot'].to_list() == list(range(12)), 'every coordinate, once, whatever the block sizes'
     assert runs.keys == _starts(blocks, 12), 'one window per block, keyed by the coordinate it starts on'
-    assert runs.record['termination_condition'].to_list() == ['optimal'] * len(runs), 'every window solved'
+    assert runs.records['termination_condition'].to_list() == ['optimal'] * len(runs), 'every window solved'
 
 
 def _starts(blocks: list[int], total: int) -> list[int]:
@@ -939,7 +939,7 @@ def test_the_lookahead_the_model_needs_is_one_number_whatever_the_blocks():
         runs = sps.solve_over(
             reaching, horizon_sources(12), sps.EachWindow('snapshot', steps=steps, lookahead=1, into='t')
         )
-        assert runs.record['termination_condition'].to_list() == ['optimal'] * len(runs), (
+        assert runs.records['termination_condition'].to_list() == ['optimal'] * len(runs), (
             'one coordinate of lookahead is what the model reads, so every window is whole'
         )
 
@@ -958,7 +958,7 @@ def test_a_short_tail_window_carries_off_its_own_last_row():
         sps.EachWindow('snapshot', steps=5, lookahead=1, into='t', carry={'soc_initial': 'soc'}),
     )
     assert runs.keys == [0, 5, 10]
-    assert runs.record['termination_condition'].to_list() == ['optimal'] * 3
+    assert runs.records['termination_condition'].to_list() == ['optimal'] * 3
     assert runs.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 10).height == 2
 
 
@@ -1165,7 +1165,7 @@ def test_solve_over_takes_an_axis_as_its_dict():
     axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
     given = sps.solve_over(WINDOW, horizon_sources(), json.loads(json.dumps(axis.to_dict())))
     expected = sps.solve_over(WINDOW, horizon_sources(), axis)
-    assert given.record['objective'].to_list() == expected.record['objective'].to_list()
+    assert given.records['objective'].to_list() == expected.records['objective'].to_list()
     assert given.primal('soc').equals(expected.primal('soc')), 'each window started from the one before it'
 
 
@@ -1361,11 +1361,11 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
 
 
 def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path, monkeypatch):
-    """`workers_share_fs` is inferred from the pool, and only paths are affected.
+    """`shared_filesystem` is inferred from the pool, and only paths are affected.
 
     A `ProcessPoolExecutor`'s workers are this machine's, so a path stays a
     path. An executor this package did not ship could be anywhere, so its paths
-    travel as their own bytes. `workers_share_fs=` says it outright when the
+    travel as their own bytes. `shared_filesystem=` says it outright when the
     guess is wrong.
     """
     sources = scenario_sources()
@@ -1392,7 +1392,7 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
 
         crossed.clear()
         remote = sps.solve_over(
-            DISPATCH, sources, sps.EachCoordinate('scenario'), executor=pool, workers_share_fs=False
+            DISPATCH, sources, sps.EachCoordinate('scenario'), executor=pool, shared_filesystem=False
         )
         assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
 
@@ -1474,7 +1474,7 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
     built = builds(strategy)
     reopened = _spilled(out)
     assert built == [], 'a directory the export wrote is a sweep already done'
-    assert reopened.record.equals(priced.record)
+    assert reopened.records.equals(priced.records)
     assert reopened.scan('soc').collect().equals(priced.primal('soc'))
     assert reopened.scan('balance', 'dual').collect().equals(priced.dual('balance'))
     assert reopened.scan('spend', 'expression').collect().equals(priced.evaluate('spend'))
@@ -1536,7 +1536,7 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
             sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
 
     ran = sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
-    assert sps.scan_sweep(out).record.equals(ran.record)
+    assert sps.scan_sweep(out).records.equals(ran.records)
 
 
 def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
@@ -1583,11 +1583,11 @@ def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
     with sps.solve(DISPATCH, low) as alone:
         one = pl.read_parquet(alone.save(tmp_path / 'low') / 'record.parquet')
 
-    assert one.columns == [column for column in sweep.record.columns if column != sweep.key_name], (
+    assert one.columns == [column for column in sweep.records.columns if column != sweep.key_name], (
         'the fold keys the record it writes; a lone solve writes the same columns unkeyed'
     )
     row = one.row(0, named=True)
-    slice_of_the_fold = sweep.record.filter(pl.col('scenario') == 'low').drop('scenario').row(0, named=True)
+    slice_of_the_fold = sweep.records.filter(pl.col('scenario') == 'low').drop('scenario').row(0, named=True)
     assert (row['status'], row['termination_condition']) == (
         slice_of_the_fold['status'],
         slice_of_the_fold['termination_condition'],
@@ -1626,7 +1626,7 @@ def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
         'every slice terminated infeasible, and the record says so'
     )
     assert not (out / 'primal').exists(), 'and no frames are written, there being none'
-    assert sps.load_sweep(out).record.height == records.height, 'the saved study reads back'
+    assert sps.load_sweep(out).records.height == records.height, 'the saved study reads back'
 
 
 @pytest.mark.parametrize('lost', ['record', 'metrics'], ids=str)
@@ -1637,7 +1637,7 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     and not the other was edited or interrupted.
     """
     out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
-    assert sps.load_sweep(out._spill.directory).record.height == 3, 'the whole one reads back first'
+    assert sps.load_sweep(out._spill.directory).records.height == 3, 'the whole one reads back first'
     shutil.rmtree(out._spill.directory / lost)
 
     with pytest.raises(sps.errors.LayoutError, match=f"no '{lost}.parquet'"):
@@ -1685,7 +1685,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
 
     runs = sps.solve_over(DISPATCH, base, slices, key_name='draw')
     assert runs.keys == ['low', 'high']
-    assert runs.record.columns[0] == 'draw'
+    assert runs.records.columns[0] == 'draw'
     assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
 
 
@@ -1725,7 +1725,7 @@ def test_key_overrides_what_an_axis_derived_and_refuses_a_collision():
     carry.
     """
     runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), key_name='case')
-    assert runs.record.columns[0] == 'case'
+    assert runs.records.columns[0] == 'case'
     assert set(runs.primal('p').columns) == {'case', 'snapshot', 'generator', 'value'}
 
     with pytest.raises(sps.errors.SpecsolveError, match=r"key_name='generator' is a dimension the spec declares"):
@@ -1932,7 +1932,7 @@ def test_a_sweep_takes_every_source_shape_solve_takes(spec, sources, axis, plain
     as_plain = {**with_tables, **plain}
     runs = sps.solve_over(spec, as_plain, axis)
     assert (
-        runs.record['objective'].to_list() == sps.solve_over(spec, with_tables, axis).record['objective'].to_list()
+        runs.records['objective'].to_list() == sps.solve_over(spec, with_tables, axis).records['objective'].to_list()
     ), 'a number, a sequence and a map attach exactly as the tables they stand for'
     with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
         pooled = sps.solve_over(spec, as_plain, axis, executor=pool)
@@ -1953,7 +1953,7 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
             sources,
             sps.EachCoordinate('period', carry={'existing': 'total'}),
         )
-    assert runs.record['objective'].to_list()[-1] == 0.0, 'the sweep still runs, and period 3 is free'
+    assert runs.records['objective'].to_list()[-1] == 0.0, 'the sweep still runs, and period 3 is free'
 
 
 def test_a_carry_with_no_seed_says_the_first_slice_needs_one():
@@ -2112,9 +2112,10 @@ def _spilled(directory, **kwargs) -> sweep_module.Sweep:
 
 
 @pytest.mark.parametrize(
-    ('table', 'row_type'), [pytest.param('record', Record, id='record'), pytest.param('metrics', Metrics, id='metrics')]
+    ('table', 'reader', 'row_type'),
+    [pytest.param('record', 'records', Record, id='record'), pytest.param('metrics', 'metrics', Metrics, id='metrics')],
 )
-def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path, table, row_type):
+def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path, table, reader, row_type):
     """The spill writes a slice's rows as `Record` and `Metrics` declare them, the slice named in
     `slice_axis` and `slice` rather than in a column of the key's own name, so a glob over sweeps
     and single solves reads one schema."""
@@ -2124,7 +2125,7 @@ def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path
     assert written.columns == list(row_type._fields), 'the columns the type declares, in its order, and no key column'
     assert written['slice_axis'].unique().to_list() == [runs.key_name], 'the axis the sweep is cut on'
     assert written['slice'].to_list() == [str(key) for key in runs.keys], 'each slice key as text'
-    held = getattr(runs, table)
+    held = getattr(runs, reader)
     assert held.columns == [runs.key_name, *written.columns], 'the held table is the written one, keyed'
 
 

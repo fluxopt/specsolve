@@ -32,7 +32,7 @@ Anything else is held only when `outputs=` asks for it.
 
 **The record keeps the solver options that change the answer**, such as a time
 limit or a gap. Any other option is `<not recorded>` unless you name it in
-`record_options=`.
+`recorded_options=`.
 
 ## Read it back
 

@@ -219,7 +219,7 @@ Rename it.
 
 ### What each sink takes
 
-`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+`Model.check_sink(sink)` refuses a built model the sink cannot ingest, naming the
 sinks that do. `solve` and `write` refuse the same. The check reads the built
 model, so a square the data prices at zero, an integer variable with no column
 or an empty set asks for nothing. Where a model can land is

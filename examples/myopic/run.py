@@ -106,7 +106,7 @@ def main() -> None:
 
     print('myopic pathway — each period sees only itself, and inherits the last')
     print()
-    print(sweep.record.select('year', 'termination_condition', pl.col('objective').round(0)))
+    print(sweep.records.select('year', 'termination_condition', pl.col('objective').round(0)))
     print()
 
     fleet = sweep.primal('total').pivot('generator', index='year', values='value')

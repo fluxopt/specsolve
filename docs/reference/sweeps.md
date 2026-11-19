@@ -106,8 +106,8 @@ with `per_window=True`.
 
 | Rule | |
 |---|---|
-| **duals are keyed, never combined** | A slice with an integer variable contributes no duals, and `sweep.record` says which. |
-| **no aggregate objective** | `sweep.record` is keyed by slice, with the objective as one column. |
+| **duals are keyed, never combined** | A slice with an integer variable contributes no duals, and `sweep.records` says which. |
+| **no aggregate objective** | `sweep.records` is keyed by slice, with the objective as one column. |
 | **the lookahead is `t >= step`** | What each window owns is `sweep.primal('soc', per_window=True).filter(pl.col('t') < step)`. |
 | **a slice that did not solve contributes no rows** | `record` still holds one row per slice, with a null objective where a slice reached none. |
 | **a window keys as `<dim>_start`** | `EachWindow('snapshot', …)` re-indexes to `into`. Per window, the key column `snapshot_start` holds where each window began. |
@@ -213,7 +213,7 @@ a `submit` that returns a `Future`.
 | `None` *(default)* | always, until measurement says otherwise | Sequential. |
 | `ThreadPoolExecutor` | rarely | Slices contend with polars' own thread pool, and peak memory adds up. |
 | `ProcessPoolExecutor` | local parallelism | **Must not use `fork`.** Sources cross as parquet. |
-| anything remote | a cluster you already run | dask's `Client`, ray, loky. Paths travel as bytes; pass `workers_share_fs=True` if workers mount your filesystem. |
+| anything remote | a cluster you already run | dask's `Client`, ray, loky. Paths travel as bytes; pass `shared_filesystem=True` if workers mount your filesystem. |
 
 **A forked worker hangs** rather than raising.
 [Running a sweep in parallel](../howto/parallel.md) is the recipe.

@@ -438,7 +438,7 @@ def test_each_slice_starts_from_its_slice_of_an_earlier_sweep(how: str | None) -
         )
         with pool:
             sweep = _swept_at_the_root('highs', earlier, pool)
-    assert sweep.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+    assert sweep.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'each slice, stopped at its root, returns its slice of the earlier sweep as its incumbent'
     )
 
@@ -446,7 +446,7 @@ def test_each_slice_starts_from_its_slice_of_an_earlier_sweep(how: str | None) -
 def test_one_answer_starts_every_slice() -> None:
     before = sps.solve(KNAPSACK, knapsack_sources())
     sweep = _swept_at_the_root('highs', before)
-    assert sweep.record['objective'].to_list() == pytest.approx([before.objective] * 2), (
+    assert sweep.records['objective'].to_list() == pytest.approx([before.objective] * 2), (
         'every slice, stopped at its root, returns the one answer as its incumbent'
     )
 
@@ -461,7 +461,7 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
     monkeypatch.setattr(Highs, 'start_from_basis', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
     again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=earlier)
     assert len(warmed) == len(earlier.keys), 'every window is warmed from a basis'
-    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+    assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
 
@@ -491,7 +491,7 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
     again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': tables})
     assert len(given) == len(earlier.keys), 'every window is started'
     assert all(not np.isnan(values).any() for values in given), 'each window takes a value for every hour it covers'
-    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+    assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
 
@@ -503,7 +503,7 @@ def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path)
     archived = sps.load_archive(tmp_path / 'run.zip')
     assert isinstance(archived, sps.types.SweepArchive)
     again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=archived.sweep)
-    assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
+    assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'the answer over the hours is all a window needs, kept windows or not'
     )
 
@@ -530,7 +530,7 @@ def test_a_slice_its_start_leaves_no_row_starts_from_nothing_with_a_warning(star
     given = start()
     with pytest.warns(SpecsolveWarning, match=r"start= gives the slices \['b'\] no row"):
         sweep = sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=given)
-    assert sweep.record['has_primal'].to_list() == [True, True], 'both draws solve, the second from nothing'
+    assert sweep.records['has_primal'].to_list() == [True, True], 'both draws solve, the second from nothing'
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +576,7 @@ def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
         'no basis is read to chain the slices, so none is spilled'
     )
     assert not forgotten, 'by default every slice after the first carries on in the solver the slice before it left'
-    assert chained.record['objective'].to_list() == pytest.approx(cold.record['objective'].to_list()), (
+    assert chained.records['objective'].to_list() == pytest.approx(cold.records['objective'].to_list()), (
         'a start moves the route, never the optimum'
     )
     with pytest.raises(SpecsolveError, match=r"outputs=\{'basis'\}"):
@@ -594,7 +594,7 @@ def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.Monkey
 def test_a_slice_after_one_that_left_no_values_carries_on_and_solves() -> None:
     draws = [DRAWS[0], ('b', EMPTY_HANDED), ('c', knapsack_sources())]
     sweep = sps.solve_over(KNAPSACK, {}, draws, key_name='draw')
-    assert sweep.record['has_primal'].to_list() == [True, False, True], (
+    assert sweep.records['has_primal'].to_list() == [True, False, True], (
         "the middle draw cannot be packed, and 'c' solves on the solver it left"
     )
 
@@ -607,7 +607,7 @@ def test_previous_under_an_executor_starts_every_slice_from_nothing(monkeypatch:
     warmed = _warmed(monkeypatch)
     with ThreadPoolExecutor(2) as pool:
         sweep = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, executor=pool)
-    assert sweep.record['has_primal'].all()
+    assert sweep.records['has_primal'].all()
     assert not warmed, 'no slice is warmed from another'
 
 

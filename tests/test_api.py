@@ -281,7 +281,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
 
     runs = sps.solve_over(spec, dispatch_frame_inputs, [(0, dict(dispatch_frame_inputs))], key_name='draw')
     assert runs.keys == [0], 'a hand-built axis of one slice still runs, whatever the model arrived as'
-    assert runs.record['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
+    assert runs.records['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
         'and the sweep reaches the answer the one-shot verbs do'
     )
 

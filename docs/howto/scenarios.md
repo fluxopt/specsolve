@@ -31,7 +31,7 @@ loads = pl.concat(
     ]
 )
 scenarios = sps.solve_over('examples/dispatch.yaml', sources | {'load': loads}, sps.EachCoordinate('scenario'))
-print(scenarios.record.select('scenario', 'objective'))
+print(scenarios.records.select('scenario', 'objective'))
 ```
 
 A table without the column is the same in every scenario.
@@ -66,7 +66,7 @@ costs = pl.concat(
 both = sps.solve_over(
     'examples/dispatch.yaml', sources | {'load': loads, 'cost': costs}, sps.EachCoordinate('scenario')
 )
-print(both.record.select('scenario', 'objective'))
+print(both.records.select('scenario', 'objective'))
 ```
 
 ## Solve them in parallel

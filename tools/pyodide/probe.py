@@ -57,7 +57,7 @@ def _by_scenario() -> dict[str, object]:
 
 
 def _objectives(sweep: sps.types.Sweep) -> dict[str, float]:
-    return dict(sweep.record.select('scenario', 'objective').iter_rows())
+    return dict(sweep.records.select('scenario', 'objective').iter_rows())
 
 
 def without_pyarrow() -> str:

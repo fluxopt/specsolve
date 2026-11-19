@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
 #: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
 #: no inverse.
-type Buildable = str | Path | Mapping[str, object] | Spec
+type SpecLike = str | Path | Mapping[str, object] | Spec
 
 
-def as_spec(spec: Buildable) -> Spec:
+def as_spec(spec: SpecLike) -> Spec:
     """*spec* as the document it is, whatever shape it arrived in.
 
     Raises:
@@ -135,7 +135,7 @@ def _refuse_reserved_names(program: Program) -> None:
         refuse_value(name, f"dimension '{name}'")
 
 
-def lowered(spec: Buildable) -> Program:
+def lowered(spec: SpecLike) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
     Every verb lowers through here.

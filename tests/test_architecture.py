@@ -610,9 +610,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / '_inputs.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / '_inputs.py', 'SpecLike'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve._inputs.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve._inputs.SpecLike takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 

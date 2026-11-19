@@ -296,9 +296,9 @@ class Sweep:
     #: text, and are what a saved sweep or an archive writes in its place. A
     #: slice that reached no objective holds null there rather than ``nan``,
     #: so the column aggregates over the slices that solved.
-    record: pl.DataFrame
+    records: pl.DataFrame
     #: One [`Metrics`][specsolve._answer_layout.Metrics] per slice, keyed as
-    #: [`record`][] is and in slice order — [`diagnostics`][specsolve._api.Model.diagnostics]
+    #: [`records`][] is and in slice order — [`diagnostics`][specsolve._api.Model.diagnostics]
     #: one dimension wider, its counts and clocks only. Each row is the slice's
     #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
     #: took the model from scratch. Under a serial fold the first slice does
@@ -379,7 +379,7 @@ class Sweep:
             }
         folded = cls(
             key_name=key_name,
-            record=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
+            records=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
             metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed),
             spec=spec,
             _slices=slices,
@@ -395,7 +395,7 @@ class Sweep:
 
     @property
     def keys(self) -> list[Label]:
-        return self.record[self.key_name].to_list()
+        return self.records[self.key_name].to_list()
 
     def _start(self, column: str) -> dict[str, dict[str, pl.DataFrame]]:
         """This sweep's answer as tables to start a sweep cut by *column* from, keyed as [`Start`][specsolve.types.Start] is.
@@ -442,8 +442,10 @@ class Sweep:
         held = stitched[kind] if stitched is not None else self._slices.get(kind, {})
         frame = held.get(name)
         if frame is None:
-            absent = self._absent.get(kind, {}).get(name) or _whole_kind_absent(kind, held, self._no_duals, self.record)
-            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.record))
+            absent = self._absent.get(kind, {}).get(name) or _whole_kind_absent(
+                kind, held, self._no_duals, self.records
+            )
+            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.records))
         return frame if stitched is not None else self._answered(frame, per_window=per_window)
 
     def _answered[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F, *, per_window: bool) -> F:
@@ -497,7 +499,7 @@ class Sweep:
         """One variable's answer.
 
         A slice that reached no solution contributes no rows, so this can be
-        shorter than the sweep; [`record`][] is one row per slice always.
+        shorter than the sweep; [`records`][] is one row per slice always.
 
         Args:
             name: A variable the sweep's spec declares.
@@ -654,7 +656,7 @@ class Sweep:
         if not isinstance(expression, str):
             return no_model
         return (
-            f'{_nothing_to_read(_LABELS["expression"], expression, self._expression_names(), self.record)} {no_model}'
+            f'{_nothing_to_read(_LABELS["expression"], expression, self._expression_names(), self.records)} {no_model}'
         )
 
     def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
@@ -726,14 +728,14 @@ class Sweep:
             directory,
             self.key_name,
             self.keys,
-            self.record[self.key_name].dtype,
+            self.records[self.key_name].dtype,
             self._stitch,
             self._outputs,
             self.spec,
         )
         write_reasons(spill.directory, self._no_duals, self._absent, write_whole)
         for position, key, frames in by_slice:
-            record = Record(**self.record.drop(self.key_name).row(position, named=True))
+            record = Record(**self.records.drop(self.key_name).row(position, named=True))
             taken = Metrics(**self.metrics.select(Metrics._fields).row(position, named=True))
             spill.write(position, key, SliceAnswer(record, taken, frames))
         return spill.directory
@@ -790,8 +792,8 @@ class Sweep:
         write_format(under, self._outputs)
         manifest = sweep_manifest(self.key_name, self.keys, self._stitch, self._outputs)
         (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
-        write(self.record.select(self.key_name), under / KEYS_FILE)
-        write(self.record.drop(self.key_name), under / RECORD_FILE)
+        write(self.records.select(self.key_name), under / KEYS_FILE)
+        write(self.records.drop(self.key_name), under / RECORD_FILE)
         write(self.metrics.drop(self.key_name), under / METRICS_FILE)
         absent = {kind: dict(names) for kind, names in self._absent.items()}
         for kind in KINDS:
@@ -815,7 +817,7 @@ class Sweep:
         under.mkdir()
         write(self._stitch.owned, under / OWNED_FILE)
         if self._spill is None:
-            windows = Spill(under, self.key_name, self.record[self.key_name].dtype)
+            windows = Spill(under, self.key_name, self.records[self.key_name].dtype)
             for position, key, frames in self._frames_by_slice():
                 windows.write_frames(position, key, frames, write)
             return
@@ -839,10 +841,10 @@ class Sweep:
             self._check_per_window()
         held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
-            absent = _whole_kind_absent(kind, held, self._no_duals, self.record) or _none_answered(
+            absent = _whole_kind_absent(kind, held, self._no_duals, self.records) or _none_answered(
                 _LABELS[kind], left_out
             )
-            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.record))
+            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.records))
         return tuple(sorted(held))
 
     def _answerable(self, kind: str, *, per_window: bool) -> tuple[dict[str, object], dict[str, str]]:
@@ -859,7 +861,7 @@ class Sweep:
         return held, left_out
 
     def __len__(self) -> int:
-        return self.record.height
+        return self.records.height
 
 
 #: Why an archive's sweep has nothing to read per window.
@@ -875,11 +877,13 @@ NO_WINDOWS = (
 WINDOWS_DIR = 'windows'
 
 
-def _whole_kind_absent(kind: str, held: Mapping[str, object], no_duals: str | None, record: pl.DataFrame) -> str | None:
+def _whole_kind_absent(
+    kind: str, held: Mapping[str, object], no_duals: str | None, records: pl.DataFrame
+) -> str | None:
     """Why no slice holds *kind*: the duals' reason for a priced kind, or [`NO_BASIS`][] where slices solved and none ended on a basis."""
     if kind in PRICED:
         return no_duals
-    if kind in BASES and not held and record['has_primal'].any():
+    if kind in BASES and not held and records['has_primal'].any():
         return NO_BASIS
     return None
 
@@ -891,19 +895,19 @@ def _none_answered(kind: str, left_out: Mapping[str, str]) -> str | None:
     return f'no {kind} of this sweep has an answer, and each one says why:\n{bulleted(dict(sorted(left_out.items())))}'
 
 
-def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], record: pl.DataFrame) -> str:
+def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], records: pl.DataFrame) -> str:
     """The message for *name* having no frame, whether undeclared or produced by no slice."""
-    conditions = ', '.join(sorted(set(record['termination_condition'].to_list())))
+    conditions = ', '.join(sorted(set(records['termination_condition'].to_list())))
     if held:
         listed = ', '.join(repr(k) for k in sorted(held))
         return (
             f'no {kind} {name!r} in this sweep — it holds {listed}. '
-            f'If the spec declares it, no slice produced one: all {record.height} terminated {conditions}.'
+            f'If the spec declares it, no slice produced one: all {records.height} terminated {conditions}.'
         )
     return (
-        f'this sweep holds no {kind} frames at all — every one of its {record.height} slices '
+        f'this sweep holds no {kind} frames at all — every one of its {records.height} slices '
         f'terminated {conditions}. The fold ran; the models did not solve. '
-        f'sweep.record carries the status of each slice.'
+        f'sweep.records carries the status of each slice.'
     )
 
 
@@ -924,7 +928,7 @@ def load_sweep(directory: str | Path) -> Sweep:
     """
     under = Path(directory)
     opened = _opened_sweep(under, under / OWNED_FILE)
-    spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
+    spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=True))
 
 
@@ -942,7 +946,7 @@ def scan_sweep(directory: str | Path) -> Sweep:
     """
     under = Path(directory)
     opened = _opened_sweep(under, under / OWNED_FILE)
-    spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
+    spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=False), _spill=spill)
 
 
@@ -965,7 +969,7 @@ def archived_sweep(under: Path, *, whole: bool) -> Sweep:
     answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
     if opened._stitch is None:
         return replace(opened, _slices=answer)
-    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
+    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.records[opened.key_name].dtype)
     return replace(opened, _stitched=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
 
 
@@ -991,7 +995,7 @@ def _opened_sweep(under: Path, owned: Path | None) -> Sweep:
     keys = parquet.read(under / KEYS_FILE, columns=[key_name]).to_series()
     return Sweep(
         key_name=key_name,
-        record=_rekeyed(consolidated(under, RECORD_FILE), keys),
+        records=_rekeyed(consolidated(under, RECORD_FILE), keys),
         metrics=_rekeyed(consolidated(under, METRICS_FILE), keys),
         spec=read_spec(under),
         _no_duals=no_duals,

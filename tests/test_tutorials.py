@@ -214,7 +214,7 @@ def scenarios() -> tuple[dict[str, Any], str]:
 
 def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str, Any], str]) -> None:
     namespace, _ = scenarios
-    objectives = dict(namespace['scenarios'].record.select('scenario', 'objective').iter_rows())
+    objectives = dict(namespace['scenarios'].records.select('scenario', 'objective').iter_rows())
     assert objectives == pytest.approx({'cold': 16530.0, 'mild': 10500.0}), 'one solve for each label of scenario'
     wide = namespace['gas'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
     assert (wide['cold'] >= wide['mild']).all(), 'gas covers the extra load of the cold scenario'
@@ -222,6 +222,6 @@ def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str
 
 def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, Any], str]) -> None:
     namespace, _ = scenarios
-    objectives = dict(namespace['both'].record.select('scenario', 'objective').iter_rows())
+    objectives = dict(namespace['both'].records.select('scenario', 'objective').iter_rows())
     assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
     assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'

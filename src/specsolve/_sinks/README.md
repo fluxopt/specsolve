@@ -120,7 +120,7 @@ supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound t
 ```
 
 — and `sinks.refusal(handoff, name)` answers before the load, off the model
-that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
+that was built, which is what `Model.check_sink(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is
 rewritten at the hand-off: the language writes a set out itself,
@@ -179,7 +179,7 @@ where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
-a sink has no spelling for cannot reach that sink by any door: `Model.check`,
+a sink has no spelling for cannot reach that sink by any door: `Model.check_sink`,
 which asks without a solve, and the engine's `solve` and `write` — which ask
 without being asked, a file written without the section being a different model
 that parses and solves.

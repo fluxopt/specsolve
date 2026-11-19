@@ -65,14 +65,14 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from specsolve._inputs import Buildable, Source
+    from specsolve._inputs import Source, SpecLike
 
 linopy.options['semantics'] = 'v1'
 
 __all__ = ['build', 'evaluate']
 
 
-def build(spec: Buildable, sources: Mapping[str, Source]) -> linopy.Model:
+def build(spec: SpecLike, sources: Mapping[str, Source]) -> linopy.Model:
     """Attach *sources* to *spec* and build it as a ``linopy.Model``.
 
     Args:
@@ -111,7 +111,7 @@ def build(spec: Buildable, sources: Mapping[str, Source]) -> linopy.Model:
 
 def evaluate(
     built: linopy.Model,
-    spec: Buildable,
+    spec: SpecLike,
     expression: str | Mapping[str, Any],
     sources: Mapping[str, Source],
 ) -> xarray.DataArray:
@@ -159,7 +159,7 @@ def evaluate(
         return xarray.DataArray(float(value))
 
 
-def _named(spec: Buildable) -> str:
+def _named(spec: SpecLike) -> str:
     """What to call *spec* in an error note.
 
     A path names itself; a mapping or an already-loaded schema has no name.

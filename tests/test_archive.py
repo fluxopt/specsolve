@@ -979,8 +979,8 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
 
     assert study.axis == axis, 'the axis comes back as the value it went in as'
-    assert study.sweep.record.drop(RUN).equals(runs.record.drop(RUN))
-    assert study.sweep.record[RUN].unique().to_list() == ['study'], (
+    assert study.sweep.records.drop(RUN).equals(runs.records.drop(RUN))
+    assert study.sweep.records[RUN].unique().to_list() == ['study'], (
         'and the archive stamped its own name on every slice, which the sweep in memory had none of'
     )
     assert study.sources['load'].columns == ['scenario', 'snapshot', 'value'], (
@@ -989,7 +989,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     differing = _attached_differently(dispatch_yaml, sources, study)
     assert not differing, f'(slice, source) pairs the archive attaches differently: {differing}'
     again = sps.solve_over(study.spec, study.sources, study.axis)
-    assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
+    assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, slice for slice'
     )
 
@@ -1042,7 +1042,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     differing = _attached_differently(spec, sources, archived)
     assert not differing, f'(window, source) pairs the archive attaches differently: {differing}'
     again = sps.solve_over(archived.spec, archived.sources, archived.axis)
-    assert again.record['objective'].to_list() == pytest.approx(runs.record['objective'].to_list()), (
+    assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
         'the archive re-runs to the sweep it recorded, window for window'
     )
 
@@ -1307,7 +1307,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
 
     assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
     assert saved.metrics.drop(RUN).equals(runs.metrics.drop(RUN)), 'and the metrics are the slices own'
-    assert saved.metrics[RUN].equals(saved.record[RUN]), 'naming the run they came from as the record does'
+    assert saved.metrics[RUN].equals(saved.records[RUN]), 'naming the run they came from as the record does'
     assert stamped == [], 'no frame the save writes carries the run, what each window owns included'
 
 
@@ -1784,7 +1784,7 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
 
 
 @pytest.mark.parametrize(
-    ('record_options', 'written'),
+    ('recorded_options', 'written'),
     [
         pytest.param(None, '<not recorded>', id='not-named'),
         pytest.param(['mip_max_nodes'], 1000, id='named'),
@@ -1792,14 +1792,14 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
     ],
 )
 def test_a_caller_names_an_option_to_record_beside_the_solvers_list(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, record_options: list[str] | None, written: object
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, recorded_options: list[str] | None, written: object
 ) -> None:
     """`mip_max_nodes` is on no list, so only the caller's naming it keeps its value."""
     sps.solve(
         dispatch_yaml,
         dispatch_frame_inputs,
         solver_options={'time_limit': 60.0, 'mip_max_nodes': 1000},
-        record_options=record_options,
+        recorded_options=recorded_options,
         archive=tmp_path / 'case',
     ).close()
 
@@ -1819,15 +1819,15 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
         sources,
         sps.EachCoordinate('scenario'),
         solver_options={'mip_max_nodes': 1000},
-        record_options=['mip_max_nodes'],
+        recorded_options=['mip_max_nodes'],
     )
 
-    assert sweep.record['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
+    assert sweep.records['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
         'both slices keep the value the caller named'
     )
 
 
 def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """A string is a sequence of letters, so `record_options='Seed'` would name `S`, `e` and `d`."""
-    with pytest.raises(sps.errors.SpecsolveError, match=r"record_options=\['mip_max_nodes'\]"):
-        sps.solve(dispatch_yaml, dispatch_frame_inputs, record_options='mip_max_nodes')
+    """A string is a sequence of letters, so `recorded_options='Seed'` would name `S`, `e` and `d`."""
+    with pytest.raises(sps.errors.SpecsolveError, match=r"recorded_options=\['mip_max_nodes'\]"):
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, recorded_options='mip_max_nodes')

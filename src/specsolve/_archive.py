@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._axes import Axis
-    from specsolve._inputs import Buildable, Label, Source
+    from specsolve._inputs import Label, Source, SpecLike
     from specsolve._result import Result
 
 __all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'load_archive', 'load_inputs', 'scan_archive']
@@ -248,7 +248,7 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
         )
 
 
-def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
+def _attach_readers(answer: Result, spec: SpecLike, sources: Mapping[str, Source]) -> Result:
     """*answer* with an undeclared expression readable through [`evaluate`][specsolve._result.Result.evaluate].
 
     *spec* is rebuilt over *sources* at the first undeclared read, never
@@ -322,7 +322,7 @@ def _sweep_evaluator(
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
     carried = set(axis.carry)
-    key_dtype = sweep.record.schema[sweep.key_name]
+    key_dtype = sweep.records.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
         _refuse_carried(carried, [lower_expression(spec, expression)])

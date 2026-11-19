@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from specsolve._answer_layout import Output
     from specsolve._api import Model
-    from specsolve._inputs import Buildable, Label, Source
+    from specsolve._inputs import Label, Source, SpecLike
     from specsolve._result import Diagnostics, Result
     from specsolve._start import Start
 
@@ -148,15 +148,15 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt, *, keep_windo
 
 
 def solve_over(
-    spec: Buildable,
+    spec: SpecLike,
     sources: Mapping[str, Source],
     axis: Axis | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     key_name: str | None = None,
     executor: Executor | None = None,
-    workers_share_fs: bool | None = None,
+    shared_filesystem: bool | None = None,
     solver_options: Mapping[str, object] | None = None,
-    record_options: Sequence[str] | None = None,
+    recorded_options: Sequence[str] | None = None,
     solver_name: str = 'highs',
     spill_to: str | Path | None = None,
     archive: str | Path | None = None,
@@ -183,11 +183,11 @@ def solve_over(
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
             slices in order on one model. A process pool must be ``spawn``
             or ``forkserver`` — a forked worker hangs.
-        workers_share_fs: Whether the executor's workers can read this
+        shared_filesystem: Whether the executor's workers can read this
             process's paths. Decided for the stdlib pools; anything else is
             assumed not to, and paths travel as bytes.
         solver_options: As [`solve`][specsolve._api.Model.solve] takes them.
-        record_options: As [`solve`][specsolve._api.Model.solve] takes them,
+        recorded_options: As [`solve`][specsolve._api.Model.solve] takes them,
             reaching every slice.
         solver_name: As [`solve`][specsolve._api.Model.solve] takes it.
         spill_to: A directory each slice's frames are written to as the fold
@@ -288,7 +288,7 @@ def solve_over(
     solving = {
         'solver_name': solver_name,
         'solver_options': dict(solver_options or {}) or None,
-        'record_options': record_options,
+        'recorded_options': recorded_options,
         'outputs': asked,
     }
     keys = [current.key for current in slices]
@@ -298,7 +298,7 @@ def solve_over(
     if executor is None:
         answered = _serially(document, slices, solving, plan, spill, starts)
     else:
-        answered = _pooled(executor, workers_share_fs, document, slices, solving, spill, starts)
+        answered = _pooled(executor, shared_filesystem, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if archiving is not None:
         out, cut = archiving
@@ -493,7 +493,7 @@ def _named_slice(key: Label, position: int, count: int) -> Generator[None, None,
 
 def _pooled(
     executor: Executor,
-    workers_share_fs: bool | None,
+    shared_filesystem: bool | None,
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
@@ -508,7 +508,7 @@ def _pooled(
     the directory.
     """
     crosses = _crosses_a_process(executor)
-    shared = _shares_filesystem(executor, workers_share_fs)
+    shared = _shares_filesystem(executor, shared_filesystem)
     memo: dict[str, tuple[Any, Any]] = {}  # pyrefly: ignore[explicit-any] — a source beside its encoding
     futures = [
         None
@@ -516,7 +516,7 @@ def _pooled(
         else executor.submit(
             _run_slice,
             document,
-            _encode(current.sources, memo, workers_share_fs=shared) if crosses else dict(current.sources),
+            _encode(current.sources, memo, shared_filesystem=shared) if crosses else dict(current.sources),
             crosses,
             solving,
             starts[position],
@@ -614,7 +614,7 @@ def _encode(
     sources: Mapping[str, Source],
     memo: dict[str, tuple[Any, Any]],  # pyrefly: ignore[explicit-any] — a source beside its encoding
     *,
-    workers_share_fs: bool = False,
+    shared_filesystem: bool = False,
 ) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
     """Sources in the shape a worker can be handed.
 
@@ -624,7 +624,7 @@ def _encode(
     """
     out: dict[str, Any] = {}  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
     for name, obj in sources.items():
-        if isinstance(obj, (str, Path)) and workers_share_fs:
+        if isinstance(obj, (str, Path)) and shared_filesystem:
             out[name] = obj
             continue
         cached = memo.get(name)

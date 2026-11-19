@@ -200,7 +200,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
-| `_inputs.py` | `Buildable` and `Source`, what every function takes |
+| `_inputs.py` | `SpecLike` and `Source`, what every function takes |
 | `_collect.py` | how polars materialises a frame |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | the door: caller data into tidy tables |

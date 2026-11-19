@@ -34,7 +34,7 @@ from specsolve._answer_layout import METRICS_FILE, METRICS_SCHEMA, Provenance, c
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expression_readers
-from specsolve._inputs import Buildable, Label, Source, as_spec, lower_expression, lowered
+from specsolve._inputs import Label, Source, SpecLike, as_spec, lower_expression, lowered
 from specsolve._result import Result, evaluated
 from specsolve._sinks import solver, writer
 from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
@@ -53,12 +53,12 @@ if TYPE_CHECKING:
 __all__ = ['build', 'check', 'evaluate', 'solve', 'tidy', 'write']
 
 
-def check(spec: Buildable) -> Program:
+def check(spec: SpecLike) -> Program:
     """Parse, validate and lower a spec; attach no data.
 
     Every other verb reads the spec through this, so what this refuses they
     refuse too. Whether a sink takes the model is a fact about the build, and
-    [`Model.check`][specsolve.types.Model.check] answers it with no solve.
+    [`Model.check_sink`][specsolve.types.Model.check_sink] answers it with no solve.
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
@@ -92,7 +92,7 @@ def check(spec: Buildable) -> Program:
     return program
 
 
-def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
+def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
     """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
 
     Every source is read and checked as [`build`][] does. The tables are what
@@ -136,7 +136,7 @@ def _refuse_a_decision(program: Program) -> None:
     )
 
 
-def evaluate(spec: Buildable, sources: Mapping[str, Source], expression: str | Mapping[str, object]) -> pl.DataFrame:
+def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Mapping[str, object]) -> pl.DataFrame:
     """The value of *expression* over a spec with no variables — arithmetic, no solver.
 
     A spec with only dimensions, parameters, relations and ``expressions:``
@@ -186,7 +186,7 @@ class Model:
     [`close`][] hands a large model back early.
     """
 
-    def __init__(self, spec: Buildable, sources: Mapping[str, Source]) -> None:
+    def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._spec = as_spec(spec)
         self._program = lowered(self._spec)
         self._sources = dict(sources)
@@ -257,7 +257,7 @@ class Model:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, object] | None = None,
-        record_options: Sequence[str] | None = None,
+        recorded_options: Sequence[str] | None = None,
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
         start: Result | Start | Literal['previous'] | None = 'previous',
@@ -280,7 +280,7 @@ class Model:
                 [`provenance`][specsolve._result.Result.provenance]
                 records the value of an option that changes the answer, such
                 as a time limit or a gap, and the name alone of any other.
-            record_options: More option names whose value the result
+            recorded_options: More option names whose value the result
                 records, in any letter case. Name no credential here: an
                 archive goes to shared storage.
             archive: Where to write the spec, the data attached to it **now**,
@@ -324,7 +324,7 @@ class Model:
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a bare string as *record_options* or *outputs*, a
+                cannot run, a bare string as *recorded_options* or *outputs*, a
                 name in *outputs* that is not an output, a *start* word other
                 than ``'previous'``, or a *start* this
                 model or solver cannot start from: a key that names no reader, a table naming no declaration or
@@ -339,10 +339,10 @@ class Model:
         if out is not None:
             parquet.require('archive=')
             check_the_target(out)
-        if isinstance(record_options, str):
+        if isinstance(recorded_options, str):
             raise SpecsolveError(
-                f'record_options={record_options!r} is one string, which would name each of its letters. '
-                f'Pass a list: record_options=[{record_options!r}].'
+                f'recorded_options={recorded_options!r} is one string, which would name each of its letters. '
+                f'Pass a list: recorded_options=[{recorded_options!r}].'
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
@@ -356,7 +356,7 @@ class Model:
             ),
             solver_name,
             solver_options,
-            record_options or (),
+            recorded_options or (),
         )
         if out is not None:
             self._archive(out, answered)
@@ -367,7 +367,7 @@ class Model:
         answer: Result,
         solver_name: str,
         solver_options: Mapping[str, object] | None,
-        record_options: Sequence[str],
+        recorded_options: Sequence[str],
     ) -> Result:
         """*answer* as [`solve`][] hands it back: the engine's, with what only this model knows of the solve.
 
@@ -381,7 +381,7 @@ class Model:
             answer,
             _spec=self._spec,
             _solved_at=datetime.now(UTC),
-            _provenance=_provenance(solver_name, solver_options, record_options),
+            _provenance=_provenance(solver_name, solver_options, recorded_options),
         )
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -412,16 +412,16 @@ class Model:
         Raises:
             ValueError: A suffix nothing writes.
             SpecsolveError: A construct the format has no section for, as
-                [`check`][specsolve.types.Model.check] refuses it.
+                [`check_sink`][] refuses it.
         """
         self._engine.write(path)
 
-    def check(self, sink: str) -> None:
+    def check_sink(self, sink: str) -> None:
         """Refuse the built model where *sink* cannot take it; no solve, no file.
 
         ::
 
-            sps.build('dispatch.yaml', sources).check('highs')
+            sps.build('dispatch.yaml', sources).check_sink('highs')
 
         The answer is read off the built model, not the file: a square the
         data prices at zero, an integer variable with no built column or a set
@@ -436,7 +436,7 @@ class Model:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; or a name belonging to no sink.
         """
-        self._engine.check(sink)
+        self._engine.check_sink(sink)
 
     def row(self, name: str, /, **coordinate: Label) -> ConstraintRow:
         """One built constraint row at one coordinate — its terms, sense and right-hand side.
@@ -542,7 +542,7 @@ class Model:
         return False
 
 
-def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
+def build(spec: SpecLike, sources: Mapping[str, Source]) -> Model:
     """Attach *sources* to *spec* and build it — the model with your data on it.
 
     Args:
@@ -567,12 +567,12 @@ def build(spec: Buildable, sources: Mapping[str, Source]) -> Model:
 
 
 def solve(
-    spec: Buildable,
+    spec: SpecLike,
     sources: Mapping[str, Source],
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, object] | None = None,
-    record_options: Sequence[str] | None = None,
+    recorded_options: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
     start: Result | Start | None = None,
@@ -587,7 +587,7 @@ def solve(
         sources: As [`build`][] takes them.
         solver_name: As [`Model.solve`][] takes it.
         solver_options: As [`Model.solve`][] takes them.
-        record_options: As [`Model.solve`][] takes them.
+        recorded_options: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
         outputs: As [`Model.solve`][] takes them.
         start: As [`Model.solve`][] takes it.
@@ -608,7 +608,7 @@ def solve(
         return model.solve(
             solver_name,
             solver_options=solver_options,
-            record_options=record_options,
+            recorded_options=recorded_options,
             archive=archive,
             outputs=outputs,
             start=start,
@@ -618,7 +618,7 @@ def solve(
 
 
 def write(
-    spec: Buildable,
+    spec: SpecLike,
     sources: Mapping[str, Source],
     out: str | Path,
 ) -> Path:
@@ -660,7 +660,7 @@ def _json_value(value: object) -> object:
 
 
 def _provenance(
-    solver_name: str, solver_options: Mapping[str, object] | None, record_options: Sequence[str] = ()
+    solver_name: str, solver_options: Mapping[str, object] | None, recorded_options: Sequence[str] = ()
 ) -> Provenance:
     """What a solve on *solver_name* with *solver_options* records about itself.
 
@@ -670,7 +670,7 @@ def _provenance(
     people read, and a list of what to hide would leak whatever it missed.
     """
     served = solver(solver_name)
-    recorded = served.recorded_options | {name.casefold() for name in record_options}
+    recorded = served.recorded_options | {name.casefold() for name in recorded_options}
     options = {
         name: _json_value(value) if name.casefold() in recorded else '<not recorded>'
         for name, value in (solver_options or {}).items()
