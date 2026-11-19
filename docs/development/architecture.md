@@ -204,6 +204,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_collect.py` | how polars materialises a frame |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | the door: caller data into tidy tables |
+| `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `_frames.py` | caller tables in, via the Arrow PyCapsule protocol |
 | `types.py` | public: every type a call returns |

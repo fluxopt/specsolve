@@ -13,7 +13,7 @@ from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -60,7 +60,6 @@ if TYPE_CHECKING:
 
     from specsolve._answer_layout import FrameWriter, Output
     from specsolve._inputs import Label
-    from specsolve._result import Start
 
 
 #: What each of the [`KINDS`][specsolve._answer_layout.KINDS] is a frame of, as a message names it.
@@ -397,19 +396,21 @@ class Sweep:
     def keys(self) -> list[Label]:
         return self.record[self.key_name].to_list()
 
-    def _start(self) -> Start:
-        """This sweep's answer as tables to start a sweep from, keyed as [`Start`][specsolve.types.Start] is.
+    def _start(self, column: str) -> dict[str, dict[str, pl.DataFrame]]:
+        """This sweep's answer as tables to start a sweep cut by *column* from, keyed as [`Start`][specsolve.types.Start] is.
 
         The primal, and the basis where the sweep carries one, each read as
-        [`scan`][] reads it: keyed by slice, or over the dimension an
-        EachWindow sweep cut.
+        [`scan`][] reads it: over the dimension an EachWindow sweep cut, or
+        keyed by slice, the key column renamed to *column*, whose coordinates
+        it holds.
         """
+        rename = {} if self._stitch is not None else {self.key_name: column}
         given: dict[str, dict[str, pl.DataFrame]] = {}
         for kind in ('primal', *(sorted(BASES) if 'basis' in self._outputs else ())):
             held, _ = self._answerable(kind, per_window=False)
             if held:
-                given[kind] = {name: self.scan(name, kind).pipe(collected) for name in held}
-        return cast('Start', given)
+                given[kind] = {name: self.scan(name, kind).rename(rename).pipe(collected) for name in held}
+        return given
 
     def _check_per_window(self) -> None:
         """Refuse ``per_window=True`` where there are no windows to read."""

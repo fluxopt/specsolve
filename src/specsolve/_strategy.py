@@ -14,14 +14,13 @@ The axes are [`specsolve._axes`][] and what a fold returns is
 from __future__ import annotations
 
 import io
-import warnings
 from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
@@ -34,13 +33,13 @@ from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import declared
 from specsolve._names import VALUE, refuse_reserved
-from specsolve._result import Result
-from specsolve._sources import numbered, refuse_unknown_start, refuse_unknown_start_word, tidy_sources
+from specsolve._sources import numbered, tidy_sources
+from specsolve._start import slice_starts
 from specsolve._sweep import SliceAnswer, Spill, Sweep, one_key_type
-from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
+from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Sequence
+    from collections.abc import Generator, Iterable, Sequence
 
     from mathspec.program import Program
     from mathspec.spec import Spec
@@ -48,7 +47,8 @@ if TYPE_CHECKING:
     from specsolve._answer_layout import Output
     from specsolve._api import Model
     from specsolve._inputs import Buildable, Label, Source
-    from specsolve._result import Diagnostics, Start
+    from specsolve._result import Diagnostics, Result
+    from specsolve._start import Start
 
 
 def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
@@ -293,7 +293,7 @@ def solve_over(
     }
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
-    starts = _slice_starts(start, axis, slices, key_name, program)
+    starts = slice_starts(start, axis, slices, key_name, program)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
     if executor is None:
         answered = _serially(program, document, slices, solving, plan, spill, starts)
@@ -304,112 +304,6 @@ def solve_over(
         out, cut = archiving
         _archive_the_sweep(out, document, program, cut, sources, folded, slices[0].sources, keep_windows)
     return folded
-
-
-def _slice_starts(
-    start: Sweep | Result | Start | Literal['previous'] | None,
-    axis: Axis | HandBuilt,
-    slices: Sequence[Slice],
-    key_name: str,
-    program: Program,
-) -> Sequence[Start | Literal['previous'] | None]:
-    """What each slice starts from: its cut of *start*, as it cut its sources, or the slice before it.
-
-    Every cut is taken and checked here, before a slice is built, so a start
-    that cannot start a slice stops the sweep before anything is solved; it
-    also lets a slice solved in another process take its start as data. A
-    table without the sliced column reaches every slice whole.
-
-    Raises:
-        SpecsolveError: A word other than ``'previous'``; a name
-            [`refuse_unknown_start`][specsolve._sources.refuse_unknown_start]
-            refuses; or a table over an EachWindow sweep's local index alone.
-
-    Warns:
-        SpecsolveWarning: A slice the cut leaves nothing, which starts from
-            nothing.
-    """
-    refuse_unknown_start_word(start)
-    if start is None or isinstance(start, str):
-        return [start] * len(slices)
-    column = axis.dim if isinstance(axis, Axis) else key_name
-    tables = _start_tables(start, column)
-    refuse_unknown_start(cast('Start', tables), program)
-    if isinstance(axis, EachWindow) and (local := _over_the_local_index(tables, axis)):
-        raise SpecsolveError(
-            f"start= gives {local} over the windows' local index {axis.into!r} and not over {axis.dim!r}, so one "
-            f'table would lay the same {axis.dim!r} onto every window. Write it over {axis.dim!r}, as a source is, '
-            f'and each window takes the rows it covers.'
-        )
-    starts: list[Start | None] = []
-    empty: list[Label] = []
-    for current in slices:
-        cut = current.cut or partial(_one_key, key_name, current.key)
-        given: dict[str, dict[str, Source]] = {}
-        for reader, named in tables.items():
-            pieces = {name: _cut_one(obj, column, cut) for name, obj in named.items()}
-            if held := {name: piece for name, piece in pieces.items() if piece is not None}:
-                given[reader] = held
-        if not given:
-            empty.append(current.key)
-        starts.append(cast('Start', given) if given else None)
-    if empty:
-        warnings.warn(
-            f'start= gives the slices {empty} no row, so they start from nothing: no table carries their '
-            f'{column!r}, and none reaches every slice. The answer is the same; only the time it takes changes.',
-            SpecsolveWarning,
-            stacklevel=3,
-        )
-    return starts
-
-
-def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFrame]) -> Source | None:
-    """*obj* as one slice takes it: a table cut, read into memory to cross a process, or ``None`` where the cut leaves no row.
-
-    A shape that is not a table, such as one number, carries no column to cut
-    on and reaches the slice whole.
-    """
-    table = as_frame(obj)
-    if table is None:
-        return obj
-    piece = (cut(table) if column in table.collect_schema().names() else table).pipe(collected)
-    return piece if piece.height else None
-
-
-def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[str, Source]]:
-    """*start* as tables keyed as [`Start`][specsolve.types.Start] is, an earlier sweep's keyed by *column*.
-
-    A sweep's slices are keyed by its own key column, which for one cut by
-    coordinate holds the coordinates a sweep cut by *column* cuts.
-    """
-    if isinstance(start, Result):
-        return {
-            reader: {name: frame.pipe(collected) for name, frame in frames.items()}
-            for reader, frames in start._start().items()
-        }
-    if isinstance(start, Sweep):
-        keyed = start._stitch is None and start.key_name != column
-        return {
-            reader: {name: table.rename({start.key_name: column}) if keyed else table for name, table in named.items()}
-            for reader, named in cast('Mapping[str, Mapping[str, pl.DataFrame]]', start._start()).items()
-        }
-    return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, Source]]', start).items()}
-
-
-def _over_the_local_index(tables: Mapping[str, Mapping[str, Source]], axis: EachWindow) -> list[str]:
-    """The names of *tables* over *axis*'s local index and not its sliced dimension, which no window can place."""
-    over = {
-        name: frame.collect_schema().names()
-        for named in tables.values()
-        for name, obj in named.items()
-        if (frame := as_frame(obj)) is not None
-    }
-    return sorted(name for name, columns in over.items() if axis.into in columns and axis.dim not in columns)
-
-
-def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
-    """*table*'s rows of the hand-built slice *key*, without the key column."""
-    return table.filter(pl.col(key_name) == key).drop(key_name)
 
 
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:

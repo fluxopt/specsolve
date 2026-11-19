@@ -240,7 +240,7 @@ class Engine:
                 solver stays loaded and begin from nothing otherwise; ``None``,
                 to begin from nothing; or an earlier answer or a
                 [`Start`][specsolve.types.Start] already read
-                ([`read_start`][specsolve._sources.read_start]), matched by
+                ([`read_start`][specsolve._start.read_start]), matched by
                 coordinate: an LP from a basis where one is given
                 ([`matched_basis`][specsolve._engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values

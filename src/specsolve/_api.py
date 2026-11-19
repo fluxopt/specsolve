@@ -37,7 +37,8 @@ from specsolve._engine.engine import Engine, expression_readers
 from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve._result import Result, evaluated
 from specsolve._sinks import solver, writer
-from specsolve._sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
+from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -46,7 +47,8 @@ if TYPE_CHECKING:
     from mathspec.program import Expression, Program
 
     from specsolve._answer_layout import FrameWriter, Output
-    from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Start
+    from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem
+    from specsolve._start import Start
 
 __all__ = ['build', 'check', 'evaluate', 'solve', 'tidy', 'write']
 
@@ -383,10 +385,10 @@ class Model:
         )
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
-        """*start*'s tables read against this build, as [`read_start`][specsolve._sources.read_start] reads them.
+        """*start*'s tables read against this build, as [`read_start`][] reads them.
 
         Raises:
-            SpecsolveError: As [`read_start`][specsolve._sources.read_start] raises.
+            SpecsolveError: As [`read_start`][] raises.
         """
         return read_start(start, self._program, self._tidied)
 

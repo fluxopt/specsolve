@@ -11,7 +11,7 @@ import importlib.util
 from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
@@ -55,31 +55,6 @@ if TYPE_CHECKING:
 
     from specsolve._answer_layout import FrameWriter
     from specsolve._status import SolveStatus
-
-
-class Start(TypedDict, total=False):
-    """What a solve starts from, given as tables: under the name of each reader, a table per declaration in that reader's shape.
-
-    Each table is ``(dims…, value)`` and is matched by coordinate, so it may
-    leave out declarations and coordinates. ``primal`` gives values, and
-    ``variable_basis`` and ``constraint_basis`` give a basis status in
-    [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
-    earlier [`Result`][] is the same, from the tables it carries. Given to
-    [`solve_over`][specsolve._strategy.solve_over], a table that carries the
-    sliced dimension is cut per slice, as a source is.
-
-    Example::
-
-        start: Start = {
-            'primal': {'on': on},
-            'variable_basis': {'p': p_status},
-            'constraint_basis': {'balance': balance_status},
-        }
-    """
-
-    primal: Mapping[str, pl.DataFrame]
-    variable_basis: Mapping[str, pl.DataFrame]
-    constraint_basis: Mapping[str, pl.DataFrame]
 
 
 #: What the bridges out say when the environment cannot serve them, ``{module}``
@@ -676,7 +651,7 @@ class Result:
         return self._output('constraint_basis', name)
 
     def _start(self) -> dict[str, Mapping[str, pl.LazyFrame]]:
-        """What this answer gives a solve to start from, keyed as [`Start`][] is: its primal, and its basis where it carries one.
+        """What this answer gives a solve to start from, keyed as [`Start`][specsolve.types.Start] is: its primal, and its basis where it carries one.
 
         Raises:
             NoSolutionError: The solve left no values to read.
