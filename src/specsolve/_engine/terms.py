@@ -42,7 +42,7 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a term exists, and what keys it.
 
-    Not which rows the term's frame has: a neutral parameter's missing rows
+    Not which rows the term's frame has: a `missing: 0` parameter's missing rows
     are a zero coefficient, a masked variable's are absence, and the frame
     cannot tell them apart.
 
@@ -283,7 +283,7 @@ def both_regions(a: program.Mask | None, b: program.Mask | None) -> program.Mask
 
 def region_over(region: program.Mask | None, dims: Sequence[str]) -> program.Mask | None:
     """*region* where a term over *dims* can still be cut to it, else ``None``."""
-    return region if region is not None and region.dims <= set(dims) else None
+    return region if region is not None and set(region.dims) <= set(dims) else None
 
 
 def negate(p: Term) -> Term:

@@ -90,16 +90,16 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 #### Subject to
 
-**`leave_each_city_once`**
-
-```math
-\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
-```
-
 **`enter_each_city_once`**
 
 ```math
 \sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\, t \in \mathcal{T}
+```
+
+**`leave_each_city_once`**
+
+```math
+\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
 ```
 
 **`ordering`**

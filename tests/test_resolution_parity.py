@@ -184,7 +184,7 @@ def test_a_constraint_row_left_with_no_variables(tmp_path, dispatch_spec_inputs)
 #: constants alone.
 EMPTY_AXIS_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'int'}},
-    'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool', 'missing': 'neutral'}},
+    'parameters': {'exists': {'dims': ['g', 'k'], 'dtype': 'bool', 'missing': False}},
     'variables': {
         'w': {'dims': ['g', 'k'], 'where': 'exists', 'bounds': {'lower': 0, 'upper': 1}},
         'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -229,7 +229,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
 #: Kirchhoff voltage law on a network with no cycles.
 EMPTY_FOREACH_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'cycle': {'dtype': 'str'}, 'line': {'dtype': 'str'}},
-    'parameters': {'w': {'dims': ['cycle', 'line'], 'missing': 'neutral'}, 'cost': {'dims': ['line']}},
+    'parameters': {'w': {'dims': ['cycle', 'line'], 'missing': 0}, 'cost': {'dims': ['line']}},
     'variables': {'s': {'dims': ['t', 'line'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'kvl': {'dims': ['t', 'cycle'], 'expression': 'sum(w * s, over=line) == 0'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(cost * s)'},
@@ -264,7 +264,7 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
 
 BOOL_MASK_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'active': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'}, 'cap': {'dims': ['t']}},
+    'parameters': {'active': {'dims': ['t'], 'dtype': 'bool', 'missing': False}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'floor': {'dims': ['t'], 'expression': 'x >= cap', 'where': 'active'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=t)'},

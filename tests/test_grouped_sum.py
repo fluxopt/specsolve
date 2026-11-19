@@ -88,7 +88,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
     program = schema_of(TRANSPORT_YAML).program
 
     (c,) = program.constraints.values()
-    assert c.dims == ('snapshot', 'bus')
+    assert c.dims == ('bus', 'snapshot'), 'the dims sorted by name'
     terms = _flatten(c.lhs)
     grouped = {
         (t.operand.operand.name, t.operand.columns.dropped_dims, t.operand.columns.name, t.operand.columns.added_dims)
@@ -331,7 +331,9 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
         tables = model._engine._model.handoff
         matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
         assert matrix.height == 4, 'a column appears twice on a row'
-        assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
+        assert matrix['coeff'].to_list() == [3.0, 3.0, 5.0, 5.0], (
+            'the 1.0 and the 2.0 merged, at b1 in both snapshots before b2'
+        )
 
         result = model.solve()
     assert result.termination_condition == 'optimal'
@@ -549,7 +551,7 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
 DEMAND_BY_REGION = {
     'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
     'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
-    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': 'neutral'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': False}},
     'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
     'expressions': {
         'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},

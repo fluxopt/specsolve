@@ -338,7 +338,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
 
     It answers as a constraint over the same expression would: a coordinate a
     parameter does not cover contributes zero, and one where a variable is
-    absent has no row, or a zero under ``missing: neutral``. A quotient has no row
+    absent has no row, or a zero under ``missing: 0``. A quotient has no row
     where its divisor is absent or zero. A variable-free expression is one row.
     Dims come in declaration order, rows in label order.
 

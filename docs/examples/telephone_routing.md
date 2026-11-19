@@ -37,7 +37,7 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 |---|---|
 | $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{A}`$ — circuits an arc can carry |
 | $`\mathrm{demand}`$ | `demand` over $`\mathcal{C}`$ — circuits a city pair asked for |
-| $`\mathrm{uses}`$ | `uses` over $`\mathcal{P} \times \mathcal{A}`$, `neutral` where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
+| $`\mathrm{uses}`$ | `uses` over $`\mathcal{A} \times \mathcal{P}`$, $`0`$ where the data has no row — which arcs a path traverses — a path uses an arc or it does not, so the value is 1 and absence is 0 |
 
 #### Variables
 
@@ -61,16 +61,16 @@ Routing telephone calls over a five-city network: how many of the 425 requested 
 
 #### Subject to
 
+**`within_capacity`**
+
+```math
+\sum_{p \in \mathcal{P}} \mathit{flow}_{p} \cdot \mathrm{uses}_{a,p} \le \mathrm{capacity}_{a} \qquad \forall\, a \in \mathcal{A}
+```
+
 **`within_demand`**
 
 ```math
 \sum_{p \in \mathcal{P} \,:\, \mathrm{call\_of}(p) = c} \mathit{flow}_{p} \le \mathrm{demand}_{c} \qquad \forall\, c \in \mathcal{C}
-```
-
-**`within_capacity`**
-
-```math
-\sum_{p \in \mathcal{P}} \mathit{flow}_{p} \cdot \mathrm{uses}_{p,a} \le \mathrm{capacity}_{a} \qquad \forall\, a \in \mathcal{A}
 ```
 
 </details>
@@ -118,7 +118,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           which arcs a path traverses — a path uses an arc or it does not, so the
           value is 1 and absence is 0
         dims: [path, arc]
-        missing: neutral
+        missing: 0
 
     variables:
       flow:

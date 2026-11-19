@@ -165,7 +165,7 @@ def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
     """
     sparse = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'k': {'dims': ['g'], 'missing': 'neutral'}},
+        'parameters': {'k': {'dims': ['g'], 'missing': 0}},
         'variables': {'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'quad': {'dims': ['g'], 'expression': 'k * p * p <= 10'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},

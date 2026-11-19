@@ -237,10 +237,13 @@ def given_rows(
     """
     given: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        if not pdef.dims or pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
+        if pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
             continue
         product = math.prod(len(master_coords[d]) for d in pdef.dims)
         if tidy[pname].select(pl.len()).collect().item() < product:
+            if not pdef.dims:
+                given[pname] = xr.DataArray(False)
+                continue
             held = _from_tidy(tidy[pname].collect(), pdef.dims).reindex({d: master_coords[d] for d in pdef.dims})
             given[pname] = held.notnull()
     return given

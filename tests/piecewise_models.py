@@ -30,10 +30,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -68,10 +69,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot, generator]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -106,11 +108,12 @@ variables:
 
 piecewise:
   chp:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [power, power_bp]
-      - [fuel, fuel_bp]
-      - [heat, heat_bp]
+      power: [power, power_bp]
+      fuel: [fuel, fuel_bp]
+      heat: [heat, heat_bp]
 
 constraints:
   balance:
@@ -145,10 +148,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
     activity: u
 
 constraints:
@@ -194,10 +198,11 @@ variables:
 piecewise:
   cost_curve:
     description: cost bounded below by the curve, which is exact where the curve is convex
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, '>=']
     method: lp
 
 constraints:

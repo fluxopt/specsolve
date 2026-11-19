@@ -10,6 +10,7 @@ SOS1, SOS2 and the unrestricted LP all have *different* optima.
 from __future__ import annotations
 
 import itertools
+import json
 from typing import Any
 
 import polars as pl
@@ -122,7 +123,7 @@ OPEN_BELOW = {'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'upper
         ),
         pytest.param(
             {'pick': {'variable': 'take', 'along': 'size'}, 'again': {'variable': 'take', 'along': 'size', 'type': 2}},
-            "already carries the set declared by 'pick'",
+            "already carries the set declared by 'again'",
             {},
             id='two-sets-over-one-variable',
         ),
@@ -294,7 +295,7 @@ def test_a_sos2_set_of_one_member_restricts_nothing():
     after it own.
     """
     raw = spec(2)
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     raw['variables'] = {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}}
     live = DATA | {
         'live': _table({(site, size): (site == 'north' or size == 0) for site in SITES for size in SIZES}).with_columns(
@@ -323,7 +324,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int', 'ordered': True}},
         'parameters': {
             'worth': {'dims': ['site', 'size']},
-            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'},
+            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False},
         },
         'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'live'}},
         'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': 1}},
@@ -354,14 +355,21 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
 def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     """The one shape where the stream is not already in ``(set, weight)`` order.
 
-    With ``over`` first in the ``dims``, a set's members are ``|site|``
-    apart in label order, so every set interleaves with every other. The sinks
-    read a set's edges off neighbouring rows, so an ungrouped stream links
-    members to the wrong binaries — and still reaches a plausible optimum.
+    The dims sort by name, so ``over`` leads where its name sorts first:
+    `site` renamed `unit` puts `size` ahead of it. A set's members are then
+    ``|unit|`` apart in label order, so every set interleaves with every other.
+    The sinks read a set's edges off neighbouring rows, so an ungrouped stream
+    links members to the wrong binaries — and still reaches a plausible optimum.
     """
-    raw = spec(1)
-    raw['variables'] = {'take': {'dims': ['size', 'site'], 'bounds': {'lower': 0, 'upper': 'cap'}}}
-    with sps.build(raw, DATA) as model:
+    raw = json.loads(json.dumps(spec(1)).replace('site', 'unit'))
+    data = {
+        'unit': SITES,
+        'size': SIZES,
+        'value': _table(VALUE).rename({'site': 'unit'}),
+        'cap': _table(CAP).rename({'site': 'unit'}),
+    }
+    assert sps.check(raw).variables['take'].dims == ('size', 'unit'), 'the set runs along the leading dim'
+    with sps.build(raw, data) as model:
         sets = model._engine._model.handoff.sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
@@ -385,7 +393,7 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dim
     take = {'dims': dims, 'bounds': {'lower': 0, 'upper': 'cap'}}
     raw = spec(2) | {'variables': {'take': take}}
     masked = raw | {
-        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}},
+        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}},
         'variables': {'take': take | {'where': 'live'}},
     }
     live = _table(dict.fromkeys(((site, size) for site in SITES for size in SIZES), 1.0)).with_columns(
@@ -411,7 +419,7 @@ def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
     """
     take = {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}
     raw = spec(1) | {'variables': {'take': take}}
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     live = _table({(site, size): float(site == 'south') for site in SITES for size in SIZES}).with_columns(
         pl.col('value').cast(pl.Boolean)
     )

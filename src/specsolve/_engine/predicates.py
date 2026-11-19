@@ -15,7 +15,7 @@ from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
-from specsolve._engine.scope import join_on
+from specsolve._engine.scope import join_on, missing_value
 from specsolve._engine.shifts import translate_rows
 from specsolve._messages import position_out_of_range_message, short_groups_message
 from specsolve.errors import DataError
@@ -68,7 +68,7 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     if where is None:
         return out
     on = tuple(d for d in dims if d in where.dims)
-    if on and len(on) < len(dims) and where.dims <= set(dims):
+    if on and len(on) < len(dims) and set(where.dims) <= set(dims):
         keyed = scope.product(on)
         carrier, condition = compile_predicate(scope, keyed, where, on)
         if carrier is keyed:
@@ -89,7 +89,7 @@ def compile_predicate(
     semi-joined rather than left-joined. No join maintains order: consumers
     verify it ([`labels.in_position_order`][]).
     """
-    certain = _certain_names(mask)
+    certain = {name for name in _certain_names(mask) if _false_without_a_row(mask, name, scope)}
     carrier = Carrier(frame)
     serial = itertools.count()
 
@@ -164,7 +164,10 @@ def compile_predicate(
 
     def walk(p: program.Condition) -> pl.Expr:
         if isinstance(p, program.ParameterComparison):
-            return _compare(pl.col(join_param(p.name)), p.op, p.value)
+            column = pl.col(join_param(p.name))
+            if (fill := missing_value(scope.program, p.name)) is not None:
+                column = column.fill_null(fill)
+            return _compare(column, p.op, p.value)
         if isinstance(p, program.ExpressionComparison):
             left, right = (_values(scope, side) for side in (p.left, p.right))
             columns = tuple(
@@ -318,6 +321,27 @@ def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> No
     named = (row[0] if len(grouping.key) == 1 else row[:-1] for row in sizes.iter_rows() if row[-1] < needed)
     if short := sorted(str(group) for group in named):
         raise DataError(short_groups_message(p.name, p.partition.name, p.op, p.position, short))
+
+
+def _false_without_a_row(mask: program.Mask, name: str, scope: Scope) -> bool:
+    """Whether the mask is false at a coordinate where *name* has no row, so a join may drop that coordinate.
+
+    A name with no fill value reads null there. One with a value reads it, and
+    the mask is still false where a conjunct on the name is false at that value,
+    as ``installed > 0`` is under ``missing: 0``.
+    """
+    fill = missing_value(scope.program, name)
+    if fill is None:
+        return True
+    return any(
+        isinstance(atom, program.ParameterDefined)
+        or (
+            isinstance(atom, program.ParameterComparison)
+            and not pl.select(_compare(pl.lit(fill), atom.op, atom.value)).item()
+        )
+        for atom in mask.conjuncts
+        if getattr(atom, 'name', None) == name
+    )
 
 
 def falsy_if_null(condition: pl.Expr) -> pl.Expr:

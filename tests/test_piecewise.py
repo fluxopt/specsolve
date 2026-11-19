@@ -188,13 +188,13 @@ def test_the_sos2_method_states_the_restriction_instead_of_building_it():
     """
     program = expanded(SOS2_SPEC, 'piecewise').program
 
-    assert list(program.variables) == ['p', 'op_cost', 'cost_curve_lam'], (
+    assert list(program.variables) == ['cost_curve_lam', 'op_cost', 'p'], (
         'the weights are emitted and the segment binaries a method with none would need are not'
     )
     assert set(program.constraints) == {
         'cost_curve_convexity',
-        'cost_curve_link0',
-        'cost_curve_link1',
+        'cost_curve_p',
+        'cost_curve_op_cost',
         'balance',
     }, 'the two rows that pick and neighbour a segment are gone with the variable they restricted'
     assert all(v.domain == 'continuous' for v in program.variables.values()), 'sos2 emits no binary of its own'
@@ -272,7 +272,7 @@ def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
         raw_of(NONCONVEX_YAML),
         **{'dimensions.zone': {'dtype': 'str'}, 'parameters.bp_y': {'dims': ['zone', 'bp']}},
     )
-    stray = r"link 1 values parameter 'bp_y' carries \['zone'\], which no link expression does"
+    stray = r"link 'op_cost' values parameter 'bp_y' is over \['zone'\], and its row \['snapshot'\] is not"
 
     with pytest.raises(DimensionError, match=stray):
         expanded(raw)
@@ -456,12 +456,12 @@ def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
 
     On this fixture B would interpolate between its real (20, 130) and the
     (0, 0) it never declared, for an optimum of 147.5 where its own two points
-    put it at 195. A curve with no `points:` reads its tables under the default
+    put it at 195. A curve with no `where:` reads its tables under the default
     `missing: refused`, so the refusal names the breakpoint B has no row at.
     """
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at generator=B, bp=2"):
+    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at bp=2, generator=B"):
         tidy_sources(schema.expand('piecewise').program, dict(ragged_inputs))
 
 
@@ -470,7 +470,7 @@ def test_the_curve_guard_fires_on_the_linopy_lane_too(ragged_inputs, tmp_path):
     path = tmp_path / 'two_dim.yaml'
     path.write_text(TWO_DIM_YAML)
 
-    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at generator=B, bp=2"):
+    with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at bp=2, generator=B"):
         specsolve_linopy.build(expanded(path), dict(ragged_inputs))
 
 
@@ -528,7 +528,7 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 
 
 # ---------------------------------------------------------------------------
-# points: a curve shorter than its breakpoint dimension
+# where: a curve shorter than its breakpoint dimension
 # ---------------------------------------------------------------------------
 
 SHORT_CURVE = """
@@ -541,7 +541,7 @@ parameters:
   load: {dims: []}
   bp_x: {dims: [generator, bp], missing: absent}
   bp_y: {dims: [generator, bp], missing: absent}
-  bp_present: {dims: [generator, bp], dtype: bool, missing: neutral}
+  bp_present: {dims: [generator, bp], dtype: bool, missing: false}
 
 variables:
   p:
@@ -553,11 +553,12 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
-    points: bp_present
+    along: bp
+    dims: [generator]
+    where: bp_present
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -602,7 +603,7 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['op_cost'] = ['op_cost', 'bp_y', '>=']
     path = tmp_path / 'masked.yaml'
     path.write_text(pyyaml.safe_dump(raw))
 
@@ -624,7 +625,7 @@ def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['op_cost'] = ['op_cost', 'bp_y', '>=']
 
     result = sps.solve(expanded(raw), short_curve_inputs)
 
@@ -637,7 +638,7 @@ def test_the_mask_is_smaller_than_padding_the_curve_out(short_curve_inputs):
     padded['bp_x'] = curve_frame({**A_AND_SHORT_B['x'], ('B', 2): 20.0})
     padded['bp_y'] = curve_frame({**A_AND_SHORT_B['y'], ('B', 2): 130.0})
     unmasked = raw_of(SHORT_CURVE)
-    del unmasked['piecewise']['cost_curve']['points']
+    del unmasked['piecewise']['cost_curve']['where']
     del unmasked['parameters']['bp_present']
 
     with sps.build(expanded(raw_of(SHORT_CURVE)), short_curve_inputs) as masked_model:
@@ -673,11 +674,6 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
             'must mark a consecutive run',
             id='a-gap-in-the-mask',
         ),
-        pytest.param(
-            {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): False, ('B', 1): False, ('B', 2): False},
-            'must mark a consecutive run',
-            id='a-curve-of-no-points-at-all',
-        ),
     ],
 )
 def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
@@ -702,6 +698,28 @@ def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
         tidy_sources(schema.expand('piecewise').program, data)
 
 
+def test_a_mask_that_marks_no_breakpoint_leaves_no_curve(short_curve_inputs):
+    """A curve exists where its `where:` admits a breakpoint, so a mask of none is no curve rather than a gap.
+
+    B's mask is false at every breakpoint, so B has no weights and no row ties
+    its cost to a curve: B runs at its bound of 20 for nothing, and A covers
+    the remaining 5 on its own curve, for 25.
+    """
+    nothing = {(g, k): g == 'A' for g in ('A', 'B') for k in range(3)}
+    whole = {
+        'bp_x': {('A', 0): 0.0, ('A', 1): 10.0, ('A', 2): 20.0, ('B', 0): 10.0, ('B', 1): 20.0, ('B', 2): 30.0},
+        'bp_y': {('A', 0): 0.0, ('A', 1): 50.0, ('A', 2): 140.0, ('B', 0): 100.0, ('B', 1): 130.0, ('B', 2): 200.0},
+    }
+    data = {**short_curve_inputs, **{n: curve_frame(v) for n, v in whole.items()}, 'bp_present': curve_frame(nothing)}
+
+    result = sps.solve(expanded(raw_of(SHORT_CURVE)), data)
+
+    assert {row['generator'] for row in result.primal('cost_curve_lam').to_dicts()} == {'A'}, (
+        'B declares no weight at all'
+    )
+    assert result.objective == pytest.approx(25.0), 'B is free of any curve, and A covers the rest on its own'
+
+
 def test_values_missing_where_the_mask_says_present_are_still_refused(short_curve_inputs):
     """#1105's guard follows the mask rather than the whole product."""
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
@@ -713,23 +731,23 @@ def test_values_missing_where_the_mask_says_present_are_still_refused(short_curv
 
 
 def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_inputs):
-    """A ragged curve meets this message first, so it is where `points:` is discovered.
+    """A ragged curve meets this message first, so it is where a `where:` over `bp` is discovered.
 
     With a mask already declared the same advice would be wrong — the reader
     said how far the curve runs and the values disagree — so the way out is
     named against what the block has.
     """
     unmasked = raw_of(SHORT_CURVE)
-    del unmasked['piecewise']['cost_curve']['points'], unmasked['parameters']['bp_present']
+    del unmasked['piecewise']['cost_curve']['where'], unmasked['parameters']['bp_present']
     ragged = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
     without = schema_of(unmasked)
 
-    with pytest.raises(DataError, match='declare points: to say how far the curve runs'):
+    with pytest.raises(DataError, match='declare a where: that sets how far the curve runs'):
         tidy_sources(without.expand('piecewise').program, ragged)
 
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     masked = schema_of(raw_of(SHORT_CURVE))
-    with pytest.raises(DataError, match=r"narrow points: 'bp_present' to where the curve runs"):
+    with pytest.raises(DataError, match=r"narrow where: 'bp_present' to where the curve runs"):
         tidy_sources(masked.expand('piecewise').program, {**short_curve_inputs, 'bp_x': curve_frame(thin)})
 
 
@@ -748,13 +766,13 @@ _ONE_DIM_CURVE = {
 def _nominated_mask_spec():
     """`NONCONVEX_YAML` with its length named as one of its own breakpoints.
 
-    `points: bp_x` masks the weights by where `bp_x` has a row, which is what
+    `where: bp_x` masks the weights by where `bp_x` has a row, which is what
     a bare parameter name means in any `where`.
     """
     return override(
         raw_of(NONCONVEX_YAML),
         **{
-            'piecewise.cost_curve.points': 'bp_x',
+            'piecewise.cost_curve.where': 'bp_x',
             'parameters.bp_x.missing': 'absent',
             'parameters.bp_y.missing': 'absent',
         },
@@ -762,7 +780,7 @@ def _nominated_mask_spec():
 
 
 def test_a_curve_masked_by_its_own_breakpoints_asks_for_nothing_extra():
-    """`points:` naming a values parameter declares no second name to attach.
+    """A `where:` naming a values parameter declares no second name to attach.
 
     The block masks the weights by a parameter the file already wrote, so what
     the caller attaches is exactly what the file declares and the curve still
@@ -803,7 +821,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     """
     raw = raw_of(GATED_YAML)
     raw['piecewise']['cost_curve']['method'] = method
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {'dims': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'}
 
     gated = [True, False] * 6
@@ -826,16 +844,16 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
-    """`missing: neutral` is the spelling the refusal above asks for, and it holds
+    """`missing: 0` is the spelling the refusal above asks for, and it holds
     the formulation together: the row is built everywhere, reading
     ``sum(lam) == 0`` where the gate does not exist."""
     raw = raw_of(GATED_YAML)
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {
         'dims': ['snapshot'],
         'domain': 'binary',
         'where': 'gate_rows',
-        'missing': 'neutral',
+        'missing': 0,
     }
 
     rows = dict(expanded(raw, 'piecewise').program.constraints)
