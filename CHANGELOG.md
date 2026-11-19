@@ -10,6 +10,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(sweep): an archive holds a sweep's answer one file per slice, as a spill and a saved sweep do ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(api): EachCoordinate is EachLabel, and solve_over takes its axis as over ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): an axis names its own key column, and slices written by hand are an EachSlice ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(api): sweep.record is sweep.records, model.check for a sink is model.check_sink, record_options is also_record, and workers_share_fs is shared_filesystem ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a window over a dimension that is not declared ordered is refused ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
