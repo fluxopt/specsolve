@@ -1,7 +1,8 @@
 """What a caller reads back — a solve's [`Result`][], a build's [`Diagnostics`][].
 
 A [`Result`][] holds one finished frame per declaration, its values already
-laid out over the build's coordinates.
+laid out over the build's coordinates. [`Result.save`][] writes one to disk;
+[`load_result`][] reads it back, and [`scan_result`][] leaves it there.
 """
 
 from __future__ import annotations
@@ -25,9 +26,15 @@ from specsolve._answer_layout import (
     Provenance,
     Record,
     asked_for,
+    check_format,
     checked_kind,
     clear_the_answer,
+    kinds_of,
     not_requested_message,
+    read_outputs,
+    read_reasons,
+    read_spec,
+    saved_frames,
     write_format,
     write_reasons,
     write_spec,
@@ -36,7 +43,7 @@ from specsolve._answer_layout import (
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve._names import VALUE
-from specsolve.errors import NoSolutionError, SpecsolveError
+from specsolve.errors import LayoutError, NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -866,3 +873,92 @@ class Result:
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
+
+
+def _absent(reason: str) -> Callable[[], pl.DataFrame]:
+    """A named expression's reader that raises *reason* at the read."""
+
+    def read() -> pl.DataFrame:
+        raise SpecsolveError(reason)
+
+    return read
+
+
+def load_result(directory: str | Path) -> Result:
+    """Read back an answer [`Result.save`][] wrote — a solve, off disk.
+
+    Every reader answers what it answered in the session that solved: the
+    values, the duals, each named expression, the outputs the solve was asked
+    for, and the reason behind anything the solve could not produce. No build
+    or solver is needed.
+
+    The solver's verbatim wording behind a refusal is not recorded — the
+    termination condition is. A solve that reached no objective reads back as
+    ``nan``.
+
+    Args:
+        directory: Where [`save`][specsolve._result.Result.save] wrote
+            it. One inside an archive is
+            [`load_archive`][specsolve._archive.load_archive]'s to find.
+
+    Returns:
+        The result, read into memory, so it owes *directory* nothing.
+        [`scan_result`][] is the same answer left on disk.
+
+    Raises:
+        LayoutError: A directory holding no ``record.parquet``, or one whose
+            layout has moved since it was written.
+    """
+    return _answer_under(Path(directory), whole=True)
+
+
+def scan_result(directory: str | Path) -> Result:
+    """The answer under *directory*, read as its readers are called rather than now.
+
+    The same answer as [`load_result`][], but each frame is a
+    `polars.scan_parquet` of its file, so an answer larger than memory is
+    readable a name at a time, and unread names cost nothing.
+
+    **The files have to outlive the result**: a name read after the
+    directory is gone raises where the scan is collected, and a file
+    rewritten underneath it comes back changed. *directory* is as
+    [`load_result`][] takes it.
+
+    Raises:
+        LayoutError: As [`load_result`][] raises it.
+    """
+    return _answer_under(Path(directory), whole=False)
+
+
+def _answer_under(out: Path, *, whole: bool) -> Result:
+    """The saved answer under *out*, its frames read into memory now where *whole*, else scanned."""
+    parquet.require('reading a saved answer')
+    record_file = out / RECORD_FILE
+    if not record_file.is_file():
+        raise LayoutError(
+            f'{str(out)!r} holds no {RECORD_FILE!r}, so it is not an answer save() wrote. Every one '
+            f'carries that record whether or not the solve produced values.'
+        )
+    check_format(out)
+    record = Record(**parquet.read(record_file).row(0, named=True))
+    status = record.solve_status
+    objective = float('nan') if record.objective is None else record.objective
+    no_duals, absent = read_reasons(out)
+    expressions: dict[str, Callable[[], pl.DataFrame]] = {
+        name: (lambda frame=frame: frame.pipe(collected))
+        for name, frame in saved_frames(out / 'expression', whole=whole).items()
+    }
+    expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
+    return Result(
+        status,
+        objective,
+        saved_frames(out / 'primal', whole=whole),
+        saved_frames(out / 'dual', whole=whole),
+        {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
+        expressions,
+        _no_duals=no_duals,
+        _spec=read_spec(out),
+        _solved_at=record.solved_at,
+        _run=record.specsolve_run,
+        _provenance=record.provenance,
+    )

@@ -24,9 +24,10 @@ from importlib.metadata import version as _installed_version
 
 from specsolve import errors as errors
 from specsolve import types as types
-from specsolve._api import build, check, evaluate, load_result, scan_result, solve, tidy, write
+from specsolve._api import build, check, evaluate, solve, tidy, write
 from specsolve._archive import load_archive, load_inputs, scan_archive
 from specsolve._axes import EachCoordinate, EachWindow
+from specsolve._result import load_result, scan_result
 from specsolve._strategy import solve_over
 from specsolve._sweep import load_sweep, scan_sweep
 

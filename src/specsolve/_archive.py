@@ -21,7 +21,7 @@ from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, Metrics, other_layout, row_of
-from specsolve._api import build, load_result, scan_result
+from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
     AXIS_MEMBER,
@@ -34,6 +34,7 @@ from specsolve._axes import axis_from
 from specsolve._collect import collected
 from specsolve._inputs import lower
 from specsolve._names import RUN
+from specsolve._result import load_result, scan_result
 from specsolve._sweep import Sweep, archived_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
@@ -237,7 +238,7 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
 
     Checked before the answer is read, so this message wins over the generic
-    one [`load_result`][] gives, which names a scratch directory for a zip.
+    one [`load_result`][specsolve._result.load_result] gives, which names a scratch directory for a zip.
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(

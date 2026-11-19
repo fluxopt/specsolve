@@ -197,7 +197,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language |
-| `_api.py` | the functions, and `load_result` / `scan_result` |
+| `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
 | `_inputs.py` | `Buildable` and `Source`, what every function takes |
@@ -225,7 +225,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/coverage.py` | is the data there where a declaration reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by label |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned |
+| `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
 | `_sinks/handoff.py` | what every sink reads |
