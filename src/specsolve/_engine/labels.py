@@ -98,6 +98,24 @@ def frame(
     return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
 
 
+def narrowed(
+    labelled: pl.DataFrame, dims: tuple[str, ...], label: str, start: int, restrictions: Sequence[Presence]
+) -> pl.DataFrame:
+    """*labelled*, as [`frame`][] labelled a ``where`` without *restrictions*, cut to them and numbered again from *start*.
+
+    The frame [`frame`][] gives with the restrictions, without reading the
+    ``where`` a second time: both number the survivors in position order, and
+    *labelled*'s labels already run in it.
+    """
+    surviving = labelled.lazy()
+    for restriction in restrictions:
+        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
+    kept = in_position_order(surviving.pipe(collected), label).drop(label)
+    return kept.with_row_index(label, offset=start).select(
+        *(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted()
+    )
+
+
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
     """[`frame`][]'s answer over dims one of which has no label, read without a query: no row, in its columns and dtypes."""
     schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
