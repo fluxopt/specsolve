@@ -543,7 +543,9 @@ def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
     if not result.has_primal:
         return SliceAnswer(result.record, metrics)
     held, no_expressions = result._all_frames()
-    frames = {kind: {name: frame.pipe(collected) for name, frame in named.items()} for kind, named in held.items()}
+    frames = {
+        kind: {name: frame.lazy().pipe(collected) for name, frame in named.items()} for kind, named in held.items()
+    }
     return SliceAnswer(result.record, metrics, frames, result._no_duals, no_expressions)
 
 

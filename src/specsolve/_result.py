@@ -814,7 +814,7 @@ class Result:
         write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
         return out
 
-    def _all_frames(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame]], dict[str, str]]:
+    def _all_frames(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
         """``{kind: {name: frame}}`` for every kind this answer carries, and why each expression left out is.
 
         What [`save`][] writes and a sweep keeps of a slice. The declared
@@ -824,11 +824,11 @@ class Result:
         Raises:
             SpecsolveError: This result was closed.
         """
-        expressions: dict[str, pl.LazyFrame] = {}
+        expressions: dict[str, pl.DataFrame] = {}
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
-                expressions[name] = reader().lazy()
+                expressions[name] = reader()
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
         return {**self._unclosed('the solution'), 'expression': expressions}, no_expressions
