@@ -66,7 +66,9 @@ def frame(
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next
-        free label is ``start`` plus its height. With no dims it is
+        free label is ``start`` plus its height, each column in one chunk, so
+        a frame laid out against it is written as one parquet row group
+        rather than one per chunk the cross join left. With no dims it is
         ``([`UNIT`][], label)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
@@ -92,10 +94,10 @@ def frame(
     )
     if not dropped and dims:
         materialised.replace_column(materialised.get_column_index(label), materialised.get_column(label).set_sorted())
-        return materialised
+        return materialised.rechunk()
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
-    return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
+    return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted()).rechunk()
 
 
 def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
@@ -155,7 +157,7 @@ def _factored(
         )
         .pipe(collected)
     )
-    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
+    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted()).rechunk()
 
 
 def _free_prefix(dims: tuple[str, ...], touched: Collection[str]) -> int:
