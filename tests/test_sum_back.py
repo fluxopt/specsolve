@@ -516,3 +516,40 @@ def test_a_window_over_only_absent_terms_is_zero_and_its_row_stands():
     with differential(ONLY_ABSENT_TERMS, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'every snapshot holds its window row, absent terms or not'
         assert run.oracle == pytest.approx(10.0), 'y[0] and y[1] are held at 0 by a window of nothing'
+
+
+def absent_width_spec(*, masked: bool) -> dict:
+    """A per-entity width that is `missing: absent`, with no row at `a`, over a masked or a dense operand."""
+    spec = {
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'u': {'dtype': 'str'}},
+        'parameters': {
+            'w': {'dims': ['u'], 'dtype': 'int', 'missing': 'absent'},
+            'live': {'dims': ['t'], 'dtype': 'bool'},
+        },
+        'variables': {
+            'x': {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {'c': {'dims': ['t', 'u'], 'expression': 'y <= sum_back(x, along=t, window=w)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y) - 1000 * sum(x)'},
+    }
+    if masked:
+        spec['variables']['x']['where'] = 'live'
+    return spec
+
+
+ABSENT_WIDTH_SOURCES = {
+    't': pd.Index([0, 1, 2], name='t'),
+    'u': pd.Index(['a', 'b'], name='u'),
+    'w': pd.Series([2], index=pd.Index(['b'], name='u')),
+    'live': pd.Series([True, True, False], index=pd.Index([0, 1, 2], name='t')),
+}
+
+
+@pytest.mark.xfail(strict=True, reason='#2092 review')
+@pytest.mark.parametrize('masked', [True, False], ids=['masked-operand', 'dense-operand'])
+def test_an_entity_whose_width_is_absent_has_no_window_and_no_row(masked: bool):
+    """A `missing: absent` width with no row at an entity leaves its window absent there, so no row."""
+    with differential(absent_width_spec(masked=masked), ABSENT_WIDTH_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'only the three rows at u=b, whose width is defined'
+        assert run.oracle == pytest.approx(30.0), 'y[a, *] is capped by no row, each at its bound of 10'
