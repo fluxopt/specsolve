@@ -28,7 +28,7 @@ from specsolve._collect import collected
 from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
 from specsolve._engine.relations import landed, mapping, walk_join
-from specsolve._engine.scope import UNIT, Scope
+from specsolve._engine.scope import UNIT, Scope, missing_value
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
 from specsolve._engine.terms import (
     PRESENT,
@@ -150,7 +150,10 @@ class Compiler:
             if isinstance(e, program.ParameterReference):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 read = pl.col(alias).cast(pl.Float64)
-                return read.fill_null(open_side) if self.scope.absent(e.name) else read
+                if self.scope.absent(e.name):
+                    return read.fill_null(open_side)
+                fill = missing_value(self.scope.program, e.name)
+                return read if fill is None else read.fill_null(float(fill))
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 

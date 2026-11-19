@@ -89,7 +89,7 @@ def compile_predicate(
     semi-joined rather than left-joined. No join maintains order: consumers
     verify it ([`labels.in_position_order`][]).
     """
-    certain = {name for name in _certain_names(mask) if missing_value(scope.program, name) is None}
+    certain = {name for name in _certain_names(mask) if _false_without_a_row(mask, name, scope)}
     carrier = Carrier(frame)
     serial = itertools.count()
 
@@ -321,6 +321,27 @@ def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> No
     named = (row[0] if len(grouping.key) == 1 else row[:-1] for row in sizes.iter_rows() if row[-1] < needed)
     if short := sorted(str(group) for group in named):
         raise DataError(short_groups_message(p.name, p.partition.name, p.op, p.position, short))
+
+
+def _false_without_a_row(mask: program.Mask, name: str, scope: Scope) -> bool:
+    """Whether the mask is false at a coordinate where *name* has no row, so a join may drop that coordinate.
+
+    A name with no fill value reads null there. One with a value reads it, and
+    the mask is still false where a conjunct on the name is false at that value,
+    as ``installed > 0`` is under ``missing: 0``.
+    """
+    fill = missing_value(scope.program, name)
+    if fill is None:
+        return True
+    return any(
+        isinstance(atom, program.ParameterDefined)
+        or (
+            isinstance(atom, program.ParameterComparison)
+            and not pl.select(_compare(pl.lit(fill), atom.op, atom.value)).item()
+        )
+        for atom in mask.conjuncts
+        if getattr(atom, 'name', None) == name
+    )
 
 
 def falsy_if_null(condition: pl.Expr) -> pl.Expr:

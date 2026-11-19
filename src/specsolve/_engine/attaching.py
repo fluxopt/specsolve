@@ -117,15 +117,14 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
 
 def filled_parameters(declared: program.Program) -> frozenset[str]:
-    """The parameters read under a divisor or by a bound anywhere in *declared*.
+    """The parameters read under a divisor anywhere in *declared*.
 
     A ``missing: 0`` row of one is filled rather than left sparse: a sparse
     zero is no contribution to a term, but under a divisor it is the number
-    divided by, as in ``x / (1 + d)``, and in a bound it is the bound.
+    divided by, as in ``x / (1 + d)``. A bound fills its own read instead.
     """
     named = (e.expression for e in declared.expressions.values())
-    bounds = (b for v in declared.variables.values() for b in (v.lower, v.upper) if b is not None)
-    return program_module.parameters_of(*divisors_of(*declared.roots, *named), *bounds)
+    return program_module.parameters_of(*divisors_of(*declared.roots, *named))
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
