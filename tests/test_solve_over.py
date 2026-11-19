@@ -1661,7 +1661,7 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
 
 
 def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
-    """`axis` also takes a plain list of `(key, sources)`.
+    """`over` also takes a plain list of `(key, sources)`.
 
     The list cannot say what its keys are coordinates *of*, so `key=` is
     required there.
@@ -1672,7 +1672,7 @@ def test_a_hand_built_axis_needs_no_class_but_must_name_its_own_key():
     with pytest.raises(sps.errors.SpecsolveError, match='hand-built axis needs key_name='):
         sps.solve_over(DISPATCH, base, slices)
 
-    runs = sps.solve_over(DISPATCH, base, slices, key_name='draw')
+    runs = sps.solve_over(DISPATCH, base, over=slices, key_name='draw')
     assert runs.keys == ['low', 'high']
     assert runs.records.columns[0] == 'draw'
     assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'

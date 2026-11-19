@@ -8,7 +8,7 @@ returns. [A horizon too large for one solve](../sweep.md) and
 
 ## The axes
 
-An axis says how the sources split into slices:
+`over=` takes an axis, which says how the sources split into slices:
 
 | Axis | Slices |
 |---|---|

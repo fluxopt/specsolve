@@ -137,7 +137,7 @@ def _archiving(archive: str | Path | None, axis: Axis | HandBuilt) -> tuple[Path
 def solve_over(
     spec: SpecLike,
     sources: Mapping[str, Source],
-    axis: Axis | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    over: Axis | Mapping[str, Any] | HandBuilt,  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     key_name: str | None = None,
     executor: Executor | None = None,
@@ -150,7 +150,7 @@ def solve_over(
     outputs: Iterable[Output] = (),
     start: Sweep | Result | Start | Literal['previous'] | None = 'previous',
 ) -> Sweep:
-    """Solve *spec* once per slice of *axis* and fold the answers together.
+    """Solve *spec* once per slice of *over* and fold the answers together.
 
     The rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 
@@ -160,8 +160,8 @@ def solve_over(
         sources: As [`build`][specsolve._api.build] takes them, every shape
             included; the axis filters the parameters and relations that carry
             it and passes the rest through.
-        axis: [`EachLabel`][], [`EachWindow`][], either as the plain
-            data its ``to_dict`` writes, or a list of ``(key, sources)``
+        over: The axis: [`EachLabel`][], [`EachWindow`][], either as the
+            plain data its ``to_dict`` writes, or a list of ``(key, sources)``
             written by hand. An axis's ``carry=`` chains its slices; a
             hand-built list carries nothing.
         key_name: What to call the slice column; a class axis names its own,
@@ -236,8 +236,7 @@ def solve_over(
             or a *start* that leaves a slice no row, which starts that slice
             from nothing.
     """
-    if isinstance(axis, Mapping):
-        axis = axis_from(axis)
+    axis = axis_from(over) if isinstance(over, Mapping) else over
     carry: Mapping[str, str] = axis.carry if isinstance(axis, Axis) else {}
     if carry and executor is not None:
         raise SpecsolveError(

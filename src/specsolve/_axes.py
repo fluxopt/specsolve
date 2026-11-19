@@ -134,7 +134,7 @@ class EachLabel:
         return out
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what ``axis=`` takes hand-built.
+        """The ``(key, sources)`` list this axis would run on *spec* — what ``over=`` takes hand-built.
 
         For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
         """
@@ -225,7 +225,7 @@ class EachWindow:
     carry: Mapping[str, str] = field(default_factory=dict, kw_only=True, hash=False)
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what ``axis=`` takes hand-built.
+        """The ``(key, sources)`` list this axis would run on *spec* — what ``over=`` takes hand-built.
 
         For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
         The pairs carry no ownership: solved as a list, the slices need
@@ -359,7 +359,7 @@ Axis = EachLabel | EachWindow
 _EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'window': EachWindow}
 
 
-#: Slices written by hand, one ``(key, sources)`` pair each; ``axis=`` takes
+#: Slices written by hand, one ``(key, sources)`` pair each; ``over=`` takes
 #: this beside an [`Axis`][].
 type HandBuilt = Sequence[tuple[Label, Mapping[str, Source]]]
 
@@ -391,7 +391,7 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
 
 
 def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs ``axis=`` takes hand-built."""
+    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs ``over=`` takes hand-built."""
     program = lowered(spec)
     axis._check_the_program(program, sources)
     return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]
