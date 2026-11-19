@@ -204,9 +204,12 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         An existing presence goes through the same map as the rows, the vacated
         positions going back in under a fill. An operand with no presence gets
         one under an acyclic edge, or else its row would survive with the term
-        quietly gone; under a wrap or fill only a coordinate in no group is absent.
+        quietly gone; under a wrap or fill only a coordinate in no group is
+        absent, and one a named offset has no row for.
         """
         if not p.presences:
+            if edge.offsets is not None:
+                return (Presence(edge.coordinates(vacated=None), edge.keys),)
             if s.wrap or s.fill is not None:
                 return (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
             return (Presence(edge.coordinates(vacated=False), edge.keys),)
@@ -257,12 +260,12 @@ class _Edge:
     def keys(self) -> tuple[str, ...]:
         return tuple(dict.fromkeys((self.order.grouping.dimension, *self.offset_dims, *self.order.grouping.joined)))
 
-    def coordinates(self, *, vacated: bool) -> pl.LazyFrame:
-        """The coordinates the shift vacates, or keeps, under [`keys`][].
+    def coordinates(self, *, vacated: bool | None) -> pl.LazyFrame:
+        """The coordinates the shift vacates, keeps, or, under ``None``, both, under [`keys`][].
 
         Exact complements, so a fill and the presence it implies agree on the
         edge. Under a partition the edge is each group's; a coordinate in no
-        group is in neither.
+        group is in neither, and nor is one a named offset has no row for.
         """
         grouping, s = self.order.grouping, self.shift
         table, position, span = grouping.table, pl.col(GROUP_RANK), pl.col(GROUP_SIZE)
@@ -278,7 +281,9 @@ class _Edge:
         reaches = (source % span + span) % span if s.wrap else source
         outside = (reaches < 0) | (reaches >= span)
         keyed = [d for d in self.keys if d != s.along]
-        return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.along), *keyed)
+        if vacated is not None:
+            table = table.filter(outside if vacated else ~outside)
+        return table.select(pl.col('val').alias(s.along), *keyed)
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""

@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(engine): a shift whose offset is absent builds no row ([#2096](https://github.com/fluxopt/specsolve/pull/2096))
 - fix(engine): a sum_back over only absent terms keeps its row as 0 ([#2095](https://github.com/fluxopt/specsolve/pull/2095))
 - fix(data): a divisor or an exponent that a case makes 0 is read as 0 ([#2097](https://github.com/fluxopt/specsolve/pull/2097))
 - perf(engine): a variable times a sum of parameters, as in a piecewise curve, builds about 40% faster ([#2091](https://github.com/fluxopt/specsolve/pull/2091))

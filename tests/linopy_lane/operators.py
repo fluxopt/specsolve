@@ -20,7 +20,7 @@ import xarray as xr
 from tests.linopy_lane import absence
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Mapping
+    from collections.abc import Callable, Hashable, Mapping
 
     import pandas as pd
 
@@ -206,14 +206,17 @@ def operator_shift(array: Any, *, over: str, offset: Any, wrap: bool, fill: floa
 
     *offset* arrives as an array where the model named a parameter — an offset
     that differs per entity, which is a gather rather than a shift
-    (:func:`_gather_by_offset`).
+    (:func:`_gather_by_offset`), and absent where it has no value
+    (:func:`_absent_where_unread`).
     """
     edge = _Edge(wrap, fill)
     if by is not None:
         groups = _grouped(over, np.asarray(array.indexes[over]), by)
-        return _gather_in_groups(array, over, _per_group(offset, by), groups=groups, edge=edge)
+        return _absent_where_unread(
+            _per_group(offset, by), lambda amount: _gather_in_groups(array, over, amount, groups=groups, edge=edge)
+        )
     if isinstance(offset, xr.DataArray) and offset.ndim:
-        return _gather_by_offset(array, over, offset, edge=edge)
+        return _absent_where_unread(offset, lambda amount: _gather_by_offset(array, over, amount, edge=edge))
     amount: dict[Hashable, int] = {over: int(offset)}
     if wrap:
         return array.roll(amount, roll_coords=False) if isinstance(array, xr.DataArray) else array.roll(amount)
@@ -353,6 +356,18 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
     moved = gathered(source.clip(0, card - 1)).where(inside)
     return moved if edge.fill is None else absence.vacated(moved, array, over, ~inside, edge.fill)
+
+
+def _absent_where_unread(offset: Any, gather: Callable[[Any], Any]) -> Any:
+    """*gather* at *offset*, absent wherever *offset* is NaN — a ``missing: absent`` row — whatever the edge.
+
+    The gather takes a stand-in of 0 there and is emptied after, so no edge
+    fills the slot: a NaN in the arithmetic would read as off the axis, which a
+    fill writes.
+    """
+    if not isinstance(offset, xr.DataArray) or bool(offset.notnull().all()):
+        return gather(offset)
+    return gather(offset.fillna(0)).where(offset.notnull())
 
 
 def _per_group(offset: Any, groups: Any) -> Any:

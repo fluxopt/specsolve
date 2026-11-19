@@ -451,7 +451,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_shift(
             _eval(node.operand, ctx),
             over=node.along,
-            offset=_amount(node.offset, ctx),
+            offset=_kept_absent(node.offset, ctx),
             wrap=node.wrap,
             fill=node.fill,
             by=_partition(node, ctx),
