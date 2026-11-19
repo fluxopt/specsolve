@@ -10,10 +10,15 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    BASIS_STATUSES,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -185,6 +190,7 @@ class Highs(Solver):
     _column_vectors: ColumnVectors
     _row_vectors: RowVectors
 
+    name = 'highs'
     requires = ('highspy',)
     recorded_options = frozenset(
         {

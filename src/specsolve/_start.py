@@ -15,13 +15,13 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import polars as pl
 
-from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._axes import Axis, EachWindow
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import Result
+from specsolve._sinks.solver import BASIS_STATUSES
 from specsolve._sources import read_values
 from specsolve._sweep import Sweep
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -136,7 +136,7 @@ def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable]
 
 
 def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
-    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve._answer_layout.BASIS_STATUSES]."""
+    """Refuse a basis status outside [`BASIS_STATUSES`][]."""
     held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
     if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
         raise SpecsolveError(

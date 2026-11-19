@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve import _sinks as sinks
-from specsolve._answer_layout import BASIS, BASIS_STATUSES, kinds_of
+from specsolve._answer_layout import kinds_of
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -33,7 +33,7 @@ from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, Diagnostics, Result
-from specsolve._sinks.solver import Basis
+from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -356,9 +356,7 @@ class Engine:
         assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
         found = self._solver.infeasible_subsystem()
         if found is None:
-            raise SpecsolveError(
-                _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
-            )
+            raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
 
     def diagnostics(self) -> Diagnostics:
@@ -582,13 +580,7 @@ def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:
             f'{status.termination_condition!r} rather than infeasible. Read dual() for the prices of a '
             f'model that does have one.'
         )
-    asks = {
-        'gurobi': "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the "
-        'solve to compute the certificate at all',
-        'xpress': "re-solve with solver_options={'presolve': 0}: xpress has a ray only where the simplex "
-        'found the infeasibility, and none where presolve found it first',
-    }
-    ask = asks.get(solver_name)
+    ask = sinks.SOLVERS[solver_name].dual_ray_advice
     return f'the model is infeasible, and the {solver_name} sink returned no dual ray to certify it. ' + (
         f'{ask}.' if ask else 'A ray comes from the simplex, so a run that never reached it has none to give.'
     )

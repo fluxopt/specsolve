@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve._answer_layout import AT_LOWER, BASIC, BASIS
 from specsolve._collect import collected
 from specsolve._engine import coverage, labels
 from specsolve._engine.terms import Term, absence_restrictions
@@ -15,7 +14,7 @@ from specsolve._messages import coordinate_expr, reported_divisor_message, unkno
 from specsolve._names import VALUE
 from specsolve._result import ConstraintRow, InfeasibleSubsystem
 from specsolve._sinks.handoff import SENSE_CODES
-from specsolve._sinks.solver import settled
+from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, settled
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

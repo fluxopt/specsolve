@@ -18,10 +18,9 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve._engine.readback import _counted
 from specsolve._sinks.handoff import SENSE_CODES
-from specsolve._sinks.solver import settled
+from specsolve._sinks.solver import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC, settled
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources

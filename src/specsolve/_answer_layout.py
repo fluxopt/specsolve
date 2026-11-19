@@ -85,17 +85,6 @@ NO_BASIS = (
     "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
 )
 
-#: A basis status in the one vocabulary every solver's is read into, each at
-#: the index that is its code. A row's bound is its right-hand side, so a
-#: binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``, and
-#: a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
-#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
-BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
-BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
-
-#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
-BASIS = pl.Enum(BASIS_STATUSES)
-
 #: Every kind of frame an answer can hold: the three every solve answers with,
 #: then the [`OUTPUT_KINDS`][]. Each is named after the reader it comes back
 #: through.

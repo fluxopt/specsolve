@@ -10,9 +10,13 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -76,6 +80,7 @@ class Gurobi(Solver):
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
 
+    name = 'gurobi'
     requires = ('gurobipy', 'scipy.sparse')
     recorded_options = frozenset(
         {
@@ -94,6 +99,11 @@ class Gurobi(Solver):
     )
     unavailable_message = (
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
+    )
+
+    dual_ray_advice = (
+        "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the solve to compute "
+        'the certificate at all'
     )
 
     #: The only sink with no quadratic exclusion, as

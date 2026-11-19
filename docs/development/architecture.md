@@ -298,8 +298,8 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Add a macro or named expression:** edit YAML.
 
-**Add a sink:** a module in `_sinks/` named for it, with one line in
-`SOLVERS`, or one keyed by suffix in `WRITERS`. Its dependency
+**Add a sink:** a module in `_sinks/` named for it, with its class in
+`SOLVERS`, or one line keyed by suffix in `WRITERS`. Its dependency
 sits behind an extra, imported inside the function. The
 [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)
 is the full list.

@@ -10,9 +10,13 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -62,6 +66,7 @@ class Xpress(Solver):
     _p: Any
 
     #: One package, and it carries its own solver library.
+    name = 'xpress'
     requires = ('xpress',)
     recorded_options = frozenset(
         {
@@ -78,6 +83,11 @@ class Xpress(Solver):
         }
     )
     unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "specsolve[xpress]"'
+
+    dual_ray_advice = (
+        "re-solve with solver_options={'presolve': 0}: xpress has a ray only where the simplex found the "
+        'infeasibility, and none where presolve found it first'
+    )
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
     #: sink does not hand it one.
