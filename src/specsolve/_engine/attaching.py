@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
+from mathspec import program as program_module
+
 from specsolve._collect import collected, in_memory
+from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
@@ -91,8 +94,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
                 'relation', name, relations[name].select(*key).unique(), key, relation.dim, dimensions
             )
     given: dict[str, pl.LazyFrame] = {}
+    divided_by = divisor_parameters(program)
     for name, p in program.parameters.items():
-        if p.missing in ('absent', None) or reads_as_zero(p.missing):
+        if p.missing in ('absent', None) or (reads_as_zero(p.missing) and name not in divided_by):
             continue
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
@@ -111,6 +115,17 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
+
+
+def divisor_parameters(declared: program.Program) -> frozenset[str]:
+    """The parameters read under a divisor anywhere in *declared*.
+
+    A ``missing: 0`` row of one is filled rather than left sparse: a sparse
+    zero is no contribution to a term, but under a divisor it is the number
+    divided by, as in ``x / (1 + d)``.
+    """
+    named = (e.expression for e in declared.expressions.values())
+    return program_module.parameters_of(*divisors_of(*declared.roots, *named))
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:

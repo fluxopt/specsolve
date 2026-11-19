@@ -833,7 +833,7 @@ def _evaluated(expression):
         pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
         pytest.param(
-            _masked_out('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-neutral'
+            _masked_out(0), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-zero'
         ),
         pytest.param(_masked_out('absent'), _evaluated('2 * slack'), [], id='masked-out-missing-absent'),
     ],

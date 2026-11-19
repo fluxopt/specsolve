@@ -215,13 +215,13 @@ def _quotients(
                 continue
             needed = region
             for variable in sorted(_in_place(quotient.numerator)):
-                if ctx.program.variables[variable].missing != 'neutral':
+                if isinstance(ctx.program.variables[variable].missing, str):
                     present = absence.present(ctx.model, variable)
                     needed = present if needed is None else (needed & present)
             if any(quotient is node for node in at_the_row):
                 own = {d for p in params for d in ctx.dataset[p].dims} | set(getattr(needed, 'dims', ()))
                 for variable in sorted(row_variables):
-                    if ctx.program.variables[variable].missing != 'neutral':
+                    if isinstance(ctx.program.variables[variable].missing, str):
                         present = absence.present(ctx.model, variable)
                         present = present.any([d for d in present.dims if d not in own])
                         needed = present if needed is None else (needed & present)
