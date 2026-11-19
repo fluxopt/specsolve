@@ -17,7 +17,7 @@ from specsolve._engine.predicates import masked
 from specsolve._engine.scope import UNIT, ordinal
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from mathspec import program
 
@@ -142,7 +142,7 @@ def _factored(
     return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
 
 
-def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
+def _free_prefix(dims: tuple[str, ...], touched: Collection[str]) -> int:
     """How many leading dims the mask does not read; 0 when it reads the first dim or none.
 
     Only a prefix leaves the survivors contiguous in declaration order.

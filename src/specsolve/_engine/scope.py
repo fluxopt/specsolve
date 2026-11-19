@@ -27,9 +27,14 @@ if TYPE_CHECKING:
 
 
 def missing_value(declared: program.Program, name: str) -> float | bool | None:
-    """The value a missing row of the parameter *name* reads as, or ``None`` under ``refused`` or ``absent``."""
-    missing = declared.parameters[name].missing
-    return None if isinstance(missing, str) else missing
+    """The value a missing row of the parameter *name* reads as, or ``None`` under ``refused`` or ``absent``.
+
+    ``None`` too for a name that is no parameter, such as a variable a mask tests.
+    """
+    declaration = declared.parameters.get(name)
+    if declaration is None or isinstance(declaration.missing, str):
+        return None
+    return declaration.missing
 
 
 def reads_as_zero(missing: program.ParameterMissing | None) -> bool:

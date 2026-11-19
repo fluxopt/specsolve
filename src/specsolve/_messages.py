@@ -111,18 +111,6 @@ def non_finite_message(divisors: str, count: int) -> str:
     )
 
 
-def null_bounds_message(name: str, rows: int) -> str:
-    """The message for a bound parameter missing values at some coordinates."""
-    return (
-        f"variable '{name}': {rows} rows have NULL bounds — a bound parameter is missing "
-        f'values for some coordinates. The two ways out build different models, so the '
-        f'language will not pick one:\n'
-        f'  supply the value           the variable exists there, bounded (`inf` is a value)\n'
-        f'  missing: absent            the variable exists there, and that side is open\n'
-        f'  where: "<the parameter>"   the variable does not exist there at all'
-    )
-
-
 def no_model_behind_this_answer_message() -> str:
     """An expression to read in an answer that has no model behind it."""
     return (
