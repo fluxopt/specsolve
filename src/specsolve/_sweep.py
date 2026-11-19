@@ -230,12 +230,34 @@ class Spill:
     def write(self, position: int, key: Label, answer: SliceAnswer) -> SliceAnswer:
         """*answer*'s frames and record on disk, and the answer with the frames released."""
         answer = answer.sliced(self.key_name, key)
-        for kind, produced in answer.frames.items():
+        self.write_tables(
+            position,
+            key,
+            answer.frames,
+            pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA),
+            pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA),
+        )
+        return replace(answer, frames={})
+
+    def write_tables(
+        self,
+        position: int,
+        key: Label,
+        frames: Mapping[str, Mapping[str, pl.DataFrame]],
+        record: pl.DataFrame,
+        metrics: pl.DataFrame,
+    ) -> None:
+        """One slice on disk: its *frames*, and its one row of *record* and of *metrics*.
+
+        The two rows are taken as tables, so a sweep saves what it holds
+        without reading a value out. A UTC timestamp read out as a Python
+        value needs a time zone database, and the browser has none.
+        """
+        for kind, produced in frames.items():
             for name, frame in produced.items():
                 self._write(with_key(frame, self.key_name, key, self.key_dtype), self._file(kind, position, name))
-        self._write(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
-        self._write(pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
-        return replace(answer, frames={})
+        self._write(metrics, self._file('metrics', position))
+        self._write(record, self._file('record', position))
 
     def take(self, other: Spill) -> None:
         """Every slice *other* holds, written here file for file, so a sweep too large to hold is copied without being held."""
@@ -736,10 +758,10 @@ class Sweep:
         write_reasons(spill.directory, self._no_duals, self._absent, spill._write)
         if on_disk is not None:
             spill.take(on_disk)
+        records = self.records.select(Record._fields)
+        metrics = self.metrics.select(Metrics._fields)
         for position, key, frames in by_slice:
-            record = Record(**self.records.drop(self.key_name).row(position, named=True))
-            taken = Metrics(**self.metrics.select(Metrics._fields).row(position, named=True))
-            spill.write(position, key, SliceAnswer(record, taken, frames))
+            spill.write_tables(position, key, frames, records.slice(position, 1), metrics.slice(position, 1))
         return spill.directory
 
     def _frames_by_slice(

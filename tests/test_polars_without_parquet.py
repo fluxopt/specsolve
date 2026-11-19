@@ -8,6 +8,8 @@ refused with a message that names the call and what still works.
 
 from __future__ import annotations
 
+import sys
+import zoneinfo
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -15,6 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import _parquet as parquet
+from specsolve._names import RUN
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -153,3 +156,39 @@ def test_every_call_that_needs_parquet_goes_through_pyarrow_where_it_can_be_impo
         call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
     finally:
         parquet._polars_has_parquet.cache_clear()
+
+
+@pytest.fixture
+def no_time_zone_database(monkeypatch):
+    """A Python that can name no time zone, as the browser's is until ``tzdata`` is loaded."""
+    monkeypatch.setitem(sys.modules, 'tzdata', None)
+    zoneinfo.reset_tzpath(to=[])
+    zoneinfo.ZoneInfo.clear_cache()
+    yield
+    zoneinfo.reset_tzpath()
+    zoneinfo.ZoneInfo.clear_cache()
+
+
+def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
+    monkeypatch, no_time_zone_database, dispatch_yaml, dispatch_frame_inputs, tmp_path
+):
+    """Archiving a sweep read each slice's record out as Python values, and its UTC timestamp needs the database.
+
+    The browser has none, so polars failed on the first slice. The record now
+    stays a table from the fold to the file. These are the steps of
+    ``tools/pyodide/probe.py``, which is where it was seen.
+    """
+    pytest.importorskip('pyarrow')
+    _take_parquet_away(monkeypatch, pyarrow=True)
+    try:
+        sources = _by_scenario(dispatch_frame_inputs)
+        runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
+        study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
+        again = sps.solve_over(study.spec, study.sources, study.axis)
+    finally:
+        parquet._polars_has_parquet.cache_clear()
+    assert study.sweep.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
+    assert study.sweep.primal('p').equals(runs.primal('p')), 'and every value'
+    assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
+        'and it solves again from what the archive holds'
+    )
