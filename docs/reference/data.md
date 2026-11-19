@@ -111,7 +111,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | an undeclared column in a table | ignored |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
-| a coordinate with no row, of a parameter declared `missing: absent`, `neutral` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
+| a coordinate with no row, of a parameter declared `missing: absent` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
 | a value that is readable and wrong | bound as given |
 
 ## The tables a solve reads

@@ -93,6 +93,10 @@ dev = [
     "pandas>=2.2",
 ]
 
+[tool.uv.sources]
+# mathspec at main until 0.5.0 is released, as the pixi environments install it.
+mathspec = { git = "https://github.com/energy-models/mathspec", rev = "5f1464c334c1012cdee2947d4d55b4d1d6bef40a" }
+
 # ---------------------------------------------------------------------------
 # pixi — the environments, and one name per command
 # ---------------------------------------------------------------------------

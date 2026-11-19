@@ -76,8 +76,26 @@ def _pinned_in_the_floors_environment() -> dict[str, str]:
     return {name: spec for name, spec in pinned.items() if isinstance(spec, str) and name not in _RUNNER}
 
 
+def _pinned_to_a_commit() -> dict[str, dict[str, str]]:
+    """The `floors` pins that name a git commit rather than a release, by package."""
+    pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
+    pinned = pixi['feature']['floors']['pypi-dependencies']
+    return {name: spec for name, spec in pinned.items() if isinstance(spec, dict) and 'git' in spec}
+
+
+def test_a_dependency_ahead_of_its_release_is_pinned_to_one_commit_everywhere():
+    """Until the release, the floor is a commit, and the default and `floors` environments install the same one."""
+    pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
+    default = {name: spec for name, spec in pixi['pypi-dependencies'].items() if isinstance(spec, dict) and 'git' in spec}
+    assert default == _pinned_to_a_commit(), (
+        f'the default environment installs {default} and `floors` installs {_pinned_to_a_commit()}: '
+        f'a dependency followed ahead of its release has one commit, or the suite tests one and the floor another'
+    )
+
+
 def test_the_floors_environment_pins_every_declared_lower_bound():
-    declared, pinned = _declared_floors(), _pinned_in_the_floors_environment()
+    declared = {name: floor for name, floor in _declared_floors().items() if name not in _pinned_to_a_commit()}
+    pinned = _pinned_in_the_floors_environment()
     assert pinned == {name: f'=={floor}' for name, floor in declared.items()}, (
         f'the `floors` pixi environment pins {pinned}, but `[project.dependencies]` declares '
         f'{declared}. That environment exists to prove each declared lower bound is real, which it '
