@@ -36,10 +36,10 @@ from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_spec, lower_expression, lowered
 from specsolve._outputs import checked_outputs
-from specsolve._records import METRICS_SCHEMA, Provenance, installed
+from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
-from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
+from specsolve._sources import refuse_unknown_sources, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -117,7 +117,9 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         DataError: As [`build`][] refuses the sources.
     """
     program = lowered(spec)
-    return {name: table.pipe(collected) for name, table in numbered(program, tidy_sources(program, sources)).items()}
+    return {
+        name: table.pipe(collected) for name, table in with_positions(program, tidy_sources(program, sources)).items()
+    }
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -233,7 +235,7 @@ class Model:
         keep their build's label frames alive until dropped or until
         [`close`][specsolve._result.Result.close] is called. A sweep, a
         rolling horizon or a myopic pathway is
-        [`solve_over`][specsolve._strategy.solve_over], which runs this loop.
+        [`solve_over`][specsolve._solve_over.solve_over], which runs this loop.
 
         Args:
             sources: Only what changed; the rest keeps what [`build`][]
@@ -405,7 +407,7 @@ class Model:
             answered._save(under, write)
             write(taken, under / METRICS_FILE)
 
-        write_archive(out, self._spec, numbered(self._program, self._tidied), axis=None, answer=answer)
+        write_archive(out, self._spec, with_positions(self._program, self._tidied), axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -678,8 +680,8 @@ def _provenance(
     }
     return Provenance(
         solver_name,
-        installed(served.requires[0]),
+        installed_version(served.requires[0]),
         json.dumps(options, sort_keys=True, default=str, allow_nan=False),
-        installed('specsolve'),
-        installed('mathspec'),
+        installed_version('specsolve'),
+        installed_version('mathspec'),
     )

@@ -43,7 +43,7 @@ class Start(TypedDict, total=False):
     ``variable_basis`` and ``constraint_basis`` give a basis status in
     [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
     earlier [`Result`][] is the same, from the tables it carries. Given to
-    [`solve_over`][specsolve._strategy.solve_over], a table that carries the
+    [`solve_over`][specsolve._solve_over.solve_over], a table that carries the
     sliced dimension is cut per slice, as a source is.
 
     Example::

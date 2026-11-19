@@ -22,7 +22,7 @@ from mathspec import to_spec
 from specsolve import _parquet as parquet
 from specsolve._names import RUN
 from specsolve._outputs import KINDS, is_output
-from specsolve._records import installed
+from specsolve._records import installed_version
 from specsolve.errors import LayoutError
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ def write_format(directory: Path, outputs: Iterable[Output] | None = None, layou
     An archive's own stamp, over its spec and its data, names no *outputs*.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    stamp: dict[str, object] = {'layout': layout, 'specsolve': installed('specsolve')}
+    stamp: dict[str, object] = {'layout': layout, 'specsolve': installed_version('specsolve')}
     if outputs is not None:
         stamp['outputs'] = sorted(outputs)
     (directory / FORMAT_FILE).write_text(json.dumps(stamp))
@@ -201,7 +201,7 @@ def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]
     return next((why for kind, name, why in rows if kind == 'dual' and not name), None), absent
 
 
-def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
+def saved_frames(under: Path, *, eager: bool) -> dict[str, pl.LazyFrame]:
     """Every ``<name>.parquet`` under *under*, keyed by name; empty where *under* does not exist.
 
     An archive's [`RUN`][] column is left on disk, so a frame read out of one
@@ -209,13 +209,13 @@ def saved_frames(under: Path, *, whole: bool) -> dict[str, pl.LazyFrame]:
 
     Args:
         under: One kind's directory.
-        whole: Read each frame into memory now, rather than as a
+        eager: Read each frame into memory now, rather than as a
             `polars.scan_parquet` collected at the first read.
     """
     if not under.is_dir():
         return {}
     return {
-        file.stem: (parquet.read(file).lazy() if whole else parquet.scan(file)).drop(RUN, strict=False)
+        file.stem: (parquet.read(file).lazy() if eager else parquet.scan(file)).drop(RUN, strict=False)
         for file in sorted(under.glob('*.parquet'))
     }
 

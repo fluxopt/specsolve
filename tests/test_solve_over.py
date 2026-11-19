@@ -24,7 +24,7 @@ import pytest
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve import _strategy as strategy
+from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
 from specsolve._axes import axis_from
 from specsolve._records import Metrics, Provenance, Record
@@ -352,7 +352,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
 
     The difference is invisible in the answer, so it is counted at `build`.
     """
-    built = builds(strategy)
+    built = builds(driver)
 
     runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'))
 
@@ -364,7 +364,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
 
 def test_a_carried_fold_still_builds_once(builds):
     """A carry writes a parameter the first slice already attached, so no slice names new sources."""
-    built = builds(strategy)
+    built = builds(driver)
 
     runs = sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
@@ -374,7 +374,7 @@ def test_a_carried_fold_still_builds_once(builds):
 
 def test_a_pooled_fold_builds_per_slice(builds):
     """The exception: a built model cannot be pickled, so a pooled slice builds its own."""
-    built = builds(strategy)
+    built = builds(driver)
 
     with ThreadPoolExecutor(2) as pool:
         runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=pool)
@@ -1302,13 +1302,13 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypat
     Every other executor is assumed to cross, because none of them can be asked.
     """
     seen: list[str] = []
-    original = strategy._encode
+    original = driver._encode
 
     def spy(sources, memo, **kwargs):
         seen.append('encoded')
         return original(sources, memo, **kwargs)
 
-    monkeypatch.setattr(strategy, '_encode', spy)
+    monkeypatch.setattr(driver, '_encode', spy)
     with ThreadPoolExecutor(2) as pool:
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=pool)
     assert seen == [], 'a thread pool encoded its sources'
@@ -1376,7 +1376,7 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
     sources['p_max'] = str(path)
 
     crossed: list[object] = []
-    original = strategy._encode
+    original = driver._encode
 
     def spy(sliced, memo, **kwargs):
         """Record what `p_max` crossed as; the same helper also encodes answers back."""
@@ -1385,7 +1385,7 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
             crossed.append(encoded['p_max'])
         return encoded
 
-    monkeypatch.setattr(strategy, '_encode', spy)
+    monkeypatch.setattr(driver, '_encode', spy)
     with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
         local = sps.solve_over(DISPATCH, sources, sps.EachCoordinate('scenario'), executor=pool)
         assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
@@ -1471,7 +1471,7 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
         'every declared expression the slices evaluated'
     )
 
-    built = builds(strategy)
+    built = builds(driver)
     reopened = _spilled(out)
     assert built == [], 'a directory the export wrote is a sweep already done'
     assert reopened.records.equals(priced.records)
@@ -2207,7 +2207,7 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     with pytest.raises(sps.errors.DataError):
         sps.solve_over(DISPATCH, base, bad, key_name='draw', spill_to=tmp_path)
 
-    built = builds(strategy)
+    built = builds(driver)
     resumed = sps.solve_over(DISPATCH, base, good, key_name='draw', spill_to=tmp_path)
     assert len(built) == 1, 'only the slice that failed is built again'
 
@@ -2224,7 +2224,7 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     window afresh, so a carried-on solve could end on another vertex of the
     same optimum.
     """
-    answered = strategy._answers
+    answered = driver._answers
     seen: list[int] = []
 
     def two_then_fail(*args):
@@ -2233,10 +2233,10 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
         seen.append(1)
         return answered(*args)
 
-    monkeypatch.setattr(strategy, '_answers', two_then_fail)
+    monkeypatch.setattr(driver, '_answers', two_then_fail)
     with pytest.raises(RuntimeError, match='went away'):
         _spilled(tmp_path, start=None)
-    monkeypatch.setattr(strategy, '_answers', answered)
+    monkeypatch.setattr(driver, '_answers', answered)
     assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
     resumed = _spilled(tmp_path, start=None)
@@ -2256,7 +2256,7 @@ def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     a slice whose frames landed but whose record did not is solved again."""
     _spilled(tmp_path)
     (tmp_path / 'record' / '000001.parquet').unlink()
-    built = builds(strategy)
+    built = builds(driver)
     resumed = _spilled(tmp_path)
     assert len(built) == 1, 'the slice without its record is the one built'
     assert resumed.keys == [0, 3, 6, 9], 'the sweep comes back whole'
@@ -2290,7 +2290,7 @@ def test_a_pooled_sweep_resumes_too(builds, tmp_path):
     ones still to solve, and the fold reads the rest back in order."""
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), spill_to=tmp_path)
     (tmp_path / 'record' / '000001.parquet').unlink()
-    built = builds(strategy)
+    built = builds(driver)
     with ThreadPoolExecutor(2) as pool:
         resumed = sps.solve_over(
             DISPATCH, scenario_sources(), sps.EachCoordinate('scenario'), executor=pool, spill_to=tmp_path

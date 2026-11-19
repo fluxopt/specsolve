@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 @cache
-def installed(distribution: str) -> str | None:
+def installed_version(distribution: str) -> str | None:
     """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
 
     Read once per process, as every solve records three.

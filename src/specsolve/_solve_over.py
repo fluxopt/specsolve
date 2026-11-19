@@ -1,6 +1,6 @@
-"""Solving strategies: one plan per slice, folded.
+"""``solve_over``: one spec solved once per slice of an axis, and the answers folded into a sweep.
 
-A plan cannot contain a loop; a process may loop over plans. A strategy is a
+A plan cannot contain a loop; a process may loop over plans. This is the
 driver above [`specsolve._api`][], built from the public verbs.
 
     scenario / sweep    ``EachCoordinate('scenario')``            independent
@@ -34,7 +34,7 @@ from specsolve._inputs import as_spec
 from specsolve._names import VALUE, refuse_reserved
 from specsolve._outputs import checked_outputs
 from specsolve._records import Metrics, Record
-from specsolve._sources import numbered, tidy_sources
+from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
 from specsolve._sweep import SliceAnswer, Spill, Sweep, one_key_type
 from specsolve.errors import DataError, SpecsolveError
@@ -331,7 +331,7 @@ def _archive_the_sweep(
     Each source's tidy table comes from *one_slice*, except the ones
     [`_uncut`][] and [`_spread_over_the_axis`][] give.
     """
-    tidied = numbered(program, tidy_sources(program, one_slice))
+    tidied = with_positions(program, tidy_sources(program, one_slice))
     sliced = sources_with_column(sources, axis.dim)
     cut = {name: _uncut(program, axis, name, table) for name, table in sliced.items()}
     held = {**tidied, **_spread_over_the_axis(program, axis, sources, tidied, sliced), **cut}

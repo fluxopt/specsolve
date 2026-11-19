@@ -19,7 +19,7 @@ import pytest
 
 import specsolve as sps
 from specsolve._outputs import OUTPUT_KINDS, OUTPUTS
-from tests.test_strategy import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
+from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,7 +79,7 @@ def test_a_request_that_names_no_output_is_refused(verb: Callable[[object], obje
             'specsolve._api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
         ),
         pytest.param(
-            'specsolve._strategy',
+            'specsolve._solve_over',
             lambda: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs={'activty'}),
             id='sweep-before-a-slice',
         ),

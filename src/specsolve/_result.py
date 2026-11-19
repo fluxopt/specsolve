@@ -894,7 +894,7 @@ def load_result(directory: str | Path) -> Result:
         LayoutError: A directory holding no ``record.parquet``, or one whose
             layout has moved since it was written.
     """
-    return _answer_under(Path(directory), whole=True)
+    return _answer_under(Path(directory), eager=True)
 
 
 def scan_result(directory: str | Path) -> Result:
@@ -912,11 +912,11 @@ def scan_result(directory: str | Path) -> Result:
     Raises:
         LayoutError: As [`load_result`][] raises it.
     """
-    return _answer_under(Path(directory), whole=False)
+    return _answer_under(Path(directory), eager=False)
 
 
-def _answer_under(out: Path, *, whole: bool) -> Result:
-    """The saved answer under *out*, its frames read into memory now where *whole*, else scanned."""
+def _answer_under(out: Path, *, eager: bool) -> Result:
+    """The saved answer under *out*, its frames read into memory now where *eager*, else scanned."""
     parquet.require('reading a saved answer')
     record_file = out / RECORD_FILE
     if not record_file.is_file():
@@ -931,13 +931,13 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
     no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda frame=frame: frame.pipe(collected))
-        for name, frame in saved_frames(out / 'expression', whole=whole).items()
+        for name, frame in saved_frames(out / 'expression', eager=eager).items()
     }
     expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
-        {kind: saved_frames(out / kind, whole=whole) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
+        {kind: saved_frames(out / kind, eager=eager) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
         Expressions(expressions),
         _no_duals=no_duals,
         _spec=read_spec(out),

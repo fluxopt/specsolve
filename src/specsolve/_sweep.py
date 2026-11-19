@@ -246,10 +246,10 @@ class Spill:
         found = {name: self._file(kind, position, name) for name in names}
         return {name: parquet.read(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
-    def frames(self, *, whole: bool) -> dict[str, dict[str, pl.LazyFrame]]:
+    def frames(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
         """``{kind: {name: frame}}``, every slice's frame of a name as one, keyed and in slice order.
 
-        A kind or a name no slice wrote is absent. *whole* reads the files into
+        A kind or a name no slice wrote is absent. *eager* reads the files into
         memory now, rather than as a `polars.scan_parquet` collected at the
         first read.
         """
@@ -258,7 +258,7 @@ class Spill:
             under = self.directory / kind
             for named in sorted(under.iterdir()) if under.is_dir() else []:
                 files = sorted(named.glob('*.parquet'))
-                frame = parquet.read(files).lazy() if whole else parquet.scan(files)
+                frame = parquet.read(files).lazy() if eager else parquet.scan(files)
                 out.setdefault(kind, {})[named.name] = frame.drop(RUN, strict=False)
         return out
 
@@ -364,7 +364,7 @@ class Sweep:
                         frames[kind][name].append(with_key(frame, key_name, key, key_dtype))
         keyed = pl.Series(key_name, keys, dtype=key_dtype)
         if spill is not None:
-            slices = spill.frames(whole=False)
+            slices = spill.frames(eager=False)
         else:
             slices = {
                 kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in frames.items()
@@ -921,7 +921,7 @@ def load_sweep(directory: str | Path) -> Sweep:
     under = Path(directory)
     opened = _opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
-    return replace(opened, _slices=spill.frames(whole=True))
+    return replace(opened, _slices=spill.frames(eager=True))
 
 
 def scan_sweep(directory: str | Path) -> Sweep:
@@ -939,10 +939,10 @@ def scan_sweep(directory: str | Path) -> Sweep:
     under = Path(directory)
     opened = _opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
-    return replace(opened, _slices=spill.frames(whole=False), _spill=spill)
+    return replace(opened, _slices=spill.frames(eager=False), _spill=spill)
 
 
-def archived_sweep(under: Path, *, whole: bool) -> Sweep:
+def archived_sweep(under: Path, *, eager: bool) -> Sweep:
     """The sweep an archive's ``answer/`` holds, as [`Sweep._write_answer`][] wrote it: one file per name, and the windows where kept.
 
     A sweep that was not cut into windows is keyed by slice, so its files are
@@ -953,16 +953,16 @@ def archived_sweep(under: Path, *, whole: bool) -> Sweep:
 
     Args:
         under: The archive's ``answer/``.
-        whole: Read every frame into memory, as [`load_sweep`][] does, rather
+        eager: Read every frame into memory, as [`load_sweep`][] does, rather
             than at the call that asks, as [`scan_sweep`][] does.
     """
     kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
     opened = _opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
-    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
+    answer = {kind: saved_frames(under / kind, eager=eager) for kind in KINDS}
     if opened._stitch is None:
         return replace(opened, _slices=answer)
     windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.records[opened.key_name].dtype)
-    return replace(opened, _stitched=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
+    return replace(opened, _stitched=answer, _windows=kept, _slices=windows.frames(eager=eager) if kept else {})
 
 
 def _opened_sweep(under: Path, owned: Path | None) -> Sweep:

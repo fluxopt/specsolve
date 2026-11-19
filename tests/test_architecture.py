@@ -646,7 +646,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
     """
     import specsolve
     from specsolve._axes import EachCoordinate, EachWindow
-    from specsolve._strategy import solve_over
+    from specsolve._solve_over import solve_over
 
     doors = {
         'build': specsolve.build,

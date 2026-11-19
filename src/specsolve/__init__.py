@@ -28,7 +28,7 @@ from specsolve._api import build, check, evaluate, solve, tidy, write
 from specsolve._archive import load_archive, load_inputs, scan_archive
 from specsolve._axes import EachCoordinate, EachWindow
 from specsolve._result import load_result, scan_result
-from specsolve._strategy import solve_over
+from specsolve._solve_over import solve_over
 from specsolve._sweep import load_sweep, scan_sweep
 
 __all__ = [

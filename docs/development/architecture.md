@@ -210,7 +210,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
-| `_strategy.py` | a sweep's driver: one plan per slice, folded |
+| `_solve_over.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, and the stitch back |
 | `_sweep.py` | `Sweep`, its spill and its archived answer on disk, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable frames built so far |
@@ -294,7 +294,7 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Carry** and **the wire**
 : One slice's answer copied into the next slice's data; how a slice's sources
-  cross to a worker (`_strategy.py`).
+  cross to a worker (`_solve_over.py`).
 
 ## Extension checklists
 

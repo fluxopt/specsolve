@@ -122,7 +122,7 @@ class EachCoordinate:
         object.__setattr__(self, 'carry', dict(self.carry))
 
     def to_dict(self) -> dict[str, object]:
-        """This axis as plain data, which [`solve_over`][specsolve._strategy.solve_over] takes in its place.
+        """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds a ``carry`` key only where the axis carries something.
@@ -227,7 +227,7 @@ class EachWindow:
             raise ValueError(f'into={self.into!r} must differ from dim — the local index replaces the global one')
 
     def to_dict(self) -> dict[str, object]:
-        """This axis as plain data, which [`solve_over`][specsolve._strategy.solve_over] takes in its place.
+        """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds a ``carry`` key only where the axis carries something.

@@ -143,7 +143,7 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
             they were written.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
-    return _whole(path, into, partial(_inputs, whole=True))
+    return _read_unpacked(path, into, partial(_inputs, eager=True))
 
 
 def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
@@ -169,10 +169,10 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
             beside it.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
-    return _whole(path, into, partial(_read, whole=True))
+    return _read_unpacked(path, into, partial(_read, eager=True))
 
 
-def _whole[T](path: str | Path, into: str | Path | None, read: Callable[[Path, Path], T]) -> T:
+def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[[Path, Path], T]) -> T:
     """What *read* makes of the archive at *path*, given where its members are and the path to name.
 
     A zip with no *into* is unpacked to a scratch directory that is gone when
@@ -192,15 +192,15 @@ def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     since the members have to outlive the value; a zip with no *into* raises
     ``LayoutError``.
     """
-    return _read(opened(path, into), Path(path), whole=False)
+    return _read(opened(path, into), Path(path), eager=False)
 
 
-def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
-    """The spec, the sources and the axis the archive *under* holds, its sources as tables where *whole*, else as paths."""
+def _inputs(under: Path, archive: Path, *, eager: bool) -> ArchivedInputs:
+    """The spec, the sources and the axis the archive *under* holds, its sources as tables where *eager*, else as paths."""
     _refuse_other_inputs(under, archive)
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
-        member.stem: parquet.read(member).drop(RUN, strict=False) if whole else member
+        member.stem: parquet.read(member).drop(RUN, strict=False) if eager else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
     axis_member = under / AXIS_MEMBER
@@ -209,16 +209,16 @@ def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
     return ArchivedInputs(spec, sources, axis_from(json.loads(axis_member.read_text())))
 
 
-def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepArchive:
-    inputs = _inputs(under, archive, whole=whole)
+def _read(under: Path, archive: Path, *, eager: bool) -> ResultArchive | SweepArchive:
+    inputs = _inputs(under, archive, eager=eager)
     _refuse_another_layout(under / ANSWER_DIR, archive)
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
+        answer = _attach_readers((load_result if eager else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers(archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
+    answer = _attach_sweep_readers(archived_sweep(saved, eager=eager), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)
 
 

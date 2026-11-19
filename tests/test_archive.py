@@ -22,7 +22,7 @@ import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve import _strategy as strategy
+from specsolve import _solve_over as driver
 from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
@@ -43,7 +43,7 @@ from tests.conftest import (
     port_spec,
     raw_of,
 )
-from tests.test_strategy import SPENDING, WINDOW, horizon_sources
+from tests.test_solve_over import SPENDING, WINDOW, horizon_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -1023,7 +1023,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     where it was longer, it read the labels the table was short of as absent.
     `soc_initial`, one number over no dimension, is the same in every window.
     """
-    from tests.test_strategy import WINDOW, horizon_sources
+    from tests.test_solve_over import WINDOW, horizon_sources
 
     spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t'], 'missing': 'neutral'}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
@@ -1329,7 +1329,7 @@ def test_keep_windows_is_refused_where_there_are_no_windows_to_keep(
     def no_build(*args: object, **kwargs: object) -> None:
         raise AssertionError('a slice was built before the refusal')
 
-    monkeypatch.setattr(strategy, 'build', no_build)
+    monkeypatch.setattr(driver, 'build', no_build)
     out = tmp_path / 'never.zip' if archived else None
     with pytest.raises(sps.errors.SpecsolveError, match=says):
         sps.solve_over(WINDOW, horizon_sources(12), axis, archive=out, keep_windows=True)
@@ -1689,7 +1689,7 @@ def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_so
 
 
 def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
-    from tests.test_strategy import WINDOW, horizon_sources
+    from tests.test_solve_over import WINDOW, horizon_sources
 
     sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=tmp_path / 'roll')
     archived = sps.load_archive(tmp_path / 'roll')

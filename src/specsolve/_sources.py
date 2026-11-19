@@ -134,7 +134,7 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
 
 
-def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
     """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an

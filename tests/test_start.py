@@ -453,7 +453,7 @@ def test_one_answer_starts_every_slice() -> None:
 
 def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
     from specsolve._sinks.highs import Highs
-    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
     warmed: list[object] = []
@@ -467,7 +467,7 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
 
 
 def test_a_table_over_the_windows_local_index_alone_is_refused() -> None:
-    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     first = earlier.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 0).drop('snapshot_start')
@@ -479,7 +479,7 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from specsolve._sinks.highs import Highs
-    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     tables = {name: earlier.primal(name) for name in WINDOW['variables']}
@@ -497,7 +497,7 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
 
 
 def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path) -> None:
-    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
     archived = sps.load_archive(tmp_path / 'run.zip')
@@ -564,8 +564,8 @@ SCENARIOS = sps.EachCoordinate('scenario')
 def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from tests.test_strategy import DISPATCH as SWEPT
-    from tests.test_strategy import scenario_sources
+    from tests.test_solve_over import DISPATCH as SWEPT
+    from tests.test_solve_over import scenario_sources
 
     forgotten = _forgotten(monkeypatch)
     cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start=None)
@@ -584,7 +584,7 @@ def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
 
 
 def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tests.test_strategy import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     forgotten = _forgotten(monkeypatch)
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
@@ -601,8 +601,8 @@ def test_a_slice_after_one_that_left_no_values_carries_on_and_solves() -> None:
 
 def test_previous_under_an_executor_starts_every_slice_from_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each slice builds its own model, so there is no solver to carry on in and nothing is matched."""
-    from tests.test_strategy import DISPATCH as SWEPT
-    from tests.test_strategy import scenario_sources
+    from tests.test_solve_over import DISPATCH as SWEPT
+    from tests.test_solve_over import scenario_sources
 
     warmed = _warmed(monkeypatch)
     with ThreadPoolExecutor(2) as pool:
@@ -641,8 +641,8 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
 def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
     monkeypatch: pytest.MonkeyPatch, start: Any, match: str
 ) -> None:
-    from specsolve import _strategy as strategy
+    from specsolve import _solve_over as driver
 
-    monkeypatch.setattr(strategy, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
+    monkeypatch.setattr(driver, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
     with pytest.raises(SpecsolveError, match=match):
         sps.solve_over(KNAPSACK, {}, DRAWS, key_name='draw', start=start)
