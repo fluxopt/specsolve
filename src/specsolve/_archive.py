@@ -32,7 +32,7 @@ from specsolve._archive_layout import (
 )
 from specsolve._axes import axis_from
 from specsolve._collect import collected
-from specsolve._inputs import lower
+from specsolve._inputs import lower_expression
 from specsolve._names import RUN
 from specsolve._result import load_result, scan_result
 from specsolve._sweep import Sweep, archived_sweep, with_key
@@ -325,7 +325,7 @@ def _sweep_evaluator(
     key_dtype = sweep.record.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
-        _refuse_carried(carried, [lower(spec, expression)])
+        _refuse_carried(carried, [lower_expression(spec, expression)])
         pieces = [
             with_key(evaluate_one(expression), sweep.key_name, key, key_dtype)
             for key, evaluate_one in _per_slice(sweep, spec, sources, axis)

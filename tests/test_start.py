@@ -457,8 +457,8 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
     warmed: list[object] = []
-    original = Highs.warm
-    monkeypatch.setattr(Highs, 'warm', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
+    original = Highs.start_from_basis
+    monkeypatch.setattr(Highs, 'start_from_basis', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
     again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=earlier)
     assert len(warmed) == len(earlier.keys), 'every window is warmed from a basis'
     assert again.record['objective'].to_list() == pytest.approx(earlier.record['objective'].to_list()), (
@@ -484,8 +484,10 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     tables = {name: earlier.primal(name) for name in WINDOW['variables']}
     given: list[np.ndarray] = []
-    original = Highs.start
-    monkeypatch.setattr(Highs, 'start', lambda self, values: (given.append(values), original(self, values))[1])
+    original = Highs.start_from_values
+    monkeypatch.setattr(
+        Highs, 'start_from_values', lambda self, values: (given.append(values), original(self, values))[1]
+    )
     again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': tables})
     assert len(given) == len(earlier.keys), 'every window is started'
     assert all(not np.isnan(values).any() for values in given), 'each window takes a value for every hour it covers'
@@ -541,8 +543,8 @@ def _warmed(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     from specsolve._sinks.highs import Highs
 
     warmed: list[object] = []
-    original = Highs.warm
-    monkeypatch.setattr(Highs, 'warm', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
+    original = Highs.start_from_basis
+    monkeypatch.setattr(Highs, 'start_from_basis', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
     return warmed
 
 

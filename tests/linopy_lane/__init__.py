@@ -48,7 +48,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from specsolve._inputs import declared, lower, lowered
+from specsolve._inputs import as_spec, lower_expression, lowered
 from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
@@ -142,8 +142,8 @@ def evaluate(
             reads a dual where the solve left none.
     """
     with note(f'while evaluating an expression against {_named(spec)}'):
-        written = declared(spec)
-        node = lower(written, expression)
+        written = as_spec(spec)
+        node = lower_expression(written, expression)
         program = lowered(written)
         refuse_relations_the_lane_does_not_build(program)
         tidy = tidy_sources(program, sources)

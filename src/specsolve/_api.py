@@ -34,7 +34,7 @@ from specsolve._answer_layout import METRICS_FILE, METRICS_SCHEMA, Provenance, c
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expression_readers
-from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
+from specsolve._inputs import Buildable, Label, Source, as_spec, lower_expression, lowered
 from specsolve._result import Result, evaluated
 from specsolve._sinks import solver, writer
 from specsolve._sources import numbered, refuse_unknown_sources, tidy_sources
@@ -165,11 +165,11 @@ def evaluate(spec: Buildable, sources: Mapping[str, Source], expression: str | M
         DataError: A source that is missing, unreadable, or the wrong shape,
             or a divisor with no value where the expression divides.
     """
-    document = declared(spec)
+    document = as_spec(spec)
     program = lowered(document)
     _refuse_a_decision(program)
     readers, evaluator = expression_readers(
-        program, tidy_sources(program, sources), lambda written: lower(document, written)
+        program, tidy_sources(program, sources), lambda written: lower_expression(document, written)
     )
     return evaluated(readers, evaluator, expression)
 
@@ -187,7 +187,7 @@ class Model:
     """
 
     def __init__(self, spec: Buildable, sources: Mapping[str, Source]) -> None:
-        self._spec = declared(spec)
+        self._spec = as_spec(spec)
         self._program = lowered(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
@@ -201,7 +201,7 @@ class Model:
         Held here because the engine may not see the model as written
         (docs/development/architecture.md, hard rule 2).
         """
-        return lower(self._spec, written)
+        return lower_expression(self._spec, written)
 
     def _fill(self) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.

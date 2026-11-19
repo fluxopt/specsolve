@@ -31,7 +31,7 @@ from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
 from specsolve._collect import collected
 from specsolve._frames import as_frame
-from specsolve._inputs import declared
+from specsolve._inputs import as_spec
 from specsolve._names import VALUE, refuse_reserved
 from specsolve._sources import numbered, tidy_sources
 from specsolve._start import slice_starts
@@ -267,7 +267,7 @@ def solve_over(
         )
     if archive is not None or spill_to is not None:
         parquet.require('archive=' if archive is not None else 'spill_to=')
-    document = declared(spec)
+    document = as_spec(spec)
     sources = _materialised(sources)
     archiving = _archiving(archive, axis, keep_windows=keep_windows)
     asked = checked_outputs(outputs)
@@ -474,7 +474,7 @@ def _carried(
     if not primals:
         raise SpecsolveError(
             f'slice {current.key!r} ({position + 1} of {len(slices)}) terminated '
-            f'{answer.meta.termination_condition}, so slice {slices[position + 1].key!r} has no '
+            f'{answer.record.termination_condition}, so slice {slices[position + 1].key!r} has no '
             f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
             f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
         )

@@ -123,7 +123,7 @@ def kinds_of(outputs: Iterable[Output]) -> tuple[str, ...]:
     return tuple(kind for kind, carried in OUTPUT_KINDS.items() if carried.output in outputs)
 
 
-def asked_for(kinds: Iterable[str]) -> frozenset[Output]:
+def outputs_of(kinds: Iterable[str]) -> frozenset[Output]:
     """The [`OUTPUTS`][] that carry *kinds*, each one of the [`OUTPUT_KINDS`][]."""
     return frozenset(OUTPUT_KINDS[kind].output for kind in kinds)
 

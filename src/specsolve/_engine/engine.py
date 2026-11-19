@@ -257,9 +257,9 @@ class Engine:
         matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
         solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
         if isinstance(matched, Basis):
-            solver.warm(matched)
+            solver.start_from_basis(matched)
         elif matched is not None:
-            solver.start(matched)
+            solver.start_from_values(matched)
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:

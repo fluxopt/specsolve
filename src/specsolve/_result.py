@@ -25,12 +25,12 @@ from specsolve._answer_layout import (
     Metrics,
     Provenance,
     Record,
-    asked_for,
     check_format,
     checked_kind,
     clear_the_answer,
     kinds_of,
     not_requested_message,
+    outputs_of,
     read_outputs,
     read_reasons,
     read_spec,
@@ -801,7 +801,7 @@ class Result:
 
         carried = self._unclosed('the solution')
         clear_the_answer(out)
-        write_format(out, asked_for(kind for kind in carried if kind in OUTPUT_KINDS))
+        write_format(out, outputs_of(kind for kind in carried if kind in OUTPUT_KINDS))
         write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
         write(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)

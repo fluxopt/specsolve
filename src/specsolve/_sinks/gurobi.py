@@ -162,7 +162,7 @@ class Gurobi(Solver):
             return None
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
-    def _warm(self, basis: Basis) -> None:
+    def _start_from_basis(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
         self._m.setAttr(
             'VBasis', solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
@@ -171,7 +171,7 @@ class Gurobi(Solver):
         self._m.setAttr('CBasis', rows)
         self._m.update()
 
-    def _start(self, values: Any) -> None:
+    def _start_from_values(self, values: Any) -> None:
         """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
         import numpy as np
 

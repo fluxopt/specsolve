@@ -200,7 +200,7 @@ class Solver(ABC):
         Called only after *handoff*'s digest matched the loaded one.
         """
 
-    def warm(self, basis: Basis) -> None:
+    def start_from_basis(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.
 
         Raises:
@@ -208,13 +208,13 @@ class Solver(ABC):
         """
         self._spans('basis', basis.columns, self._columns, 'columns')
         self._spans('basis', basis.rows, self._rows, 'rows')
-        self._warm(basis)
+        self._start_from_basis(basis)
 
     @abstractmethod
-    def _warm(self, basis: Basis) -> None:
-        """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
+    def _start_from_basis(self, basis: Basis) -> None:
+        """Set *basis* on the loaded model in the solver's own statuses. [`start_from_basis`][] has checked its spans."""
 
-    def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+    def start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
         """Start the next [`run`][] from *values*, one per column and NaN where none is given.
 
         A mixed-integer model takes them as a starting incumbent, completing
@@ -225,11 +225,11 @@ class Solver(ABC):
             SpecsolveError: Values that do not span the loaded model.
         """
         self._spans('start', values, self._columns, 'columns')
-        self._start(values)
+        self._start_from_values(values)
 
     @abstractmethod
-    def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
+    def _start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+        """Hand the values *values* gives to the solver to start from. [`start_from_values`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""

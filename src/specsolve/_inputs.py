@@ -1,6 +1,6 @@
 """What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
 
-An expression the file never named passes the same door: [`lower`][] splices
+An expression the file never named passes the same door: [`lower_expression`][] splices
 it into the spec as a named one and lowers the whole spec again. This sits
 above both lanes because nothing
 in the engine or a sink may see the spec as written
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 type Buildable = str | Path | Mapping[str, object] | Spec
 
 
-def declared(spec: Buildable) -> Spec:
+def as_spec(spec: Buildable) -> Spec:
     """*spec* as the document it is, whatever shape it arrived in.
 
     Raises:
@@ -148,7 +148,7 @@ def lowered(spec: Buildable) -> Program:
             by case, a name that starts with ``specsolve_``, or a dimension
             called ``value``, in any letter case.
     """
-    program = declared(spec).program
+    program = as_spec(spec).program
     if program.given:
         given = program.given
         read = sorted({*given.parameters, *given.variables, *given.constraints, *given.expressions, *given.conditions})
@@ -175,7 +175,7 @@ def lowered(spec: Buildable) -> Program:
 _EVALUATED = '_evaluated'
 
 
-def lower(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
+def lower_expression(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
     """One unnamed expression as a plan node, read in *spec*'s namespace.
 
     The expression is spliced under ``expressions:`` with a name no section

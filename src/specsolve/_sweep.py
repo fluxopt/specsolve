@@ -84,7 +84,7 @@ OWNED_FILE = 'owned.parquet'
 class SliceAnswer:
     """One slice, solved and read out; plain data only, so it can cross a process."""
 
-    meta: Record
+    record: Record
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
     #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._answer_layout.KINDS]:
@@ -102,7 +102,7 @@ class SliceAnswer:
         text = str(key)
         return replace(
             self,
-            meta=self.meta._replace(slice_axis=key_name, slice=text),
+            record=self.record._replace(slice_axis=key_name, slice=text),
             metrics=self.metrics._replace(slice_axis=key_name, slice=text),
         )
 
@@ -232,7 +232,7 @@ class Spill:
         answer = answer.sliced(self.key_name, key)
         self.write_frames(position, key, answer.frames, write_whole)
         write_whole(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
-        write_whole(pl.DataFrame([answer.meta._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
+        write_whole(pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
         return replace(answer, frames={})
 
     def write_frames(
@@ -364,7 +364,7 @@ class Sweep:
                     no_expressions.setdefault(name, reason)
                 named = answer.sliced(key_name, key)
                 keys.append(key)
-                rows.append(named.meta)
+                rows.append(named.record)
                 taken.append(named.metrics)
                 for kind, produced in answer.frames.items():
                     for name, frame in produced.items():
@@ -732,9 +732,9 @@ class Sweep:
         )
         write_reasons(spill.directory, self._no_duals, self._absent, write_whole)
         for position, key, frames in by_slice:
-            meta = Record(**self.record.drop(self.key_name).row(position, named=True))
+            record = Record(**self.record.drop(self.key_name).row(position, named=True))
             taken = Metrics(**self.metrics.select(Metrics._fields).row(position, named=True))
-            spill.write(position, key, SliceAnswer(meta, taken, frames))
+            spill.write(position, key, SliceAnswer(record, taken, frames))
         return spill.directory
 
     def _frames_by_slice(
