@@ -7,6 +7,7 @@ are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 from __future__ import annotations
 
 import json
+import shutil
 from collections import Counter, defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field, replace
@@ -37,6 +38,7 @@ from specsolve._answer_layout import (
     read_reasons,
     read_spec,
     row_of,
+    saved_frames,
     write_format,
     write_reasons,
     write_spec,
@@ -347,7 +349,8 @@ class Sweep:
 
         Closing the stream releases the serial fold's model when a fold is
         abandoned. A reason a slice lacks something is kept from the first
-        slice that gave one.
+        slice that gave one, and written beside the slices where they are
+        spilled.
         """
         keys: list[Label] = []
         rows: list[Record] = []
@@ -374,7 +377,7 @@ class Sweep:
             slices = {
                 kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in frames.items()
             }
-        return cls(
+        folded = cls(
             key_name=key_name,
             record=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
             metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed),
@@ -386,6 +389,9 @@ class Sweep:
             _spill=spill,
             _outputs=outputs,
         )
+        if spill is not None:
+            write_reasons(spill.directory, folded._no_duals, folded._absent, write_whole)
+        return folded
 
     @property
     def keys(self) -> list[Label]:
@@ -730,9 +736,16 @@ class Sweep:
             spill.write(position, key, SliceAnswer(meta, taken, frames))
         return spill.directory
 
-    def _frames_by_slice(self) -> list[tuple[int, Label, dict[str, dict[str, pl.DataFrame]]]]:
-        """``(position, key, {kind: {name: frame}})`` per slice, the key column dropped; a slice with no rows of a name lacks it."""
-        by_key = {kind: slice_index(self, kind) for kind in KINDS}
+    def _frames_by_slice(
+        self, kinds: Sequence[str] = KINDS
+    ) -> list[tuple[int, Label, dict[str, dict[str, pl.DataFrame]]]]:
+        """``(position, key, {kind: {name: frame}})`` per slice over *kinds*, the key column dropped; a slice with no rows of a name lacks it.
+
+        Raises:
+            SpecsolveError: The sweep was read off an archive written without
+                its windows, which holds no frame per slice.
+        """
+        by_key = {kind: self._by_slice(kind) for kind in kinds}
         return [
             (
                 position,
@@ -744,6 +757,77 @@ class Sweep:
             )
             for position, key in enumerate(self.keys)
         ]
+
+    def _by_slice(self, kind: str) -> dict[str, dict[Label, pl.DataFrame]]:
+        """``{name: {slice key: frame}}`` for *kind*, the key column dropped; a slice with no rows is absent.
+
+        An archived sweep that was not cut into windows holds its slices as its
+        answer, keyed already. One that was holds them only where the windows were
+        kept.
+        """
+        if self._answer is not None and self._stitch is None:
+            held = self._answer[kind]
+        elif not self._windows:
+            raise SpecsolveError(NO_WINDOWS)
+        else:
+            held = self._slices.get(kind, {})
+        key = self.key_name
+        return {
+            name: {
+                part[key][0]: part.drop(key) for part in frame.pipe(collected).partition_by(key, maintain_order=True)
+            }
+            for name, frame in held.items()
+        }
+
+    def _write_answer(self, under: Path, write: FrameWriter, *, keep_windows: bool) -> None:
+        """The ``answer/`` an archive holds for this sweep, laid out under *under*, each table written with *write*.
+
+        One file per kind and name, as the readers return it; a name an
+        EachWindow sweep cannot stitch has none, and ``reasons.parquet`` says
+        why. The record and metrics take a single solve's columns, so
+        ``keys.parquet`` beside them gives the keys their type back.
+        ``sweep.json`` records *keep_windows*: a zip holds files only, so an empty
+        ``windows/`` is not there to say so. [`archived_sweep`][] reads it back.
+        """
+        write_format(under, self._outputs)
+        manifest = sweep_manifest(self.key_name, self.keys, self._stitch, self._outputs)
+        (under / MANIFEST_FILE).write_text(json.dumps({**manifest, 'windows': keep_windows}))
+        write(self.record.select(self.key_name), under / KEYS_FILE)
+        write(self.record.drop(self.key_name), under / RECORD_FILE)
+        write(self.metrics.drop(self.key_name), under / METRICS_FILE)
+        absent = {kind: dict(names) for kind, names in self._absent.items()}
+        for kind in KINDS:
+            for name, frame in self._slices.get(kind, {}).items():
+                if why := self._unstitchable(frame):
+                    absent.setdefault(kind, {})[name] = why
+                    continue
+                write(self._answered(frame, per_window=False), under / kind / f'{name}.parquet')
+        write_reasons(under, self._no_duals, absent, write)
+        if keep_windows:
+            self._write_windows(under / WINDOWS_DIR, write)
+
+    def _write_windows(self, under: Path, write: FrameWriter) -> None:
+        """What each window owns, and its frames as the spill lays them out, under *under*, each table written with *write*.
+
+        Kept beside the answer, which is stitched already: copied off the spill
+        where the sweep has one, so a sweep too large to hold streams, and
+        written from memory where it is held.
+        """
+        assert self._stitch is not None, 'only an EachWindow sweep keeps its windows'
+        under.mkdir()
+        write(self._stitch.owned, under / OWNED_FILE)
+        if self._spill is None:
+            windows = Spill(under, self.key_name, self.record[self.key_name].dtype)
+            for position, key, frames in self._frames_by_slice():
+                windows.write_frames(position, key, frames, write)
+            return
+        for kind in KINDS:
+            if (self._spill.directory / kind).is_dir():
+                shutil.copytree(
+                    self._spill.directory / kind,
+                    under / kind,
+                    copy_function=lambda source, target: write(parquet.scan(Path(source)), Path(target)),
+                )
 
     def _names_held(self, kind: str, *, per_window: bool) -> tuple[str, ...]:
         """Every name of *kind* there is an answer for, sorted; none at all is refused.
@@ -841,7 +925,7 @@ def load_sweep(directory: str | Path) -> Sweep:
             fold writes, or is in a layout that has moved since it was written.
     """
     under = Path(directory)
-    opened = opened_sweep(under, under / OWNED_FILE)
+    opened = _opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=True))
 
@@ -859,12 +943,32 @@ def scan_sweep(directory: str | Path) -> Sweep:
         LayoutError: As [`load_sweep`][] raises it.
     """
     under = Path(directory)
-    opened = opened_sweep(under, under / OWNED_FILE)
+    opened = _opened_sweep(under, under / OWNED_FILE)
     spill = Spill(under, opened.key_name, opened.record[opened.key_name].dtype)
     return replace(opened, _slices=spill.frames(whole=False), _spill=spill)
 
 
-def opened_sweep(under: Path, owned: Path | None) -> Sweep:
+def archived_sweep(under: Path, *, whole: bool) -> Sweep:
+    """The sweep an archive's ``answer/`` holds, as [`Sweep._write_answer`][] wrote it: one file per name, and the windows where kept.
+
+    ``per_window=True`` is refused naming ``keep_windows=True`` where the
+    archive has no windows. The ``specsolve_run`` column every archived frame
+    carries is left on disk, so a frame read out of one equals the frame the
+    live sweep returns.
+
+    Args:
+        under: The archive's ``answer/``.
+        whole: Read every frame into memory, as [`load_sweep`][] does, rather
+            than at the call that asks, as [`scan_sweep`][] does.
+    """
+    kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
+    opened = _opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
+    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
+    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
+    return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
+
+
+def _opened_sweep(under: Path, owned: Path | None) -> Sweep:
     """The sweep whose manifest is under *under*: its record and reasons, and none of its frames.
 
     *owned* is where an EachWindow sweep keeps what each window owns, read
@@ -910,23 +1014,3 @@ def _rekeyed(table: pl.DataFrame, keys: pl.Series) -> pl.DataFrame:
     """
     texts = [str(key) for key in keys.to_list()]
     return table.select(pl.col('slice').replace_strict(texts, keys, return_dtype=keys.dtype).alias(keys.name), pl.all())
-
-
-def slice_index(sweep: Sweep, kind: str) -> dict[str, dict[Label, pl.DataFrame]]:
-    """``{name: {slice key: frame}}`` for *kind*, the key column dropped; a slice with no rows is absent.
-
-    An archived sweep that was not cut into windows holds its slices as its
-    answer, keyed already. One that was holds them only where the windows were
-    kept.
-    """
-    if sweep._answer is not None and sweep._stitch is None:
-        held = sweep._answer[kind]
-    elif not sweep._windows:
-        raise SpecsolveError(NO_WINDOWS)
-    else:
-        held = sweep._slices.get(kind, {})
-    key = sweep.key_name
-    return {
-        name: {part[key][0]: part.drop(key) for part in frame.pipe(collected).partition_by(key, maintain_order=True)}
-        for name, frame in held.items()
-    }

@@ -20,15 +20,7 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import (
-    ANSWER_LAYOUT,
-    KINDS,
-    METRICS_FILE,
-    Metrics,
-    other_layout,
-    row_of,
-    saved_frames,
-)
+from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, Metrics, other_layout, row_of
 from specsolve._api import build, load_result, scan_result
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -42,16 +34,7 @@ from specsolve._axes import axis_from
 from specsolve._collect import collected
 from specsolve._inputs import lower
 from specsolve._names import RUN
-from specsolve._sweep import (
-    MANIFEST_FILE,
-    OWNED_FILE,
-    WINDOWS_DIR,
-    Spill,
-    Sweep,
-    opened_sweep,
-    slice_index,
-    with_key,
-)
+from specsolve._sweep import Sweep, archived_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -233,7 +216,7 @@ def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepAr
         answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
+    answer = _attach_sweep_readers(archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)
 
 
@@ -292,26 +275,6 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
     return replace(answer, _evaluate=evaluate)
 
 
-def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
-    """The sweep an archive's ``answer/`` holds: one file per name, and the windows where kept.
-
-    ``per_window=True`` is refused naming ``keep_windows=True`` where the
-    archive has no windows. The ``specsolve_run`` column every archived frame
-    carries is left on disk, so a frame read out of one equals the frame the
-    live sweep returns.
-
-    Args:
-        under: The archive's ``answer/``.
-        whole: Read every frame into memory, as [`load_sweep`][] does, rather
-            than at the call that asks, as [`scan_sweep`][] does.
-    """
-    kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
-    opened = opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
-    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
-    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
-    return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
-
-
 def _attach_sweep_readers(
     sweep: Sweep,
     spec: Spec,
@@ -330,13 +293,13 @@ def _per_slice(
     sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis
 ) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
     """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt from its cut of the sources."""
-    primal, dual = slice_index(sweep, 'primal'), slice_index(sweep, 'dual')
+    solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
     for key, slice_sources in axis.slices(sources):
-        slice_primals = {name: by_key[key] for name, by_key in primal.items() if key in by_key}
-        if not slice_primals:
+        frames = solved.get(key, {})
+        if not frames.get('primal'):
             continue
-        slice_duals = {name: by_key[key] for name, by_key in dual.items() if key in by_key} or None
-        yield key, build(spec, slice_sources)._evaluator(slice_primals, slice_duals, sweep._no_duals)
+        evaluator = build(spec, slice_sources)._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
+        yield key, evaluator
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

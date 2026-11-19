@@ -211,7 +211,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_messages.py` | a wording two modules raise |
 | `_strategy.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, and the stitch back |
-| `_sweep.py` | `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
+| `_sweep.py` | `Sweep`, its spill and its archived answer on disk, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable frames built so far |
 | `_engine/compiler.py` | plan → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
