@@ -315,3 +315,28 @@ def test_a_variable_whose_where_one_parameter_empties_is_not_labelled(monkeypatc
     columns, _, labelled = _labelled_wheres(monkeypatch, {**TABLED_SPEC, 'variables': variables})
     assert columns == 6, '`gated` holds no column, so the model has the 6 of `x` alone'
     assert not labelled, '`flag` has no row, yet `gated` was labelled over its product'
+
+
+@pytest.mark.parametrize(
+    ('where', 'refused'),
+    [
+        pytest.param('flag', False, id='a-where-that-admits-nothing-is-not-read'),
+        pytest.param('cap > 2', True, id='a-where-that-admits-a-unit-is-still-checked-there'),
+    ],
+)
+def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypatch, where, refused):
+    """`cap > 10` fails at every unit, so the data is refused exactly where the `where` admits one."""
+    spec = {**TABLED_SPEC, 'assumptions': {'large': {'holds': 'cap > 10', 'where': where}}}
+    real, read = _assumptions.masked, []
+
+    def spied(scope, dims, mask):
+        read.append(tuple(dims))
+        return real(scope, dims, mask)
+
+    monkeypatch.setattr(_assumptions, 'masked', spied)
+    if refused:
+        with pytest.raises(sps.errors.DataError, match='large'):
+            sps.build(spec, TABLED_SOURCES)
+        return
+    sps.build(spec, TABLED_SOURCES).close()
+    assert not read, f'`{where}` admits no unit, yet `large` was read over {read}'
