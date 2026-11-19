@@ -326,9 +326,11 @@ class Engine:
         return Result(
             _status=answer.status,
             _objective=answer.objective,
-            _primals=primals,
-            _duals=duals,
-            _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
+            _frames={
+                'primal': primals,
+                'dual': duals,
+                **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
+            },
             _expressions=expressions,
             _evaluate=evaluate,
             _no_duals=no_duals,

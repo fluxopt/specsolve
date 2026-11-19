@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import Metrics, Record, checked_outputs, kinds_of
+from specsolve._answer_layout import Metrics, Record, checked_outputs
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._axes import Axis, EachWindow, HandBuilt, Slice, axis_from, check_no_index_is_cut, sources_with_column
@@ -296,9 +296,9 @@ def solve_over(
     starts = slice_starts(start, axis, slices, key_name, program)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
     if executor is None:
-        answered = _serially(program, document, slices, solving, plan, spill, starts)
+        answered = _serially(document, slices, solving, plan, spill, starts)
     else:
-        answered = _pooled(executor, workers_share_fs, program, document, slices, solving, spill, starts)
+        answered = _pooled(executor, workers_share_fs, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if archiving is not None:
         out, cut = archiving
@@ -412,7 +412,6 @@ def _check_the_carry(
 
 
 def _serially(
-    program: Program,
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
@@ -450,7 +449,7 @@ def _serially(
                         model.close()
                     model, named, before = build(document, sources), names, None
                 result = model.solve(**solving, start=starts[position])
-                answer = _answers(result, program, _slice_metrics(model.diagnostics(), before), solving['outputs'])
+                answer = _answers(result, _slice_metrics(model.diagnostics(), before))
             primals = answer.frames.get('primal', {})
             if spill is not None:
                 answer = spill.write(position, current.key, answer)
@@ -495,7 +494,6 @@ def _named_slice(key: Label, position: int, count: int) -> Generator[None, None,
 def _pooled(
     executor: Executor,
     workers_share_fs: bool | None,
-    program: Program,
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
@@ -517,7 +515,6 @@ def _pooled(
         if spill is not None and spill.done(position)
         else executor.submit(
             _run_slice,
-            program,
             document,
             _encode(current.sources, memo, workers_share_fs=shared) if crosses else dict(current.sources),
             crosses,
@@ -537,45 +534,20 @@ def _pooled(
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
-def _answers(result: Result, program: Program, metrics: Metrics, outputs: frozenset[Output]) -> SliceAnswer:
-    """One slice's answer, read out of *result*, every declared expression evaluated now.
+def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
+    """One slice's answer as plain data, read out of *result*, every declared expression evaluated now.
 
-    It carries the *outputs* the sweep asked for and no others, so a basis
-    read only to start the next slice from is not kept. A slice with no
-    primal, or with undefined duals, is not a failure: the reason
-    ``Result.dual`` gives is carried.
+    A slice with no primal, or with undefined duals, is not a failure: the
+    reason ``Result.dual`` gives is carried.
     """
-    meta = Record.of(
-        result.termination_condition,
-        result.objective,
-        has_primal=result.has_primal,
-        solved_at=result.solved_at,
-        provenance=result.provenance,
-    )
     if not result.has_primal:
-        return SliceAnswer(meta, metrics)
-    frames: dict[str, dict[str, pl.DataFrame]] = {
-        'primal': {name: result.primal(name) for name in program.variables},
-        'expression': {},
-    }
-    for kind in kinds_of(outputs):
-        if laid := (result._outputs or {}).get(kind):
-            frames[kind] = {name: frame.pipe(collected) for name, frame in laid.items()}
-    no_expressions: dict[str, str] = {}
-    for name in program.expressions:
-        try:
-            frames['expression'][name] = result.evaluate(name)
-        except SpecsolveError as exc:
-            no_expressions[name] = str(exc)
-    try:
-        frames['dual'] = {name: result.dual(name) for name in program.constraints}
-    except SpecsolveError as exc:
-        return SliceAnswer(meta, metrics, frames, str(exc), no_expressions)
-    return SliceAnswer(meta, metrics, frames, None, no_expressions)
+        return SliceAnswer(result.record, metrics)
+    held, no_expressions = result._all_frames()
+    frames = {kind: {name: frame.pipe(collected) for name, frame in named.items()} for kind, named in held.items()}
+    return SliceAnswer(result.record, metrics, frames, result._no_duals, no_expressions)
 
 
 def _run_slice(
-    program: Program,
     document: Spec,
     encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
@@ -584,7 +556,7 @@ def _run_slice(
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
     with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
-        answer = _answers(result, program, _slice_metrics(model.diagnostics(), None), call['outputs'])
+        answer = _answers(result, _slice_metrics(model.diagnostics(), None))
         if not encode_out:
             return answer
         return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})

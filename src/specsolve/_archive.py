@@ -255,10 +255,10 @@ def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Sourc
     solved, and cached. *answer* comes back unchanged where the solve left no
     values.
     """
-    if not answer._primals:
+    if not answer.has_primal:
         return answer
-    frames = answer._primals
-    dual_frames = answer._duals
+    frames = answer._readable('primal', 'the solution')
+    dual_frames = answer._readable('dual', 'the duals')
     no_duals = answer._no_duals
     built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
 

@@ -357,27 +357,23 @@ class Result:
 
     _status: SolveStatus
     _objective: float
-    #: One ``(dims…, value)`` frame per declaration, lazy and in label order.
-    #: ``None`` after [`close`][], which is what "closed" means; an empty
-    #: mapping is a solve that left nothing.
-    _primals: Mapping[str, pl.LazyFrame] | None
-    _duals: Mapping[str, pl.LazyFrame] | None
-    #: ``{kind: {name: frame}}`` for each of the
-    #: [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the
-    #: solve asked for, laid out as [`_primals`][] or [`_duals`][]. Its keys
-    #: are what this answer carries; a kind asked for by a solve that left no
-    #: values maps to nothing.
-    _outputs: Mapping[str, Mapping[str, pl.LazyFrame]] | None
+    #: ``{kind: {name: frame}}``: one ``(dims…, value)`` frame per declaration,
+    #: lazy and in label order, under ``primal``, ``dual`` and each of the
+    #: [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS] the solve asked
+    #: for. Its keys are what this answer carries; a kind of which the solve
+    #: left nothing maps to nothing. ``None`` after [`close`][], which is what
+    #: "closed" means.
+    _frames: Mapping[str, Mapping[str, pl.LazyFrame]] | None
     #: One deferred reader per declared named expression, and the ad-hoc
     #: evaluator. ``_evaluate`` is ``None`` where there is no spec as written:
     #: a build off an already-lowered ``Program``, or an answer read off disk.
     _expressions: Mapping[str, Callable[[], pl.DataFrame]] | None = None
     _evaluate: Callable[[str | Mapping[str, object]], pl.DataFrame] | None = None
     #: Why there are no duals, when a solve that left values still has none.
-    #: ``None`` whenever [`_duals`][] holds them.
+    #: ``None`` whenever [`_frames`][] holds them.
     _no_duals: str | None = None
-    #: One ``(dims…, value)`` frame per constraint, laid out exactly as
-    #: [`_duals`][], carrying the certificate an infeasible solve left.
+    #: One ``(dims…, value)`` frame per constraint, laid out exactly as the
+    #: duals, carrying the certificate an infeasible solve left.
     #: Empty on every solve that was not infeasible.
     _dual_rays: Mapping[str, pl.LazyFrame] | None = None
     #: Why there is no certificate — the status, or the solver setting that
@@ -462,20 +458,20 @@ class Result:
             provenance=self._provenance,
         )._replace(specsolve_run=self._run)
 
-    def _unclosed(self, what: str) -> Mapping[str, pl.LazyFrame]:
-        """The primals, or why nothing here can be read: this result was closed."""
-        if self._primals is None:
+    def _unclosed(self, what: str) -> Mapping[str, Mapping[str, pl.LazyFrame]]:
+        """Every frame held, by kind, or why nothing here can be read: this result was closed."""
+        if self._frames is None:
             raise SpecsolveError(
                 f'cannot read {what}: this result was closed, and closing releases its values and its '
                 f'hold on the coordinates they lay out over. Frames already read stay valid — they are '
                 f'their own data — so read what you need before close(), or drop the `with` and close '
                 f'when you are done.'
             )
-        return self._primals
+        return self._frames
 
-    def _readable(self, frames: Mapping[str, pl.LazyFrame] | None, what: str) -> Mapping[str, pl.LazyFrame]:
-        """*frames*, or why they cannot be read — closed first, then the status."""
-        self._unclosed(what)
+    def _readable(self, kind: str, what: str) -> Mapping[str, pl.LazyFrame]:
+        """The frames of *kind*, one this answer carries, or why they cannot be read — closed first, then the status."""
+        frames = self._unclosed(what)[kind]
         if not self._status.is_readable:
             wording = f' ({self._status.solver_wording})' if self._status.solver_wording else ''
             raise NoSolutionError(
@@ -485,7 +481,6 @@ class Result:
                 f'hands back a full-length vector of zeros either way and it is '
                 f'indistinguishable from an answer.'
             )
-        assert frames is not None, 'close() releases the primal, dual and output frames together'
         return frames
 
     def primal(self, name: str) -> pl.DataFrame:
@@ -499,7 +494,7 @@ class Result:
             SpecsolveError: This result was closed.
             KeyError: No variable is called *name*.
         """
-        frames = self._readable(self._primals, f"the primal of '{name}'")
+        frames = self._readable('primal', f"the primal of '{name}'")
         return _named(frames, name, 'variable').pipe(collected)
 
     def dual(self, name: str) -> pl.DataFrame:
@@ -523,7 +518,7 @@ class Result:
                 them.
             KeyError: No constraint is called *name*.
         """
-        frames = self._readable(self._duals, f"the dual of '{name}'")
+        frames = self._readable('dual', f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
         return _named(frames, name, 'constraint').pipe(collected)
@@ -657,9 +652,9 @@ class Result:
             NoSolutionError: The solve left no values to read.
             SpecsolveError: This result was closed.
         """
-        given = {'primal': self._readable(self._primals, 'the values to start from')}
+        given = {'primal': self._readable('primal', 'the values to start from')}
         for kind in BASES:
-            if frames := (self._outputs or {}).get(kind):
+            if frames := self._unclosed('the basis to start from').get(kind):
                 given[kind] = frames
         return given
 
@@ -676,11 +671,9 @@ class Result:
         solve ended on none.
         """
         what = f"the {kind.replace('_', ' ')} of '{name}'"
-        self._unclosed(what)
-        assert self._outputs is not None, 'close() releases the outputs with the primals, which _unclosed just checked'
-        if kind not in self._outputs:
+        if kind not in self._unclosed(what):
             raise SpecsolveError(not_requested_message(kind, name))
-        frames = self._readable(self._outputs[kind], what)
+        frames = self._readable(kind, what)
         if kind in PRICED and self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
         if kind in BASES and not frames:
@@ -710,7 +703,7 @@ class Result:
                 spec does not declare — a new parameter is a build, not a
                 read.
         """
-        self._readable(self._primals, 'an expression')
+        self._readable('primal', 'an expression')
         return evaluated(self._expressions or {}, self._evaluate, expression)
 
     def _frame(self, name: str, kind: str) -> pl.DataFrame:
@@ -730,15 +723,15 @@ class Result:
                 output the solve was not asked for.
         """
         if checked_kind(kind) == 'primal':
-            return tuple(self._readable(self._primals, 'the solution'))
+            return tuple(self._readable('primal', 'the solution'))
         if kind == 'dual':
-            frames = self._readable(self._duals, 'the duals')
+            frames = self._readable('dual', 'the duals')
             if self._no_duals is not None:
                 raise SpecsolveError(self._no_duals)
             return tuple(frames)
         if kind in OUTPUT_KINDS:
             return tuple(self._carried(kind, 'anything'))
-        self._readable(self._primals, 'the expressions')
+        self._readable('primal', 'the expressions')
         return tuple(self._expressions or {})
 
     def to_pandas(self, name: str, kind: str = 'primal') -> pd.DataFrame:
@@ -806,31 +799,39 @@ class Result:
         """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
         import polars as pl
 
-        primals = self._unclosed('the solution')
+        carried = self._unclosed('the solution')
         clear_the_answer(out)
-        write_format(out, asked_for(self._outputs or {}))
+        write_format(out, asked_for(kind for kind in carried if kind in OUTPUT_KINDS))
         write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
         write(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
-        for name, frame in primals.items():
-            write(frame, out / 'primal' / f'{name}.parquet')
-        for name, frame in (self._duals or {}).items():
-            write(frame, out / 'dual' / f'{name}.parquet')
-        for kind, frames in (self._outputs or {}).items():
+        held, no_expressions = self._all_frames()
+        for kind, frames in held.items():
             for name, frame in frames.items():
                 write(frame, out / kind / f'{name}.parquet')
+        write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
+        return out
+
+    def _all_frames(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame]], dict[str, str]]:
+        """``{kind: {name: frame}}`` for every kind this answer carries, and why each expression left out is.
+
+        What [`save`][] writes and a sweep keeps of a slice. The declared
+        expressions are evaluated now, under ``expression``, and one this data
+        cannot evaluate has no frame and a reason instead.
+
+        Raises:
+            SpecsolveError: This result was closed.
+        """
+        expressions: dict[str, pl.LazyFrame] = {}
         no_expressions: dict[str, str] = {}
         for name, reader in (self._expressions or {}).items():
             try:
-                frame = reader()
+                expressions[name] = reader().lazy()
             except SpecsolveError as absent:
                 no_expressions[name] = str(absent)
-                continue
-            write(frame, out / 'expression' / f'{name}.parquet')
-        write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
-        return out
+        return {**self._unclosed('the solution'), 'expression': expressions}, no_expressions
 
     def close(self) -> None:
         """Release this result's frames, and its hold on the build's label frames, early. Optional.
@@ -838,8 +839,7 @@ class Result:
         Frames already read stay valid. The model and the solver are the
         [`Model`][specsolve._api.Model]'s to close.
         """
-        self._primals = self._duals = self._outputs = self._expressions = None
-        self._dual_rays = None
+        self._frames = self._expressions = self._dual_rays = None
         self._evaluate = None
 
     def __enter__(self) -> Result:
@@ -927,9 +927,7 @@ def _answer_under(out: Path, *, whole: bool) -> Result:
     return Result(
         status,
         objective,
-        saved_frames(out / 'primal', whole=whole),
-        saved_frames(out / 'dual', whole=whole),
-        {kind: saved_frames(out / kind, whole=whole) for kind in kinds_of(read_outputs(out))},
+        {kind: saved_frames(out / kind, whole=whole) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
         expressions,
         _no_duals=no_duals,
         _spec=read_spec(out),
