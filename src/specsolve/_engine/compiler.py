@@ -284,9 +284,18 @@ class Compiler:
             return map_terms(inner, rewrite)
 
         def region(r: program.Region) -> CompiledExpression:
-            """One region's value, kept only where that region applies."""
+            """One region's value, kept only where that region applies.
+
+            The coordinates it claims are read once, over the dims its
+            condition reads. A region that claims none builds no term: each
+            term would carry presences over the full product of its dims, read
+            only to be cut away.
+            """
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            truth = masked(self.scope, on, r.when).select(*on) if on else None
+            truth = masked(self.scope, on, r.when).select(*on).pipe(collected) if on else None
+            if truth is not None and not truth.height:
+                return CompiledExpression((), ())
+            truth = truth.lazy() if truth is not None else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
                 """A region's presence, silent about the coordinates the region does not claim.

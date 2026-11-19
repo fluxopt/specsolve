@@ -470,3 +470,58 @@ def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_h
         DataError, match=r"parameter 'a, b' is used as a divisor but has no row at 1 of the coordinates"
     ):
         result.evaluate('v / e')
+
+
+#: `delayed` claims a unit only where its `delay` is positive, as PyPSA's links
+#: read a port's flow an earlier snapshot only where the port has a delay.
+DELAYED = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
+    'parameters': {'delay': {'dims': ['g'], 'dtype': 'int'}},
+    'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'expressions': {
+        'arrival': {
+            'dims': ['t', 'g'],
+            'cases': {'delayed': {'when': 'delay > 0', 'expression': 'shift(p, along=t, offset=1, edge=0)'}},
+            'otherwise': 'p',
+        }
+    },
+    'constraints': {'held': {'dims': ['t', 'g'], 'expression': 'arrival <= 0.5'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('delay', 'terms', 'objective', 'reads'),
+    [
+        pytest.param([0, 0], 1, 4.0, 'every p is held to 0.5', id='a-region-that-claims-no-unit-builds-no-term'),
+        pytest.param(
+            [1, 0],
+            2,
+            4.5,
+            'a reads p one step late, so its last p is free up to 1',
+            id='a-region-that-claims-a-unit-builds-its-term',
+        ),
+    ],
+)
+def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, delay, terms, objective, reads):
+    """PyPSA's spec writes a delayed and a curved arrival for every link port, and most networks claim neither.
+
+    Each term of a region carries presences over the full product of its dims,
+    so a region claiming nothing still read that product to cut it away.
+    """
+    from specsolve._engine import compiler as compiler_module
+
+    built = []
+    expression = compiler_module.Compiler.expression
+
+    def spied(self, e, what, **kwargs):
+        compiled = expression(self, e, what, **kwargs)
+        if what == "constraint 'held' lhs":
+            built.append(len(compiled.linear))
+        return compiled
+
+    monkeypatch.setattr(compiler_module.Compiler, 'expression', spied)
+    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    with differential(DELAYED, sources) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+    assert built == [terms], f'`held` compiles {terms} term(s): one per region that claims a unit'
