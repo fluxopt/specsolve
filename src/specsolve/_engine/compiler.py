@@ -435,17 +435,18 @@ class Compiler:
     def _solved_term(self, name: str) -> Term:
         """A variable at its primal — the constant term a read compiles it to, carrying the presence its linear term would.
 
-        Under ``missing: neutral`` it is filled with zero over the unmasked product,
-        because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
+        Under a numeric ``missing:`` it is filled with that number over the unmasked
+        product, because a nonlinear read such as ``0.5 ** x`` tells a value from no row.
         """
         assert self.solution is not None
         held, declaration = self.scope.variables[name], self.scope.program.variables[name]
         dims = declaration.dims
         keys = dims or (UNIT,)
         rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
-        if declaration.where is not None and declaration.missing == 'neutral':
+        if declaration.where is not None and not isinstance(declaration.missing, str):
             everywhere = masked(self.scope, dims, None).select(*keys)
-            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
+            fill = float(declaration.missing)
+            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(fill))
         return Term(dims, rows.select(*dims, 'cval'), 'constant', presences=self._variable_presences(name, dims))
 
     def _dual_term(self, name: str) -> Term:
@@ -605,7 +606,7 @@ class Compiler:
         with no labels, a group its relation maps no member to, a window of
         width zero or over no row, and a member a ``cases:`` region leaves out
         all land nowhere. Asked of the term
-        rather than the relation for that last reason. A neutral parameter short
+        rather than the relation for that last reason. A `missing: 0` parameter short
         of a member is one summand fewer. Only for a constant term: a row with
         no terms is not built.
         """

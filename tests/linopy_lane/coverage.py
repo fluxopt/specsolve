@@ -201,7 +201,7 @@ def _quotients(
     the coordinate. A quotient that stands at the row's own coordinate is
     also removed where a variable beside it there is absent, which takes the
     row; that mask narrows the quotient's own coordinates and adds none, so
-    a count stays one of the quotient's coordinates. A variable declared ``missing: neutral`` is a zero where it is
+    a count stays one of the quotient's coordinates. A variable declared ``missing: 0`` is a zero where it is
     masked, and removes nothing.
     """
     at_the_row = [node for e in expressions for node in _at_the_row(e)]

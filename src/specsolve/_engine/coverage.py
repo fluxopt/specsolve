@@ -1,6 +1,6 @@
 """Is the data there where a declaration needs it? The positions that ask.
 
-Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
+Elsewhere a missing row of a ``missing: 0`` parameter reads as a zero coefficient. A divisor and a
 constant term have no such reading, so each is asked at the last moment the
 gap is still visible:
 
@@ -135,7 +135,7 @@ def constant_side(
     owed: one whose parameters all stand beside a variable is a coefficient,
     and its zero is not a bound. A term built under a ``cases:`` region is
     owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
+    as it is for a ``missing: 0`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant term with no value at a row it is owed.

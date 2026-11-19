@@ -819,17 +819,17 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           without it (`global_constraints.py:364-369`)'
         dims: [scenario, global_constraint, snapshot]
         dtype: bool
-        missing: neutral
+        missing: false
       StorageUnit_primary_energy_weight:
         description: the constrained attribute per unit of charge depleted — data prep; an unweighted unit
           has no row
         dims: [scenario, global_constraint, storage_unit]
-        missing: neutral
+        missing: 0
       Store_primary_energy_weight:
         description: the constrained attribute per unit of energy depleted — data prep; an unweighted store
           has no row
         dims: [scenario, global_constraint, store]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

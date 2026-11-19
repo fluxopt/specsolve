@@ -134,7 +134,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
           columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus
         dims: [bus]

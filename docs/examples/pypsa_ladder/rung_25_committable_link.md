@@ -720,12 +720,12 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_down:
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_p_nom:
         description: nominal power
         dims: [scenario, link]
@@ -771,12 +771,12 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
           limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_shut_down:
         description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
           no limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_min_up_time:
         description: least snapshots a link stays on once started
         dims: [scenario, link]
@@ -794,7 +794,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
           came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_must_stay_up:
         description: true while the up time a link brought into the horizon still binds — data prep, since
           `position()` compares against a literal rather than a parameter
@@ -817,7 +817,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
       Link_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [link]
-        missing: neutral
+        missing: 0
       Link_modules_installed:
         description: 'how many whole modules a committable build has in place: `Link_p_nom / Link_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -831,7 +831,7 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
           none of them (`components.py:1050-1121`). Below the flow a solve wants, it caps that flow; data
           prep
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_p_min_pu_nonneg:
         description: true where none of the link's own minimums-per-unit is negative — PyPSA's per-unit `(p_min_pu
           >= 0).all()` over every snapshot and scenario, data prep

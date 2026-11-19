@@ -48,14 +48,15 @@ variables:
 piecewise:
   cost_curve:
     description: >-
-      each unit's own curve — `points: bp_x` says a curve runs as far as its own
+      each unit's own curve — `where: bp_x` says a curve runs as far as its own
       breakpoints do, so the hydro unit pays for two weights and the gas turbine
       for four
-    over: bp
-    points: bp_x
+    along: bp
+    dims: [snapshot, generator]
+    where: bp_x
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, ">="]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, ">="]
     method: convex
 
 constraints:

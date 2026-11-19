@@ -580,25 +580,25 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
       Generator_ramp_limit_up:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_down:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_start_up:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot a unit starts, per unit of nominal power; no value means
           no limit
       Generator_ramp_limit_shut_down:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot before a unit stops, per unit of nominal power; no value
           means no limit
       Generator_status_initial:
@@ -609,7 +609,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
       Generator_p_init:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
           came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
       Generator_start_up_cost:
@@ -627,7 +627,7 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
       Generator_p_nom_mod:
         dims: [generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the module size a build comes in whole numbers of; no value means the build is continuous
       Generator_modules_installed:
         dims: [scenario, generator]

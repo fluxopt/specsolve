@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 #: One dimension, one variable, a coefficient and a bound.
 SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f'], 'missing': 'neutral'}, 'cap': {'dims': ['f']}},
+    'parameters': {'cost': {'dims': ['f'], 'missing': 0}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['f'], 'expression': 'x <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
@@ -264,7 +264,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
 #: A flag. Only a boolean column satisfies `dtype: bool`.
 FLAG_SPEC = {
     'dimensions': {'g': {'dtype': 'str'}},
-    'parameters': {'active': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'}},
+    'parameters': {'active': {'dims': ['g'], 'dtype': 'bool', 'missing': False}},
     'variables': {'x': {'dims': ['g'], 'where': 'active', 'bounds': {'lower': 0, 'upper': 1}}},
     'constraints': {'k': {'dims': [], 'expression': 'sum(x, over=g) <= 9'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},

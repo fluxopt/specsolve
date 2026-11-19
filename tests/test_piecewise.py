@@ -541,7 +541,7 @@ parameters:
   load: {dims: []}
   bp_x: {dims: [generator, bp], missing: absent}
   bp_y: {dims: [generator, bp], missing: absent}
-  bp_present: {dims: [generator, bp], dtype: bool, missing: neutral}
+  bp_present: {dims: [generator, bp], dtype: bool, missing: false}
 
 variables:
   p:
@@ -553,11 +553,12 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
-    points: bp_present
+    along: bp
+    dims: [generator]
+    where: bp_present
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -602,7 +603,7 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['op_cost'] = ['op_cost', 'bp_y', '>=']
     path = tmp_path / 'masked.yaml'
     path.write_text(pyyaml.safe_dump(raw))
 
@@ -624,7 +625,7 @@ def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve
     """
     raw = override(raw_of(SHORT_CURVE), **{'piecewise.cost_curve.method': method})
     if method == 'lp':
-        raw['piecewise']['cost_curve']['links'][1] = ['op_cost', 'bp_y', '>=']
+        raw['piecewise']['cost_curve']['links']['op_cost'] = ['op_cost', 'bp_y', '>=']
 
     result = sps.solve(expanded(raw), short_curve_inputs)
 
@@ -637,7 +638,7 @@ def test_the_mask_is_smaller_than_padding_the_curve_out(short_curve_inputs):
     padded['bp_x'] = curve_frame({**A_AND_SHORT_B['x'], ('B', 2): 20.0})
     padded['bp_y'] = curve_frame({**A_AND_SHORT_B['y'], ('B', 2): 130.0})
     unmasked = raw_of(SHORT_CURVE)
-    del unmasked['piecewise']['cost_curve']['points']
+    del unmasked['piecewise']['cost_curve']['where']
     del unmasked['parameters']['bp_present']
 
     with sps.build(expanded(raw_of(SHORT_CURVE)), short_curve_inputs) as masked_model:
@@ -720,7 +721,7 @@ def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_i
     named against what the block has.
     """
     unmasked = raw_of(SHORT_CURVE)
-    del unmasked['piecewise']['cost_curve']['points'], unmasked['parameters']['bp_present']
+    del unmasked['piecewise']['cost_curve']['where'], unmasked['parameters']['bp_present']
     ragged = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
     without = schema_of(unmasked)
 
@@ -754,7 +755,7 @@ def _nominated_mask_spec():
     return override(
         raw_of(NONCONVEX_YAML),
         **{
-            'piecewise.cost_curve.points': 'bp_x',
+            'piecewise.cost_curve.where': 'bp_x',
             'parameters.bp_x.missing': 'absent',
             'parameters.bp_y.missing': 'absent',
         },
@@ -803,7 +804,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     """
     raw = raw_of(GATED_YAML)
     raw['piecewise']['cost_curve']['method'] = method
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {'dims': ['snapshot'], 'domain': 'binary', 'where': 'gate_rows'}
 
     gated = [True, False] * 6
@@ -826,16 +827,16 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
 
 
 def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs):
-    """`missing: neutral` is the spelling the refusal above asks for, and it holds
+    """`missing: 0` is the spelling the refusal above asks for, and it holds
     the formulation together: the row is built everywhere, reading
     ``sum(lam) == 0`` where the gate does not exist."""
     raw = raw_of(GATED_YAML)
-    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}
+    raw['parameters']['gate_rows'] = {'dims': ['snapshot'], 'dtype': 'bool', 'missing': False}
     raw['variables']['u'] = {
         'dims': ['snapshot'],
         'domain': 'binary',
         'where': 'gate_rows',
-        'missing': 'neutral',
+        'missing': 0,
     }
 
     rows = dict(expanded(raw, 'piecewise').program.constraints)

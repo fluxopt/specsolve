@@ -504,7 +504,7 @@ P_{g} = \mathrm{p}^{\mathrm{nom,set}}_{g} \qquad \forall\, g \in \mathcal{G} \,:
       Generator_p_nom_set:
         description: a given nominal power for an extendable generator; one without a value has no row here
         dims: [generator]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

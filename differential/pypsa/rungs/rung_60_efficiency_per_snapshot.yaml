@@ -308,7 +308,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   Transformer_s_nom:
     description: nominal apparent power
     dims: [scenario, transformer]
@@ -324,14 +324,14 @@ parameters:
       orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
       has no row. From the first scenario only, as a line's
     dims: [period, transformer, cycle]
-    missing: neutral
+    missing: 0
   Transformer_phase_shift_weight:
     description: a fixed transformer's phase shift in radians at each snapshot, signed by its orientation
       in the cycle — a constant added to the cycle sum, data prep; zero for a varying transformer, whose
       shift is a decision instead, so the constant and the variable term never both count a shift. A transformer
       with no shift or in no cycle of its snapshot's period has no row
     dims: [snapshot, transformer, cycle]
-    missing: neutral
+    missing: 0
   GlobalConstraint_type:
     description: which formula the row takes — `primary_energy`, `operational_limit`, `transmission_volume_expansion_limit`,
       `transmission_expansion_cost_limit` or `tech_capacity_expansion_limit`
@@ -356,13 +356,13 @@ parameters:
       without it (`global_constraints.py:364-369`)'
     dims: [scenario, global_constraint, snapshot]
     dtype: bool
-    missing: neutral
+    missing: false
   Generator_primary_energy_weight:
     description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
       over the generator's efficiency at the snapshot, data prep; a generator of an unweighted carrier
       has no row
     dims: [scenario, global_constraint, snapshot, generator]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

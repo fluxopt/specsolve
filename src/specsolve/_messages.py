@@ -57,7 +57,7 @@ def missing_row_message(kind: str, name: str, coordinate: str, missing: int) -> 
     else:
         ways = (
             '  Declare `missing: absent`, if the parameter does not exist there.\n'
-            '  Declare `missing: neutral`, if a missing row contributes nothing.\n'
+            '  Declare `missing: 0`, if a missing row contributes nothing.\n'
             '  Declare `missing: <value>`, if a missing row reads as one value.'
         )
     return (
@@ -71,7 +71,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """The message for a constant side covering fewer coordinates than its rows."""
     return (
         f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
-        f'built here. A missing neutral row is read as 0, and on the constant side that zero is a '
+        f'built here. A missing row of a `missing: 0` parameter is read as 0, and on the constant side that zero is a '
         f'bound rather than an absence — the row still exists, and it binds.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
@@ -94,7 +94,7 @@ def reported_divisor_message(name: str, missing: int) -> str:
     """The message for a divisor parameter a reported expression reads short of a row."""
     return (
         f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
+        f'the expression divides at. A missing row of a `missing: 0` parameter is not absence, so the '
         f'quotient is not dropped there, and there is no number to divide by.\n'
         f'  Supply the missing rows.\n'
         f'  Declare the parameter `missing: absent`, if the quotient has no value there.'

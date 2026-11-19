@@ -756,11 +756,11 @@ e_{\xi,t,v} = \mathrm{e}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       StorageUnit_p_set:
         description: a given net dispatch schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: neutral
+        missing: 0
       StorageUnit_state_of_charge_set:
         description: a given charge schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: neutral
+        missing: 0
       Store_e_nom:
         description: nominal energy capacity
         dims: [scenario, store]
@@ -824,7 +824,7 @@ e_{\xi,t,v} = \mathrm{e}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       Store_e_set:
         description: a given energy schedule; a store without one has no row here
         dims: [scenario, snapshot, store]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'
@@ -852,7 +852,7 @@ e_{\xi,t,v} = \mathrm{e}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
           balance keeps its row there; the bounds are PyPSA''s, on the variable rather than as rows'
         dims: [scenario, snapshot, storage_unit]
         where: StorageUnit_inflow > 0 AND StorageUnit_active
-        missing: neutral
+        missing: 0
         bounds: {lower: 0, upper: StorageUnit_inflow}
       Store_e:
         description: '`Store-e` — energy held at the end of a snapshot'

@@ -640,25 +640,25 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_ramp_limit_up:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_down:
         dims: [scenario, snapshot, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
       Generator_ramp_limit_start_up:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot a unit starts, per unit of nominal power; no value means
           no limit
       Generator_ramp_limit_shut_down:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most output in the snapshot before a unit stops, per unit of nominal power; no value
           means no limit
       Generator_min_down_time:
@@ -673,7 +673,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_p_init:
         dims: [scenario, generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
           came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
       Generator_must_stay_down:
@@ -696,7 +696,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
       Generator_p_nom_mod:
         dims: [generator]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the module size a build comes in whole numbers of; no value means the build is continuous
       Generator_modules_installed:
         dims: [scenario, generator]
@@ -870,14 +870,14 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
         where: Generator_maintainable AND Generator_active
         bounds: {lower: 0.0, upper: 1.0}
         domain: continuous
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance` — whether a maintainable generator is in maintenance: continuous,
           and one exactly where an event covers the snapshot'
       Generator_maintenance_start:
         dims: [scenario, snapshot, generator]
         where: Generator_maintainable AND Generator_active
         domain: binary
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
       Generator_maintenance_status:
         dims: [scenario, snapshot, generator]
@@ -885,7 +885,7 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
           (Generator_p_nom_mod > 0))
         bounds: {lower: 0.0}
         domain: continuous
-        missing: neutral
+        missing: 0
         description: '`Generator-maintenance_status` — the status while in maintenance, zero otherwise: the
           product the `maint-status` rows linearize, so a unit in maintenance may also be off'
       Generator_p_nom_ext:

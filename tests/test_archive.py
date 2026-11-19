@@ -1032,7 +1032,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     """
     from tests.test_strategy import WINDOW, horizon_sources
 
-    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t'], 'missing': 'neutral'}}}
+    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['t'], 'missing': 0}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, into='t', carry={'soc_initial': 'soc'})
     sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}

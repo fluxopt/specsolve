@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           energy arriving at a storage unit whether or not it was wanted — zero for
           a unit that receives none
         dims: [snapshot, storage]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -213,7 +213,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           balance keeps its row there.
         dims: [snapshot, storage]
         where: "inflow != 0"
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: inflow
@@ -322,7 +322,7 @@ only for units whose inflow is positive somewhere. The port matches that with
 The mask is safe only because of the line beside it. A constraint mentioning a
 masked variable loses its **row**, not only the term. On its own the mask would
 delete the battery's whole energy balance. Its stored energy would come from
-nowhere, and the model would report **0.0** instead of 3200. `missing: neutral`
+nowhere, and the model would report **0.0** instead of 3200. `missing: 0`
 says the missing coordinates hold a spill of zero rather than a quantity with no
 value, so the row stands without the term.
 
@@ -336,7 +336,7 @@ rather than an absence. The sparsity that matters is in the *value*, and
 
 ## What it exercises
 
-`missing: neutral` on a masked variable, the declaration that keeps a row whose
+`missing: 0` on a masked variable, the declaration that keeps a row whose
 term has gone, against an energy balance carrying two independent sinks. Also
 the asymmetry underneath it: a masked **variable** takes its row, while a sparse
 **parameter** on a constant side is refused. The two halves of this model's

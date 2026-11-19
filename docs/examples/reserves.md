@@ -224,7 +224,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the generator, which is single-valued per label; rows are absent where a
           generator backs no part of a zone
         dims: [generator, zone]
-        missing: neutral
+        missing: 0
       zone_req:
         description: reserve a zone has to be covered by
         dims: [zone]

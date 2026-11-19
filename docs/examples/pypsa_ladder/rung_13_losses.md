@@ -629,7 +629,7 @@ S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in 
           data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
           (`networks.py:1430-1437`)
         dims: [period, line, cycle]
-        missing: neutral
+        missing: 0
       transmission_losses:
         description: 'whether the network dissipates transmission losses — PyPSA''s `transmission_losses`
           read as a flag; its mode, tangents or secants, only decides how data prep fills the `segment` axis,
@@ -669,7 +669,7 @@ S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in 
           held up by the cuts; absent, and zero in the balance, where the network is lossless'
         dims: [scenario, snapshot, line]
         where: Line_lossy
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Line_s_nom_ext:
         description: '`Line-s_nom` — nominal apparent power where it is a decision, for a line that is active;

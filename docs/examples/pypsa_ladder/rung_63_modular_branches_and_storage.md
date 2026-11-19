@@ -957,7 +957,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       StorageUnit_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [storage_unit]
-        missing: neutral
+        missing: 0
       StorageUnit_p_min_pu:
         description: most storing, per unit of nominal power and negated
         dims: [scenario, snapshot, storage_unit]
@@ -1030,7 +1030,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Store_e_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [store]
-        missing: neutral
+        missing: 0
       Store_e_min_pu:
         description: least energy held, per unit of nominal capacity — negative for a store that may go short
         dims: [scenario, snapshot, store]
@@ -1091,7 +1091,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Line_s_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [line]
-        missing: neutral
+        missing: 0
       Line_s_max_pu:
         description: most flow either way, per unit of nominal apparent power
         dims: [scenario, snapshot, line]
@@ -1111,7 +1111,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Transformer_s_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [transformer]
-        missing: neutral
+        missing: 0
       Transformer_s_max_pu:
         description: most flow either way, per unit of nominal apparent power
         dims: [scenario, snapshot, transformer]

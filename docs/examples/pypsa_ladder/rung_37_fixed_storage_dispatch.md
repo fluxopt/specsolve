@@ -744,11 +744,11 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       StorageUnit_p_dispatch_set:
         description: a given dispatch schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: neutral
+        missing: 0
       StorageUnit_p_store_set:
         description: a given charging schedule; a unit without one has no row here
         dims: [scenario, snapshot, storage_unit]
-        missing: neutral
+        missing: 0
       Store_e_nom:
         description: nominal energy capacity
         dims: [scenario, store]
@@ -812,7 +812,7 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
       Store_p_set:
         description: a given schedule of power delivered; a store without one has no row here
         dims: [scenario, snapshot, store]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

@@ -14,6 +14,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, in_memory
+from specsolve._engine.scope import reads_as_zero
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -91,7 +92,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             )
     given: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        if p.missing in ('absent', 'neutral', None):
+        if p.missing in ('absent', None) or reads_as_zero(p.missing):
             continue
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)

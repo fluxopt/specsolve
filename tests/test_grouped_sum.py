@@ -549,7 +549,7 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
 DEMAND_BY_REGION = {
     'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
     'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
-    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': 'neutral'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': False}},
     'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
     'expressions': {
         'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},

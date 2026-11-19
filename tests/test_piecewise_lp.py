@@ -48,10 +48,11 @@ variables:
 piecewise:
   cost_curve:
     description: each unit's cost bounded below by its own segment lines
-    over: bp
+    along: bp
+    dims: [snapshot, unit]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, '>=']
     method: lp
 
 constraints:
@@ -140,7 +141,7 @@ def test_lp_and_convex_reach_one_optimum():
     """
     hull = override(
         pyyaml.safe_load(SPEC),
-        **{'piecewise.cost_curve.method': 'convex', 'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
+        **{'piecewise.cost_curve.method': 'convex', 'piecewise.cost_curve.links': {'p': ['p', 'bp_x'], 'op_cost': ['op_cost', 'bp_y']}},
     )
 
     with (
@@ -171,7 +172,7 @@ def test_the_bounded_link_may_be_written_first():
     out against `bp_x` either way round.
     """
     swapped = override(
-        pyyaml.safe_load(SPEC), **{'piecewise.cost_curve.links': [['op_cost', 'bp_y', '>='], ['p', 'bp_x']]}
+        pyyaml.safe_load(SPEC), **{'piecewise.cost_curve.links': {'op_cost': ['op_cost', 'bp_y', '>='], 'p': ['p', 'bp_x']}}
     )
 
     with sps.solve(expanded(swapped), _relational()) as result:
@@ -205,7 +206,7 @@ def test_a_one_breakpoint_curve_is_that_point_under_the_weight_methods(method):
     """
     point = override(
         pyyaml.safe_load(SPEC),
-        **{'piecewise.cost_curve.method': method, 'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y']]},
+        **{'piecewise.cost_curve.method': method, 'piecewise.cost_curve.links': {'p': ['p', 'bp_x'], 'op_cost': ['op_cost', 'bp_y']}},
     )
 
     with sps.solve(expanded(point), _relational(load=[10.0, 10.0, 10.0], xs=[10.0], ys=[25.0])) as result:
@@ -234,7 +235,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     ragged = override(
         pyyaml.safe_load(PER_UNIT_SPEC),
         **{
-            'piecewise.cost_curve.points': 'runs_to' if mask else 'bp_x',
+            'piecewise.cost_curve.where': 'runs_to' if mask else 'bp_x',
             'parameters.bp_x.missing': 'absent',
             'parameters.bp_y.missing': 'absent',
         },
@@ -244,7 +245,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
             'dims': ['unit', 'bp'],
             'dtype': 'bool',
             'description': 'curve length',
-            'missing': 'neutral',
+            'missing': 0,
         }
 
     with sps.solve(expanded(ragged), _per_unit_points(short=False, mask=mask)) as result:
@@ -277,9 +278,9 @@ def test_values_past_the_mask_are_not_part_of_the_curve():
                 'dims': ['unit', 'bp'],
                 'dtype': 'bool',
                 'description': 'curve length',
-                'missing': 'neutral',
+                'missing': 0,
             },
-            'piecewise.cost_curve.points': 'runs_to',
+            'piecewise.cost_curve.where': 'runs_to',
             'parameters.bp_x.missing': 'absent',
             'parameters.bp_y.missing': 'absent',
         },
@@ -321,8 +322,8 @@ def test_the_saving_is_columns_paid_for_in_rows():
     """
     sizes = {}
     for method, links in (
-        ('convex', [['p', 'bp_x'], ['op_cost', 'bp_y']]),
-        ('lp', [['p', 'bp_x'], ['op_cost', 'bp_y', '>=']]),
+        ('convex', {'p': ['p', 'bp_x'], 'op_cost': ['op_cost', 'bp_y']}),
+        ('lp', {'p': ['p', 'bp_x'], 'op_cost': ['op_cost', 'bp_y', '>=']}),
     ):
         spec = override(
             pyyaml.safe_load(SPEC),
@@ -361,7 +362,7 @@ def test_the_curvature_the_sign_states_is_required(sign, sense, ys, wanted):
     """
     spec = override(
         pyyaml.safe_load(SPEC),
-        **{'piecewise.cost_curve.links': [['p', 'bp_x'], ['op_cost', 'bp_y', sign]], 'objective.sense': sense},
+        **{'piecewise.cost_curve.links': {'p': ['p', 'bp_x'], 'op_cost': ['op_cost', 'bp_y', sign]}, 'objective.sense': sense},
     )
     with pytest.raises(DataError, match=f'exact only for a {wanted} curve'):
         sps.solve(expanded(spec), _relational(ys=ys))

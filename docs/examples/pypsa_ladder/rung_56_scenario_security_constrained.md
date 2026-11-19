@@ -569,7 +569,7 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
           data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
           (`networks.py:1430-1437`)
         dims: [period, line, cycle]
-        missing: neutral
+        missing: 0
       Line_BODF:
         description: the share of an outaged branch's flow a line takes on when that branch goes out — PyPSA's
           `BODF`, from the PTDF of the sub-network the period's active branches form, data prep; a row only
@@ -577,7 +577,7 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
           line itself. The factors are the same in every scenario, because PyPSA takes those of the first
           scenario (`abstract.py:534`)
         dims: [period, line, outage]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

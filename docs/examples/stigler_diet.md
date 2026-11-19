@@ -92,7 +92,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nutrient_per_dollar:
         description: how much of each nutrient a dollar of each food buys
         dims: [food, nutrient]
-        missing: neutral
+        missing: 0
       daily_minimum:
         description: how much of a nutrient a day has to supply
         dims: [nutrient]

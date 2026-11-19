@@ -123,7 +123,7 @@ class TestMasterCoords:
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 'neutral'}})
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 0}})
         labels = _master_coords(schema, {'x': ['z', 'a', 'm'], 'a': {'z': 1.0}})['x']
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
@@ -144,7 +144,7 @@ class TestMasterCoords:
             'a bare list': days,
         }
         schema = _schema(
-            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 'neutral'}}
+            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 0}}
         )
 
         labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
@@ -344,7 +344,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 #: the bound. The declaration it names is reached through `note()` rather than
 #: written into the message.
 _UNCOVERED_BOUND = (
-    "parameters:\n  cap: {dims: [g], missing: neutral}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+    "parameters:\n  cap: {dims: [g], missing: 0}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
 )
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
@@ -431,7 +431,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
-              gate: {dims: [f], dtype: bool, missing: neutral}
+              gate: {dims: [f], dtype: bool, missing: false}
               relmax: {dims: [f]}
             variables:
               x: {dims: [f], bounds: {lower: 0, upper: 100}}
@@ -496,8 +496,8 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
         dimensions:
           f: {dtype: str}
         parameters:
-          ub: {dims: [f], missing: neutral}
-          live: {dims: [f], dtype: bool, missing: neutral}
+          ub: {dims: [f], missing: 0}
+          live: {dims: [f], dtype: bool, missing: false}
         variables:
           x: {dims: [f], bounds: {lower: 0, upper: ub}}
         constraints:
@@ -569,11 +569,11 @@ EXPRESSION_DATA = {
 
 
 #: ``EXPRESSION_YAML`` with ``p`` masked out at the generator whose ``p_max`` is
-#: zero and declared ``missing: neutral``, plus one entry only a nonlinear read can
+#: zero and declared ``missing: 0``, plus one entry only a nonlinear read can
 #: tell apart from an affine one.
 ZERO_ABSENCE_YAML = EXPRESSION_YAML.replace(
     '    bounds: {lower: 0, upper: p_max}\n',
-    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: neutral\n',
+    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: 0\n',
 ).replace(
     '  spend: sum(p * cost, over=generator)\n',
     '  spend: sum(p * cost, over=generator)\n  grown: sum(0.5 ** p, over=generator)\n',
@@ -583,7 +583,7 @@ ZERO_ABSENCE_DATA = {**EXPRESSION_DATA, 'p_max': pd.Series({'g1': 200.0, 'g2': 0
 
 
 def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_read(yaml_file):
-    """`missing: neutral` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
+    """`missing: 0` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
     path = yaml_file(ZERO_ABSENCE_YAML, 'zero_absence.yaml')
     with differential(path, ZERO_ABSENCE_DATA) as run:
         tidy = run.result.evaluate('grown')
@@ -660,11 +660,12 @@ variables:
     bounds: {lower: 0}
 piecewise:
   cost_curve:
-    over: bp
-    points: bp_x
+    along: bp
+    dims: [snapshot, generator]
+    where: bp_x
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, ">="]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, ">="]
     method: convex
 expressions:
   spend: sum(op_cost, over=generator)

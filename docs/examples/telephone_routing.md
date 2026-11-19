@@ -118,7 +118,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           which arcs a path traverses — a path uses an arc or it does not, so the
           value is 1 and absence is 0
         dims: [path, arc]
-        missing: neutral
+        missing: 0
 
     variables:
       flow:

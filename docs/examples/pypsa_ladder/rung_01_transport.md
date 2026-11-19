@@ -442,11 +442,11 @@ f_{\xi,t,l} = \mathrm{f}^{\mathrm{set}}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\
       Generator_p_set:
         description: a given output schedule; a generator without one has no row here
         dims: [scenario, snapshot, generator]
-        missing: neutral
+        missing: 0
       Link_p_set:
         description: a given flow schedule; a link without one has no row here
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

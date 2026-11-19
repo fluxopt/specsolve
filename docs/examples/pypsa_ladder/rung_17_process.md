@@ -635,16 +635,16 @@ z_{\xi,t,j} = \mathrm{z}^{\mathrm{set}}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\
         description: most a process may raise its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, process]
-        missing: neutral
+        missing: 0
       Process_ramp_limit_down:
         description: most a process may lower its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, process]
-        missing: neutral
+        missing: 0
       Process_p_set:
         description: a given internal power schedule; a process without one has no row here
         dims: [scenario, snapshot, process]
-        missing: neutral
+        missing: 0
       Process_p_nom_min:
         description: least nominal power an extendable process may be built at
         dims: [scenario, process]
@@ -660,7 +660,7 @@ z_{\xi,t,j} = \mathrm{z}^{\mathrm{set}}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\
       Process_p_nom_set:
         description: a given nominal power for an extendable process; one without a value has no row here
         dims: [process]
-        missing: neutral
+        missing: 0
       Process_committable:
         description: whether internal power is gated by an on/off status decision
         dims: [process]
@@ -669,12 +669,12 @@ z_{\xi,t,j} = \mathrm{z}^{\mathrm{set}}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\
         description: most internal power in the snapshot a process starts, per unit of nominal power; no value
           means no limit
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_ramp_limit_shut_down:
         description: most internal power in the snapshot before a process stops, per unit of nominal power;
           no value means no limit
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_status_initial:
         description: one where the process was on before the first snapshot, zero where off — PyPSA's `up_time_before
           > 0`, data prep
@@ -685,11 +685,11 @@ z_{\xi,t,j} = \mathrm{z}^{\mathrm{set}}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\
           the process came in running; no value means it is unknown, so the process carries no ramp row at
           the first snapshot
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [process]
-        missing: neutral
+        missing: 0
       Load_p_set:
         description: demand
         dims: [scenario, snapshot, load]

@@ -1172,22 +1172,22 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: most a generator may raise its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, generator]
-        missing: neutral
+        missing: 0
       Generator_ramp_limit_down:
         description: most a generator may lower its output between snapshots, per unit of nominal power; no
           value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, generator]
-        missing: neutral
+        missing: 0
       Generator_ramp_limit_start_up:
         description: most output in the snapshot a unit starts, per unit of nominal power; no value means
           no limit
         dims: [scenario, generator]
-        missing: neutral
+        missing: 0
       Generator_ramp_limit_shut_down:
         description: most output in the snapshot before a unit stops, per unit of nominal power; no value
           means no limit
         dims: [scenario, generator]
-        missing: neutral
+        missing: 0
       Generator_status_initial:
         description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
           > 0`, data prep
@@ -1197,21 +1197,21 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
           came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
         dims: [scenario, generator]
-        missing: neutral
+        missing: 0
       Generator_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [generator]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_up:
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_down:
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, link]
-        missing: neutral
+        missing: 0
       Link_p_nom:
         description: nominal power
         dims: [scenario, link]
@@ -1257,12 +1257,12 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
           limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_ramp_limit_shut_down:
         description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
           no limit
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_status_initial:
         description: one where the link was on before the first snapshot, zero where off — PyPSA's `up_time_before
           > 0`, data prep
@@ -1272,11 +1272,11 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
           came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
         dims: [scenario, link]
-        missing: neutral
+        missing: 0
       Link_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [link]
-        missing: neutral
+        missing: 0
       Process_rate:
         description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
           … read long — negative where the port withdraws, positive where it injects; a link is a process
@@ -1398,7 +1398,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Generator_p_nom_set:
         description: a given nominal power for an extendable generator; one without a value has no row here
         dims: [generator]
-        missing: neutral
+        missing: 0
       Generator_e_sum_min:
         description: least energy over the horizon; minus infinity where no floor is meant
         dims: [scenario, generator]
@@ -1421,7 +1421,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Link_p_nom_set:
         description: a given nominal power for an extendable link; one without a value has no row here
         dims: [link]
-        missing: neutral
+        missing: 0
       StorageUnit_p_nom_min:
         description: least nominal power an extendable storage unit may be built at
         dims: [scenario, storage_unit]
@@ -1438,7 +1438,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         description: a given nominal power for an extendable storage unit; one without a value has no row
           here
         dims: [storage_unit]
-        missing: neutral
+        missing: 0
       Store_e_nom_min:
         description: least nominal capacity an extendable store may be built at
         dims: [scenario, store]
@@ -1454,7 +1454,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
       Store_e_nom_set:
         description: a given nominal capacity for an extendable store; one without a value has no row here
         dims: [store]
-        missing: neutral
+        missing: 0
       StorageUnit_p_nom:
         description: nominal power
         dims: [scenario, storage_unit]
@@ -1608,7 +1608,7 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           — data prep; a link outside it, or one that does not stand in the row's `investment_period`, has
           no row
         dims: [scenario, global_constraint, link]
-        missing: neutral
+        missing: 0
       Link_expansion_cost_weight:
         description: the link's capital cost where its carrier is in the row's set, times the objective weights
           of the periods it stands in where the row names no `investment_period` under `multi_investment_periods`
@@ -1616,27 +1616,27 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
           The capital cost is PyPSA's `capital_cost` property, which is `Link_capital_cost` without `fom_cost`
           (`components.py:1151-1169`, `global_constraints.py:870-879`)
         dims: [scenario, global_constraint, link]
-        missing: neutral
+        missing: 0
       Generator_tech_capacity_weight:
         description: one where the generator is in the row's carrier-and-bus set — data prep; one outside
           it, or one that does not stand in the row's `investment_period`, has no row
         dims: [global_constraint, generator]
-        missing: neutral
+        missing: 0
       Link_tech_capacity_weight:
         description: one where the link is in the row's carrier-and-bus set — data prep; one outside it, or
           one that does not stand in the row's `investment_period`, has no row
         dims: [global_constraint, link]
-        missing: neutral
+        missing: 0
       StorageUnit_tech_capacity_weight:
         description: one where the storage unit is in the row's carrier-and-bus set — data prep; one outside
           it, or one that does not stand in the row's `investment_period`, has no row
         dims: [global_constraint, storage_unit]
-        missing: neutral
+        missing: 0
       Store_tech_capacity_weight:
         description: one where the store is in the row's carrier-and-bus set — data prep; one outside it,
           or one that does not stand in the row's `investment_period`, has no row
         dims: [global_constraint, store]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

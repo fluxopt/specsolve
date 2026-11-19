@@ -113,6 +113,8 @@ python = "3.12.*"
 
 [tool.pixi.pypi-dependencies]
 specsolve = { path = ".", editable = true }
+# mathspec at main until 0.5.0 is released; the release swaps this for the PyPI floor.
+mathspec = { git = "https://github.com/energy-models/mathspec", rev = "5f1464c334c1012cdee2947d4d55b4d1d6bef40a" }
 
 [tool.pixi.feature.dev.pypi-dependencies]
 specsolve = { path = ".", editable = true, extras = ["gurobi", "xpress"] }
@@ -130,7 +132,7 @@ specsolve = { path = "." }
 polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
-mathspec = "==0.4.0"
+mathspec = { git = "https://github.com/energy-models/mathspec", rev = "5f1464c334c1012cdee2947d4d55b4d1d6bef40a" }
 pytest = "*"
 pytest-xdist = "*"
 

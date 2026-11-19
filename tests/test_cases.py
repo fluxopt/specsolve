@@ -28,8 +28,8 @@ from tests.oracle import specsolve_linopy
 CAPPED_BY_REGION = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {
-        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'},
-        'hi': {'dims': ['t'], 'missing': 'neutral'},
+        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': False},
+        'hi': {'dims': ['t'], 'missing': 0},
         'cost': {'dims': ['t']},
     },
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1000}}},
@@ -141,7 +141,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
 CARRIED_IN = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {
-        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'},
+        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': False},
         'before': {'dims': ['g']},
         'cap': {'dims': ['g']},
         'step': {'dims': ['g']},
@@ -310,7 +310,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 0}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
@@ -327,7 +327,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 0}},
     }
     sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
@@ -337,7 +337,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
 #: per flagged step, and none for the steps the `otherwise` carries.
 SUMMED_BY_REGION = CAPPED_BY_REGION | {
     'dimensions': CAPPED_BY_REGION['dimensions'] | {'g': {'dtype': 'str'}},
-    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 'neutral'}},
+    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 0}},
     'expressions': {
         'cap': {
             'dims': ['t'],
@@ -409,8 +409,8 @@ OUTAGE_FLOW = {
     'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
     'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
     'parameters': {
-        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': 'neutral'},
-        'share': {'dims': ['line', 'outage'], 'missing': 'neutral'},
+        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': False},
+        'share': {'dims': ['line', 'outage'], 'missing': 0},
         'cap': {'dims': ['line']},
     },
     'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
@@ -455,7 +455,7 @@ def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_h
     """
     spec = {
         'dimensions': {'h': {'dtype': 'int'}},
-        'parameters': {'a': {'dims': ['h']}, 'b': {'dims': ['h'], 'missing': 'neutral'}},
+        'parameters': {'a': {'dims': ['h']}, 'b': {'dims': ['h'], 'missing': 0}},
         'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
         'expressions': {
             'e': {'dims': ['h'], 'cases': {'flagged': {'when': 'a > 0', 'expression': 'a'}}, 'otherwise': 'b'}

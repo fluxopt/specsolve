@@ -63,7 +63,7 @@ def variable_value(variable: Any, missing: str) -> Any:
 
     :func:`variable_term`'s two readings over values: a masked slot is NaN,
     which propagates through the arithmetic the way the absent term takes its
-    row, and ``missing: neutral`` fills it.
+    row, and ``missing: 0`` fills it.
     """
     solution = variable.solution
     return solution.fillna(0.0) if missing == 'neutral' else solution

@@ -265,7 +265,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the cycle basis, as a sparse table of impedance times direction. A line
           may belong to several cycles, so this cannot be a coordinate.
         dims: [cycle, line]
-        missing: neutral
+        missing: 0
       co2_limit:
         description: emissions the whole horizon is allowed
         dims: []

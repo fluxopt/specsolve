@@ -815,12 +815,12 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
         description: most a process may raise its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, process]
-        missing: neutral
+        missing: 0
       Process_ramp_limit_down:
         description: most a process may lower its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
         dims: [scenario, snapshot, process]
-        missing: neutral
+        missing: 0
       Process_p_nom_min:
         description: least nominal power an extendable process may be built at
         dims: [scenario, process]
@@ -841,12 +841,12 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
         description: most internal power in the snapshot a process starts, per unit of nominal power; no value
           means no limit
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_ramp_limit_shut_down:
         description: most internal power in the snapshot before a process stops, per unit of nominal power;
           no value means no limit
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_min_up_time:
         description: least snapshots a process stays on once started
         dims: [scenario, process]
@@ -865,7 +865,7 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
           the process came in running; no value means it is unknown, so the process carries no ramp row at
           the first snapshot
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_must_stay_up:
         description: true while the up time a process brought into the horizon still binds — data prep, since
           `position()` compares against a literal rather than a parameter
@@ -888,7 +888,7 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
       Process_p_nom_mod:
         description: the module size a build comes in whole numbers of; no value means the build is continuous
         dims: [process]
-        missing: neutral
+        missing: 0
       Process_modules_installed:
         description: 'how many whole modules a committable build has in place: `Process_p_nom / Process_p_nom_mod`
           where a fixed build is modular, one where it is not, data prep. PyPSA refuses a fixed modular build
@@ -902,7 +902,7 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
           none of them (`components.py:1050-1121`). Below the internal power a solve wants, it caps that internal
           power; data prep
         dims: [scenario, process]
-        missing: neutral
+        missing: 0
       Process_p_min_pu_nonneg:
         description: true where none of the process's own minimums-per-unit is negative — PyPSA's per-unit
           `(p_min_pu >= 0).all()` over every snapshot and scenario, data prep

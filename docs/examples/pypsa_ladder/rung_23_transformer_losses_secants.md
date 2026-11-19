@@ -704,7 +704,7 @@ s_{\xi,t,k} + \ell_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s
           data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
           (`networks.py:1430-1437`)
         dims: [period, line, cycle]
-        missing: neutral
+        missing: 0
       transmission_losses:
         description: 'whether the network dissipates transmission losses — PyPSA''s `transmission_losses`
           read as a flag; its mode, tangents or secants, only decides how data prep fills the `segment` axis,
@@ -751,7 +751,7 @@ s_{\xi,t,k} + \ell_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s
           orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
           has no row. From the first scenario only, as a line's
         dims: [period, transformer, cycle]
-        missing: neutral
+        missing: 0
       Transformer_loss_max:
         description: the loss at a transformer's rating — PyPSA's `r_pu_eff * (s_max_pu * s_nom_max)**2`,
           its `r_pu_eff` the resistance over the given `s_nom` times the tap ratio, data prep
@@ -785,7 +785,7 @@ s_{\xi,t,k} + \ell_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s
           held up by the cuts; absent, and zero in the balance, where the network is lossless'
         dims: [scenario, snapshot, line]
         where: Line_lossy
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Transformer_s:
         description: '`Transformer-s` — PyPSA''s `p0`, the flow measured at the `Transformer_bus0` end: a
@@ -797,7 +797,7 @@ s_{\xi,t,k} + \ell_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s
           absent, and zero in the balance, where the network is lossless'
         dims: [scenario, snapshot, transformer]
         where: Transformer_lossy
-        missing: neutral
+        missing: 0
         bounds: {lower: 0}
       Transformer_s_nom_ext:
         description: '`Transformer-s_nom` — nominal apparent power where it is a decision, for a transformer

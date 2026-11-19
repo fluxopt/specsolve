@@ -906,13 +906,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_ramp_limit_up:
         dims: [scenario, snapshot, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a link may raise its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
       Link_ramp_limit_down:
         dims: [scenario, snapshot, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a link may lower its flow between snapshots, per unit of nominal power; no value
           means no limit — read at the later of the two snapshots, so the limit may change over time
       Link_p_nom:
@@ -965,13 +965,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_ramp_limit_start_up:
         dims: [scenario, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most flow in the snapshot a link starts, per unit of nominal power; no value means no
           limit
       Link_ramp_limit_shut_down:
         dims: [scenario, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most flow in the snapshot before a link stops, per unit of nominal power; no value means
           no limit
       Link_min_up_time:
@@ -986,7 +986,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_p_init:
         dims: [scenario, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the flow a link brought into the horizon — PyPSA's `p_init`, read only where the link
           came in running; no value means it is unknown, so the link carries no ramp row at the first snapshot
       Link_start_up_cost:
@@ -1004,7 +1004,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_p_nom_mod:
         dims: [link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the module size a build comes in whole numbers of; no value means the build is continuous
       Link_modules_installed:
         dims: [scenario, link]
@@ -1015,7 +1015,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Link_big_m:
         dims: [scenario, link]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the bound a committed extendable link's big-M rows release it by — the build cap `p_nom_max`
           times the highest `p_max_pu`, where the cap is finite and positive. Elsewhere it is `committable_big_m`
           times the highest `p_max_pu`, and where that keyword is not given, ten times the largest of the
@@ -1075,13 +1075,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_ramp_limit_up:
         dims: [scenario, snapshot, process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a process may raise its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
       Process_ramp_limit_down:
         dims: [scenario, snapshot, process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most a process may lower its internal power between snapshots, per unit of nominal power;
           no value means no limit — read at the later of the two snapshots, so the limit may change over time
       Process_committable:
@@ -1091,13 +1091,13 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_ramp_limit_start_up:
         dims: [scenario, process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most internal power in the snapshot a process starts, per unit of nominal power; no value
           means no limit
       Process_ramp_limit_shut_down:
         dims: [scenario, process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: most internal power in the snapshot before a process stops, per unit of nominal power;
           no value means no limit
       Process_min_up_time:
@@ -1112,7 +1112,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_p_init:
         dims: [scenario, process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the internal power a process brought into the horizon — PyPSA's `p_init`, read only where
           the process came in running; no value means it is unknown, so the process carries no ramp row at
           the first snapshot
@@ -1131,7 +1131,7 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
       Process_p_nom_mod:
         dims: [process]
         dtype: float
-        missing: neutral
+        missing: 0
         description: the module size a build comes in whole numbers of; no value means the build is continuous
       Process_modules_installed:
         dims: [scenario, process]

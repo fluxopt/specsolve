@@ -25,7 +25,7 @@ BROADCAST_MASK_SPEC = {
         'carrier': {'dtype': 'str'},
     },
     'parameters': {
-        'produces': {'dims': ['tech', 'carrier'], 'missing': 'neutral'},
+        'produces': {'dims': ['tech', 'carrier'], 'missing': 0},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
         'installed': {'dims': ['node', 'tech']},
@@ -48,7 +48,7 @@ def _grid(dims, labels, values):
 
 SPARSE_COEFFICIENT_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'c': {'dims': ['t'], 'missing': 'neutral'}, 'w': {'dims': ['t'], 'missing': 'neutral'}},
+    'parameters': {'c': {'dims': ['t'], 'missing': 0}, 'w': {'dims': ['t'], 'missing': 0}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -262,7 +262,7 @@ def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
 
     Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
-    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 'neutral'})
+    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 0})
     with differential(spec, _grouped_constant_sources(capacity=('g1',))) as run:
         assert run.oracle == pytest.approx(3.0, rel=RTOL), 'north imports up to 3 and south up to 0'
 
@@ -270,7 +270,7 @@ def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {
-        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
         'relmax': {'dims': ['f']},
         'cost': {'dims': ['f']},
     },
@@ -306,7 +306,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {
-        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
         'relmax': {'dims': ['f']},
         'cost': {'dims': ['f']},
     },
@@ -341,7 +341,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f'], 'missing': 'neutral'}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'dims': ['f'], 'missing': 0}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 50}},

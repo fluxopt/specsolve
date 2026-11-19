@@ -149,7 +149,7 @@ REDUCED = [
             id=f'{operator} over a {label} term without the dimension',
         )
         for operator, amount in [('shift', 'offset=1, edge=0'), ('sum_back', 'window=2')]
-        for label, missing in [('masked', {}), ('neutral', {'missing': 'neutral'})]
+        for label, missing in [('masked', {}), ('neutral', {'missing': 0})]
     ),
     pytest.param(
         _case(
@@ -369,7 +369,7 @@ REDUCED = [
                 T,
                 'sum_back(p, along=t, window=1) <= x',
                 ['t'],
-                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                parameters={'p': {'dims': ['t'], 'missing': 0}},
                 variables={'x': _bounded('t')},
             ),
             {'t': [1, 2], 'p': pl.DataFrame({'t': [2], 'value': [0.25]})},
@@ -381,7 +381,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'g': {'dtype': 'str'}, 'h': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 0}},
                 'variables': {
                     'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}, 'where': "g != 'g6'"},
                     'y': {'dims': ['k', 'h'], 'bounds': {'lower': -5, 'upper': 5}},
@@ -438,7 +438,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}, 'b': {'dtype': 'str'}, 't': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 0}},
                 'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 5}}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
@@ -458,7 +458,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int', 'ordered': True}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
                 'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
@@ -473,7 +473,7 @@ REDUCED = [
                 {'b': {'dtype': 'str'}},
                 'sum(v) + v * p <= 1',
                 ['b'],
-                parameters={'p': {'dims': ['b'], 'missing': 'neutral'}},
+                parameters={'p': {'dims': ['b'], 'missing': 0}},
                 variables={'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 10}, 'where': "b != 'b8'"}},
             ),
             {'b': ['b5', 'b8'], 'p': pl.DataFrame({'b': ['b5'], 'value': [2.0]})},
@@ -484,7 +484,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'b': {'dtype': 'str'}},
-                'parameters': {'p': {'dims': ['b'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['b'], 'missing': 0}},
                 'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 1}}},
                 'expressions': {'e': {'dims': ['b'], 'expression': 'v / p'}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
@@ -498,7 +498,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': G,
-                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 0}},
                 'variables': {'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
                 'expressions': {'e': {'dims': ['g'], 'expression': 'sum(v, over=g) / p'}},
                 'constraints': {'c': {'dims': ['g'], 'expression': 'v == e'}},
@@ -514,7 +514,7 @@ REDUCED = [
                 G,
                 'v / sum(p, over=g) <= 1',
                 ['g'],
-                parameters={'p': {'dims': ['g'], 'missing': 'neutral'}},
+                parameters={'p': {'dims': ['g'], 'missing': 0}},
                 variables={'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
             ),
             {'g': ['g0', 'g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2.0]})},
@@ -548,9 +548,9 @@ REDUCED = [
                 {'t': {'dtype': 'int'}},
                 '3 / p <= v',
                 ['t'],
-                parameters={'p': {'dims': ['t'], 'missing': 'neutral'}},
+                parameters={'p': {'dims': ['t'], 'missing': 0}},
                 variables={
-                    'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 'neutral'}
+                    'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 0}
                 },
             ),
             {'t': [0, 9], 'p': pl.DataFrame({'t': [0], 'value': [2.0]})},
@@ -638,7 +638,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
                 'variables': {'v': {'dims': [], 'bounds': {'lower': -5, 'upper': 10}}},
                 'constraints': {'c': {'dims': ['h'], 'expression': 'v / p <= 1'}},
                 'objective': {'sense': 'maximize', 'expression': 'v'},
@@ -651,7 +651,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'k': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
-                'parameters': {'p': {'dims': ['g'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['g'], 'missing': 0}},
                 'variables': {'v': {'dims': ['k'], 'bounds': {'lower': 0, 'upper': 5}}},
                 'constraints': {'c': {'dims': ['g', 'k'], 'expression': '0.5 <= p * (3 + v)'}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
@@ -717,7 +717,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 'neutral'}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
                 'variables': {'v': _bounded('h')},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
@@ -795,7 +795,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'k': {'dtype': 'int'}},
-                'parameters': {'f': {'dims': ['k'], 'dtype': 'bool', 'missing': 'neutral'}},
+                'parameters': {'f': {'dims': ['k'], 'dtype': 'bool', 'missing': False}},
                 'variables': {'v': {'dims': ['k'], 'bounds': {'lower': -5, 'upper': 10}}},
                 'expressions': {
                     'e': {

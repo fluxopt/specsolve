@@ -521,7 +521,7 @@ S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in 
           — data prep; a line outside it, or one that does not stand in the row's `investment_period`, has
           no row
         dims: [scenario, global_constraint, line]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

@@ -340,7 +340,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_cost:
         description: what starting one unit of capacity costs
         dims: [plant]
-        missing: neutral
+        missing: 0
       weight:
         description: how many real hours an hour of the representative day stands for
         dims: [hour]

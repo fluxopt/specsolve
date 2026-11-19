@@ -36,7 +36,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 
 | In an expression | linopy or xarray |
 |---|---|
-| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: neutral` |
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: 0` |
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
@@ -52,7 +52,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
-A missing row of a `missing: neutral` parameter is zero in a coefficient, an
+A missing row of a `missing: 0` parameter is zero in a coefficient, an
 error in `bounds:`, and false in a `where` operand
 (`tests/linopy_lane/absence.py`).
 

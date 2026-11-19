@@ -579,7 +579,7 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     the same way, and `expression()` still says why."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
@@ -622,7 +622,7 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
@@ -665,7 +665,7 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     """An absence loads back as the sentence, not as an unknown name."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
         'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},

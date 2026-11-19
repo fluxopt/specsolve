@@ -543,7 +543,7 @@ F_{l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in 
           The capital cost is PyPSA's `capital_cost` property, which is `Link_capital_cost` without `fom_cost`
           (`components.py:1151-1169`, `global_constraints.py:870-879`)
         dims: [scenario, global_constraint, link]
-        missing: neutral
+        missing: 0
     variables:
       Generator_p:
         description: '`Generator-p` — output of a generator in a snapshot'

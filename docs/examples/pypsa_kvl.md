@@ -151,7 +151,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           may belong to several cycles, so this is a parameter over both dimensions
           rather than a coordinate, and rows are absent where a line is in no cycle
         dims: [cycle, line]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]

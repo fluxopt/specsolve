@@ -567,7 +567,7 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
           data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
           (`networks.py:1430-1437`)
         dims: [period, line, cycle]
-        missing: neutral
+        missing: 0
       Transformer_s_nom:
         description: nominal apparent power
         dims: [scenario, transformer]
@@ -583,7 +583,7 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
           orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
           has no row. From the first scenario only, as a line's
         dims: [period, transformer, cycle]
-        missing: neutral
+        missing: 0
       Transformer_phase_shift_varying:
         description: whether a transformer's phase shift is a decision — PyPSA's `phase_shift_min < phase_shift_max`,
           read as a flag in data prep; false is a fixed shift carried by `phase_shift`. The shift parameters
@@ -630,7 +630,7 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
           and zero in the cycle sum, where the shift is fixed'
         dims: [scenario, snapshot, transformer]
         where: Transformer_phase_shift_varying AND Transformer_active
-        missing: neutral
+        missing: 0
         bounds: {lower: Transformer_phase_shift_min, upper: Transformer_phase_shift_max}
       Process_p:
         description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its

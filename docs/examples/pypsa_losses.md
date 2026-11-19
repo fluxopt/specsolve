@@ -226,7 +226,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           their rows.
         dims: [snapshot, line]
         where: loss_max
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: loss_max
@@ -342,15 +342,15 @@ climb `10.00 → 85.78 → 90.00`: power is worth more the further it travels,
 which no objective figure shows. Across the lossless line the price does not
 move. `b3` differs from `b2` only because the local generator sets it.
 
-**The mask needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
+**The mask needs `missing: 0`.** `loss` is declared `where: loss_max`, so
 the resistanceless line has no loss variable. `loss` also appears as a bare
 term in the rating rows, `f + loss <= s_nom`, and a constraint naming a masked
-variable loses its row. Without `missing: neutral` those two rows vanish for that
+variable loses its row. Without `missing: 0` those two rows vanish for that
 line, it becomes uncapacitated, and the model reports a cheaper answer:
 
 | spelling | rows | `omissions` | objective |
 |---|---|---|---|
-| `where:` + `missing: neutral` | 132 | 0 | **24114.24** ✔ |
+| `where:` + `missing: 0` | 132 | 0 | **24114.24** ✔ |
 | `where:` alone | 120 | **2** | 17514.24 ✘ |
 
 Twenty-seven per cent low, with an optimal status. `diagnostics().omissions`

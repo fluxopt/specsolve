@@ -153,11 +153,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_up_cost:
         description: what bringing a unit up costs, once per start
         dims: [generator]
-        missing: neutral
+        missing: 0
       shut_down_cost:
         description: what taking a unit down costs, once per stop
         dims: [generator]
-        missing: neutral
+        missing: 0
       load:
         description: demand to be met
         dims: [snapshot]

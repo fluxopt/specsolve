@@ -26,6 +26,21 @@ if TYPE_CHECKING:
     from specsolve._engine.terms import Term
 
 
+def missing_value(declared: program.Program, name: str) -> float | bool | None:
+    """The value a missing row of the parameter *name* reads as, or ``None`` under ``refused`` or ``absent``."""
+    missing = declared.parameters[name].missing
+    return None if isinstance(missing, str) else missing
+
+
+def reads_as_zero(missing: program.ParameterMissing | None) -> bool:
+    """Whether a missing row reads as zero, so a table short of rows is left sparse rather than filled.
+
+    Every term and bound reads a sparse zero row as no contribution, so only a
+    comparison has to see the zero, which [`missing_value`][] gives it.
+    """
+    return not isinstance(missing, str) and missing is not None and missing == 0
+
+
 def join_on(
     left: pl.LazyFrame,
     right: pl.LazyFrame,

@@ -681,7 +681,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     """
     spec = override(
         SPENDING,
-        **{'parameters.scale': {'dims': ['t'], 'missing': 'neutral'}, 'expressions.ratio': 'load / scale'},
+        **{'parameters.scale': {'dims': ['t'], 'missing': 0}, 'expressions.ratio': 'load / scale'},
     )
     sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
     with pytest.warns(sps.errors.SpecsolveWarning, match="'scale' has no rows for snapshot 1"):
@@ -1949,7 +1949,7 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
     with pytest.warns(sps.errors.SpecsolveWarning, match=r"'cost' has no rows for period 3, which 'demand' has"):
         runs = sps.solve_over(
-            override(MYOPIC, **{'parameters.cost.missing': 'neutral'}),
+            override(MYOPIC, **{'parameters.cost.missing': 0}),
             sources,
             sps.EachCoordinate('period', carry={'existing': 'total'}),
         )
