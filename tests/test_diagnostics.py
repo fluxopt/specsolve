@@ -158,10 +158,10 @@ def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
         spread = model.diagnostics().coefficient_range
 
     assert spread.to_dicts() == [
-        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
         {'constraint': 'badly_scaled', 'smallest': 1e-3, 'largest': 1e6},
+        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
         {'constraint': 'signed', 'smallest': 1.0, 'largest': 4.0},
-    ], 'one row per block in build order, and `signed` is scaled exactly as `ordinary` is'
+    ], 'one row per block, sorted by name as the build takes them, and `signed` is scaled exactly as `ordinary` is'
 
     worst = spread.select((pl.col('largest') / pl.col('smallest')).max()).item()
     assert worst == pytest.approx(1e9), 'the conditioning number to compare against what the solver reports'
@@ -229,9 +229,9 @@ def test_the_rhs_range_is_read_per_block_like_the_coefficients():
         seen = model.diagnostics().rhs_range
 
     assert seen.to_dicts() == [
-        {'constraint': 'small_rhs', 'smallest': 1.0, 'largest': 1.0},
         {'constraint': 'large_rhs', 'smallest': 250000.0, 'largest': 250000.0},
-    ], 'one row per constraint block in build order, magnitudes like every other range'
+        {'constraint': 'small_rhs', 'smallest': 1.0, 'largest': 1.0},
+    ], 'one row per constraint block, sorted by name as the build takes them, magnitudes like every other range'
 
 
 def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
@@ -308,35 +308,35 @@ def test_the_sparsity_report_survives_the_model_being_released():
 #: the assembly refuses it, which is a raise *after* the attach has succeeded.
 UNDEFINED_DIVISOR = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f'], 'missing': 0}},
+    'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'dims': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
 }
 
 DENSE_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
-HALF_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
+ZERO_IN_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 0.0]})}
 
 
 def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     """A build that raised reports no size, neither its own nor the previous build's.
 
-    What the attach measured is still true, and names the gap the build then
-    refused.
+    What the attach measured is still true, though the build then refused
+    the zero it divided by.
     """
     with sps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
         built = model.diagnostics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
-        with pytest.raises(sps.errors.DataError, match='used as a divisor'):
-            model.update(HALF_A_DIVISOR)
+        with pytest.raises(sps.errors.DataError, match='not finite'):
+            model.update(ZERO_IN_A_DIVISOR)
         after = model.diagnostics()
 
     assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
     )
-    assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
-        'the attach that succeeded is still reported, and it names the gap the assembly then refused'
+    assert after.sparse_parameters.is_empty(), (
+        'the attach that succeeded is still the one reported: a divisor with a row at every coordinate'
     )
 
 

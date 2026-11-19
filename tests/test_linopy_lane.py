@@ -16,6 +16,7 @@ import polars as pl
 import pytest
 from mathspec import program
 
+import specsolve as sps
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
@@ -339,12 +340,11 @@ def _has_note(exc: BaseException, substring: str) -> bool:
     return any(substring in n for n in getattr(exc, '__notes__', []))
 
 
-#: A constant side the data does not cover, which only the *build* can see: the
-#: rows exist, the parameter has no row at one of them, and the fill would be
-#: the bound. The declaration it names is reached through `note()` rather than
-#: written into the message.
-_UNCOVERED_BOUND = (
-    "parameters:\n  cap: {dims: [g], missing: 0}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+#: A parameter with no `missing:` that the data does not cover, which only the
+#: data can show: the refusal names the parameter, and the file is reached
+#: through `note()`.
+_UNCOVERED_PARAMETER = (
+    "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
 )
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
@@ -385,12 +385,12 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             id='a-comparison-with-no-variable-in-it',
         ),
         pytest.param(
-            _UNCOVERED_BOUND,
+            _UNCOVERED_PARAMETER,
             _NO_ROWS,
             DataError,
-            'fewer coordinates than the rows built here',
-            "while building constraint 'c'",
-            id='a-constant-side-the-data-misses-so-only-the-build-sees-it',
+            'has no row at g=a',
+            "parameter 'cap'",
+            id='a-parameter-the-data-misses-so-only-the-attach-sees-it',
         ),
     ],
 )
@@ -486,43 +486,41 @@ def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
         assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
 
+#: `x` is bounded above by `ub`, which has a row at `a` alone.
+_BOUND_SPEC = """
+    dimensions:
+      f: {dtype: str}
+    parameters:
+      ub: {dims: [f]}
+    variables:
+      x: {dims: [f], bounds: {lower: 0, upper: ub}}
+    constraints:
+      c:
+        dims: [f]
+        expression: x <= 100
+    objective:
+      sense: maximize
+      expression: sum(x)
+"""
+
+_BOUND_DATA = {'f': ['a', 'b'], 'ub': pd.Series([10.0], index=pd.Index(['a'], name='f'))}
+
+
 def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml_file):
-    """A bound the data does not cover is a ``DataError`` at build, as on the native lane (#313).
+    """A bound with no `missing:` that the data does not cover is a ``DataError`` at build, as on the native lane (#313)."""
+    with pytest.raises(DataError) as linopy_lane:
+        specsolve_linopy.build(yaml_file(_BOUND_SPEC), dict(_BOUND_DATA))
+    with pytest.raises(DataError) as native:
+        sps.build(yaml_file(_BOUND_SPEC), dict(_BOUND_DATA)).close()
+    assert str(linopy_lane.value) == str(native.value), 'one defect, one sentence'
+    assert "parameter 'ub' has no row at f=b" in str(native.value), 'the refusal names the parameter and the coordinate'
 
-    A coordinate the variable does not occupy needs no bound, so the gap is
-    refused and the masked one accepted.
-    """
-    spec = yaml_file("""
-        dimensions:
-          f: {dtype: str}
-        parameters:
-          ub: {dims: [f], missing: 0}
-          live: {dims: [f], dtype: bool, missing: false}
-        variables:
-          x: {dims: [f], bounds: {lower: 0, upper: ub}}
-        constraints:
-          c:
-            dims: [f]
-            expression: x <= 100
-        objective:
-          sense: maximize
-          expression: sum(x)
-        """)
-    data = {
-        'f': ['a', 'b'],
-        'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),
-        'live': pd.Series([True], index=pd.Index(['a'], name='f')),
-    }
 
-    with pytest.raises(DataError, match='NULL bounds'):
-        specsolve_linopy.build(spec, data)
-
-    masked = yaml_file(
-        spec.read_text().replace('{dims: [f], bounds:', '{dims: [f], where: live, bounds:'),
-        'masked.yaml',
-    )
-    built = specsolve_linopy.build(masked, data)
-    assert 'x' in built.variables
+def test_a_missing_zero_bound_reads_as_zero_on_both_lanes(yaml_file):
+    """`ub` is `missing: 0`, so `x` at `b` is held to 0 and only `a` runs, to 10."""
+    spec = yaml_file(_BOUND_SPEC.replace('ub: {dims: [f]}', 'ub: {dims: [f], missing: 0}'), 'zero.yaml')
+    with differential(spec, dict(_BOUND_DATA)) as run:
+        assert run.oracle == pytest.approx(10.0), 'b is bounded at 0, so the sum is a at 10'
 
 
 # ---------------------------------------------------------------------------
@@ -638,9 +636,8 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
 
 
-#: A curve masked by ``points:``, so the expansion declares a parameter the file
-#: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
-#: purpose: hydro states two breakpoints where the axis has four.
+#: A curve whose ``where:`` reads ``bp_x``, so each curve runs as far as ``bp_x``
+#: has rows. Ragged on purpose: hydro states two breakpoints where the axis has four.
 MASKED_CURVE_YAML = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
@@ -704,8 +701,8 @@ MASKED_CURVE_DATA = {
 def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
     """Both lanes value one named expression the same where a curve is masked.
 
-    `points:` names a values parameter, and the mask is that parameter read as
-    a bare name in a `where` — true wherever it has a row. So the weights the
+    `where:` names a values parameter, read as a bare name — true wherever it
+    has a row. So the weights the
     expression sums over exist at some breakpoints and not others, and a lane
     that read the unmasked product would answer a longer curve.
     """

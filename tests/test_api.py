@@ -270,7 +270,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
     with sps.solve(dispatch_yaml, dispatch_frame_inputs) as reference:
         expected = reference.objective
 
-    assert sps.check(spec).variables['p'].dims == ('snapshot', 'generator'), (
+    assert sps.check(spec).variables['p'].dims == ('generator', 'snapshot'), (
         'check lowers it, and the plan is the same one whichever form the model arrived as'
     )
     with sps.build(spec, dispatch_frame_inputs) as model:
@@ -289,7 +289,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
 def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
     """The plan is read from the model alone, with no data."""
     for program in (sps.check(dispatch_yaml), to_spec(dispatch_yaml).program):
-        assert program.variables['p'].dims == ('snapshot', 'generator')
+        assert program.variables['p'].dims == ('generator', 'snapshot'), 'the dims sorted by name'
         assert program.parameters['load'].dims == ('snapshot',)
 
 
@@ -579,17 +579,17 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     the same way, and `expression()` still says why."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
         with pytest.raises(sps.errors.SpecsolveError):
-            result.evaluate('ratio')
+            result.evaluate('price')
         with pytest.raises(sps.errors.SpecsolveError, match='integer'):
             result.to_dataset(kind='dual')
     assert sorted(p.name for p in out.iterdir()) == [
@@ -622,25 +622,25 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         out = result.save(tmp_path)
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
-            result.evaluate('ratio')
+        with pytest.raises(sps.errors.SpecsolveError) as no_price:
+            result.evaluate('price')
 
     absent = pl.read_parquet(out / 'reasons.parquet')
     assert absent.columns == ['kind', 'name', 'reason'], 'the kind, what is missing under it, and why'
     assert absent.sort('kind', 'name').rows() == [
         ('dual', '', str(no_dual.value)),
-        ('expression', 'ratio', str(no_ratio.value)),
+        ('expression', 'price', str(no_price.value)),
     ], 'the whole kind for the duals, one name for the expression, each with the sentence the reader gives'
 
 
@@ -665,26 +665,26 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     """An absence loads back as the sentence, not as an unknown name."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 0}},
+        'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}, 'domain': 'integer'}},
         'constraints': {'meet': {'dims': ['t'], 'expression': 'p >= load'}},
-        'expressions': {'twice': '2 * p', 'ratio': 'p / scale'},
+        'expressions': {'twice': '2 * p', 'price': 'dual(meet)'},
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
-    sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
+    sources = {'t': range(2), 'load': [1.5, 2.5]}
     with sps.solve(spec, sources) as result:
         loaded = sps.load_result(result.save(tmp_path))
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
-        with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
-            result.evaluate('ratio')
+        with pytest.raises(sps.errors.SpecsolveError) as no_price:
+            result.evaluate('price')
 
     assert loaded.evaluate('twice').equals(pl.DataFrame({'t': [0, 1], 'value': [4.0, 6.0]}))
     with pytest.raises(sps.errors.SpecsolveError, match='integer'):
         loaded.dual('meet')
-    with pytest.raises(sps.errors.SpecsolveError) as loaded_no_ratio:
-        loaded.evaluate('ratio')
-    assert (str(loaded_no_ratio.value), str(no_ratio.value)) == (str(no_ratio.value), str(no_ratio.value)), (
+    with pytest.raises(sps.errors.SpecsolveError) as loaded_no_price:
+        loaded.evaluate('price')
+    assert (str(loaded_no_price.value), str(no_price.value)) == (str(no_price.value), str(no_price.value)), (
         'the expression names the same reason it named in the process that solved'
     )
     assert 'integer' in str(no_dual.value), 'and the dual refuses for the reason it refused there'
@@ -737,8 +737,9 @@ def test_a_scanned_answer_reads_its_frames_at_the_call_that_asks(dispatch_soluti
 def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_frame_inputs, tmp_path):
     """A read is a join, and a join settles no order — so the read states one.
 
-    Label order is row-major over the coordinate product: `snapshot` varies
-    slowest, and within it `generator` follows the declared order.
+    Label order is row-major over the coordinate product of the dims sorted
+    by name: `generator` varies slowest, in the order its data gave the
+    labels, and `snapshot` varies within it.
     """
     sources = dispatch_frame_inputs
     generators = list(sources['p_max']['generator'])
@@ -749,7 +750,7 @@ def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_fra
         by_declaration = first.with_columns(
             pl.col('generator').replace_strict(generators, range(len(generators))).alias('ord')
         )
-        assert by_declaration.equals(by_declaration.sort('snapshot', 'ord'))
+        assert by_declaration.equals(by_declaration.sort('ord', 'snapshot'))
 
         written = [(result.save(tmp_path / f'solution{i}') / 'primal' / 'p.parquet').read_bytes() for i in range(3)]
         assert len(set(written)) == 1, 'the same solution writes the same bytes'
@@ -832,9 +833,7 @@ def _evaluated(expression):
         pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
         pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
-        pytest.param(
-            _masked_out(0), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-zero'
-        ),
+        pytest.param(_masked_out(0), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-zero'),
         pytest.param(_masked_out('absent'), _evaluated('2 * slack'), [], id='masked-out-missing-absent'),
     ],
 )
@@ -887,7 +886,7 @@ def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
     """A frame is the shape results come in; `to_pandas` converts the same table."""
     frame = dispatch_solution.primal('p')
     assert isinstance(frame, pl.DataFrame)
-    assert frame.columns == ['snapshot', 'generator', 'value']
+    assert frame.columns == ['generator', 'snapshot', 'value'], 'the dims sorted by name, then the value'
 
     pandas = pytest.importorskip('pandas')
     converted = dispatch_solution.to_pandas('p')

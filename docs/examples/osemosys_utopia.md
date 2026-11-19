@@ -21,40 +21,40 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `technology` — the plants and processes that may be built and run |
 | $`\mathcal{F}`$ | index $`f`$ — `fuel` — energy carriers, produced by one technology and consumed by another |
-| $`\mathcal{I}`$ | index $`i`$ — `timeslice` — the slices a year is dispatched over |
 | $`\mathcal{M}`$ | index $`m`$ — `mode` — the way a technology is being operated |
-| $`\mathcal{Y}`$ | index $`y`$ — `year` — the years the pathway covers |
+| $`\mathcal{T}`$ | index $`t`$ — `technology` — the plants and processes that may be built and run |
+| $`\mathcal{I}`$ | index $`i`$ — `timeslice` — the slices a year is dispatched over |
 | $`\mathcal{V}`$ | index $`v`$ — `vintage` — a second axis over the same years — capacity standing in a year was built in some vintage |
+| $`\mathcal{Y}`$ | index $`y`$ — `year` — the years the pathway covers |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{still\_live}`$ | `still_live` over $`\mathcal{T} \times \mathcal{Y} \times \mathcal{V}`$, `neutral` where the data has no row — 1 where a vintage is still inside its technology's operational life in that year |
-| $`\mathrm{residual\_capacity}`$ | `residual_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — capacity that already stood in 1990 and has not yet retired |
-| $`\mathrm{build}^{\mathrm{cost}}`$ | `build_cost` over $`\mathcal{T} \times \mathcal{V}`$, `neutral` where the data has no row — discounted cost of building a unit of capacity in a vintage |
-| $`\mathrm{holding\_cost}`$ | `holding_cost` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — discounted fixed cost of holding a unit of capacity through a year |
-| $`\mathrm{running\_cost}`$ | `running_cost` over $`\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}`$ — discounted variable cost of a unit of activity |
-| $`\mathrm{year\_split}`$ | `year_split` over $`\mathcal{I} \times \mathcal{Y}`$ — share of the year a timeslice stands for |
+| $`\mathrm{annual\_demand}`$ | `annual_demand` over $`\mathcal{F} \times \mathcal{Y}`$, $`0`$ where the data has no row — demand for a fuel placed on the year as a whole |
+| $`\mathrm{build}^{\mathrm{cost}}`$ | `build_cost` over $`\mathcal{T} \times \mathcal{V}`$, $`0`$ where the data has no row — discounted cost of building a unit of capacity in a vintage |
 | $`\mathrm{capacity}^{\mathrm{available}}`$ | `capacity_available` over $`\mathcal{T} \times \mathcal{I} \times \mathcal{Y}`$ — share of its capacity a technology can offer in a timeslice |
-| $`\mathrm{input\_ratio}`$ | `input_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — fuel a technology consumes per unit of activity |
-| $`\mathrm{output\_ratio}`$ | `output_ratio` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — fuel a technology produces per unit of activity |
-| $`\mathrm{sliced\_demand}`$ | `sliced_demand` over $`\mathcal{F} \times \mathcal{I} \times \mathcal{Y}`$, `neutral` where the data has no row — demand for a fuel placed on one timeslice |
-| $`\mathrm{annual\_demand}`$ | `annual_demand` over $`\mathcal{F} \times \mathcal{Y}`$, `neutral` where the data has no row — demand for a fuel placed on the year as a whole |
+| $`\mathrm{holding\_cost}`$ | `holding_cost` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — discounted fixed cost of holding a unit of capacity through a year |
+| $`\mathrm{input\_ratio}`$ | `input_ratio` over $`\mathcal{F} \times \mathcal{M} \times \mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — fuel a technology consumes per unit of activity |
 | $`\mathrm{max\_capacity}`$ | `max_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `absent` where the data has no row — most capacity a technology may stand at |
 | $`\mathrm{min\_capacity}`$ | `min_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, `absent` where the data has no row — least capacity a technology must stand at |
+| $`\mathrm{output\_ratio}`$ | `output_ratio` over $`\mathcal{F} \times \mathcal{M} \times \mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — fuel a technology produces per unit of activity |
+| $`\mathrm{reserve\_demand}`$ | `reserve_demand` over $`\mathcal{F} \times \mathcal{M} \times \mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — the activity the reserve margin is measured against |
 | $`\mathrm{reserve\_margin}`$ | `reserve_margin` over $`\mathcal{Y}`$ — how far firm capacity must exceed the demand of the moment |
-| $`\mathrm{reserve\_tagged}`$ | `reserve_tagged` over $`\mathcal{T} \times \mathcal{Y}`$, `neutral` where the data has no row — 1 where a technology's capacity counts towards the reserve |
-| $`\mathrm{reserve\_demand}`$ | `reserve_demand` over $`\mathcal{T} \times \mathcal{F} \times \mathcal{M} \times \mathcal{Y}`$, `neutral` where the data has no row — the activity the reserve margin is measured against |
+| $`\mathrm{reserve\_tagged}`$ | `reserve_tagged` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — 1 where a technology's capacity counts towards the reserve |
+| $`\mathrm{residual\_capacity}`$ | `residual_capacity` over $`\mathcal{T} \times \mathcal{Y}`$, $`0`$ where the data has no row — capacity that already stood in 1990 and has not yet retired |
 | $`\mathrm{residual\_holding}`$ | `residual_holding` (scalar) — fixed operating cost owed on the capacity that already stood in 1990 |
+| $`\mathrm{running\_cost}`$ | `running_cost` over $`\mathcal{M} \times \mathcal{T} \times \mathcal{I} \times \mathcal{Y}`$ — discounted variable cost of a unit of activity |
+| $`\mathrm{sliced\_demand}`$ | `sliced_demand` over $`\mathcal{F} \times \mathcal{I} \times \mathcal{Y}`$, $`0`$ where the data has no row — demand for a fuel placed on one timeslice |
+| $`\mathrm{still\_live}`$ | `still_live` over $`\mathcal{T} \times \mathcal{V} \times \mathcal{Y}`$, $`0`$ where the data has no row — 1 where a vintage is still inside its technology's operational life in that year |
+| $`\mathrm{year\_split}`$ | `year_split` over $`\mathcal{I} \times \mathcal{Y}`$ — share of the year a timeslice stands for |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{activity}`$ | `activity` over $`\mathcal{I} \times \mathcal{T} \times \mathcal{M} \times \mathcal{Y}`$ — how hard a technology runs, per timeslice and mode |
+| $`\mathit{activity}`$ | `activity` over $`\mathcal{M} \times \mathcal{T} \times \mathcal{I} \times \mathcal{Y}`$ — how hard a technology runs, per timeslice and mode |
 | $`\mathit{build}`$ | `build` over $`\mathcal{T} \times \mathcal{V}`$ — how much capacity is built, and when |
 
 #### Definitions
@@ -69,7 +69,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 **`activity`**
 
 ```math
-\mathit{activity}_{i,t,m,y} \ge 0 \qquad \forall\, i \in \mathcal{I},\ t \in \mathcal{T},\ m \in \mathcal{M},\ y \in \mathcal{Y}
+\mathit{activity}_{m,t,i,y} \ge 0 \qquad \forall\, m \in \mathcal{M},\ t \in \mathcal{T},\ i \in \mathcal{I},\ y \in \mathcal{Y}
 ```
 
 **`build`**
@@ -83,7 +83,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 **`built_capacity`**
 
 ```math
-\mathit{built\_capacity}_{t,y} = \sum_{v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathrm{still\_live}_{t,y,v} \qquad \forall\, t \in \mathcal{T},\ y \in \mathcal{Y}
+\mathit{built\_capacity}_{t,y} = \sum_{v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathrm{still\_live}_{t,v,y} \qquad \forall\, t \in \mathcal{T},\ y \in \mathcal{Y}
 ```
 
 **`capacity`**
@@ -95,27 +95,15 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathrm{build}^{\mathrm{cost}}_{t,v} + \sum_{t \in \mathcal{T},\ y \in \mathcal{Y}} \mathit{built\_capacity}_{t,y} \cdot \mathrm{holding\_cost}_{t,y} + \sum_{t \in \mathcal{T},\ i \in \mathcal{I},\ m \in \mathcal{M},\ y \in \mathcal{Y}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{running\_cost}_{i,t,m,y} + \mathrm{residual\_holding}
+\min \sum_{t \in \mathcal{T},\ v \in \mathcal{V}} \mathit{build}_{t,v} \cdot \mathrm{build}^{\mathrm{cost}}_{t,v} + \sum_{t \in \mathcal{T},\ y \in \mathcal{Y}} \mathit{built\_capacity}_{t,y} \cdot \mathrm{holding\_cost}_{t,y} + \sum_{m \in \mathcal{M},\ t \in \mathcal{T},\ i \in \mathcal{I},\ y \in \mathcal{Y}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{running\_cost}_{m,t,i,y} + \mathrm{residual\_holding}
 ```
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-\sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \le \mathit{capacity}_{t,y} \cdot \mathrm{capacity}^{\mathrm{available}}_{t,i,y} \qquad \forall\, i \in \mathcal{I},\ t \in \mathcal{T},\ y \in \mathcal{Y}
-```
-
-**`fuel_balance`**
-
-```math
-\left( \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{output\_ratio}_{t,f,m,y} \right) \cdot \mathrm{year\_split}_{i,y} \ge \mathrm{sliced\_demand}_{f,i,y} + \left( \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{input\_ratio}_{t,f,m,y} \right) \cdot \mathrm{year\_split}_{i,y} \qquad \forall\, i \in \mathcal{I},\ f \in \mathcal{F},\ y \in \mathcal{Y}
-```
-
 **`annual_balance`**
 
 ```math
-\sum_{i \in \mathcal{I}} \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{output\_ratio}_{t,f,m,y} \cdot \mathrm{year\_split}_{i,y} \ge \mathrm{annual\_demand}_{f,y} + \sum_{i \in \mathcal{I}} \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{input\_ratio}_{t,f,m,y} \cdot \mathrm{year\_split}_{i,y} \qquad \forall\, f \in \mathcal{F},\ y \in \mathcal{Y}
+\sum_{i \in \mathcal{I}} \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{output\_ratio}_{f,m,t,y} \cdot \mathrm{year\_split}_{i,y} \ge \mathrm{annual\_demand}_{f,y} + \sum_{i \in \mathcal{I}} \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{input\_ratio}_{f,m,t,y} \cdot \mathrm{year\_split}_{i,y} \qquad \forall\, f \in \mathcal{F},\ y \in \mathcal{Y}
 ```
 
 **`capacity_ceiling`**
@@ -130,10 +118,22 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 \mathit{capacity}_{t,y} \ge \mathrm{min\_capacity}_{t,y} \qquad \forall\, t \in \mathcal{T},\ y \in \mathcal{Y}
 ```
 
+**`fuel_balance`**
+
+```math
+\left( \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{output\_ratio}_{f,m,t,y} \right) \cdot \mathrm{year\_split}_{i,y} \ge \mathrm{sliced\_demand}_{f,i,y} + \left( \sum_{t \in \mathcal{T}} \sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{input\_ratio}_{f,m,t,y} \right) \cdot \mathrm{year\_split}_{i,y} \qquad \forall\, f \in \mathcal{F},\ i \in \mathcal{I},\ y \in \mathcal{Y}
+```
+
 **`reserve`**
 
 ```math
-\left( \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \sum_{m \in \mathcal{M}} \mathit{activity}_{i,t,m,y} \cdot \mathrm{reserve\_demand}_{t,f,m,y} \right) \cdot \mathrm{reserve\_margin}_{y} \le \sum_{t \in \mathcal{T}} \mathit{capacity}_{t,y} \cdot \mathrm{reserve\_tagged}_{t,y} \qquad \forall\, i \in \mathcal{I},\ y \in \mathcal{Y}
+\left( \sum_{t \in \mathcal{T}} \sum_{f \in \mathcal{F}} \sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \cdot \mathrm{reserve\_demand}_{f,m,t,y} \right) \cdot \mathrm{reserve\_margin}_{y} \le \sum_{t \in \mathcal{T}} \mathit{capacity}_{t,y} \cdot \mathrm{reserve\_tagged}_{t,y} \qquad \forall\, i \in \mathcal{I},\ y \in \mathcal{Y}
+```
+
+**`within_capacity`**
+
+```math
+\sum_{m \in \mathcal{M}} \mathit{activity}_{m,t,i,y} \le \mathit{capacity}_{t,y} \cdot \mathrm{capacity}^{\mathrm{available}}_{t,i,y} \qquad \forall\, t \in \mathcal{T},\ i \in \mathcal{I},\ y \in \mathcal{Y}
 ```
 
 </details>

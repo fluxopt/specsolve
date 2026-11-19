@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from mathspec.errors import SchemaError
 
 import specsolve as sps
 from specsolve import _api as api
 from specsolve._engine.compiler import Compiler
-from specsolve.errors import DataError, LanguageError, SpecsolveError
+from specsolve.errors import LanguageError, SpecsolveError
 from tests.fixtures import override
 
 SPEC = {
@@ -205,22 +206,6 @@ def test_a_dual_on_a_solve_that_left_none_is_refused_by_name():
     assert result.evaluate('spend').height == 3, 'the refusal is per entry, not per result'
 
 
-def test_a_divisor_that_adds_keeps_its_hole():
-    """Adding up a divisor must not invent a zero: a coordinate no term covers stays null, so the division reports it rather than dividing by it."""
-    spec = override(
-        SPEC,
-        **{
-            'parameters.scale': {'dims': ['snapshot'], 'missing': 0},
-            'parameters.other': {'dims': ['snapshot'], 'missing': 0},
-            'expressions.holed': '1 / (scale + other)',
-        },
-    )
-    covered = pl.DataFrame({'snapshot': [0, 1], 'value': [2.0, 3.0]})
-    result = sps.solve(spec, sources() | {'scale': covered, 'other': covered})
-    with pytest.raises(DataError, match='used as a divisor but has no row at 1 of the coordinates'):
-        result.evaluate('holed')
-
-
 SIZED = {
     'dimensions': {'g': {'dtype': 'str'}},
     'parameters': {
@@ -295,20 +280,29 @@ def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
 
 @pytest.mark.parametrize(
     'expression',
-    [pytest.param('out / fixed', id='the-parameter'), pytest.param('out / (fixed * chosen)', id='beside-a-variable')],
+    [
+        pytest.param('out / fixed', id='the-parameter'),
+        pytest.param('out / (fixed * chosen)', id='beside-a-variable'),
+        pytest.param('out / (fixed + spare)', id='a-sum-of-two'),
+    ],
 )
-def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions_words(expression):
-    """A missing row of a neutral divisor is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
+def test_a_reported_divisor_that_a_missing_row_makes_zero_is_refused_at_load(expression):
+    """`fixed` and `spare` are `missing: 0`, so a missing row makes the divisor 0, and mathspec refuses the entry by name.
 
-    Before #1775 it read a constraint's message: that the constraint would stop
-    constraining, and to mask the coordinates out with a `where`. It also named
-    the variable in the divisor as a parameter.
+    A sum of two `missing: 0` parameters is 0 where neither has a row, so it is refused the same way.
     """
-    spec = override(SIZED, **{'expressions.q': expression, 'parameters.fixed.missing': 0})
-    with pytest.raises(DataError, match="named expression 'q': parameter 'fixed'") as refused:
-        sps.solve(spec, ABSENT_AT_C).evaluate('q')
-    assert 'where' not in str(refused.value), 'a named expression takes no where, so the message cannot advise one'
-    assert 'constrain' not in str(refused.value), 'a reported entry constrains nothing'
+    spec = override(
+        SIZED,
+        **{
+            'expressions.q': expression,
+            'parameters.fixed.missing': 0,
+            'parameters.spare': {'dims': ['g'], 'missing': 0},
+        },
+    )
+    with pytest.raises(
+        SchemaError, match="Named expression 'q': the divisor contains 'fixed', which is declared missing: 0"
+    ):
+        sps.solve(spec, ABSENT_AT_C | {'spare': pl.DataFrame({'g': ['a'], 'value': [1.0]})})
 
 
 @pytest.mark.parametrize('crossed', [pytest.param('p * r', id='a-product'), pytest.param('p ** r', id='a-power')])

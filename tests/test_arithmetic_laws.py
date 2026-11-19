@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-
-import specsolve as sps
 from mathspec.errors import SchemaError
 
+import specsolve as sps
 from specsolve.errors import DataError
 from tests.conftest import law_data, law_spec, override, schema_of
 from tests.differential import RTOL, both_lanes_refuse, differential
@@ -380,9 +379,7 @@ SPARSE_DIVISOR_SPEC = override(DIVISOR_SPEC, **{'parameters.d.missing': 0})
             },
             id='the-objective',
         ),
-        pytest.param(
-            {'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'}, id='a-constant-side'
-        ),
+        pytest.param({'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'}, id='a-constant-side'),
         pytest.param(
             {
                 'parameters.active': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
@@ -405,9 +402,7 @@ def test_a_missing_row_under_a_divisor_reads_as_its_zero():
     """`1 + d` is 1 where `d` has no row, so the quotient divides by 1 there rather than being refused."""
     spec = override(SPARSE_DIVISOR_SPEC, **{'constraints.c.expression': 'x / (1 + d) <= 10'})
     with differential(spec, SPARSE_D, lp=True) as run:
-        assert float(run.result.objective) == pytest.approx(40.0, rel=RTOL), (
-            'f=a: x <= 10 * 3; f=b: x <= 10 * 1'
-        )
+        assert float(run.result.objective) == pytest.approx(40.0, rel=RTOL), 'f=a: x <= 10 * 3; f=b: x <= 10 * 1'
 
 
 def test_a_covered_divisor_builds_and_binds():

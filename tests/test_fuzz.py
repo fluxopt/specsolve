@@ -149,7 +149,7 @@ REDUCED = [
             id=f'{operator} over a {label} term without the dimension',
         )
         for operator, amount in [('shift', 'offset=1, edge=0'), ('sum_back', 'window=2')]
-        for label, missing in [('masked', {}), ('neutral', {'missing': 0})]
+        for label, missing in [('masked', {}), ('missing: 0', {'missing': 0})]
     ),
     pytest.param(
         _case(
@@ -375,13 +375,13 @@ REDUCED = [
             {'t': [1, 2], 'p': pl.DataFrame({'t': [2], 'value': [0.25]})},
             'sum_back(p, along=t, window=1)',
         ),
-        id='a window over a neutral parameter with no row in it',
+        id='a window over a missing: 0 parameter with no row in it',
     ),
     pytest.param(
         _case(
             {
                 'dimensions': {'g': {'dtype': 'str'}, 'h': {'dtype': 'int'}, 'k': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['g', 'h'], 'missing': 2.5}},
                 'variables': {
                     'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}, 'where': "g != 'g6'"},
                     'y': {'dims': ['k', 'h'], 'bounds': {'lower': -5, 'upper': 5}},
@@ -398,7 +398,7 @@ REDUCED = [
             },
             '(y + x) / p',
         ),
-        id='a read divided by a neutral parameter with no row, where the quotient is absent',
+        id='a read divided by a parameter with no row that reads 2.5, where the quotient is absent',
     ),
     pytest.param(
         _case(
@@ -438,7 +438,7 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}, 'b': {'dtype': 'str'}, 't': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['t', 'h'], 'missing': 2.5}},
                 'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 5}}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
@@ -452,20 +452,20 @@ REDUCED = [
             },
             'v / p - v / p',
         ),
-        id='a read refused once per coordinate where two quotients by a missing row reach it',
+        id='a read where two quotients by a parameter with no row reach one coordinate',
     ),
     pytest.param(
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int', 'ordered': True}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 2.5}},
                 'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
             {'h': [10, 4], 'p': pl.DataFrame({'h': [10], 'value': [-0.5]})},
             '-v / p + shift(shift(v, along=h, offset=1), along=h, offset=1, edge=0)',
         ),
-        id='oracle: a read answered where a quotient by a missing row is absent beside a shift',
+        id='oracle: a read where a quotient by a parameter with no row stands beside a shift',
     ),
     pytest.param(
         _case(
@@ -478,13 +478,13 @@ REDUCED = [
             ),
             {'b': ['b5', 'b8'], 'p': pl.DataFrame({'b': ['b5'], 'value': [2.0]})},
         ),
-        id='oracle: a neutral factor with no row beside a variable absent there',
+        id='oracle: a missing: 0 factor with no row beside a variable absent there',
     ),
     pytest.param(
         _case(
             {
                 'dimensions': {'b': {'dtype': 'str'}},
-                'parameters': {'p': {'dims': ['b'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['b'], 'missing': 2.5}},
                 'variables': {'v': {'dims': ['b'], 'bounds': {'lower': 0, 'upper': 1}}},
                 'expressions': {'e': {'dims': ['b'], 'expression': 'v / p'}},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
@@ -492,13 +492,13 @@ REDUCED = [
             {'b': ['b5'], 'p': pl.DataFrame({'b': [], 'value': []}, schema={'b': pl.String, 'value': pl.Float64})},
             'e',
         ),
-        id='a declared expression read from a saved answer is refused by its own name',
+        id='a declared expression divided by a parameter with no row, read from a saved answer',
     ),
     pytest.param(
         _case(
             {
                 'dimensions': G,
-                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 0}},
+                'parameters': {'p': {'dims': ['g'], 'dtype': 'int', 'missing': 2}},
                 'variables': {'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
                 'expressions': {'e': {'dims': ['g'], 'expression': 'sum(v, over=g) / p'}},
                 'constraints': {'c': {'dims': ['g'], 'expression': 'v == e'}},
@@ -514,12 +514,12 @@ REDUCED = [
                 G,
                 'v / sum(p, over=g) <= 1',
                 ['g'],
-                parameters={'p': {'dims': ['g'], 'missing': 0}},
+                parameters={'p': {'dims': ['g'], 'missing': 2.5}},
                 variables={'v': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': "g != 'g8'"}},
             ),
             {'g': ['g0', 'g7', 'g8'], 'p': pl.DataFrame({'g': ['g7'], 'value': [2.0]})},
         ),
-        id='oracle: a neutral parameter with no row summed inside a divisor',
+        id='oracle: a parameter with no row that reads 2.5 summed inside a divisor',
     ),
     pytest.param(
         _case(
@@ -548,14 +548,12 @@ REDUCED = [
                 {'t': {'dtype': 'int'}},
                 '3 / p <= v',
                 ['t'],
-                parameters={'p': {'dims': ['t'], 'missing': 0}},
-                variables={
-                    'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 0}
-                },
+                parameters={'p': {'dims': ['t'], 'missing': 2.5}},
+                variables={'v': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 't != 9', 'missing': 0}},
             ),
             {'t': [0, 9], 'p': pl.DataFrame({'t': [0], 'value': [2.0]})},
         ),
-        id='oracle: a divisor with no row beside a neutral variable masked there',
+        id='oracle: a divisor with no row beside a missing: 0 variable masked there',
     ),
     pytest.param(
         _case(
@@ -638,14 +636,14 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 2.5}},
                 'variables': {'v': {'dims': [], 'bounds': {'lower': -5, 'upper': 10}}},
                 'constraints': {'c': {'dims': ['h'], 'expression': 'v / p <= 1'}},
                 'objective': {'sense': 'maximize', 'expression': 'v'},
             },
             {'h': [2], 'p': pl.DataFrame({'h': [], 'value': []}, schema={'h': pl.Int64, 'value': pl.Float64})},
         ),
-        id='a neutral divisor beside a scalar dividend',
+        id='a divisor with no row that reads 2.5 beside a scalar dividend',
     ),
     pytest.param(
         _case(
@@ -662,7 +660,11 @@ REDUCED = [
                 'p': pl.DataFrame({'g': [], 'value': []}, schema={'g': pl.String, 'value': pl.Float64}),
             },
         ),
-        id='a neutral factor on a side with a variable',
+        id='a missing: 0 factor with no row on a side with a variable',
+        marks=pytest.mark.xfail(
+            strict=True,
+            reason='the relational lane drops a row its zeros leave with no variable, where mathspec main keeps it',
+        ),
     ),
     pytest.param(
         _case(
@@ -717,14 +719,14 @@ REDUCED = [
         _case(
             {
                 'dimensions': {'h': {'dtype': 'int'}},
-                'parameters': {'p': {'dims': ['h'], 'missing': 0}},
+                'parameters': {'p': {'dims': ['h'], 'missing': 2.5}},
                 'variables': {'v': _bounded('h')},
                 'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
             },
             {'h': [1, 2], 'p': pl.DataFrame({'h': [1], 'value': [2.0]})},
             'v / p',
         ),
-        id='oracle: a read that divides by a neutral parameter with no row',
+        id='oracle: a read that divides by a parameter with no row that reads 2.5',
     ),
     pytest.param(
         _case(

@@ -86,7 +86,9 @@ def _pinned_to_a_commit() -> dict[str, dict[str, str]]:
 def test_a_dependency_ahead_of_its_release_is_pinned_to_one_commit_everywhere():
     """Until the release, the floor is a commit, and the default and `floors` environments install the same one."""
     pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
-    default = {name: spec for name, spec in pixi['pypi-dependencies'].items() if isinstance(spec, dict) and 'git' in spec}
+    default = {
+        name: spec for name, spec in pixi['pypi-dependencies'].items() if isinstance(spec, dict) and 'git' in spec
+    }
     assert default == _pinned_to_a_commit(), (
         f'the default environment installs {default} and `floors` installs {_pinned_to_a_commit()}: '
         f'a dependency followed ahead of its release has one commit, or the suite tests one and the floor another'

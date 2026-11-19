@@ -547,7 +547,7 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
     sources = {'p_max': pd.Series([5.0, 5.0], index=pd.Index(['w', 's']))}
 
     sentence = both_lanes_refuse(path, sources, match='runs along one dimension')
-    assert "['g', 'b', 'value']" in sentence, 'and it names the table that carries both dims'
+    assert "['b', 'g', 'value']" in sentence, 'and it names the table that carries both dims, sorted by name'
 
 
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):
