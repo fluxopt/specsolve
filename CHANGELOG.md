@@ -5,10 +5,17 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
-## Upcoming version
+## 0.11.2 (2026-11-19)
 
-- fix(engine): a shift whose offset is absent builds no row ([#2096](https://github.com/fluxopt/specsolve/pull/2096))
+**Absent terms and amounts build the rows the language says, and piecewise
+cost curves build faster.** A `sum_back` window that reaches only absent terms
+now holds its row as 0, as `sum` does. A `shift` whose `missing: absent` offset
+has no row there builds no row, under any edge, and neither does a `sum_back`
+whose `missing: absent` width has no row there. A model that relied on one of
+the old readings builds different rows, though its file still loads.
+
 - fix(engine): a sum_back over only absent terms keeps its row as 0 ([#2095](https://github.com/fluxopt/specsolve/pull/2095))
+- fix(engine): a shift whose offset is absent builds no row ([#2096](https://github.com/fluxopt/specsolve/pull/2096))
 - fix(data): a divisor or an exponent that a case makes 0 is read as 0 ([#2097](https://github.com/fluxopt/specsolve/pull/2097))
 - perf(engine): a variable times a sum of parameters, as in a piecewise curve, builds about 40% faster ([#2091](https://github.com/fluxopt/specsolve/pull/2091))
 - docs(benchmarks): the published benchmarks are re-measured on 0.11.1 ([#2086](https://github.com/fluxopt/specsolve/pull/2086))
