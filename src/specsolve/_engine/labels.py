@@ -77,7 +77,7 @@ def frame(
             if factored is not None:
                 return factored
 
-    surviving = masked(scope, dims, where)
+    surviving = _survivors(scope, dims, where)
     for restriction in restrictions:
         surviving = restriction.restrict(surviving, restriction.keyed_by or ())
 
@@ -96,6 +96,22 @@ def frame(
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
     return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
+
+
+def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
+    """The coordinates of *dims* the mask keeps, built from the dims it reads crossed with the ones it leaves free.
+
+    A mask over some of the dims is evaluated on their product only, so the
+    full product is never built where the mask leaves a dim free in the middle
+    of the order; dims sorted by name put one there, as ``snapshot`` in
+    ``(node, snapshot, tech)`` under a mask over ``(node, tech)``. The rows
+    come out of order, which the caller's numbering sorts.
+    """
+    free = tuple(d for d in dims if where is not None and d not in where.dims)
+    if not free or len(free) == len(dims):
+        return masked(scope, dims, where)
+    read = tuple(d for d in dims if d not in free)
+    return masked(scope, read, where).join(scope.product(free), how='cross')
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
