@@ -1,5 +1,5 @@
-scenario,generator,value
-base,coal,0
-base,cold12,2
-base,gas,0
-base,uc12,3
+generator,scenario,value
+coal,base,0
+cold12,base,2
+gas,base,0
+uc12,base,3

@@ -1,6 +1,6 @@
-scenario,generator,value
-base,coal,1
-base,diesel,1
-base,gas,1
-base,solar,1
-base,wind,1
+generator,scenario,value
+coal,base,1.0
+diesel,base,1.0
+gas,base,1.0
+solar,base,1.0
+wind,base,1.0

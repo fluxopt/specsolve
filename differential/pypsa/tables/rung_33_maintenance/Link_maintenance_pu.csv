@@ -1,4 +1,4 @@
-scenario,link,value
-base,tie_ext,1.0
-base,tie_fix,1.0
-base,wire,1.0
+link,scenario,value
+tie_ext,base,1.0
+tie_fix,base,1.0
+wire,base,1.0

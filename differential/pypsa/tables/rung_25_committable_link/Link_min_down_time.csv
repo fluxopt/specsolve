@@ -1,7 +1,7 @@
-scenario,link,value
-base,cold_tie,3
-base,ext_tie,0
-base,hvdc,2
-base,mod_fix,0
-base,mod_tie,0
-base,wire,0
+link,scenario,value
+cold_tie,base,3
+ext_tie,base,0
+hvdc,base,2
+mod_fix,base,0
+mod_tie,base,0
+wire,base,0

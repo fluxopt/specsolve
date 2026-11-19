@@ -1,5 +1,5 @@
-scenario,global_constraint,line,value
-base,cost_ac,ca2,10.0
-base,cost_ac,ca3,8.0
-base,cost_ac_floor,ca2,10.0
-base,cost_ac_floor,ca3,8.0
+global_constraint,line,scenario,value
+cost_ac,ca2,base,10.0
+cost_ac,ca3,base,8.0
+cost_ac_floor,ca2,base,10.0
+cost_ac_floor,ca3,base,8.0
