@@ -1777,7 +1777,7 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
 
 
 @pytest.mark.parametrize(
-    ('recorded_options', 'written'),
+    ('also_record', 'written'),
     [
         pytest.param(None, '<not recorded>', id='not-named'),
         pytest.param(['mip_max_nodes'], 1000, id='named'),
@@ -1785,14 +1785,14 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
     ],
 )
 def test_a_caller_names_an_option_to_record_beside_the_solvers_list(
-    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, recorded_options: list[str] | None, written: object
+    dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path, also_record: list[str] | None, written: object
 ) -> None:
     """`mip_max_nodes` is on no list, so only the caller's naming it keeps its value."""
     sps.solve(
         dispatch_yaml,
         dispatch_frame_inputs,
         solver_options={'time_limit': 60.0, 'mip_max_nodes': 1000},
-        recorded_options=recorded_options,
+        also_record=also_record,
         archive=tmp_path / 'case',
     ).close()
 
@@ -1812,7 +1812,7 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
         sources,
         sps.EachCoordinate('scenario'),
         solver_options={'mip_max_nodes': 1000},
-        recorded_options=['mip_max_nodes'],
+        also_record=['mip_max_nodes'],
     )
 
     assert sweep.records['solver_options'].to_list() == ['{"mip_max_nodes": 1000}'] * 2, (
@@ -1821,6 +1821,6 @@ def test_every_slice_of_a_sweep_records_the_options_its_caller_named(
 
 
 def test_a_bare_string_of_options_to_record_is_refused(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """A string is a sequence of letters, so `recorded_options='Seed'` would name `S`, `e` and `d`."""
-    with pytest.raises(sps.errors.SpecsolveError, match=r"recorded_options=\['mip_max_nodes'\]"):
-        sps.solve(dispatch_yaml, dispatch_frame_inputs, recorded_options='mip_max_nodes')
+    """A string is a sequence of letters, so `also_record='Seed'` would name `S`, `e` and `d`."""
+    with pytest.raises(sps.errors.SpecsolveError, match=r"also_record=\['mip_max_nodes'\]"):
+        sps.solve(dispatch_yaml, dispatch_frame_inputs, also_record='mip_max_nodes')

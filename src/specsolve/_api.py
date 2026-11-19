@@ -260,7 +260,7 @@ class Model:
         solver_name: str = 'highs',
         *,
         solver_options: Mapping[str, object] | None = None,
-        recorded_options: Sequence[str] | None = None,
+        also_record: Sequence[str] | None = None,
         archive: str | Path | None = None,
         outputs: Iterable[Output] = (),
         start: Result | Start | Literal['previous'] | None = 'previous',
@@ -283,9 +283,10 @@ class Model:
                 [`provenance`][specsolve._result.Result.provenance]
                 records the value of an option that changes the answer, such
                 as a time limit or a gap, and the name alone of any other.
-            recorded_options: More option names whose value the result
-                records, in any letter case. Name no credential here: an
-                archive goes to shared storage.
+            also_record: Option names whose value the result records as
+                well, beside the ones the solver records already, in any
+                letter case. Name no credential here: an archive goes to
+                shared storage.
             archive: Where to write the spec, the data attached to it **now**,
                 and this answer, so that
                 [`load_archive`][specsolve._archive.load_archive] gives all
@@ -327,7 +328,7 @@ class Model:
 
         Raises:
             SpecsolveError: A solver name nothing serves, one this environment
-                cannot run, a bare string as *recorded_options* or *outputs*, a
+                cannot run, a bare string as *also_record* or *outputs*, a
                 name in *outputs* that is not an output, a *start* word other
                 than ``'previous'``, or a *start* this
                 model or solver cannot start from: a key that names no reader, a table naming no declaration or
@@ -342,10 +343,10 @@ class Model:
         if out is not None:
             parquet.require('archive=')
             check_the_target(out)
-        if isinstance(recorded_options, str):
+        if isinstance(also_record, str):
             raise SpecsolveError(
-                f'recorded_options={recorded_options!r} is one string, which would name each of its letters. '
-                f'Pass a list: recorded_options=[{recorded_options!r}].'
+                f'also_record={also_record!r} is one string, which would name each of its letters. '
+                f'Pass a list: also_record=[{also_record!r}].'
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
@@ -359,7 +360,7 @@ class Model:
             ),
             solver_name,
             solver_options,
-            recorded_options or (),
+            also_record or (),
         )
         if out is not None:
             self._archive(out, answered)
@@ -370,7 +371,7 @@ class Model:
         answer: Result,
         solver_name: str,
         solver_options: Mapping[str, object] | None,
-        recorded_options: Sequence[str],
+        also_record: Sequence[str],
     ) -> Result:
         """*answer* as [`solve`][] hands it back: the engine's, with what only this model knows of the solve.
 
@@ -384,7 +385,7 @@ class Model:
             answer,
             _spec=self._spec,
             _solved_at=datetime.now(UTC),
-            _provenance=_provenance(solver_name, solver_options, recorded_options),
+            _provenance=_provenance(solver_name, solver_options, also_record),
         )
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -575,7 +576,7 @@ def solve(
     solver_name: str = 'highs',
     *,
     solver_options: Mapping[str, object] | None = None,
-    recorded_options: Sequence[str] | None = None,
+    also_record: Sequence[str] | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
     start: Result | Start | None = None,
@@ -590,7 +591,7 @@ def solve(
         sources: As [`build`][] takes them.
         solver_name: As [`Model.solve`][] takes it.
         solver_options: As [`Model.solve`][] takes them.
-        recorded_options: As [`Model.solve`][] takes them.
+        also_record: As [`Model.solve`][] takes them.
         archive: As [`Model.solve`][] takes it — a ``.zip``, or a directory.
         outputs: As [`Model.solve`][] takes them.
         start: As [`Model.solve`][] takes it.
@@ -611,7 +612,7 @@ def solve(
         return model.solve(
             solver_name,
             solver_options=solver_options,
-            recorded_options=recorded_options,
+            also_record=also_record,
             archive=archive,
             outputs=outputs,
             start=start,
@@ -663,7 +664,7 @@ def _json_value(value: object) -> object:
 
 
 def _provenance(
-    solver_name: str, solver_options: Mapping[str, object] | None, recorded_options: Sequence[str] = ()
+    solver_name: str, solver_options: Mapping[str, object] | None, also_record: Sequence[str] = ()
 ) -> Provenance:
     """What a solve on *solver_name* with *solver_options* records about itself.
 
@@ -673,7 +674,7 @@ def _provenance(
     people read, and a list of what to hide would leak whatever it missed.
     """
     served = solver(solver_name)
-    recorded = served.recorded_options | {name.casefold() for name in recorded_options}
+    recorded = served.recorded_options | {name.casefold() for name in also_record}
     options = {
         name: _json_value(value) if name.casefold() in recorded else '<not recorded>'
         for name, value in (solver_options or {}).items()
