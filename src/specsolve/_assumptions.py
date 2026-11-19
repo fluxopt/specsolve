@@ -13,7 +13,7 @@ from mathspec.program import assumption_message
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import attach
-from specsolve._engine.predicates import masked
+from specsolve._engine.predicates import admits_nothing, masked
 from specsolve._engine.scope import Scope
 from specsolve._messages import coordinate_text
 from specsolve.errors import DataError
@@ -53,13 +53,17 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
 
     A predicate with no value at a coordinate does not hold there. The empty
     string answers a failing assumption over no dims. One over a dimension
-    without a label has no coordinate to fail at, so it is not read.
+    without a label, or whose ``where``
+    [`admits_nothing`][specsolve._engine.predicates.admits_nothing], has no
+    coordinate to fail at, so it is not read.
     """
     failing = ~assumption.holds
     if assumption.where is not None:
         failing = failing & assumption.where
     dims = scope.in_declaration_order(failing.dims)
     if any(not scope.data.cardinality[d] for d in dims):
+        return None
+    if assumption.where is not None and admits_nothing(scope, assumption.where, dims):
         return None
     offending = masked(scope, dims, failing).head(1).pipe(collected)
     if not offending.height:
