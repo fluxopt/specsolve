@@ -29,12 +29,13 @@ jobs:
           else
             echo "with=--with mathspec==$(grep -o 'mathspec>=[^,"]*' pyproject.toml | cut -d= -f2)" >> "$GITHUB_OUTPUT"
           fi
-      # The corpus is the release the committed rungs were certified from. A later corpus
-      # adds rungs and data prep, so moving this tag is its own change, with the rungs it adds.
+      # The corpus is the mathspec commit the committed rungs were certified from, the one
+      # `[tool.uv.sources]` pins. A later corpus adds rungs and data prep, so moving this ref
+      # is its own change, with the rungs it adds and the PyPSA commit that corpus pins.
       - uses: actions/checkout@v7
         with:
           repository: energy-models/mathspec
-          ref: v0.4.0
+          ref: 5f1464c334c1012cdee2947d4d55b4d1d6bef40a
           path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:
@@ -45,7 +46,7 @@ jobs:
           --with-editable .
           --with "$(grep -o 'linopy==[^"]*' pyproject.toml)"
           ${{ steps.pin.outputs.with }}
-          --with "pypsa @ git+https://github.com/PyPSA/PyPSA@51986084bfb68d38e5b64021649cb339448112cb"
+          --with "pypsa @ git+https://github.com/PyPSA/PyPSA@3625c8168b0b45a7936ddcb3a4da99dd608125ca"
           --with "highspy==1.15.1" --with "polars>=2.0"
           python differential/pypsa/parity.py corpus
       - name: the committed certificate, projections and tables are what this tree produces
