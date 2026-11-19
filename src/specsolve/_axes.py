@@ -4,8 +4,8 @@ An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
 into windows of its labels, and also says how each window's frames are
-stitched back over that dimension. An [`EachSlice`][] cuts nothing: its slices
-are written by hand.
+stitched back over that dimension. [`Slices`][] cuts nothing: it holds
+slices written by hand.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ class EachLabel:
         return {'each': 'label', 'dim': self.dim, **_where_set(self)}
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what [`EachSlice`][] takes.
+        """The ``(key, sources)`` list this axis would run on *spec* — what [`Slices`][] takes.
 
         For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
         """
@@ -232,10 +232,10 @@ class EachWindow:
     key_name: str | None = field(default=None, kw_only=True)
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what [`EachSlice`][] takes.
+        """The ``(key, sources)`` list this axis would run on *spec* — what [`Slices`][] takes.
 
         For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
-        The pairs carry no ownership: solved through [`EachSlice`][], the
+        The pairs carry no ownership: solved through [`Slices`][], the
         answer is keyed by slice rather than stitched, and nothing is carried
         between them.
         """
@@ -364,7 +364,7 @@ _EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'win
 
 
 @dataclass(frozen=True, eq=False)
-class EachSlice:
+class Slices:
     """One slice per ``(key, sources)`` pair, written by hand.
 
     Each pair is a whole set of sources, solved as its own model, so nothing
@@ -421,7 +421,7 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
 
 
 def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs [`EachSlice`][] takes."""
+    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs [`Slices`][] takes."""
     program = lowered(spec)
     axis._check_the_program(program, sources)
     return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]

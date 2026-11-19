@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Constraint, Program, Variable
 
-    from specsolve._axes import EachSlice, Slice
+    from specsolve._axes import Slice, Slices
     from specsolve._inputs import Label, Source
 
 
@@ -147,7 +147,7 @@ def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
 
 def slice_starts(
     start: Sweep | Result | Start | Literal['previous'] | None,
-    axis: Axis | EachSlice,
+    axis: Axis | Slices,
     slices: Sequence[Slice],
     key_name: str,
     program: Program,
@@ -221,5 +221,5 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
 
 
 def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
-    """*table*'s rows of the slice *key* of an ``EachSlice``, without the key column."""
+    """*table*'s rows of the slice *key* that [`Slices`][specsolve._axes.Slices] holds, without the key column."""
     return table.filter(pl.col(key_name) == key).drop(key_name)

@@ -81,7 +81,7 @@ each name, so `primal(..., per_window=True)` reads off the archive too.
 
 ## What an archive will not take
 
-- **A sweep of slices written by hand**, an `EachSlice`. Archive one solve each.
+- **A sweep of `Slices` written by hand.** Archive one solve each.
 - **A directory that already holds something.** A `.zip` target is replaced.
 
 A directory of archives reads as one set of tables:

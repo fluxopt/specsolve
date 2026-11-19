@@ -14,7 +14,7 @@ returns. [A horizon too large for one solve](../sweep.md) and
 |---|---|
 | [`EachLabel`](api.md#specsolve.EachLabel) | one per label of a dimension the model does not declare |
 | [`EachWindow`](api.md#specsolve.EachWindow) | one per window of consecutive labels of a dimension it declares |
-| [`EachSlice`](api.md#specsolve.EachSlice) | one per `(key, sources)` pair, as written. It names its key with `key_name=`, and its answer is keyed by slice. |
+| [`Slices`](api.md#specsolve.Slices) | one per `(key, sources)` pair, as written. It names its key with `key_name=`, and its answer is keyed by slice. |
 
 **`EachLabel` squeezes a dimension the model does not declare**, and
 **`EachWindow` keeps one it does.** A label's slice holds that label's rows
@@ -47,7 +47,7 @@ repeat one size to the end.
 ```
 
 **`axis.slices(spec, sources)` is the list the axis would run**, as the
-`(key, sources)` pairs an `EachSlice` takes:
+`(key, sources)` pairs `Slices` takes:
 
 ```python
 slices = sps.EachWindow('snapshot', steps=24, lookahead=24).slices('window.yaml', sources)
@@ -58,7 +58,7 @@ sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that wa
 it as a mapping, and `solve_over` takes that mapping in the axis's place. An
 archive's `axis.json` holds the same mapping. A mapping with a key the axis does
 not take, or without one it needs, is refused, and the message names the keys
-the axis takes. An `EachSlice` holds tables, so it has no mapping.
+the axis takes. `Slices` holds tables, so it has no mapping.
 
 ```python
 axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
@@ -121,7 +121,7 @@ with `per_window=True`.
 | **a window owns its first `steps` labels** | The rows after them are lookahead. The answer keeps the owned rows, and `per_window=True` reads them all. |
 | **a slice that did not solve contributes no rows** | `sweep.records` still holds one row per slice, with a null objective where a slice reached none. |
 | **a window keys as `<dim>_start`** | Per window, the key column `snapshot_start` holds the label each window began at, beside the window's own `snapshot`. |
-| **an axis's `key_name=` names the key** | On any axis, and required on `EachSlice`. A name that collides with a table column, or starts with `specsolve_`, is refused. An archive holds it with the axis, so the sweep runs again under the same key. |
+| **an axis's `key_name=` names the key** | On any axis, and required on `Slices`. A name that collides with a table column, or starts with `specsolve_`, is refused. An archive holds it with the axis, so the sweep runs again under the same key. |
 | **`sweep.metrics` says what each slice took** | One [`Metrics`](api.md#specsolve.types.Metrics) per slice, keyed like `sweep.records`. |
 | **on disk, the slice is two text columns** | `slice_axis` holds the key name and `slice` the key as text. Two keys of one text are refused. |
 | **a slice that fails says which slice** | The engine's error carries a note: `in slice 'bad' (3 of 3)`. |
@@ -168,8 +168,8 @@ sweep = sps.solve_over(
 ## Carrying state between slices
 
 **An axis's `carry={parameter: variable}` copies one slice's answer into the
-next slice's data.** `EachLabel` and `EachWindow` take it. An `EachSlice`
-carries nothing.
+next slice's data.** `EachLabel` and `EachWindow` take it. `Slices` carries
+nothing.
 
 ```python
 sweep = sps.solve_over(
@@ -237,4 +237,4 @@ encoded once. `df.lazy()` pickles larger than the table.
 |---|---|
 | **one model, updated per slice** | A serial sweep builds once and [updates](api.md#specsolve.types.Model.update); under `executor=` each slice builds its own. A [remote Gurobi](api.md#specsolve.types.Model.solve) opens one session per serial sweep, and a new one at each slice that loads again. |
 | **the model is asked before it is sliced** | `EachWindow` refuses a window the model's coupling cannot bear. `EachLabel` is not asked. |
-| **a slice is total** | A slice supplies what the whole model attaches, not what changed. An `EachSlice` has to keep this rule. |
+| **a slice is total** | A slice supplies what the whole model attaches, not what changed. `Slices` has to keep this rule. |

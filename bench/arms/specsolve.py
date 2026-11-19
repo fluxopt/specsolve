@@ -198,7 +198,7 @@ def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     swept = sps.solve_over(
-        spec, sources, sps.EachSlice([(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario'), solver_name=sink
+        spec, sources, sps.Slices([(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario'), solver_name=sink
     )
     metrics = swept.metrics
     return {

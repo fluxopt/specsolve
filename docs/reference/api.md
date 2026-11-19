@@ -53,7 +53,7 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.EachSlice
+::: specsolve.Slices
     options:
       heading_level: 4
 

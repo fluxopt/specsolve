@@ -340,7 +340,7 @@ def test_every_repository_path_a_workflow_names_exists():
 #: What a caller calls, by role (hard rule 5). Everything ``specsolve`` binds.
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
-    'run it many times': {'solve_over', 'EachLabel', 'EachSlice', 'EachWindow'},
+    'run it many times': {'solve_over', 'EachLabel', 'EachWindow', 'Slices'},
     'see what it reads': {'tidy'},
     'read it back': {
         'load_archive',
@@ -470,7 +470,7 @@ def test_only_the_axes_are_classes_at_the_top_level():
     import specsolve
 
     classes = sorted(n for n in specsolve.__all__ if isinstance(getattr(specsolve, n), type))
-    assert classes == ['EachLabel', 'EachSlice', 'EachWindow'], (
+    assert classes == ['EachLabel', 'EachWindow', 'Slices'], (
         f'classes at the top level: {classes}, not only the three axes'
     )
 
