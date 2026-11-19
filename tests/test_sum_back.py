@@ -546,10 +546,14 @@ ABSENT_WIDTH_SOURCES = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason='#2092 review')
 @pytest.mark.parametrize('masked', [True, False], ids=['masked-operand', 'dense-operand'])
 def test_an_entity_whose_width_is_absent_has_no_window_and_no_row(masked: bool):
-    """A `missing: absent` width with no row at an entity leaves its window absent there, so no row."""
+    """A `missing: absent` width with no row at an entity leaves its window undefined there, so no row.
+
+    Both lanes built `y[a, t] <= 0` there instead: the relational lane read
+    the missing width as a window of nothing, and the linopy lane read it as 0
+    once its operand's absence stopped travelling through the window (#2095).
+    """
     with differential(absent_width_spec(masked=masked), ABSENT_WIDTH_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, 'only the three rows at u=b, whose width is defined'
         assert run.oracle == pytest.approx(30.0), 'y[a, *] is capped by no row, each at its bound of 10'

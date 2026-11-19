@@ -115,8 +115,9 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     The lag table is built to the widest window the data asks for. A window
     is a sum, so the operand's presence does not travel: an absent slot is one
     summand fewer, and a window of only absent slots is an empty sum whose row
-    stands. The one absence it reports is a coordinate a partition places in
-    no group, which has no window at all.
+    stands. The absence it reports is a coordinate with no window at all: one
+    a partition places in no group, or one a ``missing: absent`` width has no
+    row for ([`_widths_defined`][]).
     """
     if s.along not in p.dims:
         refuse_a_term_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
@@ -143,8 +144,25 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
         return join_on(frame, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
 
     frame = order.remap(p.frame, p.carried, p.dims, moved=moved, prepared=lagged)
+    if width_name is not None and scope.absent(width_name):
+        return replace(p, frame=frame, presences=(_widths_defined(scope, order, width_name),))
     unplaced = (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
     return replace(p, frame=frame, presences=unplaced)
+
+
+def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
+    """The coordinates a width has a value for, as a presence: a window elsewhere is undefined, so absent.
+
+    Read off the order's table, which holds only the coordinates a partition
+    places, and through the group column for a per-group width, which no
+    frame carries.
+    """
+    grouping = order.grouping
+    widths, keys = _named_amount(scope, order, name, _WIDTH)
+    own = [key for key in keys if key not in grouping.key]
+    table = join_on(grouping.table, widths, [key for key in keys if key in grouping.key], 'inner')
+    coordinates = table.select(pl.col('val').alias(grouping.dimension), *grouping.joined, *own).unique()
+    return Presence(coordinates, (*grouping.keys, *own))
 
 
 def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *, over_a_variable: bool) -> Term:

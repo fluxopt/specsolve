@@ -241,10 +241,10 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     slots, is an empty sum and reads zero; a row it leaves with no variable is
     not built.
 
-    ``by=`` stops the window at each group's edge, and a coordinate the
-    relation places in no group has no window, so it is absent. A width
-    declared over the group's own dim is read through the relation first
-    (:func:`_per_group`).
+    ``by=`` stops the window at each group's edge. A coordinate with no
+    window is absent: one the relation places in no group, or one a
+    ``missing: absent`` width arrives NaN at. A width declared over the
+    group's own dim is read through the relation first (:func:`_per_group`).
     """
     within = _per_group(within, by) if by is not None else within
     asked = _widest(within)
@@ -263,7 +263,10 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
             term = term.where(within > lag, 0)
         terms.append(term)
     merged = _merged(terms)
-    return merged if groups is None or bool(groups.grouped.all()) else merged.where(groups.grouped)
+    defined = groups.grouped if groups is not None else None
+    if isinstance(within, xr.DataArray):
+        defined = within.notnull() if defined is None else defined & within.notnull()
+    return merged if defined is None or bool(defined.all()) else merged.where(defined)
 
 
 def _widest(within: Any) -> int:
