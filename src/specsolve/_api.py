@@ -53,7 +53,14 @@ from specsolve._engine.engine import Engine, expression_readers
 from specsolve._inputs import Buildable, Label, Source, declared, lower, lowered
 from specsolve._result import Result, evaluated
 from specsolve._sinks import solver, writer
-from specsolve._sources import numbered, read_start, refuse_unknown_sources, refuse_unknown_start_word, tidy_sources
+from specsolve._sources import (
+    numbered,
+    read_start,
+    refuse_unknown_sources,
+    refuse_unknown_start_word,
+    tidied_and_attached,
+    tidy_sources,
+)
 from specsolve.errors import (
     LayoutError,
     SpecsolveError,
@@ -228,8 +235,8 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            self._tidied = tidy_sources(self._program, self._sources)
-            self._engine.build(self._program, self._tidied)
+            self._tidied, attached = tidied_and_attached(self._program, self._sources)
+            self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._engine.close()
             raise
