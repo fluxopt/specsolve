@@ -8,6 +8,7 @@ declaration is instantiated over, cut by its mask.
 from __future__ import annotations
 
 import itertools
+import math
 from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
@@ -22,7 +23,7 @@ from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from polars._typing import JoinStrategy
 
@@ -77,6 +78,45 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
         return out.join(surviving, on=list(on), how='semi')
     carrier, condition = compile_predicate(scope, out, where, dims)
     return carrier.filter(falsy_if_null(condition))
+
+
+def admits_nothing(scope: Scope, where: program.Mask, dims: tuple[str, ...]) -> bool:
+    """Whether *where* admits no row over *dims*, decided from one parameter's own rows.
+
+    A parameter that a bare name or a comparison on the ``AND`` spine tests, a
+    named condition read as its body, makes the mask false wherever it has no
+    row that passes the test. When none passes, the mask admits nothing, and
+    that is read off the parameter's table instead of the product of *dims*: a
+    per-unit flag over a unit-by-snapshot declaration is read once per unit.
+    A table at least as large as the product is not read, since the full mask
+    costs no more. ``False`` is no claim that a row survives.
+    """
+    cells = math.prod(scope.data.cardinality[d] for d in dims)
+    for atom in _spine(where.root):
+        if not isinstance(atom, program.ParameterDefined | program.ParameterComparison):
+            continue
+        rows = scope.data.parameter_rows[atom.name]
+        if not rows:
+            return True
+        if rows >= cells:
+            continue
+        keys = tuple(atom.dims)
+        base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
+        carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys)
+        if not carrier.filter(falsy_if_null(condition)).head(1).pipe(collected).height:
+            return True
+    return False
+
+
+def _spine(node: program.Condition) -> Iterator[program.Condition]:
+    """The conditions *node* joins by ``AND``, a named condition read as its body; each is necessary for *node*."""
+    if isinstance(node, program.And):
+        yield from _spine(node.left)
+        yield from _spine(node.right)
+    elif isinstance(node, program.ConditionReference):
+        yield from _spine(node.body)
+    else:
+        yield node
 
 
 def compile_predicate(

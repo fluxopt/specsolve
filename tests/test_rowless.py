@@ -218,3 +218,71 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
     assert (tmp_path / 'updated.lp').read_text() == (tmp_path / 'fresh.lp').read_text(), (
         'the update kept a skip that its new data undoes'
     )
+
+
+#: `flag` has no row and `cap` none above 3, so a `where` that needs either admits
+#: nothing; each is over `g` alone, a sixth of the product a declaration over
+#: `g` and `t` spans.
+TABLED_SPEC = {
+    'dimensions': {'g': {}, 't': {}},
+    'parameters': {
+        'flag': {'dims': ['g'], 'dtype': 'bool', 'missing': 'absent'},
+        'cap': {'dims': ['g']},
+    },
+    'conditions': {'flagged': {'condition': 'flag'}},
+    'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+TABLED_SOURCES = {
+    'g': ['a', 'b'],
+    't': [1, 2, 3],
+    'flag': pl.DataFrame(schema={'g': pl.String, 'value': pl.Boolean}),
+    'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 3.0]}),
+}
+
+
+def _labelled_wheres(monkeypatch: pytest.MonkeyPatch, spec: dict) -> tuple[int, int, list]:
+    """The model's columns and rows, and every `where` the build labelled over the product of its declaration's dims."""
+    frame, labelled = labels.frame, []
+
+    def spied_frame(scope, dims, where, *args, **kwargs):
+        if where is not None:
+            labelled.append(where)
+        return frame(scope, dims, where, *args, **kwargs)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(spec, TABLED_SOURCES) as model:
+        diagnostics = model.diagnostics()
+        return diagnostics.columns, diagnostics.rows, labelled
+
+
+@pytest.mark.parametrize(
+    ('where', 'rows'),
+    [
+        pytest.param('flag', 0, id='a-parameter-without-a-row'),
+        pytest.param('cap > 3', 0, id='a-comparison-no-row-passes'),
+        pytest.param('flagged', 0, id='a-named-condition-read-as-its-body'),
+        pytest.param('cap > 1 AND flag', 0, id='one-condition-of-an-and'),
+        pytest.param('NOT flag', 6, id='a-negation-of-a-parameter-without-a-row-admits-every-row'),
+        pytest.param('cap > 2', 3, id='a-comparison-one-label-passes-admits-its-rows'),
+    ],
+)
+def test_a_where_one_parameter_empties_is_decided_from_its_table(monkeypatch, where, rows):
+    """PyPSA's spec gates most unit-by-snapshot declarations on a per-unit flag no unit of a network sets.
+
+    The flag's table answers whether the declaration holds a row; labelling the
+    product of its dims to find none read the whole product.
+    """
+    spec = {**TABLED_SPEC, 'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}}}
+    _, built, labelled = _labelled_wheres(monkeypatch, spec)
+    assert built == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+    if not rows:
+        assert not labelled, f'`{where}` admits no row, yet `probe` was labelled over its product'
+
+
+def test_a_variable_whose_where_one_parameter_empties_is_not_labelled(monkeypatch):
+    variables = {**TABLED_SPEC['variables'], 'gated': {'dims': ['g', 't'], 'where': 'flag', 'bounds': {'lower': 0}}}
+    columns, _, labelled = _labelled_wheres(monkeypatch, {**TABLED_SPEC, 'variables': variables})
+    assert columns == 6, '`gated` holds no column, so the model has the 6 of `x` alone'
+    assert not labelled, '`flag` has no row, yet `gated` was labelled over its product'
