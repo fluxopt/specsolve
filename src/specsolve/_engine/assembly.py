@@ -292,8 +292,10 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None or restrictions:
-            labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+        if admitted is None:
+            labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
+        elif restrictions:
+            labelled = labels.narrowed(admitted, c.dims, 'row', start, restrictions)
         else:
             labelled = admitted
         if restrictions:
