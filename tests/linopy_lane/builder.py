@@ -451,7 +451,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_shift(
             _eval(node.operand, ctx),
             over=node.along,
-            offset=_offset(node.offset, ctx),
+            offset=_kept_absent(node.offset, ctx),
             wrap=node.wrap,
             fill=node.fill,
             by=_partition(node, ctx),
@@ -463,7 +463,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_sum_back(
             _eval(node.operand, ctx),
             over=node.along,
-            within=_amount(node.width, ctx),
+            within=_kept_absent(node.width, ctx),
             wrap=node.wrap,
             by=_partition(node, ctx),
         )
@@ -585,8 +585,8 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
-def _offset(amount: int | str, ctx: EvaluationContext) -> Any:
-    """A shift's offset as :func:`_amount` reads it, a ``missing: absent`` row kept NaN for the shift to carry."""
+def _kept_absent(amount: int | str, ctx: EvaluationContext) -> Any:
+    """An amount as :func:`_amount` reads it, a ``missing: absent`` row kept NaN for the operator to carry."""
     return ctx.dataset[amount] if isinstance(amount, str) and ctx.absent(amount) else _amount(amount, ctx)
 
 
