@@ -7,6 +7,7 @@ on whether that data is usable is made here, once.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -689,10 +690,7 @@ def _check_one_row_per_coordinate(
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
     for d, labels in known.items():
         _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
-    answers = frame.select(
-        pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
-        *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
-    ).row(0, named=True)
+    answers = _key_answers(p.dims, frame, known)
 
     for d, labels in known.items():
         if not answers[f'#known {d}']:
@@ -720,6 +718,48 @@ def _check_one_row_per_coordinate(
         f'It holds one value per coordinate, so which value applies is undefined — '
         f'aggregate the source to one row per {list(p.dims)} before attaching it.'
     )
+
+
+def _key_answers(dims: tuple[str, ...], frame: pl.DataFrame, known: Mapping[str, pl.Series]) -> dict[str, bool]:
+    """Whether *frame* holds a coordinate twice (``#duplicated``), and whether each known dim's labels are all real (``#known d``).
+
+    Each row's position in the product of its dims' labels answers both at
+    once: a label outside its dimension has no position, and two rows for one
+    coordinate share one. Distinct positions are counted in one integer
+    column instead of hashing every key column, the check's cost on a dense
+    table. Where no position can be formed (a dimension whose
+    labels are not read yet, a column of another dtype than its labels, a
+    product past 63 bits), and in a table under 50,000 rows, where forming the
+    positions costs more than hashing, the columns are hashed as they are.
+    """
+    position = _position(dims, frame, known) if frame.height >= 50_000 else None
+    if position is None:
+        return frame.select(
+            pl.struct(dims).is_duplicated().any().alias('#duplicated'),
+            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
+        ).row(0, named=True)
+    positions = frame.select(position.alias('#position')).to_series()
+    strays, distinct = positions.null_count(), positions.n_unique()
+    if strays:
+        return frame.select(
+            pl.lit(value=False).alias('#duplicated'),
+            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
+        ).row(0, named=True)
+    return {'#duplicated': distinct < frame.height, **{f'#known {d}': True for d in known}}
+
+
+def _position(dims: tuple[str, ...], frame: pl.DataFrame, known: Mapping[str, pl.Series]) -> pl.Expr | None:
+    """Each row's row-major position in the product of *dims*' labels, null where a label is none of them; ``None`` where it cannot be formed."""
+    if any(d not in known or frame.schema[d] != known[d].dtype for d in dims):
+        return None
+    if math.prod(known[d].len() for d in dims) >= 2**63:
+        return None
+    position = pl.lit(0, dtype=pl.UInt64)
+    for d in dims:
+        labels = known[d]
+        ordinals = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        position = position * labels.len() + pl.col(d).replace_strict(labels, ordinals, default=None)
+    return position
 
 
 def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
