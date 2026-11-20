@@ -106,7 +106,7 @@ class Assembly:
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.compiler = Compiler(self.scope)
+        self.compiler = Compiler(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.

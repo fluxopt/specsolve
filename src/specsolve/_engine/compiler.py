@@ -120,11 +120,15 @@ class Compiler:
     """Turn plan nodes into polars queries over the model's tidy frames.
 
     ``solution`` is set on the compiler a read builds and on no other: with it
-    every variable and every ``dual(c)`` compiles to a value.
+    every variable and every ``dual(c)`` compiles to a value. ``builds`` is set
+    on the compiler of a build and on no other: a build places each term on a
+    declaration's rows by the term's own dims, so a term that holds nothing
+    can be left out, where a read takes its dims from the terms it is given.
     """
 
     scope: Scope
     solution: Solution | None = None
+    builds: bool = False
 
     # ------------------------------------------------------------------
     # bounds
@@ -287,13 +291,15 @@ class Compiler:
             """One region's value, kept only where that region applies.
 
             The coordinates it claims are read once, over the dims its
-            condition reads. A region that claims none builds no term: each
-            term would carry presences over the full product of its dims, read
-            only to be cut away.
+            condition reads. In a build, a region that claims none builds no
+            term: each term would carry presences over the full product of its
+            dims, read only to be cut away. A read keeps it, since a read
+            takes its dims from its terms and the region may be the only one
+            over a dim.
             """
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
             truth = masked(self.scope, on, r.when).select(*on).pipe(collected) if on else None
-            if truth is not None and not truth.height:
+            if truth is not None and not truth.height and self.builds:
                 return CompiledExpression((), ())
             truth = truth.lazy() if truth is not None else None
 

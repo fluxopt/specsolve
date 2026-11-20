@@ -525,3 +525,45 @@ def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, d
     with differential(DELAYED, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
     assert built == [terms], f'`held` compiles {terms} term(s): one per region that claims a unit'
+
+
+@pytest.mark.parametrize(
+    'solved',
+    [
+        pytest.param(True, id='an-expression-read-from-a-solve'),
+        pytest.param(False, id='a-calculation-evaluated-without-a-solve'),
+    ],
+)
+def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solved):
+    """`flat` claims every step, so `otherwise` claims none, and `otherwise` is the one region over `g`.
+
+    A build places each term on a row by its own dims, so a region that claims
+    nothing can be left out of it. A read takes its columns from the terms it
+    is given, and with `otherwise` left out it came back over `h` alone, one
+    value where the expression declares two.
+    """
+    spec = {
+        'dimensions': {'g': {}, 'h': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'on': {'dims': ['h'], 'dtype': 'bool'}, 'w': {'dims': ['h', 'g']}},
+        'expressions': {
+            'e': {
+                'dims': ['g', 'h'],
+                'cases': {'flat': {'when': 'on', 'expression': '0.5'}},
+                'otherwise': 'v' if solved else 'w',
+            }
+        },
+    }
+    if solved:
+        spec['variables'] = {'v': {'dims': ['h', 'g'], 'bounds': {'lower': 0, 'upper': 5}}}
+        spec['objective'] = {'sense': 'maximize', 'expression': 'sum(v)'}
+    sources = _frames(
+        {
+            'g': ['a', 'b'],
+            'h': [7],
+            'on': {'h': [7], 'value': [True]},
+            'w': {'h': [7, 7], 'g': ['a', 'b'], 'value': [1.0, 2.0]},
+        }
+    )
+    read = sps.solve(spec, sources).evaluate('e') if solved else sps.evaluate(spec, sources, 'e')
+    assert read.columns == ['g', 'h', 'value'], '`e` is declared over `g` and `h`, whichever region claims a coordinate'
+    assert read.sort('g').get_column('value').to_list() == [0.5, 0.5], '`flat` is worth 0.5 at each of the two units'
