@@ -157,7 +157,7 @@ def test_a_constraint_with_a_where_and_restrictions_reads_its_where_once(monkeyp
         'parameters': {**SPARSE_SPEC['parameters'], 'on': {'dims': ['g'], 'dtype': 'bool'}},
         'constraints': {'capped': {**SPARSE_SPEC['constraints']['capped'], 'where': 'on'}},
     }
-    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, True]})}
+    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, False]})}
     frame, read = labels.frame, []
 
     def spied_frame(scope, dims, where, *args, **kwargs):
