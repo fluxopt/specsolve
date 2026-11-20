@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - perf(engine): a declaration that a flag or an absent curve switches off is skipped without reading its grid, and PyPSA's spec builds up to 1.4× faster ([#2104](https://github.com/fluxopt/specsolve/pull/2104))
+- perf(engine): a case that claims no coordinate builds no term, and PyPSA's spec builds up to 1.4× faster ([#2105](https://github.com/fluxopt/specsolve/pull/2105))
 
 ## 0.11.2 (2026-11-19)
 
