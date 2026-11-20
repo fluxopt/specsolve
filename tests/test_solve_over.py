@@ -2433,6 +2433,28 @@ def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     assert resumed.keys == [0, 3, 6, 9], 'the sweep comes back whole'
 
 
+def test_a_sweep_saved_over_another_leaves_none_of_its_files(tmp_path):
+    """A save wrote into what the directory held, so a file the new sweep lacks survived from the old one.
+
+    Here the first sweep solves every scenario and the second leaves one
+    infeasible. Read back, that slice said it had no values and still
+    returned the first sweep's.
+    """
+    sources = scenario_sources()
+    out = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario')).save(tmp_path / 'study')
+    beyond = sources['load'].with_columns(
+        pl.when(pl.col('scenario') == 'high').then(pl.col('value') + 1_000).otherwise(pl.col('value'))
+    )
+    again = sps.solve_over(DISPATCH, {**sources, 'load': beyond}, sps.EachLabel('scenario'))
+    again.save(out)
+
+    saved = sps.load_sweep(out)
+    assert saved.records['has_primal'].to_list() == again.records['has_primal'].to_list()
+    assert saved.primal('p')['scenario'].unique().sort().to_list() == ['low', 'mid'], (
+        'the scenario that has no values now has none on disk either'
+    )
+
+
 def test_a_directory_holding_another_sweep_is_refused(tmp_path):
     """A directory answers for one sweep. Another one pointed at it would read
     the first one's slices back as its own, so the mismatch is refused."""
