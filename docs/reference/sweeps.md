@@ -68,6 +68,10 @@ whose table carries the axis is filtered. Every other source passes through. An
 index of another dimension that carries the axis is refused. A table carrying
 the axis that is short of a label another table has warns, naming both.
 
+**Every source carries the axis as one type.** `int` in one table and `str` in
+another is refused, naming both tables, and so is a datetime with a time zone
+beside one without. A row with no label in that column is refused too.
+
 ## Reading a sweep
 
 **Every reader returns the answer**, with the names and shapes of

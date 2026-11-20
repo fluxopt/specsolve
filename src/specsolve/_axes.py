@@ -23,7 +23,7 @@ from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import lowered
 from specsolve._names import VALUE
-from specsolve._sources import in_microseconds, index_labels, least_value, parameter_frame
+from specsolve._sources import declared_dtype_of, in_microseconds, index_labels, least_value, parameter_frame
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -485,6 +485,30 @@ def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl
     return {name: table for name, table in tables.items() if dim in table.collect_schema().names()}
 
 
+def _kind(column: pl.DataType) -> str:
+    """What a column of labels is, as a refusal names it; the labels of two columns of one kind sort as one list."""
+    if isinstance(column, pl.Datetime):
+        return 'datetime' if column.time_zone is None else f'datetime in {column.time_zone}'
+    return declared_dtype_of(column) or str(column)
+
+
+def _refuse_types_apart(carrying: Mapping[str, pl.LazyFrame], dim: str) -> None:
+    """Refuse sources that carry *dim* as two kinds of column, from their schemas alone.
+
+    The labels of every source become one sorted list of keys, written as one
+    column type. Two kinds either cannot be sorted against each other, or
+    sort into keys that one type then rewrites.
+    """
+    kinds = {name: _kind(table.collect_schema()[dim]) for name, table in carrying.items()}
+    first, kind = next(iter(kinds.items()))
+    for name, other in kinds.items():
+        if other != kind:
+            raise DataError(
+                f"sources '{first}' and '{name}' carry '{dim}' as {kind} and {other}, and a sweep keys its "
+                f"slices by one type. Cast '{dim}' in one of them to match the other."
+            )
+
+
 def _labels_carried(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, pl.LazyFrame], list[Label]]:
     """The sources an [`EachLabel`][] sweep has to cut, by name, and the labels of *dim* they carry, sorted by value.
 
@@ -498,7 +522,13 @@ def _labels_carried(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, 
             f'EachLabel names a dimension the data has and the spec does not; a span of consecutive labels '
             f'of a dimension the spec declares is EachWindow.'
         )
+    _refuse_types_apart(carrying, dim)
     unique = {name: table.select(pl.col(dim).unique()).pipe(collected) for name, table in carrying.items()}
+    if unlabelled := next((name for name, labels in unique.items() if labels[dim].null_count()), None):
+        raise DataError(
+            f"source '{unlabelled}' holds a null '{dim}'. A slice is keyed by a label, and a null names none. "
+            f'Drop those rows: polars .drop_nulls({dim!r}), pandas .dropna(subset=[{dim!r}]).'
+        )
     held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
     carrying = {name: _in_microseconds(table, [dim]) for name, table in carrying.items()}
     labels = sorted(set().union(*held.values()))

@@ -1658,43 +1658,77 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
 
 
 def _typed_apart(in_load: object, in_cost: object) -> dict[str, object]:
-    """Dispatch sources whose `load` and `cost` each carry one `draw`, typed as the two labels are."""
+    """Dispatch sources whose `load` and `cost` each carry one `draw`, typed as the two labels are.
+
+    A label given as a one-row series keeps that series' type.
+    """
     load = pl.DataFrame({'draw': [in_load] * 4, 'snapshot': range(4), 'value': [5.0, 6.0, 7.0, 8.0]})
-    cost = pl.DataFrame({'draw': [in_cost] * 2, 'generator': GENERATORS, 'value': [1.0, 50.0]})
+    drawn = in_cost.extend_constant(in_cost[0], 1) if isinstance(in_cost, pl.Series) else [in_cost] * 2
+    cost = pl.DataFrame({'draw': drawn, 'generator': GENERATORS, 'value': [1.0, 50.0]})
     return {**STATIC, 'snapshot': range(4), 'load': load, 'cost': cost}
 
 
-@pytest.mark.filterwarnings('ignore:.* has no rows for draw')
-def test_a_sweep_keyed_in_more_than_one_type_is_refused() -> None:
-    """Refused rather than widened: the caller's own labels are not ours to change.
+def test_a_row_with_no_label_in_the_sliced_column_is_refused_by_name():
+    """A null among the labels reached the sort that orders the keys, which raised a bare `TypeError`."""
+    sources = scenario_sources()
+    unlabelled = sources['load'].with_columns(
+        pl.when(pl.col('scenario') == 'mid').then(None).otherwise(pl.col('scenario')).alias('scenario')
+    )
+    with pytest.raises(sps.errors.DataError, match="source 'load' holds a null 'scenario'") as refused:
+        sps.solve_over(DISPATCH, {**sources, 'load': unlabelled}, sps.EachLabel('scenario'))
+    assert "drop_nulls('scenario')" in str(refused.value), 'the refusal names the rewrite'
 
-    Two sources carry the axis, one as integers and one as floats.
+
+AWARE = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
+
+
+@pytest.mark.parametrize(
+    ('in_load', 'in_cost', 'kinds'),
+    [
+        pytest.param(1, 'a', 'as str and int', id='an-int-and-a-str'),
+        pytest.param(AWARE, datetime.datetime(2021, 1, 1), 'as datetime and datetime in UTC', id='aware-and-naive'),
+        pytest.param(datetime.date(2020, 1, 1), datetime.datetime(2021, 1, 1), 'as datetime and Date', id='a-date'),
+        pytest.param(1, 2.5, 'as float and int', id='an-int-and-a-float'),
+        pytest.param(0, True, 'as bool and int', id='an-int-and-a-bool'),
+    ],
+)
+def test_two_sources_that_type_the_axis_apart_are_refused_by_name(in_load, in_cost, kinds):
+    """Two sources carried the sliced column as two types, and the sweep failed wherever the pair first clashed.
+
+    An int beside a str, a naive datetime beside an aware one and a date
+    beside a datetime raised a bare `TypeError` from sorting the labels. An
+    int beside a float or a bool reached a refusal about keys that named
+    neither source. The schemas say it before a label is read.
     """
-    with pytest.raises(sps.errors.SpecsolveError, match='more than one type'):
-        sps.solve_over(DISPATCH, _typed_apart(1, 2.5), sps.EachLabel('draw'))
+    with pytest.raises(sps.errors.DataError, match=rf"sources 'cost' and 'load' carry 'draw' {kinds}") as refused:
+        sps.solve_over(DISPATCH, _typed_apart(in_load, in_cost), sps.EachLabel('draw'))
+    assert "Cast 'draw' in one of them" in str(refused.value), 'the refusal names the rewrite'
 
 
 @pytest.mark.filterwarnings('ignore:.* has no rows for draw')
 @pytest.mark.parametrize(
-    ('keys', 'match'),
+    ('in_load', 'in_cost', 'match'),
     [
+        pytest.param(float('nan'), float('nan'), "'nan' names more than one slice", id='two nan, unequal yet one text'),
         pytest.param(
-            [float('nan'), float('nan')], "'nan' names more than one slice", id='two nan, unequal yet one text'
+            -1,
+            pl.Series([2**63 + 1], dtype=pl.UInt64),
+            'fit no one column type',
+            id='an int below what unsigned holds beside one above what signed does',
         ),
-        pytest.param([0, True], "'True' is written as '1'", id='a bool among ints'),
     ],
 )
-def test_a_key_that_cannot_name_one_slice_by_its_text_is_refused_before_a_slice_is_taken(tmp_path, keys, match):
-    """The record and metrics name a slice by its key's text, and are typed back by matching that text.
+def test_keys_that_cannot_key_one_sweep_are_refused_before_a_slice_is_taken(tmp_path, in_load, in_cost, match):
+    """The record and metrics name a slice by its key's text, and every file writes the key as one type.
 
-    Two sources that carry the axis under two keys of one text, or a key the
-    sweep's one type rewrote, failed in polars' ``replace_strict`` when the
-    fold ended — after every slice had solved — and again on every
-    ``scan_sweep`` of the spill.
+    Two sources that each carry a NaN give two keys of one text, which failed
+    in polars' ``replace_strict`` when the fold ended — after every slice had
+    solved — and again on every ``scan_sweep`` of the spill. Integers that
+    span more than any one integer type holds have no type to be written as.
     """
     out = tmp_path / 'spill'
     with pytest.raises(sps.errors.SpecsolveError, match=match):
-        sps.solve_over(DISPATCH, _typed_apart(*keys), sps.EachLabel('draw'), spill_to=out)
+        sps.solve_over(DISPATCH, _typed_apart(in_load, in_cost), sps.EachLabel('draw'), spill_to=out)
     assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
 
 

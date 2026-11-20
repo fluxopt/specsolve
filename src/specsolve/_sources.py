@@ -750,6 +750,11 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
+def declared_dtype_of(column: pl.DataType) -> str | None:
+    """The declared dtype a polars column is, or ``None`` for a column no declaration names."""
+    return next((name for name, types in _COLUMNS.items() if column in types), None)
+
+
 def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the declaration claims.
 
@@ -759,7 +764,7 @@ def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) 
     column = frame.schema[VALUE]
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
-    arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
+    arrived = declared_dtype_of(column) or str(column)
     raise DataError(
         f"{kind} '{name}' is declared '{p.dtype}' and its values arrived as '{arrived}'. "
         f'A declared dtype is a claim about the values, and it is checked here — the file '
