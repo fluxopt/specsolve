@@ -1,0 +1,232 @@
+"""The rows an answer records beside its frames: how the solve terminated, what it took, and what produced it.
+
+One [`Record`][] and one [`Metrics`][] per solve, with the same columns whoever
+writes them: a result, a sweep's slice, or an archive.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from functools import cache
+from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
+
+import polars as pl
+
+from specsolve._status import SolveStatus, status_of
+from specsolve.errors import SpecsolveError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+
+@cache
+def installed_version(distribution: str) -> str | None:
+    """The installed version of *distribution*, or ``None`` from a source tree nothing installed.
+
+    Read once per process, as every solve records three.
+    """
+    try:
+        return version(distribution)
+    except PackageNotFoundError:
+        return None
+
+
+class Provenance(NamedTuple):
+    """What produced an answer: the solver, the options it ran with, and the packages that built the model.
+
+    Enough to install the same environment again and ask the same question.
+    Every field is ``None`` for an answer no solve wrote, such as one built by
+    hand.
+    """
+
+    #: The solver's name, as ``solver_name`` takes it.
+    solver: str | None = None
+    #: The installed version of the solver's Python package.
+    solver_version: str | None = None
+    #: The options the solver ran with, as one JSON object with sorted keys:
+    #: ``{}`` where none were passed. An option that changes the answer, such
+    #: as a time limit or a gap, keeps its value, and an infinite or ``nan``
+    #: one is the string ``"inf"``, ``"-inf"`` or ``"nan"``; any other has the
+    #: value ``<not recorded>``, so a licence credential reaches an archive
+    #: only where ``also_record`` names it.
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
+
+
+#: The provenance of an answer no solve wrote.
+NO_PROVENANCE = Provenance()
+
+
+class Record(NamedTuple):
+    """How a solve terminated, what it reached, and when.
+
+    One row per solve, and the same columns whoever wrote them: a result
+    writes one, a sweep one per slice, which [`slice_axis`][] and
+    [`slice`][] name. A run that left no values writes this and nothing else.
+    """
+
+    status: str
+    termination_condition: str
+    #: What the solve reached, or ``None`` where it reached nothing — null
+    #: rather than ``nan``, which every aggregate reads as a number.
+    #: [`Result.objective`][specsolve.types.Result.objective] is a float and reads it back as ``nan``.
+    objective: float | None
+    #: Whether the solve produced values, which the condition alone does not
+    #: say: a run stopped at a limit before any incumbent is ``ok`` with
+    #: nothing to read.
+    has_primal: bool
+    #: When the solver returned, in UTC, or ``None`` for a solve that carried
+    #: no clock, such as a result built by hand.
+    solved_at: datetime | None = None
+    #: What the archive holding this answer was called — its file name without
+    #: a ``.zip``, so ``runs/nightly-2026-09-10.zip`` writes
+    #: ``nightly-2026-09-10`` and a directory called ``case.v2`` keeps both
+    #: halves of its name. Null until the archive is written. Every other
+    #: table the archive holds carries the same column, ``specsolve_run``.
+    specsolve_run: str | None = None
+    #: What the sweep that solved this called its slices — ``scenario``,
+    #: ``snapshot_start``, ``draw`` — and which slice this is, as text. Both
+    #: null for a single solve. Fixed names rather than a column named for the
+    #: axis, so every table written here has the same columns.
+    slice_axis: str | None = None
+    slice: str | None = None
+    #: [`Provenance`][]'s fields, one column each.
+    solver: str | None = None
+    solver_version: str | None = None
+    solver_options: str | None = None
+    specsolve_version: str | None = None
+    mathspec_version: str | None = None
+
+    @classmethod
+    def of(
+        cls,
+        termination_condition: str,
+        objective: float,
+        *,
+        has_primal: bool,
+        solved_at: datetime | None,
+        provenance: Provenance = NO_PROVENANCE,
+    ) -> Record:
+        """The row a solve that terminated this way writes; each argument fills the column of its name.
+
+        ``status`` is derived from *termination_condition*, *objective* is
+        kept only where *has_primal* says there are values, and *provenance*
+        fills its own fields' columns.
+        """
+        return cls(
+            status_of(termination_condition),
+            termination_condition,
+            objective if has_primal else None,
+            has_primal,
+            solved_at,
+            **provenance._asdict(),
+        )
+
+    @property
+    def provenance(self) -> Provenance:
+        """What produced the answer this row records."""
+        return Provenance(*(getattr(self, name) for name in Provenance._fields))
+
+    @property
+    def solve_status(self) -> SolveStatus:
+        """The status this row records, without the solver's own wording."""
+        return SolveStatus(self.termination_condition, has_primal=self.has_primal)
+
+
+#: The column type each Python annotation of a record column is written as.
+_WRITTEN_AS: Mapping[type, pl.DataType | type[pl.DataType]] = {
+    str: pl.String,
+    float: pl.Float64,
+    bool: pl.Boolean,
+    int: pl.Int64,
+    datetime: pl.Datetime(time_zone='UTC'),
+}
+
+
+def _column_types(record: type[NamedTuple]) -> dict[str, pl.DataType | type[pl.DataType]]:
+    """*record*'s columns as they are written, off its own annotations.
+
+    ``X | None`` is written as ``X`` holding null.
+    """
+    written: dict[str, pl.DataType | type[pl.DataType]] = {}
+    for name, hint in get_type_hints(record).items():
+        declared = next((arg for arg in get_args(hint) if arg is not type(None)), hint)
+        if declared not in _WRITTEN_AS:
+            raise SpecsolveError(
+                f'{record.__name__}.{name} is annotated {declared!r}, which nothing here writes. A record '
+                f'column has to say what type it is written as: add it to _WRITTEN_AS.'
+            )
+        written[name] = _WRITTEN_AS[declared]
+    return written
+
+
+#: [`Record`][]'s columns as they are written, so an absent value keeps its
+#: column's type rather than the ``Null`` one polars infers from a single row.
+RECORD_SCHEMA = _column_types(Record)
+
+
+class Metrics(NamedTuple):
+    """What a build and its solves took, as the row an archive records beside the answer.
+
+    The scalars of [`Diagnostics`][specsolve._result.Diagnostics],
+    with the same columns whoever writes them, so rows from unrelated runs
+    concatenate into one table.
+
+    **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
+    for the archive [`specsolve.solve`][] writes and on each slice's row of a
+    sweep, whose clocks are that slice's own share. There [`loads`][] is ``1``
+    where the solver took the slice from scratch and ``0`` where values were
+    pushed onto the model it held, and [`write_seconds`][] is zero, a sweep
+    writing no model file.
+    """
+
+    #: The shape the build produced, in the solver's own vocabulary.
+    columns: int
+    rows: int
+    nonzeros: int
+    #: How many solves the row covers, and how many of those loaded the solver
+    #: from scratch. The clocks are cumulative over exactly these solves.
+    solves: int
+    loads: int
+    #: Wall-clock seconds in each phase a build clocks, in the order they run:
+    #: the caller's sources onto the plan, the declarations into the model
+    #: frames, the built model into a solver, the solver's own run, and the
+    #: built model streamed to an LP or MPS file. A phase that never ran writes
+    #: zero rather than no column. [`write_seconds`][] is
+    #: [`write`][specsolve._api.Model.write]'s clock, not the archive's: what
+    #: writing the archive cost is recorded nowhere.
+    attach_seconds: float
+    build_seconds: float
+    handoff_seconds: float
+    solve_seconds: float
+    write_seconds: float
+    #: What the archive holding this row was called, as
+    #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
+    #: until one is written.
+    specsolve_run: str | None = None
+    #: Which sweep slice this row is, as [`Record.slice_axis`][] and
+    #: [`Record.slice`][] say it; null for a single solve.
+    slice_axis: str | None = None
+    slice: str | None = None
+
+    def since(self, earlier: Metrics) -> Metrics:
+        """This row less *earlier*'s counts and clocks: the share of the solves between the two."""
+        return self._replace(**{name: getattr(self, name) - getattr(earlier, name) for name in _CUMULATIVE})
+
+
+#: The [`Metrics`][] columns a model sums over its solves.
+_CUMULATIVE = (
+    'solves',
+    'loads',
+    'attach_seconds',
+    'build_seconds',
+    'handoff_seconds',
+    'solve_seconds',
+    'write_seconds',
+)
+
+
+#: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
+METRICS_SCHEMA = _column_types(Metrics)

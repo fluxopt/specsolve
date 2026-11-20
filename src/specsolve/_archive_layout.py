@@ -22,15 +22,11 @@ import polars as pl
 import polars.selectors as cs
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import (
-    FORMAT_FILE,
-    OUTPUT_KINDS,
-    write_format,
-    write_whole,
-)
+from specsolve._answer_layout import FORMAT_FILE, write_format, write_whole
 from specsolve._inputs import lowered
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
-from specsolve._sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
+from specsolve._outputs import OUTPUT_KINDS
+from specsolve._sweep import MANIFEST_FILE, OWNED_FILE
 from specsolve.errors import LayoutError
 
 if TYPE_CHECKING:
@@ -53,7 +49,7 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve._answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 2
+INPUTS_LAYOUT = 3
 
 
 def check_the_target(out: Path) -> None:
@@ -83,7 +79,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, FrameWriter], None],
+    answer: Callable[[Path, FrameWriter], object],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -145,10 +141,6 @@ _CATALOG_SCHEMA = {
 }
 
 
-#: Where an archive keeps an EachWindow sweep's per-window frames, and their own catalog.
-_WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
-
-
 def _answered_under(under: str) -> dict[str, list[str]]:
     """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
     held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
@@ -168,29 +160,21 @@ _HELD_UNDER = MappingProxyType(
 )
 
 
-#: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
-_HELD_IN_WINDOWS = MappingProxyType(_answered_under(_WINDOWS))
-
-
-#: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.
-_OWNED = 'the coordinate of the sliced dimension that each window owns, by window and index inside the window'
+#: What ``answer/owned.parquet`` holds, as its catalog row describes it.
+_OWNED = 'the labels of the windowed dimension that each window owns, by window'
 
 
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
-    """``catalog.parquet`` for what *tree* holds, and ``answer/windows/catalog.parquet`` where the windows were kept."""
-    dims = _axis_dims(tree, axis)
-    parquet.write(_catalog(program, tree, run, _HELD_UNDER, dims), tree / CATALOG_MEMBER)
-    if (tree / _WINDOWS).is_dir():
-        owned = f'{_WINDOWS}/{OWNED_FILE}'
-        windows = _catalog(program, tree, run, _HELD_IN_WINDOWS, dims, extra=[(owned, 'owned', 'window', _OWNED)])
-        parquet.write(windows, tree / _WINDOWS / CATALOG_MEMBER)
+    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/owned.parquet`` where a sweep cut windows."""
+    owned = f'{ANSWER_DIR}/{OWNED_FILE}'
+    extra = [(owned, 'owned', 'window', _OWNED)] if (tree / owned).is_file() else []
+    parquet.write(_catalog(program, tree, run, _HELD_UNDER, _axis_dims(tree, axis), extra), tree / CATALOG_MEMBER)
 
 
 def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
     """The dimension of each column a sweep adds to its files: the axis column, and the key naming each slice.
 
-    A window's answer and cut sources hold the axis column where the spec
-    declares the local index. Empty for a single solve.
+    Empty for a single solve.
     """
     if axis is None:
         return {}

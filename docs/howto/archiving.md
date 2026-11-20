@@ -32,7 +32,7 @@ Anything else is held only when `outputs=` asks for it.
 
 **The record keeps the solver options that change the answer**, such as a time
 limit or a gap. Any other option is `<not recorded>` unless you name it in
-`record_options=`.
+`also_record=`.
 
 ## Read it back
 
@@ -69,19 +69,19 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 runs again from the archive alone:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, into='t', carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
 archived = sps.load_archive('roll/')
 sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
-`keep_windows=True` also writes each window's own frames, which
-`primal(..., per_window=True)` reads.
+A sweep's `answer/` is the layout `spill_to=` writes, one file per slice of
+each name, so `primal(..., per_window=True)` reads off the archive too.
 
 ## What an archive will not take
 
-- **A sweep cut by a hand-built axis.** Archive one solve each.
+- **A sweep of `Slices` written by hand.** Archive one solve each.
 - **A directory that already holds something.** A `.zip` target is replaced.
 
 A directory of archives reads as one set of tables:

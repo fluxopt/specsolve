@@ -45,11 +45,15 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.EachCoordinate
+::: specsolve.EachLabel
     options:
       heading_level: 4
 
 ::: specsolve.EachWindow
+    options:
+      heading_level: 4
+
+::: specsolve.Slices
     options:
       heading_level: 4
 
@@ -219,7 +223,7 @@ Rename it.
 
 ### What each sink takes
 
-`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+`Model.check_sink(sink)` refuses a built model the sink cannot ingest, naming the
 sinks that do. `solve` and `write` refuse the same. The check reads the built
 model, so a square the data prices at zero, an integer variable with no column
 or an empty set asks for nothing. Where a model can land is

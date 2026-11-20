@@ -79,7 +79,20 @@ def _imported(
 
 
 #: The streaming lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
-LANE = frozenset({'_answer_layout', '_collect', '_engine', '_names', '_parquet', '_result', '_sinks', '_status'})
+LANE = frozenset(
+    {
+        '_answer_layout',
+        '_collect',
+        '_engine',
+        '_names',
+        '_outputs',
+        '_parquet',
+        '_records',
+        '_result',
+        '_sinks',
+        '_status',
+    }
+)
 
 
 def _lane_modules() -> list[Path]:
@@ -327,7 +340,7 @@ def test_every_repository_path_a_workflow_names_exists():
 #: What a caller calls, by role (hard rule 5). Everything ``specsolve`` binds.
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
-    'run it many times': {'solve_over', 'EachCoordinate', 'EachWindow'},
+    'run it many times': {'solve_over', 'EachLabel', 'EachWindow', 'Slices'},
     'see what it reads': {'tidy'},
     'read it back': {
         'load_archive',
@@ -457,7 +470,9 @@ def test_only_the_axes_are_classes_at_the_top_level():
     import specsolve
 
     classes = sorted(n for n in specsolve.__all__ if isinstance(getattr(specsolve, n), type))
-    assert classes == ['EachCoordinate', 'EachWindow'], f'classes at the top level: {classes}, not only the two axes'
+    assert classes == ['EachLabel', 'EachWindow', 'Slices'], (
+        f'classes at the top level: {classes}, not only the three axes'
+    )
 
 
 SINKS = PKG / '_sinks'
@@ -610,9 +625,9 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
         return {part.strip() for part in annotation.split('|')}
 
     upstream = members(str(inspect.signature(to_spec).parameters['spec'].annotation))
-    ours = members(type_alias_value(PKG / '_inputs.py', 'Buildable'))
+    ours = members(type_alias_value(PKG / '_inputs.py', 'SpecLike'))
     assert upstream == ours and 'Program' not in ours, (
-        f'the language takes {sorted(upstream)} and specsolve._inputs.Buildable takes {sorted(ours)} — '
+        f'the language takes {sorted(upstream)} and specsolve._inputs.SpecLike takes {sorted(ours)} — '
         f'every shape the language reads a spec from, and not the lowered Program'
     )
 
@@ -632,8 +647,8 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve._axes import EachCoordinate, EachWindow
-    from specsolve._strategy import solve_over
+    from specsolve._axes import EachLabel, EachWindow
+    from specsolve._solve_over import solve_over
 
     doors = {
         'build': specsolve.build,
@@ -644,7 +659,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'Model': specsolve.types.Model.__init__,
         'Model.update': specsolve.types.Model.update,
         'solve_over': solve_over,
-        'EachCoordinate.slices': EachCoordinate.slices,
+        'EachLabel.slices': EachLabel.slices,
         'EachWindow.slices': EachWindow.slices,
     }
     assert sources_annotations(doors) == {'Mapping[str, Source]'}, (

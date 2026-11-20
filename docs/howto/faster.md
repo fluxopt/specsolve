@@ -114,7 +114,7 @@ however long the horizon is:
 sweep = sps.solve_over(
     'storage.yaml',
     sources,
-    sps.EachWindow('hour', steps=24, lookahead=12, into='snapshot', carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', steps=24, lookahead=12, carry={'soc_initial': 'soc'}),
 )
 ```
 

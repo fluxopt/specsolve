@@ -32,13 +32,13 @@ that evidence at the load; a subclass owns **the hand-off**:
 |---|---|
 | `loaded(held, name, …)` | reuse or load again — the whole of that decision |
 | `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
-| `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
+| `Solver.start_from_basis(basis)` / `start_from_values(values)` | `_start_from_basis` / `_start_from_values`, plus the refusal of either that does not span the model |
 | `_load(handoff)` | hand the model over and hold what reads it back |
 | `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
 | `_run(handoff)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
-| `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
-| `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
+| `_start_from_basis(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
+| `_start_from_values(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
 | `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
@@ -57,12 +57,12 @@ while carrying its progress wins or loses by model.
 
 A **genuine rebuild** loads a fresh solver, which starts cold.
 
-`warm(basis)` is how a caller carries one anyway. A `Basis` is a code per
+`start_from_basis(basis)` is how a caller carries one anyway. A `Basis` is a code per
 column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a
 basis HiGHS read warms Gurobi. It is positional, and the engine is what makes
 it fit: `solve(start=)` lays an earlier answer's basis onto the new build by
 coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
-*row* starts from every row it kept. `start(values)` hands values over the same
+*row* starts from every row it kept. `start_from_values(values)` hands values over the same
 way: an incumbent to a mixed-integer solve, and a primal to an LP where the
 member's `lp_values` says it takes one.
 
@@ -120,7 +120,7 @@ supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound t
 ```
 
 — and `sinks.refusal(handoff, name)` answers before the load, off the model
-that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
+that was built, which is what `Model.check_sink(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is
 rewritten at the hand-off: the language writes a set out itself,
@@ -150,9 +150,10 @@ places it bites are worth naming because neither is a choice:
 ## Adding one
 
 **A solver:** `<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
-`SOLVERS` holding the class. Constructing it loads the model and stops there,
-which is what `bench/` measures.
+subclass named for it — its `name`, `_load`, `push`, `_run`, `close` — and the
+class in the tuple `SOLVERS` is built from. What a caller is told about it, such
+as `dual_ray_advice`, is a `ClassVar` beside them. Constructing it loads the
+model and stops there, which is what `bench/` measures.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it
@@ -178,7 +179,7 @@ where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
-a sink has no spelling for cannot reach that sink by any door: `Model.check`,
+a sink has no spelling for cannot reach that sink by any door: `Model.check_sink`,
 which asks without a solve, and the engine's `solve` and `write` — which ask
 without being asked, a file written without the section being a different model
 that parses and solves.
