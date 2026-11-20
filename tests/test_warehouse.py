@@ -70,8 +70,8 @@ GENERATORS = ['wind', 'gas', 'coal']
 BUSES = ['north', 'south']
 
 
-def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str, object]:
-    """``SPEC``'s data over *periods* steps of *time*, the load scaled by *scale*.
+def _sources(periods: int = 4, scale: float = 1.0) -> dict[str, object]:
+    """``SPEC``'s data over *periods* steps, the load scaled by *scale*.
 
     ``wind`` is sited at ``north`` and connected to both buses; ``coal``
     changes zone every step.
@@ -86,7 +86,7 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
         'zone_of': pl.DataFrame(
             {
                 'generator': GENERATORS * periods,
-                time: [step for step in steps for _ in GENERATORS],
+                't': [step for step in steps for _ in GENERATORS],
                 'zone': [zone for step in steps for zone in ('z1', 'z2', 'z1' if step % 2 else 'z2')],
             }
         ),
@@ -96,15 +96,14 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
         'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 50.0, 30.0]}),
         'load': pl.DataFrame(
             {
-                time: [step for step in steps for _ in BUSES],
+                't': [step for step in steps for _ in BUSES],
                 'bus': BUSES * periods,
                 'value': [scale * (10.0 + step) for step in steps for _ in BUSES],
             }
         ),
         'zone_cap': pl.DataFrame({'zone': ['z1', 'z2'], 'value': [100.0, 100.0]}),
     }
-    if time == 't':
-        sources['t'] = list(steps)
+    sources['t'] = list(steps)
     return sources
 
 
@@ -123,11 +122,11 @@ GIVEN = {
     'sources': _sources(),
     'peak': _sources(scale=1.5),
     'by_scenario': _by_scenario(),
-    'by_snapshot': _sources('snapshot', periods=8),
+    'longer': _sources(periods=8),
 }
 
 #: The run names the page writes, in the order a sorted glob returns them.
-RUNS = ['base', 'peak', 'rolling', 'rolling-kept', 'scenarios']
+RUNS = ['base', 'peak', 'rolling', 'scenarios']
 
 #: A fence the page shows and the suite does not run, with the reason on the
 #: line before it.
@@ -178,7 +177,7 @@ def runs(page: tuple[Path, dict[str, Any]]) -> Path:
 
 def test_the_page_writes_one_folder_of_every_kind_of_run(runs: Path) -> None:
     assert sorted(path.name for path in runs.iterdir()) == RUNS, (
-        'two single solves, a scenario sweep, and a rolling horizon with and without its windows'
+        'two single solves, a scenario sweep and a rolling horizon'
     )
 
 
@@ -247,20 +246,27 @@ STRICT = {
 }
 
 
+def _globs(member: str) -> list[str]:
+    """*member* as the files that hold it: the one a single solve writes, and under ``answer/`` a sweep's one per slice."""
+    return [member, member.removesuffix('.parquet') + '/*.parquet'] if member.startswith('answer/') else [member]
+
+
+def _stacked(runs: Path, member: str) -> pl.DataFrame:
+    return pl.concat([pl.read_parquet(runs / '*' / glob) for glob in _globs(member)])
+
+
 @pytest.mark.parametrize('member', sorted(STRICT), ids=str)
-def test_one_glob_reads_every_run_under_one_strict_schema(member: str, runs: Path) -> None:
+def test_one_table_reads_every_run_under_one_strict_schema(member: str, runs: Path) -> None:
     """A column added, dropped or retyped in one kind of run fails the read, as it fails a warehouse."""
-    table = pl.scan_parquet(runs / '*' / member, schema=STRICT[member]).collect()
+    table = pl.concat([pl.scan_parquet(runs / '*' / glob, schema=STRICT[member]).collect() for glob in _globs(member)])
     assert table['specsolve_run'].unique().sort().to_list() == RUNS, 'every run is in the one table'
 
 
-#: ``answer/primal/p.parquet`` across the folder: the scenario sweep adds its
-#: key, and the rolling horizon writes the swept ``snapshot`` where a single
-#: solve writes ``t``.
+#: ``p`` across the folder: each sweep adds its key.
 P_UNION = {
     'scenario': pl.String,
+    't_start': pl.Int64,
     't': pl.Int64,
-    'snapshot': pl.Int64,
     'generator': pl.String,
     'value': pl.Float64,
     'specsolve_run': pl.String,
@@ -269,27 +275,21 @@ P_UNION = {
 
 def _value_table(runs: Path, name: str = 'p') -> pl.DataFrame:
     """One answer table across every run, unioned by column name."""
-    files = sorted(runs.glob(f'*/answer/primal/{name}.parquet'))
+    files = sorted([*runs.glob(f'*/answer/primal/{name}.parquet'), *runs.glob(f'*/answer/primal/{name}/*.parquet')])
     return pl.concat([pl.read_parquet(file) for file in files], how='diagonal')
 
 
-def test_a_value_table_globs_only_by_name_across_kinds_of_run(runs: Path) -> None:
-    """A strict glob of a value table is refused, and a union by name has exactly the columns the runs add."""
-    with pytest.raises(pl.exceptions.SchemaError, match='extra column'):
-        pl.read_parquet(runs / '*' / 'answer' / 'primal' / 'p.parquet')
+def test_a_value_table_unions_by_name_across_kinds_of_run(runs: Path) -> None:
+    """A union by name has exactly the columns the runs add."""
     union = _value_table(runs)
     assert union.select(sorted(union.columns)).schema == pl.Schema(dict(sorted(P_UNION.items()))), (
-        'the union of p is t, generator and value, plus scenario from the sweep and snapshot from the rolling horizon'
+        'the union of p is t, generator and value, plus the key of each sweep'
     )
 
 
 # ---------------------------------------------------------------------------
 # the warehouse joins
 # ---------------------------------------------------------------------------
-
-
-def _stacked(runs: Path, member: str) -> pl.DataFrame:
-    return pl.read_parquet(runs / '*' / member)
 
 
 def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -> None:
@@ -303,10 +303,9 @@ def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -
 
     held = sorted(runs.glob('*/sources/t.parquet'))
     steps = pl.concat([pl.read_parquet(file) for file in held])
-    over_t = p.filter(pl.col('t').is_not_null())
-    assert over_t.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
-    assert sorted(file.parent.parent.name for file in held) == ['base', 'peak', 'scenarios'], (
-        'a rolling horizon holds no index of t, which each window numbers for itself'
+    assert p.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
+    assert sorted(file.parent.parent.name for file in held) == RUNS, (
+        'every run holds the index of t, a rolling horizon the whole of it'
     )
 
 
@@ -319,7 +318,6 @@ def test_a_value_table_joins_the_record_on_the_run(runs: Path) -> None:
     sweeps = record.filter(pl.col('slice').is_not_null()).group_by('specsolve_run').agg(pl.col('slice').sort())
     assert sorted(sweeps.rows()) == [
         ('rolling', ['0', '4']),
-        ('rolling-kept', ['0', '4']),
         ('scenarios', ['high', 'low']),
     ], 'a sweep has one record row per slice, named in slice as text'
 

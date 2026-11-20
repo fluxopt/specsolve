@@ -18,8 +18,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._answer_layout import OUTPUT_KINDS, OUTPUTS
-from tests.test_strategy import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
+from specsolve._outputs import OUTPUT_KINDS, OUTPUTS
+from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 ACTIVITY: frozenset[Output] = frozenset({'activity'})
 NONE: frozenset[Output] = frozenset()
-SCENARIO = sps.EachCoordinate('scenario')
+SCENARIO = sps.EachLabel('scenario')
 LOAD = [5.0, 6.0, 7.0, 8.0]
 ONE = {
     **STATIC,
@@ -79,7 +79,7 @@ def test_a_request_that_names_no_output_is_refused(verb: Callable[[object], obje
             'specsolve._api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
         ),
         pytest.param(
-            'specsolve._strategy',
+            'specsolve._solve_over',
             lambda: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs={'activty'}),
             id='sweep-before-a-slice',
         ),
@@ -284,7 +284,6 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
         replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         outputs=ACTIVITY,
         archive=tmp_path / 'run',
-        keep_windows=True,
     )
     loads = horizon_sources(12)['load']
     stitched = sweep.activity('balance').sort('snapshot')

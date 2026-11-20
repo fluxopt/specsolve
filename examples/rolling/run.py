@@ -5,10 +5,9 @@
 A storage schedule solved a window at a time with `solve_over`, against the
 answer full foresight gives.
 
-One file, `horizon.yaml`, written over a *local* index `t`. The same YAML is
-solved as one window over the whole horizon — the reference — and then as
-rolling windows of increasing lookahead, each handing its state of charge to
-the next through `carry`.
+One file, `horizon.yaml`, and one set of sources. They are solved once over
+the whole horizon — the reference — and then as rolling windows of increasing
+lookahead, each handing its state of charge to the next through `carry`.
 
 **The store cycles in every schedule**: wind blows nightly and load triples by
 day, so charging and discharging is worth doing inside any window. What
@@ -54,6 +53,7 @@ STEP = 8
 
 SOURCES = {
     'generator': pl.DataFrame({'generator': GENERATORS}),
+    'snapshot': range(PERIODS),
     'p_max': pl.DataFrame(
         {
             'snapshot': [t for t in range(PERIODS) for _ in GENERATORS],
@@ -67,31 +67,27 @@ SOURCES = {
 }
 
 
-def full_foresight() -> sps.types.Sweep:
-    """One window over the whole horizon — the answer rolling is measured against."""
-    return sps.solve_over(
-        MODEL,
-        SOURCES,
-        sps.EachWindow('snapshot', steps=PERIODS, lookahead=0, into='t'),
-    )
+def full_foresight() -> sps.types.Result:
+    """One solve of the whole horizon — the answer rolling is measured against."""
+    return sps.solve(MODEL, SOURCES)
 
 
 def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
     """Windows keeping *steps* coordinates and seeing *lookahead* beyond them.
 
-    The carry names no coordinate: `soc` is over `(t)` and `soc_initial` over
-    `()`, so `t` is what it collapses, and the row handed on is the last one the
-    window *keeps* rather than the last it solved. With lookahead those differ,
+    The carry names no coordinate: `soc` is over `(snapshot)` and `soc_initial`
+    over `()`, so `snapshot` is what it collapses, and the row handed on is the
+    last one the window *keeps* rather than the last it solved. With lookahead those differ,
     and the last solved row is a level the next window is about to recompute.
     """
     return sps.solve_over(
         MODEL,
         SOURCES,
-        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t', carry={'soc_initial': 'soc'}),
+        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
 
 
-def cost_of(sweep: sps.types.Sweep) -> float:
+def cost_of(sweep: sps.types.Result | sps.types.Sweep) -> float:
     """What the schedule cost, summed over the snapshots each window owns.
 
     A window objective covers its lookahead too, so summing them double-counts.
@@ -106,7 +102,7 @@ def main() -> None:
     best = cost_of(reference)
     peak = reference.primal('soc')['value'].max()
     print(f'{DAYS} days of {DAY} hours: six of cheap wind, then six of none.')
-    print(f'full foresight   one window                      cost {best:>9.2f}   peak soc {peak:>6.1f}')
+    print(f'full foresight   one solve                       cost {best:>9.2f}   peak soc {peak:>6.1f}')
     print()
 
     for lookahead in (0, 4, 8):

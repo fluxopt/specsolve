@@ -230,7 +230,7 @@ def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
 
     fresh = Xpress(tables)
     try:
-        fresh.warm(basis)
+        fresh.start_from_basis(basis)
         loaded_rows, loaded_columns = fresh._p.getBasis()
     finally:
         fresh.close()

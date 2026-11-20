@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve._names import VALUE
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve.errors import SpecsolveError
@@ -26,6 +25,17 @@ if TYPE_CHECKING:
     from specsolve._sinks.handoff import Handoff, Ints
     from specsolve._status import SolveStatus
 
+
+#: A basis status in the one vocabulary every solver's is read into, each at
+#: the index that is its code. A row's bound is its right-hand side, so a
+#: binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``, and
+#: a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
+#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
+BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
+BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
+
+#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
+BASIS = pl.Enum(BASIS_STATUSES)
 
 #: The status of a nonbasic row, by its sense.
 _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
@@ -106,6 +116,9 @@ class Solver(ABC):
         self._columns = handoff.column_count
         self._rows = handoff.row_count
 
+    #: What a caller names this member by, and its key in ``SOLVERS``.
+    name: ClassVar[str]
+
     #: The packages this member imports lazily, all needed for it to run.
     requires: ClassVar[tuple[str, ...]]
 
@@ -121,6 +134,11 @@ class Solver(ABC):
     #: ``no_gain`` where the member takes them and no gain from them is known,
     #: so the solve warns, or ``refused`` where it cannot take them.
     lp_values: ClassVar[Mapping[Literal['complete', 'partial'], Literal['used', 'no_gain', 'refused']]]
+
+    #: What makes this member leave a [`dual_ray`][] on an infeasible solve
+    #: that left none, as the clause a refusal ends on. ``None`` where no
+    #: option does.
+    dual_ray_advice: ClassVar[str | None] = None
 
     #: Option names, casefolded, whose value an answer records: the ones that
     #: change what a solve returns. Any other option is recorded by name
@@ -182,7 +200,7 @@ class Solver(ABC):
         Called only after *handoff*'s digest matched the loaded one.
         """
 
-    def warm(self, basis: Basis) -> None:
+    def start_from_basis(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.
 
         Raises:
@@ -190,13 +208,13 @@ class Solver(ABC):
         """
         self._spans('basis', basis.columns, self._columns, 'columns')
         self._spans('basis', basis.rows, self._rows, 'rows')
-        self._warm(basis)
+        self._start_from_basis(basis)
 
     @abstractmethod
-    def _warm(self, basis: Basis) -> None:
-        """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
+    def _start_from_basis(self, basis: Basis) -> None:
+        """Set *basis* on the loaded model in the solver's own statuses. [`start_from_basis`][] has checked its spans."""
 
-    def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+    def start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
         """Start the next [`run`][] from *values*, one per column and NaN where none is given.
 
         A mixed-integer model takes them as a starting incumbent, completing
@@ -207,11 +225,11 @@ class Solver(ABC):
             SpecsolveError: Values that do not span the loaded model.
         """
         self._spans('start', values, self._columns, 'columns')
-        self._start(values)
+        self._start_from_values(values)
 
     @abstractmethod
-    def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
+    def _start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+        """Hand the values *values* gives to the solver to start from. [`start_from_values`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
@@ -262,7 +280,7 @@ class Solver(ABC):
         """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
-                f'{type(self).__name__} returned {len(values)} {quantity} values for a model with '
+                f'{self.name} returned {len(values)} {quantity} values for a model with '
                 f'{expected}. Reading a solution back is positional, so a vector that does not span '
                 f'the model describes a different one. This is an engine bug rather than a problem '
                 f'with the model — please report it.'
