@@ -62,3 +62,26 @@ def test_a_dense_table_with_one_row_per_coordinate_builds():
 def test_a_dense_table_is_refused_as_a_small_one_is(cap, refusal):
     with pytest.raises(sps.errors.DataError, match=refusal):
         sps.build(SPEC, _sources(cap))
+
+
+def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatch):
+    """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
+    from specsolve import _sources as reading
+
+    reads, real = [], reading._labels_of
+
+    def counted(dim, index):
+        reads.append(dim)
+        return real(dim, index)
+
+    monkeypatch.setattr(reading, '_labels_of', counted)
+    spec = {
+        **SPEC,
+        'parameters': {**SPEC['parameters'], 'cost': {'dims': ['g']}, 'floor': {'dims': ['g', 't']}},
+    }
+    sources = _sources(_dense()) | {
+        'cost': pl.DataFrame({'g': GENERATORS, 'value': 1.0}),
+        'floor': _dense().with_columns(value=0.0),
+    }
+    sps.build(spec, sources).close()
+    assert sorted(reads) == ['g', 't'], f'the labels were read as {sorted(reads)}, where each dimension once is enough'
