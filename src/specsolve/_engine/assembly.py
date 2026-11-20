@@ -323,9 +323,13 @@ class Assembly:
         frames = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
         dense = c.where is None and not restrictions
+        lookup = None if dense else self._row_lookup(c.dims, labelled)
+        position = self.scope.row_major(c.dims, self.scope.ordinal_of)
         for p, sign in linear:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+            elif lookup is not None and set(p.dims) == set(c.dims):
+                placed = p.frame.with_columns(pl.lit(lookup).gather(position).alias('row')).filter(pl.col('row') >= 0)
             else:
                 placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             frames.append(
@@ -377,6 +381,23 @@ class Assembly:
         """
         self.constraints[name] = labels.Labelled(labelled.lazy(), start, 0)
         return _stack([], _ROWS), None, None
+
+    def _row_lookup(self, dims: tuple[str, ...], labelled: pl.DataFrame) -> pl.Series | None:
+        """Each position in the product of *dims* to the row the block built there, ``-1`` where it built none.
+
+        A term over the block's own dims finds its row by gathering at its
+        position instead of joining on every dim, which was most of what a
+        constraint with a ``where`` cost on a dense model. The lookup holds
+        one integer per coordinate of the product, so it is formed only where
+        the product is at most 16 times the rows; ``None`` otherwise.
+        """
+        cells = math.prod(self.attached.cardinality[d] for d in dims)
+        if not dims or not labelled.height or cells > 16 * labelled.height:
+            return None
+        positions = labelled.select(self.scope.row_major(dims, self.scope.ordinal_of)).to_series().to_numpy()
+        lookup = np.full(cells, -1, dtype=np.int64)
+        lookup[positions] = labelled.get_column('row').to_numpy()
+        return pl.Series('row', lookup)
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.

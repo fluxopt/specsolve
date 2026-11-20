@@ -476,3 +476,50 @@ def test_a_parameter_no_live_row_reads_is_not_read_and_its_faults_are_not_refuse
 def test_a_fault_in_a_parameter_that_is_read_is_still_refused(read):
     with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
         read()
+
+
+#: `level` is positive at every `(g, t)` but one; `rare` at one alone, a hundredth of the product.
+PLACED_SPEC = {
+    'dimensions': {'g': {}, 't': {'dtype': 'int'}},
+    'parameters': {'level': {'dims': ['g', 't']}, 'rare': {'dims': ['g', 't']}},
+    'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+PLACED_SOURCES = {
+    'g': ['a', 'b', 'c', 'd'],
+    't': list(range(25)),
+    'level': pl.DataFrame(
+        {'g': [g for g in 'abcd' for _ in range(25)], 't': list(range(25)) * 4, 'value': [0.0] + [1.0] * 99}
+    ),
+    'rare': pl.DataFrame(
+        {'g': [g for g in 'abcd' for _ in range(25)], 't': list(range(25)) * 4, 'value': [1.0] + [0.0] * 99}
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ('where', 'rows', 'looked_up'),
+    [
+        pytest.param('level > 0', 99, True, id='a-block-that-keeps-most-rows-places-by-position'),
+        pytest.param('rare > 0', 1, False, id='a-block-a-hundredth-of-its-product-joins'),
+    ],
+)
+def test_a_term_over_its_blocks_dims_is_placed_by_position_where_the_product_is_small(
+    monkeypatch, where, rows, looked_up
+):
+    """A dense model places a term on its rows by gathering at its position: joining on every dim was most of such a block's cost."""
+    from specsolve._engine import assembly as assembly_module
+
+    lookups, real = [], assembly_module.Assembly._row_lookup
+
+    def spied(self, dims, labelled):
+        found = real(self, dims, labelled)
+        lookups.append(found is not None)
+        return found
+
+    monkeypatch.setattr(assembly_module.Assembly, '_row_lookup', spied)
+    spec = {**PLACED_SPEC, 'constraints': {'capped': {'dims': ['g', 't'], 'where': where, 'expression': 'x <= 0.5'}}}
+    with sps.build(spec, PLACED_SOURCES) as model:
+        assert model.diagnostics().rows == rows, f'`{where}` admits {rows} of the 100 rows'
+        assert model.solve().objective == pytest.approx(100 - rows * 0.5), 'each kept row holds its x to 0.5'
+    assert lookups == [looked_up], f'the lookup was formed {lookups}, where {looked_up} is expected'
