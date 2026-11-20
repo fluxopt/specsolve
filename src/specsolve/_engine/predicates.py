@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, assert_never
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected
+from specsolve._collect import collected, collected_all
 from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
 from specsolve._engine.scope import join_on
 from specsolve._engine.shifts import translate_rows
@@ -23,7 +23,7 @@ from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Mapping
 
     from polars._typing import JoinStrategy
 
@@ -80,48 +80,74 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     return carrier.filter(falsy_if_null(condition))
 
 
-def admits_nothing(scope: Scope, where: program.Mask, dims: tuple[str, ...]) -> bool:
-    """Whether *where* admits no row over *dims*, decided without the product of *dims*.
+def settled(scope: Scope, masks: Iterable[program.Mask]) -> dict[program.Condition, bool]:
+    """Each test in *masks* that the data settles at every coordinate: ``True`` where it holds everywhere, ``False`` where nowhere.
 
-    ``False`` is no claim that a row survives. [`_holds_nowhere`][] is the rule.
+    A test is a parameter's bare name or comparison, anywhere in a mask, a
+    named condition read through. Each is read once over the parameter's own
+    table, all in one batch: a model gates hundreds of declarations on the
+    same few flags, and reading a flag per declaration over the product of
+    its dims was most of the cost of the declarations that build nothing. A
+    parameter with no row, and a count along a dimension without a label,
+    settle without a query. A test the data leaves partial is not in the
+    answer.
     """
-    return _holds_nowhere(scope, where.root, math.prod(scope.data.cardinality[d] for d in dims))
+    atoms = {atom for mask in masks for atom in mask.atoms}
+    out: dict[program.Condition, bool] = {}
+    queried: list[program.ParameterDefined | program.ParameterComparison] = []
+    for atom in atoms:
+        if isinstance(atom, program.CountComparison) and not scope.data.cardinality[atom.over]:
+            out[atom] = pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
+        elif isinstance(atom, program.ParameterDefined | program.ParameterComparison):
+            if scope.data.parameter_rows[atom.name]:
+                queried.append(atom)
+            else:
+                out[atom] = False
+    for atom, passing in zip(queried, collected_all(_passing(scope, atom) for atom in queried), strict=True):
+        count = passing.item()
+        if not count:
+            out[atom] = False
+        elif count == math.prod(scope.data.cardinality[d] for d in atom.dims):
+            out[atom] = True
+    return out
 
 
-def _holds_nowhere(scope: Scope, node: program.Condition, cells: int) -> bool:
-    """Whether *node* is false at every coordinate, read off the data its leaves name rather than a product.
+def _passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
+    """How many rows of *atom*'s parameter pass its test, as a one-cell frame; a missing row reads as false."""
+    keys = tuple(atom.dims)
+    base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
+    carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys)
+    return carrier.filter(falsy_if_null(condition)).select(pl.len())
 
-    An ``AND`` holds nowhere when either side does, an ``OR`` when both do,
-    and a named condition when its body does. A count along a dimension
-    without a label is zero, so its comparison is a constant. A bare name or a
-    comparison of a parameter is false wherever the parameter has no row that
-    passes the test, so it holds nowhere when none does: read off the
-    parameter's table, once per unit for a per-unit flag under a
-    unit-by-snapshot declaration. A table at least as large as the *cells* of
-    the declaration is not read, since the full mask costs no more. Any other
-    leaf, and a ``NOT``, is not decided here.
-    """
+
+def folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:
+    """*mask* with each settled test written as the literal it is, folded by mathspec into what is left."""
+    return program.Mask(_substituted(mask.root, tests))
+
+
+def holds_nowhere(mask: program.Mask) -> bool:
+    """Whether *mask* folded to the literal false."""
+    return isinstance(mask.root, program.BooleanLiteral) and not mask.root.value
+
+
+def holds_everywhere(mask: program.Mask) -> bool:
+    """Whether *mask* folded to the literal true."""
+    return isinstance(mask.root, program.BooleanLiteral) and mask.root.value
+
+
+def _substituted(node: program.Condition, tests: Mapping[program.Condition, bool]) -> program.Condition:
+    """*node* rebuilt with each settled test as a literal, a named condition read as its body."""
+    if node in tests:
+        return program.BooleanLiteral(tests[node])
     if isinstance(node, program.And):
-        return _holds_nowhere(scope, node.left, cells) or _holds_nowhere(scope, node.right, cells)
+        return program.And(_substituted(node.left, tests), _substituted(node.right, tests))
     if isinstance(node, program.Or):
-        return _holds_nowhere(scope, node.left, cells) and _holds_nowhere(scope, node.right, cells)
+        return program.Or(_substituted(node.left, tests), _substituted(node.right, tests))
+    if isinstance(node, program.Not):
+        return program.Not(_substituted(node.operand, tests))
     if isinstance(node, program.ConditionReference):
-        return _holds_nowhere(scope, node.body, cells)
-    if isinstance(node, program.CountComparison):
-        if scope.data.cardinality[node.over]:
-            return False
-        return not pl.select(_COLUMN_COMPARISONS[node.op](pl.lit(0), pl.lit(node.value))).item()
-    if not isinstance(node, program.ParameterDefined | program.ParameterComparison):
-        return False
-    rows = scope.data.parameter_rows[node.name]
-    if not rows:
-        return True
-    if rows >= cells:
-        return False
-    keys = tuple(node.dims)
-    base = scope.data.parameters[node.name].select(*keys) if keys else scope.product(())
-    carrier, condition = compile_predicate(scope, base, program.Mask(node), keys)
-    return not carrier.filter(falsy_if_null(condition)).head(1).pipe(collected).height
+        return _substituted(node.body, tests)
+    return node
 
 
 def compile_predicate(

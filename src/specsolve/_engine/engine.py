@@ -10,6 +10,7 @@ The lane is described in docs/development/architecture.md.
 
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from specsolve import _sinks as sinks
+from specsolve._collect import in_memory
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -29,6 +31,7 @@ from specsolve._engine.assembly import (
 )
 from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.compiler import Compiler, Solution
+from specsolve._engine.predicates import folded, holds_everywhere, settled
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
@@ -151,7 +154,7 @@ class Engine:
             with _clocked(self._seconds, 'attach'):
                 attached = attach(program, sources)
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(program, attached, self._measured)
+        assembly = Assembly(_settled_wheres(program, attached), attached, self._measured)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
 
@@ -623,3 +626,37 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         yield
     finally:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
+
+
+def _settled_wheres(lowered: program.Program, attached: AttachedSources) -> program.Program:
+    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles.
+
+    Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
+    not once per declaration. A ``where`` that folds to true is dropped, so
+    the declaration takes the path of one without a ``where``: dense labels,
+    and terms placed on their rows without a join. One that folds to false
+    is kept as that literal, and the declaration is skipped with no further
+    read. The program the model keeps is this one, so readback reads the
+    declarations it built. The tests read one parameter's table whole, so
+    they run on the in-memory engine whatever the model's size.
+    """
+    declared = [*lowered.variables.values(), *lowered.constraints.values()]
+    with in_memory():
+        tests = settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+
+    def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
+        out = {}
+        for name, declaration in declarations.items():
+            where = declaration.where
+            if where is None or not tests:
+                out[name] = declaration
+                continue
+            kept = folded(where, tests)
+            out[name] = dataclasses.replace(declaration, where=None if holds_everywhere(kept) else kept)
+        return out
+
+    if not tests:
+        return lowered
+    return dataclasses.replace(
+        lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints)
+    )

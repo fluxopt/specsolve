@@ -157,7 +157,7 @@ def test_a_constraint_with_a_where_and_restrictions_reads_its_where_once(monkeyp
         'parameters': {**SPARSE_SPEC['parameters'], 'on': {'dims': ['g'], 'dtype': 'bool'}},
         'constraints': {'capped': {**SPARSE_SPEC['constraints']['capped'], 'where': 'on'}},
     }
-    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, True]})}
+    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, False]})}
     frame, read = labels.frame, []
 
     def spied_frame(scope, dims, where, *args, **kwargs):
@@ -358,3 +358,61 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
+
+
+#: `active` is true at every `(g, t)`, as PyPSA's is on a network without
+#: investment periods; `level` is given at `(a, 1)` alone and filled with 0.
+EVERYWHERE_SOURCES = TABLED_SOURCES | {
+    'active': pl.DataFrame({'g': ['a', 'a', 'a', 'b', 'b', 'b'], 't': [1, 2, 3] * 2, 'value': [True] * 6}),
+    'level': pl.DataFrame({'g': ['a'], 't': [1], 'value': [5.0]}),
+}
+EVERYWHERE_PARAMETERS = {
+    **TABLED_SPEC['parameters'],
+    'active': {'dims': ['g', 't'], 'dtype': 'bool'},
+    'level': {'dims': ['g', 't'], 'missing': 0.0},
+}
+
+
+@pytest.mark.parametrize(
+    ('where', 'active', 'rows', 'read'),
+    [
+        pytest.param('active', [True] * 6, 6, [], id='a-flag-true-everywhere-is-dropped'),
+        pytest.param('active', [True] * 5 + [False], 5, [('g', 't')], id='a-flag-false-somewhere-is-kept'),
+        pytest.param('level', [True] * 6, 1, [('g', 't')], id='a-filled-parameter-holds-only-where-given'),
+        pytest.param('cap > 2 AND active', [True] * 6, 3, [('g',)], id='the-rest-of-an-and-is-kept'),
+    ],
+)
+def test_a_condition_that_holds_everywhere_is_dropped_from_its_where(monkeypatch, where, active, rows, read):
+    """PyPSA gates nearly every declaration on `active`, which holds everywhere without investment periods.
+
+    Kept, it reads every declaration at unit-by-snapshot and keeps it off the
+    path of a declaration without a `where`.
+    """
+    spec = {
+        **TABLED_SPEC,
+        'parameters': EVERYWHERE_PARAMETERS,
+        'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}},
+    }
+    sources = EVERYWHERE_SOURCES | {'active': EVERYWHERE_SOURCES['active'].with_columns(value=pl.Series(active))}
+    frame, labelled = labels.frame, []
+
+    def spied_frame(scope, dims, mask, *args, **kwargs):
+        if mask is not None:
+            labelled.append(tuple(sorted(mask.dims)))
+        return frame(scope, dims, mask, *args, **kwargs)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(spec, sources) as model:
+        assert model.diagnostics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+    assert labelled == read, f'`probe` was labelled over {labelled}, where what is left of `{where}` reads {read}'
+
+
+def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Path):
+    spec = {**TABLED_SPEC, 'parameters': EVERYWHERE_PARAMETERS}
+    gated = {**spec, 'constraints': {'probe': {'dims': ['g', 't'], 'where': 'active', 'expression': 'x <= 0.5'}}}
+    plain = {**spec, 'constraints': {'probe': {'dims': ['g', 't'], 'expression': 'x <= 0.5'}}}
+    sps.write(gated, EVERYWHERE_SOURCES, tmp_path / 'gated.lp')
+    sps.write(plain, EVERYWHERE_SOURCES, tmp_path / 'plain.lp')
+    assert (tmp_path / 'gated.lp').read_text() == (tmp_path / 'plain.lp').read_text(), (
+        'a where that holds everywhere changed the written model'
+    )

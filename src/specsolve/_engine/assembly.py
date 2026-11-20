@@ -18,7 +18,7 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.predicates import admits_nothing
+from specsolve._engine.predicates import holds_nowhere
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
@@ -345,8 +345,8 @@ class Assembly:
         return any(not self.attached.cardinality[d] for d in dims)
 
     def _holds_nothing(self, dims: tuple[str, ...], where: program.Mask | None) -> bool:
-        """Whether a declaration over *dims* holds no row, known without labelling it: [`_over_nothing`][], or a *where* that [`admits_nothing`][]."""
-        return self._over_nothing(dims) or (where is not None and admits_nothing(self.scope, where, dims))
+        """Whether a declaration over *dims* holds no row, known without labelling it: [`_over_nothing`][], or a *where* the data settled false."""
+        return self._over_nothing(dims) or (where is not None and holds_nowhere(where))
 
     def _without_a_row(
         self, name: str, labelled: pl.DataFrame, start: int
