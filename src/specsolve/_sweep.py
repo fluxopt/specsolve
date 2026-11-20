@@ -38,7 +38,6 @@ from specsolve._answer_layout import (
 )
 from specsolve._axes import Stitch, bulleted
 from specsolve._collect import collected
-from specsolve._messages import no_model_behind_this_answer_message
 from specsolve._names import RUN
 from specsolve._outputs import BASES, KINDS, NO_BASIS, OUTPUT_KINDS, PRICED, checked_kind, not_requested_message
 from specsolve._records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record
@@ -657,8 +656,18 @@ class Sweep:
         return name in self._expression_names() or name in self._absent.get('expression', {})
 
     def _nothing_to_evaluate(self, expression: str | Mapping[str, object]) -> str:
-        """Why a sweep with no model behind it cannot value *expression*; a string is also answered as a name."""
-        no_model = no_model_behind_this_answer_message()
+        """Why a sweep with no model behind it cannot value *expression*; a string is also answered as a name.
+
+        The way back to its models is an archive, which holds what rebuilds
+        each slice. One solve of the sweep's sources is another question, and
+        for a label sweep one the door refuses.
+        """
+        no_model = (
+            'this sweep has no model behind it, so a quantity the file never named cannot be read from it: a '
+            'sweep holds the values of each slice without the models that solved them. Solve it with '
+            "archive=, and sps.load_archive(path).sweep reads any expression at each slice's solution; a name "
+            'the spec declares is readable either way.'
+        )
         if not isinstance(expression, str):
             return no_model
         return (
