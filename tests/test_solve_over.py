@@ -1668,6 +1668,17 @@ def _typed_apart(in_load: object, in_cost: object) -> dict[str, object]:
     return {**STATIC, 'snapshot': range(4), 'load': load, 'cost': cost}
 
 
+def test_a_row_with_no_label_in_the_sliced_column_is_refused_by_name():
+    """A null among the labels reached the sort that orders the keys, which raised a bare `TypeError`."""
+    sources = scenario_sources()
+    unlabelled = sources['load'].with_columns(
+        pl.when(pl.col('scenario') == 'mid').then(None).otherwise(pl.col('scenario')).alias('scenario')
+    )
+    with pytest.raises(sps.errors.DataError, match="source 'load' holds a null 'scenario'") as refused:
+        sps.solve_over(DISPATCH, {**sources, 'load': unlabelled}, sps.EachLabel('scenario'))
+    assert "drop_nulls('scenario')" in str(refused.value), 'the refusal names the rewrite'
+
+
 AWARE = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
 
 

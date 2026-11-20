@@ -524,6 +524,11 @@ def _labels_carried(sources: Mapping[str, Source], dim: str) -> tuple[dict[str, 
         )
     _refuse_types_apart(carrying, dim)
     unique = {name: table.select(pl.col(dim).unique()).pipe(collected) for name, table in carrying.items()}
+    if unlabelled := next((name for name, labels in unique.items() if labels[dim].null_count()), None):
+        raise DataError(
+            f"source '{unlabelled}' holds a null '{dim}'. A slice is keyed by a label, and a null names none. "
+            f'Drop those rows: polars .drop_nulls({dim!r}), pandas .dropna(subset=[{dim!r}]).'
+        )
     held = {name: set(in_microseconds(labels, f"source '{name}'")[dim]) for name, labels in unique.items()}
     carrying = {name: _in_microseconds(table, [dim]) for name, table in carrying.items()}
     labels = sorted(set().union(*held.values()))

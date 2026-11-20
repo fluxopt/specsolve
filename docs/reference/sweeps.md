@@ -70,7 +70,7 @@ the axis that is short of a label another table has warns, naming both.
 
 **Every source carries the axis as one type.** `int` in one table and `str` in
 another is refused, naming both tables, and so is a datetime with a time zone
-beside one without.
+beside one without. A row with no label in that column is refused too.
 
 ## Reading a sweep
 
