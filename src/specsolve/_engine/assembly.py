@@ -507,7 +507,7 @@ class Assembly:
         """
         if o is None:
             return None
-        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True)
+        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True, sums=True)
         coverage.refuse_null_constants(
             [p.frame for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )

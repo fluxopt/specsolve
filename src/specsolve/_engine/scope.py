@@ -62,6 +62,8 @@ class Scope:
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
     #: Each column or array read by position, by what it holds and its name; [`dense`][specsolve._engine.dense] fills it.
     by_position: dict[tuple[str, str], np.ndarray | pl.Series] = field(default_factory=dict)
+    #: Whether each parameter asked about is zero at every row it has.
+    _zero: dict[str, bool] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -130,6 +132,13 @@ class Scope:
         if not dims or not all(self.data.is_enum_encoded(d) or d in self.data.consecutive for d in dims):
             return None
         return self.row_major(dims, self.ordinal_of)
+
+    def is_zero(self, param: str) -> bool:
+        """Whether *param* is zero at every row it has, any value ``missing:`` fills included; read once per build."""
+        if param not in self._zero:
+            table = self.data.parameters[param]
+            self._zero[param] = not table.select((pl.col(VALUE) != 0).any()).pipe(collected).item()
+        return self._zero[param]
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
