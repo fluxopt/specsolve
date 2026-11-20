@@ -186,8 +186,9 @@ label 23 of a window keeping 24, not label 47 of the 48 it solved.
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
 | **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole frame. |
+| **a window carries nothing over the dimension it windows** | No two windows hold the same labels, so a parameter over that dimension is refused. |
 | **that dimension must be the one `EachWindow` windows** | Any other is refused. A carry on `EachLabel` collapses nothing. |
-| **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` at `t == 0`. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |
+| **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` where `position(t) == 0`, a window's first row. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |
 | **the first slice needs a seed** | It takes the parameter from `sources`. A sweep whose sources lack it is refused. |
 | **a carry is checked before any source is read** | Two collapsed dimensions, a parameter over more dimensions than the variable, the wrong dimension and no seed all raise first. `check` cannot see a carry, because it is not part of the spec. |
 | **a slice that leaves nothing to carry stops the sweep** | The error names the slice and how it terminated. Without a carry, the sweep goes on. |

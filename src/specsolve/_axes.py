@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import MISSING, dataclass, field, fields
+from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -434,7 +435,7 @@ def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
 
 def _one_window(dim: str, window: Sequence[Label], table: pl.LazyFrame) -> pl.LazyFrame:
     """*table*'s rows at the labels of *window* along its *dim* column."""
-    return _in_microseconds(table, [dim]).filter(pl.col(dim).is_in(window))
+    return _as_the_index_holds(table, [dim], window).filter(pl.col(dim).is_in(window))
 
 
 def _tables_over(
@@ -450,20 +451,27 @@ def _tables_over(
     are found once, and every window keeps them, so the door refuses them as
     it does for a single solve. A table short of a column it is cut on is left
     for the door to refuse.
+
+    Raises:
+        DataError: A label finer than a microsecond, which the cast that
+            matches it to the index would round onto another label.
     """
     index = {dim: pl.LazyFrame({dim: labels})}
-    found: dict[str, tuple[pl.LazyFrame, tuple[str, ...]]] = {}
+    found: dict[str, tuple[pl.LazyFrame, tuple[str, ...], str]] = {}
     for name, parameter in program.parameters.items():
         if dim in parameter.dims and name in sources and not isinstance(sources[name], (bool, int, float)):
-            found[name] = (parameter_frame(name, parameter, sources[name], index), (dim,))
+            found[name] = (parameter_frame(name, parameter, sources[name], index), (dim,), 'parameter')
     for name, relation in program.relations.items():
         columns = tuple(role for role, over in relation.columns if over == dim)
         if columns and name in sources and (table := as_frame(sources[name], relation.roles)) is not None:
-            found[name] = (table, columns)
+            found[name] = (table, columns, 'relation')
     out = {}
-    for name, (table, columns) in found.items():
-        if set(columns) <= set(table.collect_schema().names()):
-            held = _in_microseconds(table, columns)
+    for name, (table, columns, kind) in found.items():
+        schema = table.collect_schema()
+        if set(columns) <= set(schema.names()):
+            if finer := [column for column in columns if schema[column] == pl.Datetime('ns')]:
+                in_microseconds(table.select(finer).unique().pipe(collected), f"{kind} '{name}'")
+            held = _as_the_index_holds(table, columns, labels)
             strange = pl.any_horizontal(~pl.col(column).is_in(labels).fill_null(False) for column in columns)
             out[name] = (held, columns, held.filter(strange).pipe(collected))
     return out
@@ -475,6 +483,18 @@ def _within(
     """*table*'s rows whose *columns* all hold a label of *window*, and its *strangers* for the door to refuse."""
     inside = table.filter(pl.all_horizontal(pl.col(column).is_in(window) for column in columns))
     return pl.concat([inside, strangers.lazy()]) if strangers.height else inside
+
+
+def _as_the_index_holds(table: pl.LazyFrame, columns: Sequence[str], labels: Sequence[Label]) -> pl.LazyFrame:
+    """*table* with *columns* typed as *labels* are, so that a membership test compares like with like.
+
+    A datetime is held in microseconds. Where the labels are datetimes, a
+    date is the microsecond its day starts on, as attach reads one.
+    """
+    held = _in_microseconds(table, columns)
+    if labels and isinstance(labels[0], datetime):
+        held = held.with_columns((cs.by_name(columns) & cs.date()).cast(pl.Datetime('us')))
+    return held
 
 
 def _in_microseconds(table: pl.LazyFrame, columns: Sequence[str]) -> pl.LazyFrame:

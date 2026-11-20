@@ -1052,6 +1052,15 @@ def test_a_myopic_pathway_carries_a_whole_vector():
 
 #: The five ways a carry cannot line up.
 _PERIOD_AXIS = sps.EachLabel('period')
+#: The stores with a size to choose, which is over no snapshot, and a budget for it.
+BUILDING_STORES = override(
+    MULTI_STORE,
+    **{
+        'parameters.budget': {'dims': []},
+        'variables.built': {'dims': ['storage'], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+)
+
 UNSOUND_CARRIES = [
     pytest.param(
         WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 'p'},
@@ -1069,12 +1078,18 @@ UNSOUND_CARRIES = [
         id='a-name-neither-side-declares',
     ),
     pytest.param(
+        WINDOW, horizon_sources, WINDOW_AXIS, {'load': 'soc'},
+        r"carry 'load' <- 'soc' keeps 'snapshot'", 'no two windows hold the same labels',
+        id='a-window-carrying-a-whole-frame-over-the-dimension-it-windows',
+    ),
+    pytest.param(
         WINDOW, horizon_sources, sps.EachLabel('scenario'), {'soc_initial': 'soc'},
         r"collapses 'snapshot', and this axis owns none", 'Reduce',
         id='a-label-sweep-collapsing-a-dimension-it-does-not-advance-along',
     ),
     pytest.param(
-        MULTI_STORE, multi_store_sources, WINDOW_AXIS, {'load': 'soc'},
+        BUILDING_STORES, lambda: {**multi_store_sources(), 'budget': pl.DataFrame({'value': [1.0]})},
+        WINDOW_AXIS, {'budget': 'built'},
         r"collapses 'storage', and this axis advances along 'snapshot'", 'Reduce',
         id='a-window-collapsing-a-dimension-that-is-not-its-own',
     ),
@@ -1094,6 +1109,134 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, source
         sps.solve_over(spec, sources(), replace(axis, carry=carry))
     if names is not None:
         assert names in str(raised.value), 'the message names the dimensions it could not choose between'
+
+
+#: The window model over hours, a datetime dimension.
+BY_THE_HOUR = override(WINDOW, **{'dimensions.snapshot': {'dtype': 'datetime', 'ordered': True}})
+
+
+def _dated_sources(index: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
+    """The horizon over *index*, its load keyed by *load_labels*."""
+    sources = horizon_sources(len(index))
+    return {
+        **sources,
+        'snapshot': pl.DataFrame({'snapshot': index}),
+        'load': sources['load'].with_columns(load_labels.alias('snapshot')),
+    }
+
+
+def test_a_window_refuses_a_label_finer_than_a_microsecond_as_a_single_solve_does():
+    """A window cast every label to microseconds before matching it, so a row a nanosecond past a label took that label's place.
+
+    A single solve refuses the row. The window read its value at the label
+    beside it.
+    """
+    hours = [datetime.datetime(2030, 1, 1, h) for h in range(8)]
+    nanoseconds = pl.Series(hours).dt.cast_time_unit('ns').to_physical()
+    a_nanosecond_past = (nanoseconds + pl.Series([0, 1, 0, 0, 0, 0, 0, 0])).cast(pl.Datetime('ns'))
+    sources = _dated_sources(hours, a_nanosecond_past)
+    finer = r"parameter 'load' holds 'snapshot' label\(s\) finer than a microsecond"
+    with pytest.raises(sps.errors.DataError, match=finer):
+        sps.solve(BY_THE_HOUR, sources)
+    with pytest.raises(sps.errors.DataError, match=finer):
+        sps.solve_over(BY_THE_HOUR, sources, WINDOW_AXIS)
+
+
+def test_a_window_takes_a_date_over_a_datetime_dimension_as_a_single_solve_does():
+    """A date is the microsecond its day starts on, and a window compared it with a datetime as it came.
+
+    polars refused the comparison, so a table a single solve attaches stopped
+    the sweep.
+    """
+    days = [datetime.datetime(2030, 1, d) for d in range(1, 9)]
+    by_datetime = sps.solve_over(BY_THE_HOUR, _dated_sources(days, pl.Series(days)), WINDOW_AXIS)
+    by_date = sps.solve_over(BY_THE_HOUR, _dated_sources(days, pl.Series(days).cast(pl.Date)), WINDOW_AXIS)
+    assert by_date.records['objective'].to_list() == by_datetime.records['objective'].to_list()
+    assert by_date.primal('soc').equals(by_datetime.primal('soc'))
+
+
+@pytest.mark.filterwarnings('ignore:.*a partial start of values for an LP')
+def test_a_window_cuts_a_start_keyed_by_date_as_a_single_solve_reads_it():
+    """A start table is cut as a source is, and one keyed by date stopped the sweep on the same comparison."""
+    days = [datetime.datetime(2030, 1, d) for d in range(1, 9)]
+    sources = _dated_sources(days, pl.Series(days))
+    whole = sps.solve(BY_THE_HOUR, sources)
+    by_date = {'primal': {'soc': whole.primal('soc').with_columns(pl.col('snapshot').cast(pl.Date))}}
+    assert sps.solve(BY_THE_HOUR, sources, start=by_date).objective == pytest.approx(whole.objective), (
+        'a single solve reads each date as the midnight it starts on'
+    )
+    swept = sps.solve_over(BY_THE_HOUR, sources, WINDOW_AXIS, start=by_date)
+    assert swept.records['has_primal'].all(), 'every window solved from the rows of the start it covers'
+
+
+def test_a_window_refuses_an_index_that_carries_a_relation_as_a_single_solve_does():
+    """A window replaced the index with its own labels, so a column the door refuses on an index went unseen."""
+    spec = override(
+        WINDOW,
+        **{'dimensions.season': {'dtype': 'str'}, 'relations.season_of': {'key': 'snapshot', 'values': 'season'}},
+    )
+    seasons = ['winter'] * 4 + ['summer'] * 4
+    sources = {
+        **horizon_sources(8),
+        'season': ['winter', 'summer'],
+        'season_of': pl.DataFrame({'snapshot': range(8), 'season': seasons}),
+        'snapshot': pl.DataFrame({'snapshot': range(8), 'season_of': seasons}),
+    }
+    carried = "index for dimension 'snapshot' carries a 'season_of' column"
+    with pytest.raises(sps.errors.DataError, match=carried):
+        sps.solve(spec, sources)
+    with pytest.raises(sps.errors.DataError, match=carried):
+        sps.solve_over(spec, sources, WINDOW_AXIS)
+
+
+def test_a_start_with_a_status_that_is_none_is_refused_before_a_slice_is_solved(tmp_path):
+    """A basis status was read when its slice was solved, so a bad one in the second window left the first on disk."""
+    sources = horizon_sources(8)
+    basis = (
+        sps.solve(WINDOW, sources, outputs={'basis'})
+        .variable_basis('soc')
+        .with_columns(pl.col('value').cast(pl.String))
+    )
+    bogus = basis.with_columns(
+        pl.when(pl.col('snapshot') >= 4).then(pl.lit('bogus')).otherwise(pl.col('value')).alias('value')
+    )
+    out = tmp_path / 'spill'
+    with pytest.raises(sps.errors.SpecsolveError, match="gives the basis status 'bogus'"):
+        sps.solve_over(WINDOW, sources, WINDOW_AXIS, start={'variable_basis': {'soc': bogus}}, spill_to=out)
+    assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
+
+
+def test_a_sweep_copied_halfway_is_solved_again_rather_than_read_back(monkeypatch, tmp_path):
+    """A copied sweep landed its records before its metrics, and a record is what says a slice is done.
+
+    A copy that stopped between the two left slices the next run read back,
+    and the read failed on the metrics that never landed.
+    """
+    spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'spill')
+    write = sweep_module.write_whole
+
+    def stops_at_the_metrics(frame, path) -> None:
+        if path.parent.name == 'metrics':
+            raise _CrashError
+        write(frame, path)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(sweep_module, 'write_whole', stops_at_the_metrics)
+        with pytest.raises(_CrashError):
+            spilled.save(tmp_path / 'copy')
+
+    again = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'copy')
+    assert again.records['objective'].to_list() == spilled.records['objective'].to_list()
+
+
+def test_a_sweep_whose_first_record_never_landed_is_no_sweep_to_read(tmp_path):
+    """A `record/` with no file in it reached polars, which raised a `ValueError` about concatenating nothing."""
+    out = tmp_path / 'spill'
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=out)
+    for written in (out / 'record').glob('*.parquet'):
+        written.unlink()
+    with pytest.raises(sps.errors.LayoutError, match="holds no slice under 'record'"):
+        sps.load_sweep(out)
 
 
 def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
@@ -1631,7 +1774,7 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     assert sps.load_sweep(out._spill.directory).records.height == 3, 'the whole one reads back first'
     shutil.rmtree(out._spill.directory / lost)
 
-    with pytest.raises(sps.errors.LayoutError, match=f"no '{lost}' directory"):
+    with pytest.raises(sps.errors.LayoutError, match=f"holds no slice under '{lost}'"):
         sps.load_sweep(out._spill.directory)
 
 

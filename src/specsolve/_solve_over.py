@@ -257,7 +257,7 @@ def solve_over(
     key_name = _key_column(axis, program)
 
     if isinstance(axis, Axis):
-        _check_the_carry(plan, axis, sources)
+        _check_the_carry(plan, axis, sources, program)
         axis._check_the_program(program, sources)
         slices, stitch = axis._slice(program, sources, key_name)
     else:
@@ -330,8 +330,9 @@ def _check_the_carry(
     plan: Mapping[str, _CarryRule],
     axis: Axis,
     first: Mapping[str, Source],
+    program: Program,
 ) -> None:
-    """Refuse a carry with no seed, or one that collapses a dimension other than the one an [`EachWindow`][] cuts.
+    """Refuse a carry with no seed, one that keeps the dimension an [`EachWindow`][] cuts, or one that collapses another.
 
     Reads no source: the seed is a key of *first*, and the owned dimension is
     the axis's own.
@@ -341,6 +342,13 @@ def _check_the_carry(
             raise SpecsolveError(
                 f'carry writes {parameter!r} from the second slice on, and the first slice has nothing to '
                 f'start from: supply {parameter!r} in sources as the seed.'
+            )
+        if isinstance(axis, EachWindow) and axis.dim in program.parameters[parameter].dims:
+            raise SpecsolveError(
+                f'carry {parameter!r} <- {rule.variable!r} keeps {axis.dim!r}, the dimension the sweep windows, '
+                f'and no two windows hold the same labels: the rows one window solved are at labels the next '
+                f'does not have. Carry into a parameter that is not over {axis.dim!r}, which takes the row at '
+                f'the last label a window owns.'
             )
         if rule.dropped is None:
             continue

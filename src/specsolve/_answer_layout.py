@@ -127,16 +127,18 @@ def consolidated(under: Path, file: str) -> pl.DataFrame:
     ``record/`` holds what a single solve writes as ``record.parquet``.
 
     Raises:
-        LayoutError: No such directory under *under*.
+        LayoutError: No such directory under *under*, or one no slice has
+            landed in.
     """
     apart = file.removesuffix('.parquet')
-    if not (under / apart).is_dir():
+    files = sorted((under / apart).glob('*.parquet'))
+    if not files:
         raise LayoutError(
-            f'{str(under)!r} holds no {apart!r} directory, so it is not a sweep this package wrote. Every '
-            f'record here is written as the fold goes, one file per slice, whether or not a slice produced '
-            f'values.'
+            f'{str(under)!r} holds no slice under {apart!r}, so it is not a sweep this package wrote, or its '
+            f'first slice never landed. Every record here is written as the fold goes, one file per slice, '
+            f'whether or not a slice produced values.'
         )
-    return pl.concat([parquet.read(path) for path in sorted((under / apart).glob('*.parquet'))])
+    return pl.concat([parquet.read(path) for path in files])
 
 
 def clear_the_answer(directory: Path) -> None:
