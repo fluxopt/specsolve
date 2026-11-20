@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 from mathspec import to_spec
-from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, other_layout, row_of
@@ -30,9 +29,9 @@ from specsolve._archive_layout import (
     SPEC_MEMBER,
     opened,
 )
-from specsolve._axes import axis_from
+from specsolve._axes import axis_from, carry_plan, cut, handed_on
 from specsolve._collect import collected
-from specsolve._inputs import lower_expression
+from specsolve._inputs import lowered
 from specsolve._names import RUN
 from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
@@ -40,12 +39,11 @@ from specsolve._sweep import Sweep, load_sweep, scan_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
-    from mathspec.program import Expression
     from mathspec.spec import Spec
 
-    from specsolve._axes import Axis
+    from specsolve._axes import Axis, Slice
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._result import Result
 
@@ -292,25 +290,24 @@ def _attach_sweep_readers(
 def _per_slice(
     sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis
 ) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
-    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt from its cut of the sources."""
+    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt as it was solved.
+
+    A slice a carry wrote into is rebuilt with what the slice before it handed
+    on, read off that slice's saved primal. From the seed alone it would be
+    another model wherever a ``where`` reads the carried parameter.
+    """
+    program = lowered(spec)
+    plan = carry_plan(program, axis)
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
-    for key, slice_sources in axis.slices(spec, sources):
-        frames = solved.get(key, {})
+    before: tuple[Slice, Mapping[str, pl.DataFrame]] | None = None
+    for current in cut(axis, program, sources):
+        frames = solved.get(current.key, {})
         if not frames.get('primal'):
             continue
-        evaluator = build(spec, slice_sources)._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
-        yield key, evaluator
-
-
-def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
-    """Refuse a block that reads a parameter the sweep carried — its value is not stored per slice."""
-    if touched := sorted({name for node in nodes for name in parameters_of(node)} & carried):
-        raise SpecsolveError(
-            f'this expression reads {touched}, which the sweep carried from one slice into the next, and a '
-            f"carried value is a previous slice's answer rather than stored data — so it cannot be put back "
-            f'per slice from the archive. Re-run the sweep with sps.solve_over(spec, sources, axis) '
-            f'and evaluate on what comes back, or read a quantity over the sweep that reads no carried parameter.'
-        )
+        carried = handed_on(plan, before[1], before[0]) if before is not None else {}
+        model = build(spec, {**current.sources, **carried})
+        yield current.key, model._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
+        before = (current, frames['primal'])
 
 
 def _sweep_evaluator(
@@ -320,11 +317,9 @@ def _sweep_evaluator(
     axis: Axis,
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
-    carried = set(axis.carry)
     key_dtype = sweep.records.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
-        _refuse_carried(carried, [lower_expression(spec, expression)])
         pieces = [
             with_key(evaluate_one(expression), sweep.key_name, key, key_dtype)
             for key, evaluate_one in _per_slice(sweep, spec, sources, axis)

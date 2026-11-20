@@ -2640,20 +2640,60 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     )
 
 
-def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_parameter(tmp_path):
-    """The narrow gap: a carried value is a previous slice's answer, not stored data, so evaluate refuses it."""
-    sps.solve_over(
-        WINDOW,
-        horizon_sources(),
-        replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
-        archive=tmp_path / 'roll.zip',
-    )
-    sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
-    assert sweep.sweep.evaluate('sum(p * cost)', per_window=True).height, (
+def test_an_archived_sweep_reads_a_carried_parameter_as_each_window_was_solved_with_it(tmp_path):
+    """A carried value is the answer of the slice before, and the archive holds that answer.
+
+    It was refused as data the archive does not store. Each window is rebuilt
+    with what the window before it handed on, read off that window's saved
+    primal.
+    """
+    axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
+    live = sps.solve_over(WINDOW, horizon_sources(), axis, archive=tmp_path / 'roll.zip')
+    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
+    assert archived.evaluate('sum(p * cost)', per_window=True).height, (
         'an expression over static data evaluates per slice'
     )
-    with pytest.raises(sps.errors.SpecsolveError, match='carried'):
-        sweep.sweep.evaluate('soc_initial')
+
+    at_the_seams = live.primal('soc').filter(pl.col('snapshot').is_in([3, 7]))['value'].to_list()
+    seeds = archived.evaluate('soc_initial', per_window=True).sort('snapshot_start')['value'].to_list()
+    assert seeds == pytest.approx([0.0, *at_the_seams]), (
+        'the seed for the first window, then the level each window left at the last label it owns'
+    )
+
+
+#: Two draws chained by a carry that switches a variable off: `p` exists only while `seed` is positive.
+SWITCHED_OFF = {
+    'dimensions': {'g': {'dtype': 'str'}},
+    'parameters': {'seed': {'dims': []}, 'demand': {'dims': []}},
+    'variables': {
+        'state': {'dims': [], 'bounds': {'lower': 0, 'upper': 0}},
+        'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 'seed > 0'},
+        'q': {'dims': [], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'constraints': {'meet': {'dims': [], 'expression': 'q >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'q + state + sum(p)'},
+}
+
+
+def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with(tmp_path):
+    """A slice was rebuilt from the seed in the sources, whatever the slice before it had handed on.
+
+    Here the first draw leaves `seed` at 0, so the second builds no `p`. The
+    rebuild read `seed` as 1, expected a `p` frame the archive does not hold,
+    and refused its own answer.
+    """
+    sources = {
+        'g': ['a', 'b'],
+        'seed': pl.DataFrame({'value': [1.0]}),
+        'demand': pl.DataFrame({'draw': [1, 2], 'value': [3.0, 4.0]}),
+    }
+    live = sps.solve_over(
+        SWITCHED_OFF, sources, sps.EachLabel('draw', carry={'seed': 'state'}), archive=tmp_path / 'study'
+    )
+    assert live.primal('p')['draw'].unique().to_list() == [1], 'the second draw builds no p'
+
+    read = sps.load_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
+    assert read['value'].to_list() == [3.0, 4.0], 'each draw read against the model it was solved as'
 
 
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
