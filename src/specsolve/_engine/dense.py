@@ -282,6 +282,18 @@ def placed(
     return at, kept, index, cols, coeffs
 
 
+def summed(terms: Sequence[tuple[Dense, float]], at: At) -> Floats:
+    """The sum of *terms*, each a constant body and its sign, at the coordinates *at*.
+
+    Every term has a value at every coordinate, so the sum is owed nothing: no
+    coordinate is a gap for a coverage check to find.
+    """
+    total = np.zeros(len(at), dtype=np.float64)
+    for body, sign in terms:
+        total += sign * body.values(at)
+    return total
+
+
 def _columns_of(body: Dense, at: At) -> Integers | Entries:
     assert body.columns is not None, 'a term placed on a row carries a variable'
     return body.columns(at)
