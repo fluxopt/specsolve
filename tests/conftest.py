@@ -102,7 +102,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         '--terms-by-join',
         action='store_true',
         default=False,
-        help='hold no term by position, so the joins place every constraint the suite builds',
+        help='read nothing by position, so the joins build every model the suite holds',
     )
     parser.addoption(
         '--sweep-shard',
@@ -112,7 +112,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--terms-by-join``, no leaf is held by position."""
+    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--terms-by-join``, nothing is read by position."""
     if config.getoption('--parquet-via-pyarrow'):
         from specsolve import _parquet as parquet
 
@@ -120,7 +120,8 @@ def pytest_configure(config: pytest.Config) -> None:
     if config.getoption('--terms-by-join'):
         from specsolve._engine import dense
 
-        dense.constant = dense.parameter = dense.variable = lambda *args: None
+        dense.constant = dense.variable = lambda *args: None
+        dense.covers = lambda *args: False
 
 
 @pytest.fixture
@@ -134,7 +135,7 @@ def polars_parquet(request: pytest.FixtureRequest) -> None:
 def terms_by_position(request: pytest.FixtureRequest) -> None:
     """Skip where ``--terms-by-join`` takes away the reading by position this test is about."""
     if request.config.getoption('--terms-by-join'):
-        pytest.skip('--terms-by-join holds no term by position, which this test is about')
+        pytest.skip('--terms-by-join reads nothing by position, which this test is about')
 
 
 # ---------------------------------------------------------------------------

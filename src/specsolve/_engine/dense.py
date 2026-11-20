@@ -141,9 +141,18 @@ def covers(scope: Scope, name: str) -> bool:
     return scope.data.parameter_rows.get(name) == math.prod(scope.data.cardinality[d] for d in dims)
 
 
+def column(scope: Scope, name: str) -> pl.Series:
+    """Parameter *name*'s value column in the row-major order of its dims, as it was attached; it [`covers`][] them."""
+    held = _held(scope, ('column', name), _column_by_position)
+    assert isinstance(held, pl.Series), 'a parameter is held as the column it was attached with'
+    return held
+
+
 def values(scope: Scope, name: str) -> Floats:
-    """Parameter *name*'s values in the row-major order of its dims, read once per build; it [`covers`][] them."""
-    return _held(scope, ('parameter', name), _values_by_position)
+    """[`column`][] as the numbers a term reads, read once per build."""
+    held = _held(scope, ('values', name), lambda scope, name: column(scope, name).cast(pl.Float64).to_numpy())
+    assert isinstance(held, np.ndarray), "a parameter's numbers are held as an array"
+    return held
 
 
 def parameter(scope: Scope, name: str) -> Values | None:
@@ -168,7 +177,7 @@ def variable(scope: Scope, name: str) -> Columns | None:
     cells = math.prod(scope.data.cardinality[d] for d in dims)
     if not held.height or cells > CELLS_PER_COLUMN * held.height:
         return None
-    return lambda at: _held(scope, ('variable', name), _columns_by_position)[at.over(dims)]
+    return lambda at: _columns(scope, name)[at.over(dims)]
 
 
 def unit(at: At) -> float:
@@ -176,8 +185,17 @@ def unit(at: At) -> float:
     return 1.0
 
 
-def _held(scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.ndarray]) -> np.ndarray:
-    """The array *read* gives for *key*'s name, read once per build and kept on the scope."""
+def _columns(scope: Scope, name: str) -> np.ndarray:
+    """Variable *name*'s column at each coordinate of its dims, read once per build."""
+    held = _held(scope, ('variable', name), _columns_by_position)
+    assert isinstance(held, np.ndarray), "a variable's columns are held as an array"
+    return held
+
+
+def _held(
+    scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.ndarray | pl.Series]
+) -> np.ndarray | pl.Series:
+    """What *read* gives for *key*'s name, read once per build and kept on the scope."""
     if key not in scope.by_position:
         scope.by_position[key] = read(scope, key[1])
     return scope.by_position[key]
@@ -197,11 +215,11 @@ def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.reach, a.absent)
 
 
-def _values_by_position(scope: Scope, name: str) -> Floats:
-    """Parameter *name*'s values in the row-major order of its dims, the table having a row at every coordinate.
+def _column_by_position(scope: Scope, name: str) -> pl.Series:
+    """Parameter *name*'s value column in the row-major order of its dims, the table having a row at every coordinate.
 
     A table whose rows already stand in that order is read as it is, with no
-    array beside it; any other order is moved into one.
+    copy beside it; any other order is sorted into one.
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
@@ -209,24 +227,19 @@ def _values_by_position(scope: Scope, name: str) -> Floats:
     """
     dims = scope.program.parameters[name].dims
     table = scope.data.parameters[name]
-    position, value = scope.row_major(dims, scope.ordinal_of), pl.col(VALUE).cast(pl.Float64)
+    position, counted = scope.row_major(dims, scope.ordinal_of), pl.int_range(pl.len(), dtype=pl.Int64)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
-    in_order = (position == pl.int_range(pl.len(), dtype=pl.Int64)).all() & (pl.len() == cells)
+    in_order = (position == counted).all() & (pl.len() == cells)
     if table.select(in_order).pipe(collected).item():
-        return table.select(value).pipe(collected).get_column(VALUE).to_numpy()
-    held = table.select(position.alias('#position'), value).pipe(collected)
-    at = held.get_column('#position').to_numpy()
-    written = np.zeros(cells, dtype=bool)
-    written[at] = True
-    if at.size != cells or not written.all():
+        return table.select(VALUE).pipe(collected).get_column(VALUE)
+    held = table.select(position.alias('#position'), VALUE).pipe(collected).sort('#position')
+    if not held.select(((pl.col('#position') == counted).all() & (pl.len() == cells))).item():
         msg = f"parameter '{name}' is as tall as the product of its dims and does not cover it"
         raise SpecsolveError(msg)
-    out = np.empty(cells, dtype=np.float64)
-    out[at] = held.get_column(VALUE).to_numpy()
-    return out
+    return held.get_column(VALUE)
 
 
-def _columns_by_position(scope: Scope, name: str) -> Entries:
+def _columns_by_position(scope: Scope, name: str) -> np.ndarray:
     """Variable *name*'s column at each coordinate of its dims in row-major order, ``-1`` where it has none."""
     dims = scope.program.variables[name].dims
     position = scope.row_major(dims, scope.ordinal_of)

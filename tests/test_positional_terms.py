@@ -94,11 +94,17 @@ def _built(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatc
     return path.read_text(), placed
 
 
+def nothing_by_position(patched: pytest.MonkeyPatch) -> None:
+    """Every read by position switched off, as ``--terms-by-join`` switches it off for the suite."""
+    patched.setattr(dense, 'constant', lambda *args: None)
+    patched.setattr(dense, 'variable', lambda *args: None)
+    patched.setattr(dense, 'covers', lambda *args: False)
+
+
 def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """The model as the join path writes it, no leaf being held by position."""
     with monkeypatch.context() as patched:
-        for leaf in ('constant', 'parameter', 'variable'):
-            patched.setattr(dense, leaf, lambda *args: None)
+        nothing_by_position(patched)
         text, placed = _built(spec, sources, path, monkeypatch)
     assert BY_POSITION not in placed, 'with no leaf held by position, no constraint is placed by it'
     return text
@@ -215,11 +221,10 @@ def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: py
     """`on` is false at 14 of the 40 labels, and `masked` is absent there."""
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'masked + x <= 10'}}}
     counts = {}
-    for label, leaves in (('by position', None), ('by join', lambda *args: None)):
+    for label, by_join in (('by position', False), ('by join', True)):
         with monkeypatch.context() as patched:
-            if leaves is not None:
-                for leaf in ('constant', 'parameter', 'variable'):
-                    patched.setattr(dense, leaf, leaves)
+            if by_join:
+                nothing_by_position(patched)
             with sps.build(spec, SOURCES) as model:
                 omissions = model.diagnostics().omissions.to_dicts()
         counts[label] = {r['constraint']: r['rows_not_built'] for r in omissions}
@@ -245,8 +250,7 @@ def test_rows_labelled_from_their_positions_read_back_at_the_coordinates_the_joi
     for label, by_join in (('by position', False), ('by join', True)):
         with monkeypatch.context() as patched:
             if by_join:
-                for leaf in ('constant', 'parameter', 'variable'):
-                    patched.setattr(dense, leaf, lambda *args: None)
+                nothing_by_position(patched)
             result = sps.solve(spec, SOURCES, outputs={'activity'})
         read[label] = (result.dual('row'), result.activity('row'))
     for by_position, by_join in zip(read['by position'], read['by join'], strict=True):
@@ -259,8 +263,7 @@ def test_a_coefficient_that_is_not_finite_is_refused_by_position_as_by_join(monk
     with pytest.raises(DataError, match="constraint 'row'") as by_position:
         sps.build(spec, sources)
     with monkeypatch.context() as patched:
-        for leaf in ('constant', 'parameter', 'variable'):
-            patched.setattr(dense, leaf, lambda *args: None)
+        nothing_by_position(patched)
         with pytest.raises(DataError, match="constraint 'row'") as by_join:
             sps.build(spec, sources)
     assert str(by_position.value) == str(by_join.value)
