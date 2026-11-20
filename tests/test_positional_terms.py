@@ -131,6 +131,11 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
             id='a-masked-variable-removes-the-rows-it-is-absent-from',
         ),
         pytest.param(
+            {'dims': ['i'], 'expression': 'a * masked + x <= 10'},
+            BY_POSITION,
+            id='a-masked-variable-under-a-product-still-removes-its-rows',
+        ),
+        pytest.param(
             {'dims': ['i'], 'expression': 'silent + x <= 10'},
             BY_POSITION,
             id='a-masked-variable-that-reads-as-zero-keeps-its-rows',
