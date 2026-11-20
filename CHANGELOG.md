@@ -36,6 +36,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(data): each dimension's cast into its Enum is built once and the parameters are cast in one batch ([#2120](https://github.com/fluxopt/specsolve/pull/2120))
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2122](https://github.com/fluxopt/specsolve/pull/2122))
 - perf(data): a build reads, checks and attaches a parameter only when a row, a bound, an assumption or a later read asks for it ([#2123](https://github.com/fluxopt/specsolve/pull/2123))
+- fix(data): a fault in a parameter the build did not read is refused before an archived solve starts, and again at each later read ([#2127](https://github.com/fluxopt/specsolve/pull/2127))
 
 ## 0.11.2 (2026-11-19)
 
