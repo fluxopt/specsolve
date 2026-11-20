@@ -26,6 +26,7 @@ import specsolve as sps
 from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
+from specsolve._inputs import lowered
 from specsolve._names import RUN
 from specsolve._outputs import KINDS
 from specsolve._records import Metrics, Provenance, Record
@@ -932,10 +933,16 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
     assert loaded.sweep.primal('p').equals(scanned.sweep.scan('p').collect()), 'and lazily'
 
 
+def _cuts(axis, spec, sources) -> list[dict[str, object]]:
+    """The sources of each slice *axis* cuts for *spec*, in slice order."""
+    slices, _ = axis._slice(lowered(spec), sources, axis._key_name())
+    return [dict(current.sources) for current in slices]
+
+
 def _attached_differently(spec, sources, archived: sps.types.SweepArchive) -> list[tuple[int, str]]:
     """``(slice, source)`` where a slice cut from *archived* attaches other than one cut from *sources*."""
-    before = [sps.tidy(spec, cut) for _, cut in archived.axis.slices(spec, sources)]
-    after = [sps.tidy(archived.spec, cut) for _, cut in archived.axis.slices(archived.spec, archived.sources)]
+    before = [sps.tidy(spec, cut) for cut in _cuts(archived.axis, spec, sources)]
+    after = [sps.tidy(archived.spec, cut) for cut in _cuts(archived.axis, archived.spec, archived.sources)]
     return [
         (position, name)
         for position, (attached, again) in enumerate(zip(before, after, strict=True))
