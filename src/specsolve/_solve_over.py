@@ -8,7 +8,8 @@ driver above [`specsolve._api`][], built from the public verbs.
     rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
-[`specsolve._sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
+[`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,
+as the driver builds it. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ import io
 from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -26,7 +28,7 @@ import polars as pl
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._axes import Axis, EachWindow, axis_from, sources_with_column
+from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
@@ -45,7 +47,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._api import Model
-    from specsolve._axes import Slice
+    from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._outputs import Output
     from specsolve._result import Diagnostics, Result
@@ -60,64 +62,6 @@ def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
     """
     now = after.metrics()
     return now if before is None else now.since(before.metrics())
-
-
-@dataclass(frozen=True)
-class _CarryRule:
-    """One resolved carry: which variable moves into a parameter, and how.
-
-    ``dropped`` is the one dimension the carry collapses, and ``None`` where the
-    whole frame moves forward.
-    """
-
-    variable: str
-    dropped: str | None
-
-    @classmethod
-    def resolved(cls, program: Program, parameter: str, variable: str) -> _CarryRule:
-        """One carry checked against the plan, without reading data."""
-        if parameter not in program.parameters:
-            raise SpecsolveError(f'carry writes parameter {parameter!r}, which the spec does not declare')
-        if variable not in program.variables:
-            raise SpecsolveError(f'carry reads variable {variable!r}, which the spec does not declare')
-        over = list(program.parameters[parameter].dims)
-        source = list(program.variables[variable].dims)
-        if missing := [d for d in over if d not in source]:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
-                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
-                f'parameter, so the parameter cannot be over more than the variable is.'
-            )
-        dropped = [d for d in source if d not in over]
-        if len(dropped) > 1:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
-                f'{source} and {parameter!r} over {over}. A carry collapses the one dimension the sweep '
-                f'advances along, so reduce the others in the YAML — a derived variable is where the oracle '
-                f'can see the math.'
-            )
-        return cls(variable, dropped[0] if dropped else None)
-
-    def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, seam: Label | None
-    ) -> pl.DataFrame:
-        """What this rule hands the next slice, read out of one slice's primals.
-
-        The row handed on is the one at *seam*, the last label the slice owns,
-        never a lookahead row.
-        """
-        frame = frames[self.variable]
-        if self.dropped is None:
-            return frame
-        assert seam is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == seam).drop(self.dropped)
-        if picked.is_empty():
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {seam!r}, the last label it owns, so there is no '
-                f'value there to hand forward.'
-            )
-        return picked
 
 
 def solve_over(
@@ -216,11 +160,7 @@ def solve_over(
             or a *start* that leaves a slice no row, which starts that slice
             from nothing.
     """
-    axis = axis_from(over) if isinstance(over, Mapping) else over
-    if not isinstance(axis, Axis):
-        raise SpecsolveError(
-            f"over= takes EachLabel or EachWindow, or the mapping an axis's to_dict writes (got {type(over).__name__})."
-        )
+    axis = _as_axis(over)
     carry = axis.carry
     if carry and executor is not None:
         raise SpecsolveError(
@@ -236,7 +176,7 @@ def solve_over(
         check_the_target(out)
     asked = checked_outputs(outputs)
     program = check(document)
-    plan = {p: _CarryRule.resolved(program, p, v) for p, v in carry.items()}
+    plan = carry_plan(program, axis)
     key_name = _key_column(axis, program)
 
     _check_the_carry(plan, axis, sources, program)
@@ -262,6 +202,114 @@ def solve_over(
     if out is not None:
         _archive_the_sweep(out, document, program, axis, sources, folded, slices[0].sources)
     return folded
+
+
+def build_slice(
+    spec: SpecLike,
+    sources: Mapping[str, Source],
+    over: Axis | Mapping[str, Any],  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    key: Label,
+    *,
+    sweep: Sweep | None = None,
+) -> Model:
+    """Build the model of one slice of *over*, as [`solve_over`][] builds it.
+
+    For looking at one slice alone: writing its LP file, reading a row, or
+    solving it with other options.
+
+    Args:
+        spec: As [`solve_over`][] takes it.
+        sources: The sources the sweep is cut from, as [`solve_over`][] takes
+            them. A parameter the axis carries is a source like any other:
+            the slice is built from the value given here, whichever slice it
+            is.
+        over: The axis, as [`solve_over`][] takes it.
+        key: The slice's key, one of [`Sweep.keys`][]: the label of an
+            [`EachLabel`][] slice, or the first label of an [`EachWindow`][]
+            window.
+        sweep: A sweep solved over these sources and this axis. Each carried
+            parameter is then what the slice before *key* left in it, in
+            place of the value in *sources*, so the model is the one that
+            sweep solved. The first slice has none before it and takes
+            *sources* as given, and so does every slice of an axis without a
+            carry.
+
+    Returns:
+        The slice's model, as [`build`][specsolve._api.build] returns it.
+
+    Raises:
+        SpecsolveError: A *key* that is no slice of the axis, a *sweep* in
+            which the slice before *key* did not run or left no values, or an
+            axis or a carry [`solve_over`][] refuses.
+        DataError: As [`solve_over`][] raises it.
+    """
+    axis = _as_axis(over)
+    document = as_spec(spec)
+    sources = _materialised(sources)
+    program = check(document)
+    plan = carry_plan(program, axis)
+    _check_the_carry(plan, axis, sources, program)
+    axis._check_the_program(program, sources)
+    slices, _ = axis._slice(program, sources, axis._key_name())
+    keys = [current.key for current in slices]
+    if key not in keys:
+        raise SpecsolveError(
+            f'key={key!r} is no slice of this axis, whose {len(keys)} slices are keyed {_listed(keys)}. A key is '
+            f'the label of an EachLabel slice, or the first label of an EachWindow window.'
+        )
+    position = keys.index(key)
+    if sweep is None or position == 0:
+        return build(document, slices[position].sources)
+    carried = sorted({rule.variable for rule in plan.values()})
+    left = partial(_left_in, sweep, carried, isinstance(axis, EachWindow), key)
+    *_, current = as_built(slices[position - 1 : position + 1], plan, left)
+    return build(document, current.sources)
+
+
+def _as_axis(over: Axis | Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    """*over* as the axis it names, a mapping read as an axis's ``to_dict`` writes it."""
+    axis = axis_from(over) if isinstance(over, Mapping) else over
+    if not isinstance(axis, Axis):
+        raise SpecsolveError(
+            f"over= takes EachLabel or EachWindow, or the mapping an axis's to_dict writes (got {type(over).__name__})."
+        )
+    return axis
+
+
+def _left_in(
+    sweep: Sweep, variables: Sequence[str], per_window: bool, key: Label, before: Slice
+) -> dict[str, pl.DataFrame]:
+    """What the slice *before* left in *sweep* of each of *variables*, for the slice *key* to be built from.
+
+    A carried sweep stops at the first slice that leaves nothing to carry, so
+    the slice after one that did not solve was never built, and neither was
+    any slice after that one. Both are refused, since the frames read here
+    would be empty and the model built from them one no sweep solved.
+    """
+    column = sweep.key_name
+    ran = sweep.records.filter(pl.col(column) == before.key)
+    if ran.is_empty():
+        raise SpecsolveError(
+            f'sweep= did not run slice {before.key!r}, the one before {key!r}, so it holds no {list(variables)} '
+            f'to build slice {key!r} from. It ran {len(sweep)} slice(s), keyed {_listed(sweep.keys)}. Without '
+            f'sweep=, the slice is built from the sources as given.'
+        )
+    if not ran['has_primal'][0]:
+        raise SpecsolveError(
+            f'slice {before.key!r} terminated {ran["termination_condition"][0]} in sweep=, so it left no '
+            f'{list(variables)} to build slice {key!r} from. A carried sweep stops at the first slice that '
+            f'leaves nothing to carry, so slice {before.key!r} is the one to build.'
+        )
+    return {
+        name: sweep.scan(name, per_window=per_window).filter(pl.col(column) == before.key).drop(column).pipe(collected)
+        for name in variables
+    }
+
+
+def _listed(keys: Sequence[Label]) -> str:
+    """*keys* as a message names them: the first five, and how many follow."""
+    shown = ', '.join(repr(key) for key in keys[:5])
+    return shown if len(keys) <= 5 else f'{shown} and {len(keys) - 5} more'
 
 
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
@@ -305,7 +353,7 @@ def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.L
 
 
 def _check_the_carry(
-    plan: Mapping[str, _CarryRule],
+    plan: Mapping[str, CarryRule],
     axis: Axis,
     first: Mapping[str, Source],
     program: Program,
@@ -345,65 +393,55 @@ def _serially(
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    plan: Mapping[str, _CarryRule],
+    plan: Mapping[str, CarryRule],
     spill: Spill | None,
     starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    A generator because slice ``i+1``'s carry is read from slice ``i``'s
-    frames after the yield; the caller closes it to release the model.
-    A slice the spill holds is read back, and one solved here is written
-    before it is yielded.
+    A generator, since a slice is built from what the one before it left;
+    the caller closes it to release the model. A slice the spill holds is
+    read back, and one solved here is written before it is yielded.
     """
     model: Model | None = None
-    state: dict[str, pl.DataFrame] = {}
+    carried = {rule.variable for rule in plan.values()}
+    last: tuple[int, SliceAnswer, Mapping[str, pl.DataFrame]] | None = None
+
+    def left(before: Slice) -> Mapping[str, pl.DataFrame]:
+        """The primal *before* left for the slice after it; a carried sweep stops at a slice that left none."""
+        assert last is not None, 'a slice is asked for only after it was solved or read back'
+        position, answer, primals = last
+        if not primals:
+            raise SpecsolveError(
+                f'slice {before.key!r} ({position + 1} of {len(slices)}) terminated '
+                f'{answer.record.termination_condition}, so slice {slices[position + 1].key!r} has no '
+                f'{sorted(carried)} to start from. A carried sweep '
+                f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
+            )
+        return primals
+
     try:
-        for position, current in enumerate(slices):
+        for position, current in enumerate(as_built(slices, plan, left)):
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
-                primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
-                yield current.key, answer
-                state = _carried(plan, primals, current, position, slices, answer)
-                continue
-            sources = {**current.sources, **state}
-            with _named_slice(current.key, position, len(slices)):
-                if model is None:
-                    model, before = build(document, sources), None
-                else:
-                    before = model.diagnostics()
-                    model.update(sources)
-                result = model.solve(**solving, start=starts[position])
-                answer = _answers(result, _slice_metrics(model.diagnostics(), before))
-            primals = answer.frames.get('primal', {})
-            if spill is not None:
-                answer = spill.write(position, current.key, answer)
+                primals = spill.written('primal', position, carried)
+            else:
+                with _named_slice(current.key, position, len(slices)):
+                    if model is None:
+                        model, before = build(document, current.sources), None
+                    else:
+                        before = model.diagnostics()
+                        model.update(current.sources)
+                    result = model.solve(**solving, start=starts[position])
+                    answer = _answers(result, _slice_metrics(model.diagnostics(), before))
+                primals = answer.frames.get('primal', {})
+                if spill is not None:
+                    answer = spill.write(position, current.key, answer)
+            last = (position, answer, primals)
             yield current.key, answer
-            state = _carried(plan, primals, current, position, slices, answer)
     finally:
         if model is not None:
             model.close()
-
-
-def _carried(
-    plan: Mapping[str, _CarryRule],
-    primals: Mapping[str, pl.DataFrame],
-    current: Slice,
-    position: int,
-    slices: Sequence[Slice],
-    answer: SliceAnswer,
-) -> dict[str, pl.DataFrame]:
-    """What the next slice starts from, read out of *primals*; nothing for the last slice, or with no plan."""
-    if not plan or position == len(slices) - 1:
-        return {}
-    if not primals:
-        raise SpecsolveError(
-            f'slice {current.key!r} ({position + 1} of {len(slices)}) terminated '
-            f'{answer.record.termination_condition}, so slice {slices[position + 1].key!r} has no '
-            f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
-            f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
-        )
-    return {p: rule.value_from(primals, p, current.key, current.seam) for p, rule in plan.items()}
 
 
 @contextmanager
