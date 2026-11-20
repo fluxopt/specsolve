@@ -30,6 +30,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2133](https://github.com/fluxopt/specsolve/pull/2133))
 - perf(data): a build reads each dimension's labels once and shares one empty frame per dims, not one per parameter or declaration ([#2134](https://github.com/fluxopt/specsolve/pull/2134))
 - perf(data): each dimension's cast into its Enum is built once and the parameters are cast in one batch ([#2135](https://github.com/fluxopt/specsolve/pull/2135))
+- perf(engine): a case that claims no coordinate builds no term ([#2136](https://github.com/fluxopt/specsolve/pull/2136))
 
 ## 0.11.2 (2026-11-19)
 
