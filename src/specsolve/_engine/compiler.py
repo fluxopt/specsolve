@@ -20,7 +20,6 @@ import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal, assert_never
 
-import numpy as np
 import polars as pl
 from mathspec import program
 
@@ -175,22 +174,15 @@ class Compiler:
     def _aligned_bound(self, frame: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
         """*frame* with *param* attached by position, or ``None`` to join.
 
-        Position lines up only for a dense parameter over the variable's
-        unmasked dims, in order. Height stands in for density because
-        duplicates are refused at the door.
+        Position lines up only for a parameter that covers the variable's
+        unmasked dims, declared in their order.
         """
         declaration = self.scope.program.parameters[param]
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
-
-        expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
-        table = self.scope.data.parameters[param]
-        if table.select(pl.len()).pipe(collected).item() != expected:
+        if not dense.covers(self.scope, param):
             return None
-
-        position = self.scope.row_major(v.dims, self.scope.ordinal_of)
-        pairs = table.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
-        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
+        return frame.with_columns(pl.Series(alias, dense.values(self.scope, param)))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -751,17 +743,3 @@ def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:
 
 def _zero(e: program.Expression) -> bool:
     return isinstance(e, program.Constant) and float(e.value) == 0
-
-
-def _scattered(at: pl.Series, values: pl.Series, size: int) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:
-    """*values* moved to the positions *at* names, one pass, order checked."""
-    indices = at.to_numpy()
-    written = np.zeros(size, dtype=bool)
-    written[indices] = True
-    if not written.all():
-        msg = 'a parameter passed the density gate but does not cover the coordinate product'
-        raise SpecsolveError(msg)
-
-    out = np.empty(size, dtype=np.float64)
-    out[indices] = values.to_numpy()
-    return out

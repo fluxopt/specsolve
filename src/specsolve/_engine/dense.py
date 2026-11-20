@@ -106,24 +106,36 @@ class Dense:
         An operator that gives a term another presence leaves the body
         saying less than the term does, and the term is then read as a frame.
         """
-        return list(presences) == ([] if self.absent is None else [self.absent])
+        own = () if self.absent is None else (self.absent,)
+        return len(presences) == len(own) and all(theirs is mine for theirs, mine in zip(presences, own, strict=True))
 
 
-def constant(value: float) -> Take | None:
+def constant(value: float) -> Take:
     """A literal number at every coordinate."""
     return lambda at: (None, np.full(len(at), value, dtype=np.float64))
 
 
-def parameter(scope: Scope, name: str) -> Take | None:
-    """Parameter *name* by position, or ``None`` where it is short of a row.
+def covers(scope: Scope, name: str) -> bool:
+    """Whether parameter *name* has a row at every coordinate of its dims.
 
     Duplicates and strangers are refused at the door, so a table as tall as
-    the product of its dims has one row at every coordinate.
+    the product of its dims has one row at each.
     """
     dims = scope.program.parameters[name].dims
-    if scope.data.parameter_rows.get(name) != math.prod(scope.data.cardinality[d] for d in dims):
+    return scope.data.parameter_rows.get(name) == math.prod(scope.data.cardinality[d] for d in dims)
+
+
+def values(scope: Scope, name: str) -> Floats:
+    """Parameter *name*'s values in the row-major order of its dims, read once per build; it [`covers`][] them."""
+    return _held(scope, ('parameter', name), _values_by_position)
+
+
+def parameter(scope: Scope, name: str) -> Take | None:
+    """Parameter *name* by position, or ``None`` where it is short of a row."""
+    if not covers(scope, name):
         return None
-    return lambda at: (None, _held(scope, ('parameter', name), _values_by_position)[at.over(dims)])
+    dims = scope.program.parameters[name].dims
+    return lambda at: (None, values(scope, name)[at.over(dims)])
 
 
 def variable(scope: Scope, name: str) -> Take | None:
