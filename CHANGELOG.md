@@ -25,6 +25,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a case that claims no coordinate builds no term, and PyPSA's spec builds up to 1.4× faster ([#2105](https://github.com/fluxopt/specsolve/pull/2105))
 - perf(engine): a constraint with a where and absence restrictions reads its where once ([#2106](https://github.com/fluxopt/specsolve/pull/2106))
 - perf(data): an assumption whose where admits no coordinate is not read ([#2107](https://github.com/fluxopt/specsolve/pull/2107))
+- perf(api): a build attaches its sources once, not again after reading the assumptions ([#2108](https://github.com/fluxopt/specsolve/pull/2108))
 
 ## 0.11.2 (2026-11-19)
 
