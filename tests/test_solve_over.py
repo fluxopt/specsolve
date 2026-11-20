@@ -2401,6 +2401,49 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 
 
+#: A knapsack of whole items with a price on its budget, which a mixed-integer solve cannot give.
+PRICED_KNAPSACK = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'variables': {'x': {'dims': ['f'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'budget_row': {'dims': [], 'expression': 'sum(x, over=f) <= budget'}},
+    'expressions': {'price': {'dims': [], 'expression': 'dual(budget_row)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
+}
+
+
+def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypatch, tmp_path):
+    """Why an output is missing was written once, when the fold ended, and a slice read back gives no reason.
+
+    A sweep that stopped after its last record and before that file was
+    resumed without solving a slice, so nothing gave the reason again, and a
+    reader answered with another sentence. A slice's reasons now land before
+    the record that marks it done.
+    """
+    sources = {
+        'f': ['a', 'b'],
+        'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}),
+        'budget': pl.DataFrame({'draw': [1, 2], 'value': [5.0, 7.0]}),
+    }
+    out = tmp_path / 'spill'
+    write = sweep_module.write_whole
+
+    def stops_after_the_last_record(frame, path) -> None:
+        write(frame, path)
+        if (path.parent.name, path.name) == ('record', '000001.parquet'):
+            raise _CrashError
+
+    with monkeypatch.context() as patched:
+        patched.setattr(sweep_module, 'write_whole', stops_after_the_last_record)
+        with pytest.raises(_CrashError):
+            sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
+
+    resumed = sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
+    for read in (resumed, sps.scan_sweep(out)):
+        with pytest.raises(sps.errors.SpecsolveError, match='duals are undefined for a mixed-integer model'):
+            read.evaluate('price')
+
+
 def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     """A rolling horizon interrupted after two windows continues from the
     second window's file, and ends where an uninterrupted one does.
