@@ -99,34 +99,27 @@ class SliceAnswer:
 
 
 def one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
-    """The type every file writes *key_name* as; keys of mixed types are refused, never coerced."""
+    """The type every file writes *key_name* as; keys that fit no one type are refused, never coerced."""
     try:
         typed = pl.Series(keys)
-    except TypeError as mixed:
+    except TypeError as apart:
         kinds = sorted({type(key).__name__ for key in keys})
         raise SpecsolveError(
-            f'the keys of this sweep are of more than one type ({", ".join(kinds)}), so its files could not '
-            f'all write {key_name!r} as one. Every file carries the key, and a column that changes type '
-            f'between them cannot be concatenated or loaded into one table. Key the slices consistently.'
-        ) from mixed
-    _one_slice_per_text(keys, typed.to_list())
+            f'the keys of this sweep fit no one column type ({", ".join(kinds)}), so its files could not all '
+            f'write {key_name!r} as one. Every file carries the key, and a column that changes type between '
+            f'them cannot be concatenated or loaded into one table. Give the labels one type in every source.'
+        ) from apart
+    _one_slice_per_text(keys)
     return typed.dtype
 
 
-def _one_slice_per_text(keys: Sequence[Label], typed: Sequence[Label]) -> None:
-    """Refuse keys whose text, which the record and metrics name a slice by, does not find one slice.
+def _one_slice_per_text(keys: Sequence[Label]) -> None:
+    """Refuse two keys of one text, which the record and metrics name a slice by.
 
-    ``_rekeyed`` matches each row's ``slice`` text against the keys' text in
-    the sweep's one type, when the fold ends and when a spill is scanned, so
-    a key that type rewrites, or two keys of one text, would fail there,
-    after every slice has solved.
+    ``_rekeyed`` matches each row's ``slice`` text against the keys' text,
+    when the fold ends and when a spill is scanned, so two keys of one text
+    would fail there, after every slice has solved.
     """
-    for given, held in zip(keys, typed, strict=True):
-        if str(given) != str(held):
-            raise SpecsolveError(
-                f'the key {str(given)!r} is written as {str(held)!r} once every key of this sweep shares one '
-                f'type, and the record names a slice by its key as text. Key the slices consistently.'
-            )
     texts = Counter(str(key) for key in keys)
     repeated = [text for text, count in texts.items() if count > 1]
     if repeated:
