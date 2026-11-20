@@ -211,6 +211,31 @@ def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: py
     )
 
 
+@pytest.mark.parametrize(
+    'constraint',
+    [
+        pytest.param({'dims': ['i', 'j'], 'expression': 'y <= a * x'}, id='every-coordinate-holds-a-row'),
+        pytest.param({'dims': ['i', 'j'], 'expression': 'y + masked <= 10'}, id='a-masked-variable-removes-rows'),
+        pytest.param({'dims': ['i'], 'where': 'a > 5', 'expression': 'masked + x <= 10'}, id='under-a-where'),
+    ],
+)
+def test_rows_labelled_from_their_positions_read_back_at_the_coordinates_the_joins_give(
+    monkeypatch: pytest.MonkeyPatch, constraint: dict
+) -> None:
+    """A constraint without a `where` is labelled from the positions its terms keep, not from the product of its dims."""
+    spec = {**SPEC, 'constraints': {'row': constraint}}
+    read = {}
+    for label, by_join in (('by position', False), ('by join', True)):
+        with monkeypatch.context() as patched:
+            if by_join:
+                for leaf in ('constant', 'parameter', 'variable'):
+                    patched.setattr(dense, leaf, lambda *args: None)
+            result = sps.solve(spec, SOURCES, outputs={'activity'})
+        read[label] = (result.dual('row'), result.activity('row'))
+    for by_position, by_join in zip(read['by position'], read['by join'], strict=True):
+        assert by_position.equals(by_join), 'a row read back by coordinate sits where the joins put it'
+
+
 def test_a_coefficient_that_is_not_finite_is_refused_by_position_as_by_join(monkeypatch: pytest.MonkeyPatch) -> None:
     sources = {**SOURCES, 'a': pl.DataFrame({'i': LABELS, 'value': [float('inf') if n == 3 else 1.0 for n in LABELS]})}
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'a * x <= 10'}}}

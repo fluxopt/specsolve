@@ -67,11 +67,16 @@ class At:
         if dims not in self._over:
             position = np.zeros(len(self), dtype=np.int64)
             for d in dims:
-                position = position * self._cardinality[d] + self._ordinal(d)
+                position = position * self._cardinality[d] + self.ordinal(d)
             self._over[dims] = position
         return self._over[dims]
 
-    def _ordinal(self, dim: str) -> Integers:
+    def only(self, kept: np.ndarray[tuple[int, ...], np.dtype[np.bool_]]) -> At:
+        """The coordinates *kept* marks, in the order they are in."""
+        return At(self.dims, self._over[self.dims][kept], self._cardinality)
+
+    def ordinal(self, dim: str) -> Integers:
+        """Each coordinate's ordinal along *dim*, one of this one's dims."""
         if dim not in self._ordinals:
             after = self.dims[self.dims.index(dim) + 1 :]
             stride = math.prod(self._cardinality[d] for d in after)

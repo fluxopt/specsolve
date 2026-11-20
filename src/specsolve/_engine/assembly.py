@@ -223,19 +223,28 @@ class Assembly:
         return pl.concat(frames).pipe(collected)
 
     def _placed_by_position(
-        self, linear: list[tuple[Dense, float]], dims: tuple[str, ...], labelled: pl.DataFrame, start: int
+        self, linear: list[tuple[Dense, float]], dims: tuple[str, ...], labelled: pl.DataFrame | None, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame]:
-        """[`_placed_by_join`][]'s entries for terms held by position, and *labelled* cut to the rows they keep.
+        """[`_placed_by_join`][]'s entries for terms held by position, and the labelled rows they keep.
 
         The terms' own absences are read off their columns here, where the
         join path hands them to [`labels.frame`][specsolve._engine.labels.frame]
         as restrictions. *labelled* numbers its rows in position order, so
-        the entries leave in row order.
+        the entries leave in row order; ``None`` stands for every coordinate
+        of *dims*, and the rows are then labelled from the coordinates kept,
+        the whole product never being a frame.
         """
-        position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
-        positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
-        kept, index, col, coeff = dense.placed(linear, dense.At(dims, positions, self.attached.cardinality))
-        if kept is not None:
+        cardinality = self.attached.cardinality
+        if labelled is None:
+            positions = np.arange(math.prod(cardinality[d] for d in dims), dtype=np.int64)
+        else:
+            position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
+            positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
+        at = dense.At(dims, positions, cardinality)
+        kept, index, col, coeff = dense.placed(linear, at)
+        if labelled is None:
+            labelled = labels.at(self.scope, at if kept is None else at.only(kept), 'row', start)
+        elif kept is not None:
             labelled = labels.renumbered(labelled.filter(pl.Series(kept)), dims, 'row', start)
         entries = {'row': index + start, 'col': col, 'coeff': coeff}
         return pl.DataFrame(entries, schema={column: _DTYPES[column] for column in _MATRIX}), labelled
@@ -344,18 +353,22 @@ class Assembly:
         by_position = [
             (p.body, sign) for p, sign in linear if isinstance(p.body, Dense) and p.body.stands_for(p.presences)
         ]
-        joined: list[tuple[Term, float]] = [] if linear and len(by_position) == len(linear) else linear
-        restrictions = absence_restrictions([p for p, _ in (*joined, *quadratic, *constant)])
-        if admitted is None:
-            labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
-        elif restrictions:
-            labelled = labels.narrowed(admitted, c.dims, 'row', start, restrictions)
+        positional = bool(linear) and len(by_position) == len(linear)
+        restrictions = absence_restrictions(
+            [p for p, _ in ((*quadratic, *constant) if positional else (*linear, *quadratic, *constant))]
+        )
+        labelled: pl.DataFrame | None
+        if admitted is not None:
+            labelled = labels.narrowed(admitted, c.dims, 'row', start, restrictions) if restrictions else admitted
+        elif positional and c.dims and not restrictions:
+            labelled = None
         else:
-            labelled = admitted
+            labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
         declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
         stacked = None
-        if not joined:
+        if positional:
             stacked, labelled = self._placed_by_position(by_position, c.dims, labelled, start)
+        assert labelled is not None, 'only a constraint placed by position is left for its placing to label'
         if declared > labelled.height:
             self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
