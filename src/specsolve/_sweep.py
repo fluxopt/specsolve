@@ -219,6 +219,7 @@ class Spill:
     def write(self, position: int, key: Label, answer: SliceAnswer) -> SliceAnswer:
         """*answer*'s frames and record on disk, and the answer with the frames released."""
         answer = answer.sliced(self.key_name, key)
+        self._keep_reasons(answer)
         self.write_tables(
             position,
             key,
@@ -227,6 +228,20 @@ class Spill:
             pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA),
         )
         return replace(answer, frames={})
+
+    def _keep_reasons(self, answer: SliceAnswer) -> None:
+        """*answer*'s reasons for what it lacks, added to the sweep's on disk before its record lands.
+
+        A slice read back on resume gives no reason again, so one written
+        only when the fold ends is lost to a sweep that stopped before then.
+        The first slice to give a reason keeps it.
+        """
+        no_duals, absent = read_reasons(self.directory)
+        known = absent.get('expression', {})
+        if (answer.no_duals is None or no_duals is not None) and set(answer.no_expressions) <= set(known):
+            return
+        gathered = {**absent, 'expression': {**answer.no_expressions, **known}}
+        write_reasons(self.directory, no_duals or answer.no_duals, gathered, self._write)
 
     def write_tables(
         self,
@@ -361,8 +376,9 @@ class Sweep:
 
         Closing the stream releases the serial fold's model when a fold is
         abandoned. A reason a slice lacks something is kept from the first
-        slice that gave one, and written beside the slices where they are
-        spilled.
+        slice that gave one. A spilled sweep reads its reasons off the
+        directory, where each slice left its own before its record, so the
+        slices a resume reads back are counted too.
         """
         keys: list[Label] = []
         rows: list[Record] = []
@@ -384,27 +400,26 @@ class Sweep:
                         frames[kind][name].append(with_key(frame, key_name, key, key_dtype))
         keyed = pl.Series(key_name, keys, dtype=key_dtype)
         texts = [str(key) for key in keys]
+        absent: dict[str, dict[str, str]] = {'expression': no_expressions} if no_expressions else {}
         if spill is not None:
             slices = spill.frames(eager=False)
+            no_duals, absent = read_reasons(spill.directory)
         else:
             slices = {
                 kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in frames.items()
             }
-        folded = cls(
+        return cls(
             key_name=key_name,
             records=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed, texts),
             metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed, texts),
             spec=spec,
             _slices=slices,
             _no_duals=no_duals,
-            _absent={'expression': no_expressions} if no_expressions else {},
+            _absent=absent,
             _stitch=stitch,
             _spill=spill,
             _outputs=outputs,
         )
-        if spill is not None:
-            write_reasons(spill.directory, folded._no_duals, folded._absent, write_whole)
-        return folded
 
     @property
     def keys(self) -> list[Label]:
