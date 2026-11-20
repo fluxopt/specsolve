@@ -231,36 +231,39 @@ def placed(
     Returns:
         Which coordinates keep a row, ``None`` for all of them: a coordinate
         where a term is ``absent`` keeps none. Then the entries as
-        ``(index, col, coeff)`` in that order, *index* counting the
-        coordinates kept, so the sort the join path's stack needs is not
-        made. A term whose variable has no column at a coordinate holds no
-        entry there.
+        ``(index, col, coeff)`` in *index* order, *index* counting the
+        coordinates kept. A term whose variable has no column at a coordinate
+        holds no entry there. Within a coordinate the terms are laid out by
+        the furthest column each reaches, which is column order for terms
+        over different variables, so their share is not sorted.
     """
     count = len(terms)
+    taken = [body.take(at) for body, _ in terms]
     cols = np.empty((len(at), count), dtype=np.int32)
     coeffs = np.empty((len(at), count), dtype=np.float64)
     kept, holed = None, False
-    for i, (body, sign) in enumerate(terms):
-        column, value = body.take(at)
+    for slot, i in enumerate(sorted(range(count), key=lambda i: _furthest(taken[i][0]))):
+        column, value = taken[i]
         assert column is not None, 'a term placed on a row carries a variable'
-        cols[:, i] = column
-        np.multiply(value, sign, out=coeffs[:, i])
+        cols[:, slot] = column
+        np.multiply(value, terms[i][1], out=coeffs[:, slot])
         if not column.size or column.min() >= 0:
             continue
-        if body.absent is None:
+        if terms[i][0].absent is None:
             holed = True
         else:
             there = column >= 0
             kept = there if kept is None else kept & there
     if kept is not None:
         cols, coeffs = cols[kept], coeffs[kept]
-    if count > 1 and not (cols[:, 1:] >= cols[:, :-1]).all():
-        order = np.argsort(cols, axis=1, kind='stable')
-        cols = np.take_along_axis(cols, order, axis=1)
-        coeffs = np.take_along_axis(coeffs, order, axis=1)
     index = np.repeat(np.arange(len(cols), dtype=np.int64), count)
     cols, coeffs = cols.reshape(-1), coeffs.reshape(-1)
     if holed:
         held = cols >= 0
         return kept, index[held], cols[held], coeffs[held]
     return kept, index, cols, coeffs
+
+
+def _furthest(column: Integers | None) -> int:
+    """The largest column a term reaches, ``-1`` where it reaches none."""
+    return int(column.max()) if column is not None and column.size else -1

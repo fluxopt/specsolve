@@ -171,6 +171,15 @@ def test_a_constraint_placed_by_position_is_the_one_the_joins_build(
     )
 
 
+def test_terms_that_name_a_later_variable_first_are_placed_without_a_sort(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`late` is declared after `x`, so in file order its entry would lead each row and the share would be sorted."""
+    sorts = []
+    monkeypatch.setattr(assembly, '_sorted', lambda stacked, keys: sorts.append(keys) or stacked.sort(*keys))
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'late - a * x <= 10'}}}
+    sps.build(spec, SOURCES).close()
+    assert not sorts, f'the share of two terms over two variables was sorted by {sorts}'
+
+
 def test_a_variable_masked_to_few_coordinates_is_not_held_by_position(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

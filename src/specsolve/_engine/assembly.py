@@ -230,7 +230,7 @@ class Assembly:
         The terms' own absences are read off their columns here, where the
         join path hands them to [`labels.frame`][specsolve._engine.labels.frame]
         as restrictions. *labelled* numbers its rows in position order, so
-        the entries leave in ``(row, col)`` order and the share is not sorted.
+        the entries leave in row order.
         """
         position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
         positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
