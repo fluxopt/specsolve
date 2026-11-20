@@ -18,7 +18,6 @@ is infinite, has no reading either. It is asked at the same two moments.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -27,7 +26,7 @@ from mathspec import program
 from specsolve._collect import collected, collected_all
 from specsolve._engine.predicates import masked
 from specsolve._engine.scope import join_on
-from specsolve._engine.terms import constant_scalar
+from specsolve._engine.terms import constant_scalar, cut_to_rows
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
@@ -122,13 +121,6 @@ def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyF
     ]
 
 
-def _on_rows(p: Term, rows: pl.LazyFrame) -> Term:
-    """*p* cut to the coordinates *rows* holds, before its sum per coordinate: a constraint's rows are often a fraction of the product its constant terms are read over."""
-    if not p.dims:
-        return p
-    return replace(p, frame=p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi'))
-
-
 def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
@@ -151,9 +143,10 @@ def constant_side(
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: dict[str, frozenset[str]] = {}
     carrier = rows
+    held = rows.pipe(collected)
     for i, (p, sign) in enumerate(terms):
         column = f'__const {i}__'
-        aggregated = constant_scalar(_on_rows(p, rows)).rename({'cval': column})
+        aggregated = constant_scalar(cut_to_rows(p, held, scope.data.cardinality)).rename({'cval': column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         if not p.parameters:
