@@ -45,14 +45,6 @@ the last 5 would be solved by no window. List a block for them, or pass an int t
 repeat one size to the end.
 ```
 
-**`axis.slices(spec, sources)` is the list the axis would run**, as `(key, sources)`
-pairs:
-
-```python
-slices = sps.EachWindow('snapshot', steps=24, lookahead=24).slices('window.yaml', sources)
-sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that was infeasible
-```
-
 **An axis is also plain data.** `axis.to_dict()` writes it as a mapping, and
 `solve_over` takes that mapping in the axis's place. An archive's `axis.json`
 holds the same mapping. A mapping with a key the axis does not take, or without
@@ -195,6 +187,42 @@ label 23 of a window keeping 24, not label 47 of the 48 it solved.
 | **a carry is checked before any source is read** | Two collapsed dimensions, a parameter over more dimensions than the variable, the wrong dimension and no seed all raise first. `check` cannot see a carry, because it is not part of the spec. |
 | **a slice that leaves nothing to carry stops the sweep** | The error names the slice and how it terminated. Without a carry, the sweep goes on. |
 | **`carry` excludes `executor`** | Slice *i+1* depends on slice *i*, so the call is refused. |
+
+## Building one slice
+
+**[`build_slice`](api.md#specsolve.build_slice) builds the model of one slice**,
+as `solve_over` builds it. It takes what the sweep took, and the key of the
+slice:
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+model = sps.build_slice('window.yaml', sources, axis, 888)
+model.write('window-888.lp')
+```
+
+**A carried parameter is a source like any other.** The window above starts
+from the `soc_initial` in `sources`, which is the seed of the sweep. Overwrite
+it to start the window from another level:
+
+```python
+model = sps.build_slice('window.yaml', sources | {'soc_initial': 40.0}, axis, 888)
+```
+
+**`sweep=` starts the slice from what that sweep handed it.** Each carried
+parameter is then what the slice before left in the sweep, so the model is the
+one the sweep solved. A sweep that stopped is read back off its spill:
+
+```python
+stopped = sps.scan_sweep('runs/')
+model = sps.build_slice('window.yaml', sources, axis, stopped.keys[-1], sweep=stopped)
+```
+
+| Rule | |
+|---|---|
+| **a key is where a slice starts** | The label of an `EachLabel` slice, or the first label of an `EachWindow` window. `sweep.keys` lists them. A key that names no slice is refused, and the message names the keys. |
+| **`sweep=` reads the slice before** | The first slice has none, so it takes `sources` as given. So does every slice of an axis without a carry. |
+| **a slice the sweep never reached is refused** | A carried sweep stops at the first slice that leaves nothing to carry. That slice builds. The slices after it were never built. |
+| **the model comes back open** | Close it, or build it in a `with` block, as with [`build`](api.md#specsolve.build). |
 
 ## Starting slices
 
