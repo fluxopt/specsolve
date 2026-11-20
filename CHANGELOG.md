@@ -16,6 +16,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): every where is folded once over the flags the data settles, so PyPSA's spec builds 1.1–1.2× faster ([#2112](https://github.com/fluxopt/specsolve/pull/2112))
 - perf(data): a build reads each dimension's labels once and shares one empty frame per dims, not one per parameter or declaration ([#2113](https://github.com/fluxopt/specsolve/pull/2113))
 - perf(data): each dimension's cast into its Enum is built once and the parameters are cast in one batch ([#2120](https://github.com/fluxopt/specsolve/pull/2120))
+- perf(engine): a cases region whose condition the data settles is built without reading it ([#2122](https://github.com/fluxopt/specsolve/pull/2122))
 
 ## 0.11.2 (2026-11-19)
 
