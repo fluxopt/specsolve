@@ -137,7 +137,8 @@ class Engine:
         """Attach *sources*, then build every declaration into the model frames.
 
         *attached* is *sources* already attached, as reading the assumptions
-        left them, and is not attached again. A second call rebuilds over the same object. The held solver reads its
+        left them, and is not attached again; the time that attach took is
+        recorded either way. A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         frames. A build that raises leaves no model rather than half of one.
@@ -148,8 +149,8 @@ class Engine:
         self._solved = None
         self._measured = Measured()
         if attached is None:
-            with _clocked(self._seconds, 'attach'):
-                attached = attach(program, sources)
+            attached = attach(program, sources)
+        self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
         with _clocked(self._seconds, 'build'):

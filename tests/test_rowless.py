@@ -261,3 +261,15 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
+
+
+def test_a_build_with_assumptions_reports_the_time_its_attach_took():
+    """The assumptions attach the sources before the engine runs, and the engine timed only an attach of its own.
+
+    A model with an assumption so reported no attach time at all, and an
+    archive of it recorded zero.
+    """
+    spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
+    with sps.build(spec, TABLED_SOURCES) as model:
+        seconds = model.diagnostics().seconds
+    assert seconds.get('attach', 0.0) > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
