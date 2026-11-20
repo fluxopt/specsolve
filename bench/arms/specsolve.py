@@ -186,20 +186,34 @@ def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
 SWEEP_SLICES = 4
 
 
-def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
-    """``solve_over`` across hand-built slices of the rung's own data, folded in order on one model.
+def _under_each_scenario(spec: Path, sources: dict[str, str]) -> dict[str, Any]:
+    """*sources* with one parameter repeated under each of ``SWEEP_SLICES`` scenarios.
 
-    Every slice carries the same values, so the first loads the solver and the
-    rest push. The solver runs on every slice, and ``phases`` sums the sweep's
-    own per-slice clocks, so its ``solve`` is what the wall time owes the
-    solver and the rest is the sweep's.
+    The parameter over the fewest dimensions carries the column, so cutting it
+    is the least of what a slice costs.
+    """
+    import polars as pl
+
+    import specsolve as sps
+
+    parameters = sps.check(spec).parameters
+    carrier = min((name for name in parameters if name in sources), key=lambda name: len(parameters[name].dims))
+    scenarios = pl.LazyFrame({'scenario': range(SWEEP_SLICES)})
+    return {**sources, carrier: pl.scan_parquet(sources[carrier]).join(scenarios, how='cross')}
+
+
+def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
+    """``solve_over`` across scenarios of the rung's own data, folded in order on one model.
+
+    Every scenario carries the same values, so the first loads the solver and
+    the rest push. The solver runs on every slice, and ``phases`` sums the
+    sweep's own per-slice clocks, so its ``solve`` is what the wall time owes
+    the solver and the rest is the sweep's.
     """
     import specsolve as sps
 
     spec, sources = prepared
-    swept = sps.solve_over(
-        spec, sources, sps.Slices([(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario'), solver_name=sink
-    )
+    swept = sps.solve_over(spec, _under_each_scenario(spec, sources), sps.EachLabel('scenario'), solver_name=sink)
     metrics = swept.metrics
     return {
         'columns': metrics['columns'][0],

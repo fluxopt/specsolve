@@ -279,8 +279,9 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
         assert result.objective == pytest.approx(expected, rel=1e-9), 'and so does solve'
     assert sps.write(spec, dispatch_frame_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
 
-    runs = sps.solve_over(spec, dispatch_frame_inputs, sps.Slices([(0, dict(dispatch_frame_inputs))], key_name='draw'))
-    assert runs.keys == [0], 'a hand-built axis of one slice still runs, whatever the model arrived as'
+    one_draw = {**dispatch_frame_inputs, 'load': dispatch_frame_inputs['load'].with_columns(draw=pl.lit(0))}
+    runs = sps.solve_over(spec, one_draw, sps.EachLabel('draw'))
+    assert runs.keys == [0], 'a sweep of one slice still runs, whatever the model arrived as'
     assert runs.records['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
         'and the sweep reaches the answer the one-shot verbs do'
     )
@@ -806,7 +807,10 @@ def _saved(spec, sources, tmp_path):
 
 
 def _swept(spec, sources, tmp_path):
-    return sps.solve_over(spec, sources, sps.Slices([(0, sources)], key_name='draw')).evaluate('twice').drop('draw')
+    cost = pl.DataFrame(
+        {'draw': [0] * len(sources['cost']), 'f': list(sources['cost']), 'value': sources['cost'].values()}
+    )
+    return sps.solve_over(spec, {**sources, 'cost': cost}, sps.EachLabel('draw')).evaluate('twice').drop('draw')
 
 
 def _evaluated(expression):
