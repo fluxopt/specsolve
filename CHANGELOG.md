@@ -22,6 +22,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(result): a save replaces what its directory held, and never the files it is reading ([#2115](https://github.com/fluxopt/specsolve/pull/2115))
 - fix(sweep): a sweep that solved and holds no frame of a kind no longer says its models did not solve ([#2118](https://github.com/fluxopt/specsolve/pull/2118))
 - perf(engine): a declaration that a flag or an absent curve switches off is skipped without reading its grid, and PyPSA's spec builds up to 1.4× faster ([#2104](https://github.com/fluxopt/specsolve/pull/2104))
+- perf(engine): a case that claims no coordinate builds no term, and PyPSA's spec builds up to 1.4× faster ([#2105](https://github.com/fluxopt/specsolve/pull/2105))
 
 ## 0.11.2 (2026-11-19)
 
