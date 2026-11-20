@@ -2264,8 +2264,10 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
 
     A memory run used to build twice, as a timed run does. Its peak then turned
     on whether the first model's garbage was collected before the second build
-    reached its own peak. The stand-in `specsolve` under the tree counts the
-    builds of a real worker process.
+    reached its own peak: over six processes on one tree `grid-worst-l` peaked
+    between 591 and 667 MB built twice, and between 572 and 580 MB built once
+    (#2143). The stand-in `specsolve` under the tree counts the builds of a
+    real worker process.
     """
     package = tmp_path / 'src/specsolve'
     package.mkdir(parents=True)
