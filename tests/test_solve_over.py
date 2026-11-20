@@ -27,7 +27,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
-from specsolve._axes import axis_from
+from specsolve._axes import CarryRule, Slice, as_built, axis_from
 from specsolve._inputs import lowered
 from specsolve._records import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
@@ -2638,6 +2638,64 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     assert runs.evaluate('spend')['scenario'].n_unique() == len(runs), (
         'the declared name answers without a model, stitched from every slice'
     )
+
+
+def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():
+    """`as_built` threads a carry for every caller, and asks for a slice's primal only when the next slice is asked for.
+
+    A caller that solves as it goes has the primal by then. The last slice
+    hands nothing on, so it is never asked.
+    """
+    slices = [Slice(key, {'seed': f'the seed of {key}', 'own': key}, cut=lambda table: table) for key in 'abc']
+    asked: list[object] = []
+
+    def primals_of(before: Slice) -> dict[str, pl.DataFrame]:
+        asked.append(before.key)
+        return {'state': pl.DataFrame({'value': [float(len(asked))]})}
+
+    walk = as_built(slices, {'seed': CarryRule('state', None)}, primals_of)
+    first = next(walk)
+    assert (first.key, first.sources['seed'], asked) == ('a', 'the seed of a', []), (
+        'the first slice is its own cut, and no primal is asked for yet'
+    )
+    rest = list(walk)
+    assert asked == ['a', 'b'], 'each slice is asked once the next one is, and the last never'
+    assert [built.sources['seed'].item() for built in rest] == [1.0, 2.0], 'each takes what the one before it handed on'
+    assert [built.sources['own'] for built in rest] == ['b', 'c'], 'beside its own cut of everything else'
+
+
+#: Two draws chained by a carry that switches a variable off: `p` exists only while `seed` is positive.
+SWITCHED_OFF = {
+    'dimensions': {'g': {'dtype': 'str'}},
+    'parameters': {'seed': {'dims': []}, 'demand': {'dims': []}},
+    'variables': {
+        'state': {'dims': [], 'bounds': {'lower': 0, 'upper': 0}},
+        'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 'seed > 0'},
+        'q': {'dims': [], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'constraints': {'meet': {'dims': [], 'expression': 'q >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'q + state + sum(p)'},
+}
+
+
+def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with(tmp_path):
+    """A slice was rebuilt from the seed in the sources, whatever the slice before it had handed on.
+
+    Here the first draw leaves `seed` at 0, so the second builds no `p`. The
+    rebuild read `seed` as 1, expected a `p` frame the archive does not hold,
+    and refused its own answer.
+    """
+    sources = {
+        'g': ['a', 'b'],
+        'seed': pl.DataFrame({'value': [1.0]}),
+        'demand': pl.DataFrame({'draw': [1, 2], 'value': [3.0, 4.0]}),
+    }
+    axis = sps.EachLabel('draw', carry={'seed': 'state'})
+    live = sps.solve_over(SWITCHED_OFF, sources, axis, archive=tmp_path / 'study')
+    assert live.primal('p')['draw'].unique().to_list() == [1], 'the second draw builds no p'
+
+    read = sps.load_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
+    assert read['value'].to_list() == [3.0, 4.0], 'each draw read against the model it was solved as'
 
 
 def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_parameter(tmp_path):

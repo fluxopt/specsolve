@@ -17,16 +17,14 @@ import io
 from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
-
-import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
-from specsolve._axes import Axis, EachWindow, axis_from, sources_with_column
+from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
@@ -41,11 +39,12 @@ from specsolve.errors import DataError, SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
+    import polars as pl
     from mathspec.program import Program
     from mathspec.spec import Spec
 
     from specsolve._api import Model
-    from specsolve._axes import Slice
+    from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._outputs import Output
     from specsolve._result import Diagnostics, Result
@@ -60,64 +59,6 @@ def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
     """
     now = after.metrics()
     return now if before is None else now.since(before.metrics())
-
-
-@dataclass(frozen=True)
-class _CarryRule:
-    """One resolved carry: which variable moves into a parameter, and how.
-
-    ``dropped`` is the one dimension the carry collapses, and ``None`` where the
-    whole frame moves forward.
-    """
-
-    variable: str
-    dropped: str | None
-
-    @classmethod
-    def resolved(cls, program: Program, parameter: str, variable: str) -> _CarryRule:
-        """One carry checked against the plan, without reading data."""
-        if parameter not in program.parameters:
-            raise SpecsolveError(f'carry writes parameter {parameter!r}, which the spec does not declare')
-        if variable not in program.variables:
-            raise SpecsolveError(f'carry reads variable {variable!r}, which the spec does not declare')
-        over = list(program.parameters[parameter].dims)
-        source = list(program.variables[variable].dims)
-        if missing := [d for d in over if d not in source]:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
-                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
-                f'parameter, so the parameter cannot be over more than the variable is.'
-            )
-        dropped = [d for d in source if d not in over]
-        if len(dropped) > 1:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
-                f'{source} and {parameter!r} over {over}. A carry collapses the one dimension the sweep '
-                f'advances along, so reduce the others in the YAML — a derived variable is where the oracle '
-                f'can see the math.'
-            )
-        return cls(variable, dropped[0] if dropped else None)
-
-    def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, seam: Label | None
-    ) -> pl.DataFrame:
-        """What this rule hands the next slice, read out of one slice's primals.
-
-        The row handed on is the one at *seam*, the last label the slice owns,
-        never a lookahead row.
-        """
-        frame = frames[self.variable]
-        if self.dropped is None:
-            return frame
-        assert seam is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == seam).drop(self.dropped)
-        if picked.is_empty():
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {seam!r}, the last label it owns, so there is no '
-                f'value there to hand forward.'
-            )
-        return picked
 
 
 def solve_over(
@@ -236,7 +177,7 @@ def solve_over(
         check_the_target(out)
     asked = checked_outputs(outputs)
     program = check(document)
-    plan = {p: _CarryRule.resolved(program, p, v) for p, v in carry.items()}
+    plan = carry_plan(program, axis)
     key_name = _key_column(axis, program)
 
     _check_the_carry(plan, axis, sources, program)
@@ -305,7 +246,7 @@ def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.L
 
 
 def _check_the_carry(
-    plan: Mapping[str, _CarryRule],
+    plan: Mapping[str, CarryRule],
     axis: Axis,
     first: Mapping[str, Source],
     program: Program,
@@ -345,65 +286,55 @@ def _serially(
     document: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    plan: Mapping[str, _CarryRule],
+    plan: Mapping[str, CarryRule],
     spill: Spill | None,
     starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
-    A generator because slice ``i+1``'s carry is read from slice ``i``'s
-    frames after the yield; the caller closes it to release the model.
-    A slice the spill holds is read back, and one solved here is written
-    before it is yielded.
+    A generator, since a slice is built from what the one before it left;
+    the caller closes it to release the model. A slice the spill holds is
+    read back, and one solved here is written before it is yielded.
     """
     model: Model | None = None
-    state: dict[str, pl.DataFrame] = {}
+    carried = {rule.variable for rule in plan.values()}
+    last: tuple[int, SliceAnswer, Mapping[str, pl.DataFrame]] | None = None
+
+    def left(before: Slice) -> Mapping[str, pl.DataFrame]:
+        """The primal *before* left for the slice after it; a carried sweep stops at a slice that left none."""
+        assert last is not None, 'a slice is asked for only after it was solved or read back'
+        position, answer, primals = last
+        if not primals:
+            raise SpecsolveError(
+                f'slice {before.key!r} ({position + 1} of {len(slices)}) terminated '
+                f'{answer.record.termination_condition}, so slice {slices[position + 1].key!r} has no '
+                f'{sorted(carried)} to start from. A carried sweep '
+                f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
+            )
+        return primals
+
     try:
-        for position, current in enumerate(slices):
+        for position, current in enumerate(as_built(slices, plan, left)):
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
-                primals = spill.written('primal', position, {rule.variable for rule in plan.values()})
-                yield current.key, answer
-                state = _carried(plan, primals, current, position, slices, answer)
-                continue
-            sources = {**current.sources, **state}
-            with _named_slice(current.key, position, len(slices)):
-                if model is None:
-                    model, before = build(document, sources), None
-                else:
-                    before = model.diagnostics()
-                    model.update(sources)
-                result = model.solve(**solving, start=starts[position])
-                answer = _answers(result, _slice_metrics(model.diagnostics(), before))
-            primals = answer.frames.get('primal', {})
-            if spill is not None:
-                answer = spill.write(position, current.key, answer)
+                primals = spill.written('primal', position, carried)
+            else:
+                with _named_slice(current.key, position, len(slices)):
+                    if model is None:
+                        model, before = build(document, current.sources), None
+                    else:
+                        before = model.diagnostics()
+                        model.update(current.sources)
+                    result = model.solve(**solving, start=starts[position])
+                    answer = _answers(result, _slice_metrics(model.diagnostics(), before))
+                primals = answer.frames.get('primal', {})
+                if spill is not None:
+                    answer = spill.write(position, current.key, answer)
+            last = (position, answer, primals)
             yield current.key, answer
-            state = _carried(plan, primals, current, position, slices, answer)
     finally:
         if model is not None:
             model.close()
-
-
-def _carried(
-    plan: Mapping[str, _CarryRule],
-    primals: Mapping[str, pl.DataFrame],
-    current: Slice,
-    position: int,
-    slices: Sequence[Slice],
-    answer: SliceAnswer,
-) -> dict[str, pl.DataFrame]:
-    """What the next slice starts from, read out of *primals*; nothing for the last slice, or with no plan."""
-    if not plan or position == len(slices) - 1:
-        return {}
-    if not primals:
-        raise SpecsolveError(
-            f'slice {current.key!r} ({position + 1} of {len(slices)}) terminated '
-            f'{answer.record.termination_condition}, so slice {slices[position + 1].key!r} has no '
-            f'{sorted({rule.variable for rule in plan.values()})} to start from. A carried sweep '
-            f'stops at the first slice that leaves nothing to carry; the {position} before it solved.'
-        )
-    return {p: rule.value_from(primals, p, current.key, current.seam) for p, rule in plan.items()}
 
 
 @contextmanager
