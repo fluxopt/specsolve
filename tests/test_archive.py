@@ -10,6 +10,7 @@ import json
 import math
 import shutil
 import zipfile
+import zoneinfo
 from dataclasses import replace
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -941,6 +942,33 @@ def _attached_differently(spec, sources, archived: sps.types.SweepArchive) -> li
         for name in attached
         if not attached[name].equals(again[name])
     ]
+
+
+@pytest.mark.parametrize('target', ['study', 'study.zip'], ids=['a-directory', 'a-zip'])
+def test_an_archived_sweep_keyed_by_datetimes_in_a_time_zone_reads_back(
+    target: str, dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
+) -> None:
+    """An archive holds every datetime in UTC, and a record names its slice by the key's text as it was solved.
+
+    The reader took the text off the archived key, which the move to UTC had
+    rewritten, so no record found its slice and polars refused the archive.
+    """
+    paris = zoneinfo.ZoneInfo('Europe/Paris')
+    days = {'low': datetime(2025, 1, 1, tzinfo=paris), 'high': datetime(2025, 1, 2, tzinfo=paris)}
+    by_day = _by_scenario(list(days)).with_columns(
+        pl.col('scenario').replace_strict(days, return_dtype=pl.Datetime('us', 'Europe/Paris'))
+    )
+    sources = {**dispatch_frame_inputs, 'load': by_day}
+    runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / target)
+    unpacked = [tmp_path / 'unpacked'] if target.endswith('.zip') else []
+    study = sps.load_archive(tmp_path / target, *unpacked)
+
+    assert study.sweep.keys == runs.keys, 'the same instants, whichever zone each is written in'
+    assert study.sweep.records['objective'].to_list() == runs.records['objective'].to_list()
+    assert study.sweep.records['slice'].to_list() == runs.records['slice'].to_list(), (
+        'a record still names its slice as the solve did'
+    )
+    assert study.sweep.primal('p').drop('scenario').equals(runs.primal('p').drop('scenario'))
 
 
 def test_a_scenario_sweep_is_an_archive_and_runs_again(
