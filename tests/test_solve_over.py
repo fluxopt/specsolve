@@ -27,7 +27,7 @@ from mathspec import to_spec
 import specsolve as sps
 from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
-from specsolve._axes import axis_from
+from specsolve._axes import CarryRule, Slice, as_built, axis_from
 from specsolve._inputs import lowered
 from specsolve._records import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
@@ -2236,23 +2236,72 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     assert len(parsed) == 1, f'the model was parsed {len(parsed)} times for three slices'
 
 
-def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
-    """`axis.slices(spec, sources)` is the list of slices the sweep would have run.
+def _objective_alone(spec, sources, axis, key, **given) -> float:
+    """The objective of one slice, built by `build_slice` and solved alone."""
+    with sps.build_slice(spec, sources, axis, key, **given) as model:
+        return model.solve().objective
+
+
+def test_one_slice_of_a_sweep_builds_alone():
+    """`build_slice` is the model of one slice the sweep would have run.
 
     One slice builds alone, and each solved alone reaches the objective its
     window did.
     """
     sources = horizon_sources(12)
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3)
-    slices = axis.slices(WINDOW, sources)
-    assert [key for key, _ in slices] == [0, 3, 6, 9], 'one slice per window, keyed by where it starts'
+    sweep = sps.solve_over(WINDOW, sources, axis)
+    assert sweep.keys == [0, 3, 6, 9], 'one slice per window, keyed by where it starts'
 
-    with sps.build(WINDOW, slices[1][1]) as model:
-        assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), 'one window builds alone'
+    with sps.build_slice(WINDOW, sources, axis.to_dict(), 3) as model:
+        assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), (
+            'one window builds alone, its axis given as the plain data solve_over takes too'
+        )
 
-    by_axis = sps.solve_over(WINDOW, sources, axis).records['objective'].to_list()
-    alone = [sps.solve(WINDOW, cut).objective for _, cut in slices]
-    assert alone == pytest.approx(by_axis), 'each window solved alone is the window the sweep solved'
+    alone = [_objective_alone(WINDOW, sources, axis, key) for key in sweep.keys]
+    assert alone == pytest.approx(sweep.records['objective'].to_list()), (
+        'each window solved alone is the window the sweep solved'
+    )
+
+
+@pytest.mark.parametrize(
+    ('over', 'without', 'refusal'),
+    [
+        pytest.param('snapshot', None, 'over= takes EachLabel or EachWindow', id='no-axis'),
+        pytest.param(
+            sps.EachLabel('snapshot'),
+            None,
+            "EachLabel('snapshot') squeezes 'snapshot' out of every source, and the spec declares it",
+            id='an-axis-the-spec-does-not-allow',
+        ),
+        pytest.param(
+            sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'}),
+            'soc_initial',
+            "supply 'soc_initial' in sources as the seed",
+            id='a-carry-with-no-seed',
+        ),
+    ],
+)
+def test_build_slice_refuses_the_axis_and_the_carry_solve_over_refuses(over, without, refusal):
+    """One slice is built as the sweep builds it, so what the sweep refuses of an axis is refused here too."""
+    sources = {name: source for name, source in horizon_sources().items() if name != without}
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, sources, over, 0)
+
+
+@pytest.mark.parametrize(
+    ('steps', 'keyed'),
+    [
+        pytest.param(3, '0, 3, 6, 9', id='every-key-where-they-are-few'),
+        pytest.param(1, '0, 1, 2, 3, 4 and 7 more', id='the-first-five-where-they-are-many'),
+    ],
+)
+def test_a_key_that_is_no_slice_is_refused_naming_the_keys(steps, keyed):
+    """A key is where a window starts, so a label inside one names no slice."""
+    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0)
+    refusal = f'key=99 is no slice of this axis, whose {12 // steps} slices are keyed {keyed}.'
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, horizon_sources(), axis, 99)
 
 
 @pytest.mark.parametrize('make_executor', [pytest.param(None, id='serial'), *EXECUTORS])
@@ -2399,6 +2448,49 @@ def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     fresh = sps.solve_over(DISPATCH, good, axis)
     assert answer_of(resumed).equals(answer_of(fresh))
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
+
+
+#: A knapsack of whole items with a price on its budget, which a mixed-integer solve cannot give.
+PRICED_KNAPSACK = {
+    'dimensions': {'f': {'dtype': 'str'}},
+    'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
+    'variables': {'x': {'dims': ['f'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 100}}},
+    'constraints': {'budget_row': {'dims': [], 'expression': 'sum(x, over=f) <= budget'}},
+    'expressions': {'price': {'dims': [], 'expression': 'dual(budget_row)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
+}
+
+
+def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypatch, tmp_path):
+    """Why an output is missing was written once, when the fold ended, and a slice read back gives no reason.
+
+    A sweep that stopped after its last record and before that file was
+    resumed without solving a slice, so nothing gave the reason again, and a
+    reader answered with another sentence. A slice's reasons now land before
+    the record that marks it done.
+    """
+    sources = {
+        'f': ['a', 'b'],
+        'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}),
+        'budget': pl.DataFrame({'draw': [1, 2], 'value': [5.0, 7.0]}),
+    }
+    out = tmp_path / 'spill'
+    write = sweep_module.write_whole
+
+    def stops_after_the_last_record(frame, path) -> None:
+        write(frame, path)
+        if (path.parent.name, path.name) == ('record', '000001.parquet'):
+            raise _CrashError
+
+    with monkeypatch.context() as patched:
+        patched.setattr(sweep_module, 'write_whole', stops_after_the_last_record)
+        with pytest.raises(_CrashError):
+            sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
+
+    resumed = sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
+    for read in (resumed, sps.scan_sweep(out)):
+        with pytest.raises(sps.errors.SpecsolveError, match='duals are undefined for a mixed-integer model'):
+            read.evaluate('price')
 
 
 def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
@@ -2565,8 +2657,9 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
     sweep = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'out')
     expr = 'sum(p * cost, over=generator)'
     swept = sweep.sweep.evaluate(expr)
-    for key, slice_sources in axis.slices(DISPATCH, scenario_sources()):
-        live = sps.solve(DISPATCH, slice_sources).evaluate(expr)
+    for key in sweep.sweep.keys:
+        with sps.build_slice(DISPATCH, scenario_sources(), axis, key) as model:
+            live = model.solve().evaluate(expr)
         got = swept.filter(pl.col(sweep.sweep.key_name) == key).drop(sweep.sweep.key_name)
         columns = live.columns[:-1]
         assert got.sort(columns).equals(live.sort(columns)), f'slice {key!r} evaluates at its own primal, no re-solve'
@@ -2585,11 +2678,176 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     """A Sweep a live solve returned retains no model, so an undeclared expression says why — the archive is what carries one — while a declared name is stitched from what the sweep holds."""
     spec = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
     runs = sps.solve_over(spec, scenario_sources(), sps.EachLabel('scenario'))
-    with pytest.raises(sps.errors.SpecsolveError, match='no model behind it'):
+    with pytest.raises(sps.errors.SpecsolveError, match='no model behind it') as refused:
         runs.evaluate('sum(p, over=generator)')
+    assert 'archive=' in str(refused.value), 'the refusal names what gives a sweep its models back'
+    assert 'load_archive' in str(refused.value), 'and where the sweep that reads any expression comes from'
+    assert 'sps.solve(' not in str(refused.value), (
+        "one solve of a sweep's sources is another question, and here it is refused: they hold a row per scenario"
+    )
     assert runs.evaluate('spend')['scenario'].n_unique() == len(runs), (
         'the declared name answers without a model, stitched from every slice'
     )
+
+
+@pytest.mark.parametrize(
+    'read',
+    [
+        pytest.param(lambda sweep, spilled: sweep, id='the-sweep-as-it-came-back'),
+        pytest.param(lambda sweep, spilled: sps.scan_sweep(spilled), id='its-spill-scanned'),
+    ],
+)
+def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_sweep(read, tmp_path):
+    """Under a carry a window after the first is built from what the one before it left, which the sweep holds.
+
+    From the sources alone it is built from the seed, which is no model the
+    sweep solved.
+    """
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    sweep = sps.solve_over(WINDOW, sources, axis, spill_to=tmp_path / 'runs')
+    solved = sweep.records['objective'].to_list()
+
+    from_the_seed = [_objective_alone(WINDOW, sources, axis, key) for key in sweep.keys]
+    assert from_the_seed[0] == pytest.approx(solved[0]), 'the first window is built from the seed either way'
+    assert from_the_seed[1] != pytest.approx(solved[1]), 'and the second, from the seed, is another model'
+
+    held = read(sweep, tmp_path / 'runs')
+    as_the_sweep_built = [_objective_alone(WINDOW, sources, axis, key, sweep=held) for key in sweep.keys]
+    assert as_the_sweep_built == pytest.approx(solved), 'each window built alone is the window the sweep solved'
+
+    full = {**sources, 'soc_initial': pl.DataFrame({'value': [100.0]})}
+    assert _objective_alone(WINDOW, full, axis, 3, sweep=held) == pytest.approx(solved[1]), (
+        'the sweep says what the window started from, whatever the sources hold'
+    )
+
+
+def test_a_slice_starts_from_the_carried_parameter_its_sources_give():
+    """A carried parameter is a source like any other, so a slice built without the sweep starts from the value given.
+
+    Given the level the window before ended at, it is the window the sweep
+    solved. Given another level, it is another model.
+    """
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    sweep = sps.solve_over(WINDOW, sources, axis)
+    solved = sweep.records['objective'][1]
+
+    ended_at = sweep.primal('soc').filter(pl.col('snapshot') == 2).select('value')
+    assert _objective_alone(WINDOW, {**sources, 'soc_initial': ended_at}, axis, 3) == pytest.approx(solved), (
+        'the second window, from the level the first ended at'
+    )
+    full = pl.DataFrame({'value': [100.0]})
+    assert _objective_alone(WINDOW, {**sources, 'soc_initial': full}, axis, 3) < solved - 1.0, (
+        'and from a full store it is a cheaper window than the sweep solved'
+    )
+
+
+def _stopped_at_the_second_window(spilled) -> tuple[sps.EachWindow, dict[str, object]]:
+    """A carried sweep run to where it stops: its second window cannot meet a load beyond every generator."""
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    beyond = sources['load'].with_columns(
+        pl.when(pl.col('snapshot').is_between(6, 8)).then(pl.col('value') + 1_000).otherwise(pl.col('value'))
+    )
+    stopped = {**sources, 'load': beyond}
+    with pytest.raises(sps.errors.SpecsolveError, match='leaves nothing to carry'):
+        sps.solve_over(WINDOW, stopped, axis, spill_to=spilled)
+    return axis, stopped
+
+
+def test_the_window_a_carried_sweep_stopped_at_builds_alone(tmp_path):
+    """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
+    axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
+    ran = sps.scan_sweep(tmp_path / 'runs')
+    assert ran.keys == [0, 3], 'the window that solved, and the one the sweep stopped at'
+    with sps.build_slice(WINDOW, stopped, axis, 3, sweep=ran) as model:
+        assert model.solve().termination_condition == 'infeasible', 'built alone, it is the window that failed'
+
+
+@pytest.mark.parametrize(
+    ('key', 'refusal'),
+    [
+        pytest.param(
+            6,
+            "slice 3 terminated infeasible in sweep=, so it left no ['soc'] to build slice 6 from.",
+            id='the-slice-before-left-nothing',
+        ),
+        pytest.param(
+            9,
+            "sweep= did not run slice 6, the one before 9, so it holds no ['soc'] to build slice 9 from. "
+            'It ran 2 slice(s), keyed 0, 3.',
+            id='the-slice-before-never-ran',
+        ),
+    ],
+)
+def test_a_slice_the_sweep_never_reached_is_refused(key, refusal, tmp_path):
+    """Past where a carried sweep stopped, no slice was built, so there is nothing to build one from.
+
+    Read anyway, the frames would be empty and the slice built from a carried
+    parameter with no rows.
+    """
+    axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_sweep(tmp_path / 'runs'))
+
+
+def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():
+    """`as_built` threads a carry for every caller, and asks for a slice's primal only when the next slice is asked for.
+
+    A caller that solves as it goes has the primal by then. The last slice
+    hands nothing on, so it is never asked.
+    """
+    slices = [Slice(key, {'seed': f'the seed of {key}', 'own': key}, cut=lambda table: table) for key in 'abc']
+    asked: list[object] = []
+
+    def primals_of(before: Slice) -> dict[str, pl.DataFrame]:
+        asked.append(before.key)
+        return {'state': pl.DataFrame({'value': [float(len(asked))]})}
+
+    walk = as_built(slices, {'seed': CarryRule('state', None)}, primals_of)
+    first = next(walk)
+    assert (first.key, first.sources['seed'], asked) == ('a', 'the seed of a', []), (
+        'the first slice is its own cut, and no primal is asked for yet'
+    )
+    rest = list(walk)
+    assert asked == ['a', 'b'], 'each slice is asked once the next one is, and the last never'
+    assert [built.sources['seed'].item() for built in rest] == [1.0, 2.0], 'each takes what the one before it handed on'
+    assert [built.sources['own'] for built in rest] == ['b', 'c'], 'beside its own cut of everything else'
+
+
+#: Two draws chained by a carry that switches a variable off: `p` exists only while `seed` is positive.
+SWITCHED_OFF = {
+    'dimensions': {'g': {'dtype': 'str'}},
+    'parameters': {'seed': {'dims': []}, 'demand': {'dims': []}},
+    'variables': {
+        'state': {'dims': [], 'bounds': {'lower': 0, 'upper': 0}},
+        'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}, 'where': 'seed > 0'},
+        'q': {'dims': [], 'bounds': {'lower': 0, 'upper': 100}},
+    },
+    'constraints': {'meet': {'dims': [], 'expression': 'q >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'q + state + sum(p)'},
+}
+
+
+def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with(tmp_path):
+    """A slice was rebuilt from the seed in the sources, whatever the slice before it had handed on.
+
+    Here the first draw leaves `seed` at 0, so the second builds no `p`. The
+    rebuild read `seed` as 1, expected a `p` frame the archive does not hold,
+    and refused its own answer.
+    """
+    sources = {
+        'g': ['a', 'b'],
+        'seed': pl.DataFrame({'value': [1.0]}),
+        'demand': pl.DataFrame({'draw': [1, 2], 'value': [3.0, 4.0]}),
+    }
+    axis = sps.EachLabel('draw', carry={'seed': 'state'})
+    live = sps.solve_over(SWITCHED_OFF, sources, axis, archive=tmp_path / 'study')
+    assert live.primal('p')['draw'].unique().to_list() == [1], 'the second draw builds no p'
+
+    read = sps.load_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
+    assert read['value'].to_list() == [3.0, 4.0], 'each draw read against the model it was solved as'
 
 
 def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_parameter(tmp_path):
