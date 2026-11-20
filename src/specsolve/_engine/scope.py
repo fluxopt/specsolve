@@ -58,6 +58,8 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false, read once for the build.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+    #: Whether each parameter asked about is zero at every row it has.
+    _zero: dict[str, bool] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -110,6 +112,13 @@ class Scope:
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
         return join_on(frame, table, declaration.dims, how, maintain_order)
+
+    def is_zero(self, param: str) -> bool:
+        """Whether *param* is zero at every row it has, any value ``missing:`` fills included; read once per build."""
+        if param not in self._zero:
+            table = self.data.parameters[param]
+            self._zero[param] = not table.select((pl.col(VALUE) != 0).any()).pipe(collected).item()
+        return self._zero[param]
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
