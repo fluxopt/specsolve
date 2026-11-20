@@ -339,6 +339,18 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
 
 
+def test_a_build_with_assumptions_reports_the_time_its_attach_took():
+    """The assumptions attach the sources before the engine runs, and the engine timed only an attach of its own.
+
+    A model with an assumption so reported no attach time at all, and an
+    archive of it recorded zero.
+    """
+    spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
+    with sps.build(spec, TABLED_SOURCES) as model:
+        seconds = model.diagnostics().seconds
+    assert seconds.get('attach', 0.0) > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
+
+
 #: `active` is true at every `(g, t)`, as PyPSA's is on a network without
 #: investment periods; `level` is given at `(a, 1)` alone and filled with 0.
 EVERYWHERE_SOURCES = TABLED_SOURCES | {
@@ -411,3 +423,54 @@ def test_declarations_that_hold_no_row_over_the_same_dims_share_one_empty_frame(
     assert built == [(('g', 't'), 'row')], (
         f'empty frames were built for {built}, where one per dims and label is enough'
     )
+
+
+#: `square` is zero at every unit, as PyPSA's quadratic costs are on most networks.
+ZERO_SPEC = {
+    'dimensions': {'g': {}},
+    'parameters': {'square': {'dims': ['g']}, 'cost': {'dims': ['g']}},
+    'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x * x * square) - sum(x * cost)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('square', 'quadratic', 'objective'),
+    [
+        pytest.param([0.0, 0.0], 0, -2.0, id='a-cost-zero-everywhere-builds-no-term'),
+        pytest.param([0.0, 2.0], 1, -1.125, id='a-cost-nonzero-somewhere-builds-its-term'),
+    ],
+)
+def test_a_variable_times_a_parameter_zero_everywhere_adds_nothing_to_the_objective(
+    monkeypatch, square, quadratic, objective
+):
+    """PyPSA prices the square of every unit's dispatch, and most networks price it at zero."""
+    from specsolve._engine import assembly as assembly_module
+
+    compiled, real = [], assembly_module.Assembly._objective_quadratic
+
+    def spied(self, terms, expression):
+        compiled.append(len(terms))
+        return real(self, terms, expression)
+
+    monkeypatch.setattr(assembly_module.Assembly, '_objective_quadratic', spied)
+    sources = {
+        'g': ['a', 'b'],
+        'square': pl.DataFrame({'g': ['a', 'b'], 'value': square}),
+        'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(ZERO_SPEC, sources) as model:
+        assert model.solve().objective == pytest.approx(objective), 'b settles at x = 0.25 where its square is priced'
+    assert compiled == [quadratic], f'the objective compiled {compiled} quadratic terms, where {quadratic} are needed'
+
+
+def test_a_constraint_times_a_parameter_zero_everywhere_keeps_its_rows():
+    """A zero coefficient keeps its row in a constraint: only the objective, which only sums, drops it."""
+    spec = {**ZERO_SPEC, 'constraints': {'scaled': {'dims': ['g'], 'expression': 'x * square <= 1'}}}
+    sources = {
+        'g': ['a', 'b'],
+        'square': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 0.0]}),
+        'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(spec, sources) as model:
+        assert model.diagnostics().rows == 2, 'both rows of `scaled` are built, their coefficient zero'
