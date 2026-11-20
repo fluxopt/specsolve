@@ -99,9 +99,14 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _held(take: dense.Take | None, frame: pl.LazyFrame, absent: Presence | None = None) -> pl.LazyFrame | Dense:
-    """A leaf's body: held by position where *take* reads it there, *frame* otherwise."""
-    return frame if take is None else Dense(take, lambda: frame, absent)
+def _held(
+    values: dense.Values | None,
+    frame: pl.LazyFrame,
+    columns: dense.Columns | None = None,
+    absent: Presence | None = None,
+) -> pl.LazyFrame | Dense:
+    """A leaf's body: held by position where *values* reads it there, *frame* otherwise."""
+    return frame if values is None else Dense(values, lambda: frame, columns, absent)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -472,8 +477,9 @@ class Compiler:
             *dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
         )
         presences = self._variable_presences(name, dims)
-        absent = presences[0] if presences else None
-        return Term(dims, _held(dense.variable(self.scope, name), frame, absent), 'linear', presences=presences)
+        columns = dense.variable(self.scope, name)
+        body = _held(None if columns is None else dense.unit, frame, columns, presences[0] if presences else None)
+        return Term(dims, body, 'linear', presences=presences)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""

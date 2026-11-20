@@ -240,13 +240,13 @@ class Assembly:
         else:
             position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
             positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
-        at = dense.At(dims, positions, cardinality)
-        kept, index, col, coeff = dense.placed(linear, at)
+        at, kept, index, col, coeff = dense.placed(linear, dense.At(dims, positions, cardinality))
         if labelled is None:
-            labelled = labels.at(self.scope, at if kept is None else at.only(kept), 'row', start)
+            labelled = labels.at(self.scope, at, 'row', start)
         elif kept is not None:
             labelled = labels.renumbered(labelled.filter(pl.Series(kept)), dims, 'row', start)
-        entries = {'row': index + start, 'col': col, 'coeff': coeff}
+        index += start
+        entries = {'row': index, 'col': col, 'coeff': coeff}
         return pl.DataFrame(entries, schema={column: _DTYPES[column] for column in _MATRIX}), labelled
 
     # ------------------------------------------------------------------

@@ -35,11 +35,12 @@ if TYPE_CHECKING:
     type Integers = np.ndarray[tuple[int, ...], np.dtype[np.int64]]
     type Floats = np.ndarray[tuple[int, ...], np.dtype[np.float64]]
     #: Solver column indices, in the dtype the hand-off carries them.
-    type Columns = np.ndarray[tuple[int, ...], np.dtype[np.int32]]
+    type Entries = np.ndarray[tuple[int, ...], np.dtype[np.int32]]
 
-    #: A term read at coordinates: the column under it at each, ``-1`` where
-    #: its variable has none and ``None`` for a constant term, and its value.
-    type Take = Callable[[At], tuple[Integers | None, Floats]]
+    #: A term's columns at coordinates, ``-1`` where its variable has none.
+    type Columns = Callable[[At], Integers | Entries]
+    #: A term's values at coordinates: one each, or one number that stands at all of them.
+    type Values = Callable[[At], Floats | float]
 
 #: The most coordinates a masked variable's dims may span per column it has,
 #: for its columns to be held by position: an integer per coordinate.
@@ -87,16 +88,24 @@ class At:
 class Dense:
     """A term with a value at every coordinate of its dims.
 
-    ``take`` reads it at the coordinates of an [`At`][] over dims that
-    include its own. ``frame`` is the same term as the join path reads it,
+    ``values`` reads it at the coordinates of an [`At`][] over dims that
+    include its own, and ``columns`` the column under it there, ``None`` for
+    a constant term. ``frame`` is the same term as the join path reads it,
     formed the first time something asks. ``absent`` is the presence a
     coordinate without a column stands for, where the term's variable is
     masked and removes the row it is missing from; ``None`` where a missing
     column is a zero.
     """
 
-    def __init__(self, take: Take, tidy: Callable[[], pl.LazyFrame], absent: Presence | None = None) -> None:
-        self.take = take
+    def __init__(
+        self,
+        values: Values,
+        tidy: Callable[[], pl.LazyFrame],
+        columns: Columns | None = None,
+        absent: Presence | None = None,
+    ) -> None:
+        self.values = values
+        self.columns = columns
         self.absent = absent
         self._tidy = tidy
 
@@ -115,9 +124,9 @@ class Dense:
         return len(presences) == len(own) and all(theirs is mine for theirs, mine in zip(presences, own, strict=True))
 
 
-def constant(value: float) -> Take:
+def constant(value: float) -> Values | None:
     """A literal number at every coordinate."""
-    return lambda at: (None, np.full(len(at), value, dtype=np.float64))
+    return lambda at: value
 
 
 def covers(scope: Scope, name: str) -> bool:
@@ -135,16 +144,16 @@ def values(scope: Scope, name: str) -> Floats:
     return _held(scope, ('parameter', name), _values_by_position)
 
 
-def parameter(scope: Scope, name: str) -> Take | None:
+def parameter(scope: Scope, name: str) -> Values | None:
     """Parameter *name* by position, or ``None`` where it is short of a row."""
     if not covers(scope, name):
         return None
     dims = scope.program.parameters[name].dims
-    return lambda at: (None, values(scope, name)[at.over(dims)])
+    return lambda at: values(scope, name)[at.over(dims)]
 
 
-def variable(scope: Scope, name: str) -> Take | None:
-    """Variable *name*'s columns by position at unit coefficient, or ``None`` where position is not worth holding.
+def variable(scope: Scope, name: str) -> Columns | None:
+    """Variable *name*'s columns by position, or ``None`` where position is not worth holding.
 
     An unmasked variable's column is its start plus its position, so nothing
     is held. A masked one holds an integer per coordinate of its dims, which
@@ -153,14 +162,16 @@ def variable(scope: Scope, name: str) -> Take | None:
     declaration, held = scope.program.variables[name], scope.variables[name]
     dims = declaration.dims
     if declaration.where is None:
-        return lambda at: (held.start + at.over(dims), np.ones(len(at), dtype=np.float64))
+        return lambda at: held.start + at.over(dims)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
     if not held.height or cells > CELLS_PER_COLUMN * held.height:
         return None
-    return lambda at: (
-        _held(scope, ('variable', name), _columns_by_position)[at.over(dims)],
-        np.ones(len(at), dtype=np.float64),
-    )
+    return lambda at: _held(scope, ('variable', name), _columns_by_position)[at.over(dims)]
+
+
+def unit(at: At) -> float:
+    """The coefficient a variable stands at before anything multiplies it."""
+    return 1.0
 
 
 def _held(scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.ndarray]) -> np.ndarray:
@@ -172,12 +183,7 @@ def _held(scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.nd
 
 def negated(body: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     """``-body``, *tidy* being the same on the join path."""
-
-    def take(at: At) -> tuple[Integers | None, Floats]:
-        column, value = body.take(at)
-        return column, -value
-
-    return Dense(take, tidy, body.absent)
+    return Dense(lambda at: -body.values(at), tidy, body.columns, body.absent)
 
 
 def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
@@ -186,17 +192,14 @@ def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     Each factor reads the coordinate along its own dims, which is the
     broadcast the join makes by matching the dims the two share.
     """
-
-    def take(at: At) -> tuple[Integers | None, Floats]:
-        column, value = a.take(at)
-        _, factor = c.take(at)
-        return column, value * factor
-
-    return Dense(take, tidy, a.absent)
+    return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.absent)
 
 
 def _values_by_position(scope: Scope, name: str) -> Floats:
     """Parameter *name*'s values in the row-major order of its dims, the table having a row at every coordinate.
+
+    A table whose rows already stand in that order is read as it is, with no
+    array beside it; any other order is moved into one.
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
@@ -204,9 +207,12 @@ def _values_by_position(scope: Scope, name: str) -> Floats:
     """
     dims = scope.program.parameters[name].dims
     table = scope.data.parameters[name]
-    position = scope.row_major(dims, scope.ordinal_of)
-    held = table.select(position.alias('#position'), pl.col(VALUE).cast(pl.Float64)).pipe(collected)
+    position, value = scope.row_major(dims, scope.ordinal_of), pl.col(VALUE).cast(pl.Float64)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
+    in_order = (position == pl.int_range(pl.len(), dtype=pl.Int64)).all() & (pl.len() == cells)
+    if table.select(in_order).pipe(collected).item():
+        return table.select(value).pipe(collected).get_column(VALUE).to_numpy()
+    held = table.select(position.alias('#position'), value).pipe(collected)
     at = held.get_column('#position').to_numpy()
     written = np.zeros(cells, dtype=bool)
     written[at] = True
@@ -218,57 +224,70 @@ def _values_by_position(scope: Scope, name: str) -> Floats:
     return out
 
 
-def _columns_by_position(scope: Scope, name: str) -> Integers:
+def _columns_by_position(scope: Scope, name: str) -> Entries:
     """Variable *name*'s column at each coordinate of its dims in row-major order, ``-1`` where it has none."""
     dims = scope.program.variables[name].dims
     position = scope.row_major(dims, scope.ordinal_of)
     held = scope.variables[name].frame.select(position.alias('#position'), 'var_label').pipe(collected)
-    out = np.full(math.prod(scope.data.cardinality[d] for d in dims), -1, dtype=np.int64)
+    out = np.full(math.prod(scope.data.cardinality[d] for d in dims), -1, dtype=np.int32)
     out[held.get_column('#position').to_numpy()] = held.get_column('var_label').to_numpy()
     return out
 
 
 def placed(
     terms: Sequence[tuple[Dense, float]], at: At
-) -> tuple[np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None, Integers, Columns, Floats]:
+) -> tuple[At, np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None, Integers, Entries, Floats]:
     """The matrix entries of *terms*, each a body and its sign, at the coordinates *at*.
 
+    A coordinate where a term is ``absent`` keeps no row, and which those are
+    is read first, so every term is read only where a row stands.
+
     Returns:
-        Which coordinates keep a row, ``None`` for all of them: a coordinate
-        where a term is ``absent`` keeps none. Then the entries as
-        ``(index, col, coeff)`` in *index* order, *index* counting the
-        coordinates kept. A term whose variable has no column at a coordinate
-        holds no entry there. Within a coordinate the terms are laid out by
-        the furthest column each reaches, which is column order for terms
-        over different variables, so their share is not sorted.
+        The coordinates that keep a row, and which of *at* they are, ``None``
+        for all of them. Then the entries as ``(index, col, coeff)`` in
+        *index* order, *index* counting the coordinates kept. A term whose
+        variable has no column at a coordinate holds no entry there. Within
+        a coordinate the terms are laid out by the furthest column each
+        reaches, which is column order for terms over different variables, so
+        their share is not sorted.
     """
-    count = len(terms)
-    taken = [body.take(at) for body, _ in terms]
-    cols = np.empty((len(at), count), dtype=np.int32)
-    coeffs = np.empty((len(at), count), dtype=np.float64)
-    kept, holed = None, False
-    for slot, i in enumerate(sorted(range(count), key=lambda i: _furthest(taken[i][0]))):
-        column, value = taken[i]
-        assert column is not None, 'a term placed on a row carries a variable'
-        cols[:, slot] = column
-        np.multiply(value, terms[i][1], out=coeffs[:, slot])
-        if not column.size or column.min() >= 0:
+    read: dict[int, Integers | Entries] = {}
+    kept = None
+    for i, (body, _) in enumerate(terms):
+        if body.absent is None:
             continue
-        if terms[i][0].absent is None:
-            holed = True
-        else:
-            there = column >= 0
+        read[i] = _columns_of(body, at)
+        if read[i].size and read[i].min() < 0:
+            there = read[i] >= 0
             kept = there if kept is None else kept & there
     if kept is not None:
-        cols, coeffs = cols[kept], coeffs[kept]
-    index = np.repeat(np.arange(len(cols), dtype=np.int64), count)
-    cols, coeffs = cols.reshape(-1), coeffs.reshape(-1)
+        at = at.only(kept)
+        read.clear()
+
+    count = len(terms)
+    for i, (body, _) in enumerate(terms):
+        if i not in read:
+            read[i] = _columns_of(body, at)
+    cols = np.empty(len(at) * count, dtype=np.int32)
+    coeffs = np.empty(len(at) * count, dtype=np.float64)
+    holed = False
+    for slot, i in enumerate(sorted(range(count), key=lambda i: _furthest(read[i]))):
+        column = read.pop(i)
+        cols[slot::count] = column
+        holed = holed or bool(column.size and column.min() < 0)
+        np.multiply(terms[i][0].values(at), terms[i][1], out=coeffs[slot::count])
+    index = np.repeat(np.arange(len(at), dtype=np.int64), count)
     if holed:
         held = cols >= 0
-        return kept, index[held], cols[held], coeffs[held]
-    return kept, index, cols, coeffs
+        return at, kept, index[held], cols[held], coeffs[held]
+    return at, kept, index, cols, coeffs
 
 
-def _furthest(column: Integers | None) -> int:
+def _columns_of(body: Dense, at: At) -> Integers | Entries:
+    assert body.columns is not None, 'a term placed on a row carries a variable'
+    return body.columns(at)
+
+
+def _furthest(column: Integers | Entries) -> int:
     """The largest column a term reaches, ``-1`` where it reaches none."""
-    return int(column.max()) if column is not None and column.size else -1
+    return int(column.max()) if column.size else -1

@@ -171,6 +171,18 @@ def test_a_constraint_placed_by_position_is_the_one_the_joins_build(
     )
 
 
+def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A table in the order of its dims is read as it stands; any other order is moved into place first."""
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i', 'j'], 'expression': 'b * y + a * x <= 10'}}}
+    reversed_rows = {**SOURCES, 'a': SOURCES['a'].reverse(), 'b': SOURCES['b'].reverse()}
+    in_order, placed = _built(spec, SOURCES, tmp_path / 'in_order.lp', monkeypatch)
+    out_of_order, _ = _built(spec, reversed_rows, tmp_path / 'reversed.lp', monkeypatch)
+    assert placed == [BY_POSITION]
+    assert out_of_order == in_order, "the order of a table's rows changed the model read from it by position"
+
+
 def test_terms_that_name_a_later_variable_first_are_placed_without_a_sort(monkeypatch: pytest.MonkeyPatch) -> None:
     """`late` is declared after `x`, so in file order its entry would lead each row and the share would be sorted."""
     sorts = []
@@ -268,10 +280,10 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
         consecutive={'i': 0},
         given={},
     )
-    take = dense.parameter(Scope(program, data, {}), 'a')
-    assert take is not None, 'a table of three rows over three labels is taken for whole'
+    values = dense.parameter(Scope(program, data, {}), 'a')
+    assert values is not None, 'a table of three rows over three labels is taken for whole'
     with pytest.raises(SpecsolveError, match='does not cover'):
-        take(dense.At(('i',), np.arange(3), {'i': 3}))
+        values(dense.At(('i',), np.arange(3), {'i': 3}))
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:
