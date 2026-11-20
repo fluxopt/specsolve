@@ -18,6 +18,7 @@ is infinite, has no reading either. It is asked at the same two moments.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -121,6 +122,13 @@ def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyF
     ]
 
 
+def _on_rows(p: Term, rows: pl.LazyFrame) -> Term:
+    """*p* cut to the coordinates *rows* holds, before its sum per coordinate: a constraint's rows are often a fraction of the product its constant terms are read over."""
+    if not p.dims:
+        return p
+    return replace(p, frame=p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi'))
+
+
 def constant_side(
     scope: Scope,
     rows: pl.LazyFrame,
@@ -145,7 +153,7 @@ def constant_side(
     carrier = rows
     for i, (p, sign) in enumerate(terms):
         column = f'__const {i}__'
-        aggregated = constant_scalar(p).rename({'cval': column})
+        aggregated = constant_scalar(_on_rows(p, rows)).rename({'cval': column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         if not p.parameters:
