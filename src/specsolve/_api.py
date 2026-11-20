@@ -39,7 +39,7 @@ from specsolve._outputs import checked_outputs
 from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
-from specsolve._sources import refuse_unknown_sources, tidy_sources, with_positions
+from specsolve._sources import refuse_unknown_sources, tidied_and_attached, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -213,8 +213,8 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            self._tidied = tidy_sources(self._program, self._sources)
-            self._engine.build(self._program, self._tidied)
+            self._tidied, attached = tidied_and_attached(self._program, self._sources)
+            self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._engine.close()
             raise

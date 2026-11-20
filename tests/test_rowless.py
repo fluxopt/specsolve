@@ -218,3 +218,46 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
     assert (tmp_path / 'updated.lp').read_text() == (tmp_path / 'fresh.lp').read_text(), (
         'the update kept a skip that its new data undoes'
     )
+
+
+#: `flag` has no row and `cap` none above 3, so a `where` that needs either admits
+#: nothing; each is over `g` alone, a sixth of the product a declaration over
+#: `g` and `t` spans. `e` has no label, so a count along it is 0.
+TABLED_SPEC = {
+    'dimensions': {'g': {}, 't': {}, 'e': {}},
+    'parameters': {
+        'flag': {'dims': ['g'], 'dtype': 'bool', 'missing': 'absent'},
+        'cap': {'dims': ['g']},
+        'on': {'dims': ['g', 'e'], 'dtype': 'bool', 'missing': 'absent'},
+    },
+    'conditions': {'flagged': {'condition': 'flag'}},
+    'variables': {'x': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+TABLED_SOURCES = {
+    'g': ['a', 'b'],
+    't': [1, 2, 3],
+    'flag': pl.DataFrame(schema={'g': pl.String, 'value': pl.Boolean}),
+    'cap': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 3.0]}),
+    'e': [],
+    'on': pl.DataFrame(schema={'g': pl.String, 'e': pl.String, 'value': pl.Boolean}),
+}
+
+
+def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
+    """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
+    from specsolve._engine import engine as engine_module
+
+    calls = []
+    real = engine_module.attach
+
+    def counted(program, sources):
+        calls.append(1)
+        return real(program, sources)
+
+    monkeypatch.setattr(engine_module, 'attach', counted)
+    monkeypatch.setattr(_assumptions, 'attach', counted)
+    spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
+    sps.build(spec, TABLED_SOURCES).close()
+    assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
