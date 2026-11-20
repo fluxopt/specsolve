@@ -233,7 +233,7 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
     if table.select(in_order).pipe(collected).item():
         return table.select(VALUE).pipe(collected).get_column(VALUE)
     held = table.select(position.alias('#position'), VALUE).pipe(collected).sort('#position')
-    if not held.select(((pl.col('#position') == counted).all() & (pl.len() == cells))).item():
+    if not held.select((pl.col('#position') == counted).all() & (pl.len() == cells)).item():
         msg = f"parameter '{name}' is as tall as the product of its dims and does not cover it"
         raise SpecsolveError(msg)
     return held.get_column(VALUE)
