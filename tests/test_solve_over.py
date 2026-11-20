@@ -2236,23 +2236,72 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     assert len(parsed) == 1, f'the model was parsed {len(parsed)} times for three slices'
 
 
-def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
-    """`axis.slices(spec, sources)` is the list of slices the sweep would have run.
+def _objective_alone(spec, sources, axis, key, **given) -> float:
+    """The objective of one slice, built by `build_slice` and solved alone."""
+    with sps.build_slice(spec, sources, axis, key, **given) as model:
+        return model.solve().objective
+
+
+def test_one_slice_of_a_sweep_builds_alone():
+    """`build_slice` is the model of one slice the sweep would have run.
 
     One slice builds alone, and each solved alone reaches the objective its
     window did.
     """
     sources = horizon_sources(12)
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3)
-    slices = axis.slices(WINDOW, sources)
-    assert [key for key, _ in slices] == [0, 3, 6, 9], 'one slice per window, keyed by where it starts'
+    sweep = sps.solve_over(WINDOW, sources, axis)
+    assert sweep.keys == [0, 3, 6, 9], 'one slice per window, keyed by where it starts'
 
-    with sps.build(WINDOW, slices[1][1]) as model:
-        assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), 'one window builds alone'
+    with sps.build_slice(WINDOW, sources, axis.to_dict(), 3) as model:
+        assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), (
+            'one window builds alone, its axis given as the plain data solve_over takes too'
+        )
 
-    by_axis = sps.solve_over(WINDOW, sources, axis).records['objective'].to_list()
-    alone = [sps.solve(WINDOW, cut).objective for _, cut in slices]
-    assert alone == pytest.approx(by_axis), 'each window solved alone is the window the sweep solved'
+    alone = [_objective_alone(WINDOW, sources, axis, key) for key in sweep.keys]
+    assert alone == pytest.approx(sweep.records['objective'].to_list()), (
+        'each window solved alone is the window the sweep solved'
+    )
+
+
+@pytest.mark.parametrize(
+    ('over', 'without', 'refusal'),
+    [
+        pytest.param('snapshot', None, 'over= takes EachLabel or EachWindow', id='no-axis'),
+        pytest.param(
+            sps.EachLabel('snapshot'),
+            None,
+            "EachLabel('snapshot') squeezes 'snapshot' out of every source, and the spec declares it",
+            id='an-axis-the-spec-does-not-allow',
+        ),
+        pytest.param(
+            sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'}),
+            'soc_initial',
+            "supply 'soc_initial' in sources as the seed",
+            id='a-carry-with-no-seed',
+        ),
+    ],
+)
+def test_build_slice_refuses_the_axis_and_the_carry_solve_over_refuses(over, without, refusal):
+    """One slice is built as the sweep builds it, so what the sweep refuses of an axis is refused here too."""
+    sources = {name: source for name, source in horizon_sources().items() if name != without}
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, sources, over, 0)
+
+
+@pytest.mark.parametrize(
+    ('steps', 'keyed'),
+    [
+        pytest.param(3, '0, 3, 6, 9', id='every-key-where-they-are-few'),
+        pytest.param(1, '0, 1, 2, 3, 4 and 7 more', id='the-first-five-where-they-are-many'),
+    ],
+)
+def test_a_key_that_is_no_slice_is_refused_naming_the_keys(steps, keyed):
+    """A key is where a window starts, so a label inside one names no slice."""
+    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0)
+    refusal = f'key=99 is no slice of this axis, whose {12 // steps} slices are keyed {keyed}.'
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, horizon_sources(), axis, 99)
 
 
 @pytest.mark.parametrize('make_executor', [pytest.param(None, id='serial'), *EXECUTORS])
@@ -2608,8 +2657,9 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
     sweep = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'out')
     expr = 'sum(p * cost, over=generator)'
     swept = sweep.sweep.evaluate(expr)
-    for key, slice_sources in axis.slices(DISPATCH, scenario_sources()):
-        live = sps.solve(DISPATCH, slice_sources).evaluate(expr)
+    for key in sweep.sweep.keys:
+        with sps.build_slice(DISPATCH, scenario_sources(), axis, key) as model:
+            live = model.solve().evaluate(expr)
         got = swept.filter(pl.col(sweep.sweep.key_name) == key).drop(sweep.sweep.key_name)
         columns = live.columns[:-1]
         assert got.sort(columns).equals(live.sort(columns)), f'slice {key!r} evaluates at its own primal, no re-solve'
@@ -2647,28 +2697,54 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
         pytest.param(lambda sweep, spilled: sps.scan_sweep(spilled), id='its-spill-scanned'),
     ],
 )
-def test_the_slices_of_a_carried_sweep_are_as_it_built_them_given_the_sweep(read, tmp_path):
-    """`axis.slices` gave every window the seed, so a window after the first, built alone, was no model the sweep solved.
+def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_sweep(read, tmp_path):
+    """Under a carry a window after the first is built from what the one before it left, which the sweep holds.
 
-    Given the sweep, each window holds what the one before it handed on.
+    From the sources alone it is built from the seed, which is no model the
+    sweep solved.
     """
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
     sources = horizon_sources()
     sweep = sps.solve_over(WINDOW, sources, axis, spill_to=tmp_path / 'runs')
     solved = sweep.records['objective'].to_list()
 
-    from_the_seed = [sps.solve(WINDOW, cut).objective for _, cut in axis.slices(WINDOW, sources)]
+    from_the_seed = [_objective_alone(WINDOW, sources, axis, key) for key in sweep.keys]
     assert from_the_seed[0] == pytest.approx(solved[0]), 'the first window is built from the seed either way'
     assert from_the_seed[1] != pytest.approx(solved[1]), 'and the second, from the seed, is another model'
 
-    as_built_then = axis.slices(WINDOW, sources, read(sweep, tmp_path / 'runs'))
-    assert [sps.solve(WINDOW, cut).objective for _, cut in as_built_then] == pytest.approx(solved), (
-        'each window built alone is the window the sweep solved'
+    held = read(sweep, tmp_path / 'runs')
+    as_the_sweep_built = [_objective_alone(WINDOW, sources, axis, key, sweep=held) for key in sweep.keys]
+    assert as_the_sweep_built == pytest.approx(solved), 'each window built alone is the window the sweep solved'
+
+    full = {**sources, 'soc_initial': pl.DataFrame({'value': [100.0]})}
+    assert _objective_alone(WINDOW, full, axis, 3, sweep=held) == pytest.approx(solved[1]), (
+        'the sweep says what the window started from, whatever the sources hold'
     )
 
 
-def test_the_slices_of_a_sweep_that_stopped_end_where_it_did(tmp_path):
-    """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
+def test_a_slice_starts_from_the_carried_parameter_its_sources_give():
+    """A carried parameter is a source like any other, so a slice built without the sweep starts from the value given.
+
+    Given the level the window before ended at, it is the window the sweep
+    solved. Given another level, it is another model.
+    """
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    sweep = sps.solve_over(WINDOW, sources, axis)
+    solved = sweep.records['objective'][1]
+
+    ended_at = sweep.primal('soc').filter(pl.col('snapshot') == 2).select('value')
+    assert _objective_alone(WINDOW, {**sources, 'soc_initial': ended_at}, axis, 3) == pytest.approx(solved), (
+        'the second window, from the level the first ended at'
+    )
+    full = pl.DataFrame({'value': [100.0]})
+    assert _objective_alone(WINDOW, {**sources, 'soc_initial': full}, axis, 3) < solved - 1.0, (
+        'and from a full store it is a cheaper window than the sweep solved'
+    )
+
+
+def _stopped_at_the_second_window(spilled) -> tuple[sps.EachWindow, dict[str, object]]:
+    """A carried sweep run to where it stops: its second window cannot meet a load beyond every generator."""
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
     sources = horizon_sources()
     beyond = sources['load'].with_columns(
@@ -2676,12 +2752,44 @@ def test_the_slices_of_a_sweep_that_stopped_end_where_it_did(tmp_path):
     )
     stopped = {**sources, 'load': beyond}
     with pytest.raises(sps.errors.SpecsolveError, match='leaves nothing to carry'):
-        sps.solve_over(WINDOW, stopped, axis, spill_to=tmp_path / 'runs')
+        sps.solve_over(WINDOW, stopped, axis, spill_to=spilled)
+    return axis, stopped
 
-    ran = axis.slices(WINDOW, stopped, sps.scan_sweep(tmp_path / 'runs'))
-    assert [key for key, _ in ran] == [0, 3], 'the window that solved, and the one the sweep stopped at'
-    with sps.solve(WINDOW, ran[1][1]) as alone:
-        assert alone.termination_condition == 'infeasible', 'built alone, it is the window that failed'
+
+def test_the_window_a_carried_sweep_stopped_at_builds_alone(tmp_path):
+    """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
+    axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
+    ran = sps.scan_sweep(tmp_path / 'runs')
+    assert ran.keys == [0, 3], 'the window that solved, and the one the sweep stopped at'
+    with sps.build_slice(WINDOW, stopped, axis, 3, sweep=ran) as model:
+        assert model.solve().termination_condition == 'infeasible', 'built alone, it is the window that failed'
+
+
+@pytest.mark.parametrize(
+    ('key', 'refusal'),
+    [
+        pytest.param(
+            6,
+            "slice 3 terminated infeasible in sweep=, so it left no ['soc'] to build slice 6 from.",
+            id='the-slice-before-left-nothing',
+        ),
+        pytest.param(
+            9,
+            "sweep= did not run slice 6, the one before 9, so it holds no ['soc'] to build slice 9 from. "
+            'It ran 2 slice(s), keyed 0, 3.',
+            id='the-slice-before-never-ran',
+        ),
+    ],
+)
+def test_a_slice_the_sweep_never_reached_is_refused(key, refusal, tmp_path):
+    """Past where a carried sweep stopped, no slice was built, so there is nothing to build one from.
+
+    Read anyway, the frames would be empty and the slice built from a carried
+    parameter with no rows.
+    """
+    axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
+        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_sweep(tmp_path / 'runs'))
 
 
 def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():

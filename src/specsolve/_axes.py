@@ -22,18 +22,16 @@ from mathspec.errors import did_you_mean
 
 from specsolve._collect import collected
 from specsolve._frames import as_frame
-from specsolve._inputs import lowered
 from specsolve._names import VALUE
 from specsolve._sources import declared_dtype_of, in_microseconds, index_labels, least_value, parameter_frame
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from mathspec.program import Program
 
-    from specsolve._inputs import Label, Source, SpecLike
-    from specsolve._sweep import Sweep
+    from specsolve._inputs import Label, Source
 
 
 #: The key [`EachLabel.to_dict`][] and [`EachWindow.to_dict`][] write an axis's carry under.
@@ -136,19 +134,6 @@ class EachLabel:
         """
         return {'each': 'label', 'dim': self.dim, **_where_set(self)}
 
-    def slices(
-        self, spec: SpecLike, sources: Mapping[str, Source], sweep: Sweep | None = None
-    ) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec*.
-
-        For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
-        Under a ``carry`` a slice after the first is built from what the one
-        before it left, which only a *sweep* that solved them knows: with it,
-        the list is the slices that sweep ran, each as it built it. Without,
-        every slice holds the seed.
-        """
-        return _slices(self, spec, sources, sweep)
-
     def _key_name(self) -> str:
         return self.dim if self.key_name is None else self.key_name
 
@@ -238,20 +223,6 @@ class EachWindow:
     #: What to call the key column in every table of the answer; ``None``
     #: takes the default the class documents.
     key_name: str | None = field(default=None, kw_only=True)
-
-    def slices(
-        self, spec: SpecLike, sources: Mapping[str, Source], sweep: Sweep | None = None
-    ) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec*.
-
-        For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
-        A pair holds the window's lookahead rows too. Under a ``carry`` a
-        window after the first is built from what the one before it left,
-        which only a *sweep* that solved them knows: with it, the list is the
-        windows that sweep ran, each as it built it. Without, every window
-        holds the seed.
-        """
-        return _slices(self, spec, sources, sweep)
 
     def __post_init__(self) -> None:
         blocks = [self.steps] if isinstance(self.steps, int) else list(self.steps)
@@ -503,30 +474,6 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
             f'required: {wrong}.'
         )
     return kind(**keys)
-
-
-def _slices(
-    axis: Axis, spec: SpecLike, sources: Mapping[str, Source], sweep: Sweep | None
-) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as ``(key, sources)`` pairs; with *sweep*, the ones it ran, as it built them."""
-    program = lowered(spec)
-    axis._check_the_program(program, sources)
-    slices, _ = axis._slice(program, sources, axis._key_name())
-    if sweep is None:
-        return [(current.key, current.sources) for current in slices]
-    ran = set(sweep.keys)
-    plan = carry_plan(program, axis)
-    left = partial(_left_in, sweep, {rule.variable for rule in plan.values()}, isinstance(axis, EachWindow))
-    return [(current.key, built) for current, built in as_built([s for s in slices if s.key in ran], plan, left)]
-
-
-def _left_in(sweep: Sweep, variables: Collection[str], per_window: bool, before: Slice) -> dict[str, pl.DataFrame]:
-    """The primal the slice *before* left in *sweep*, for each of *variables*, as that slice solved it."""
-    key = sweep.key_name
-    return {
-        name: sweep.scan(name, per_window=per_window).filter(pl.col(key) == before.key).drop(key).pipe(collected)
-        for name in variables
-    }
 
 
 def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
