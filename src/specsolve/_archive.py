@@ -30,9 +30,9 @@ from specsolve._archive_layout import (
     SPEC_MEMBER,
     opened,
 )
-from specsolve._axes import axis_from
+from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
-from specsolve._inputs import lower_expression
+from specsolve._inputs import lower_expression, lowered
 from specsolve._names import RUN
 from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
@@ -292,14 +292,21 @@ def _attach_sweep_readers(
 def _per_slice(
     sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis
 ) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
-    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt as the sweep built it."""
+    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt as the sweep built it.
+
+    A slice a carry wrote into takes what the slice before it handed on, read
+    off that slice's saved primal. From the seed alone it is another model
+    wherever a ``where`` reads the carried parameter.
+    """
+    program = lowered(spec)
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
-    for key, built_from in axis.slices(spec, sources, sweep):
-        frames = solved.get(key, {})
+    slices, _ = axis._slice(program, sources, sweep.key_name)
+    for current in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
+        frames = solved.get(current.key, {})
         if not frames.get('primal'):
             continue
-        evaluator = build(spec, built_from)._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
-        yield key, evaluator
+        model = build(spec, current.sources)
+        yield current.key, model._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
