@@ -5,6 +5,10 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
+## Upcoming version
+
+- perf(engine): a declaration that a flag or an absent curve switches off is skipped without reading its grid, and PyPSA's spec builds up to 1.4× faster ([#2104](https://github.com/fluxopt/specsolve/pull/2104))
+
 ## 0.11.2 (2026-11-19)
 
 **Absent terms and amounts build the rows the language says, and piecewise
