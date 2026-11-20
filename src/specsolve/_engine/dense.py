@@ -219,24 +219,25 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
     """Parameter *name*'s value column in the row-major order of its dims, the table having a row at every coordinate.
 
     A table whose rows already stand in that order is read as it is, with no
-    copy beside it; any other order is sorted into one.
+    copy beside it; any other order is moved into one in a single pass.
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
             a coordinate, which the door's refusal of a repeated row rules out.
     """
     dims = scope.program.parameters[name].dims
-    table = scope.data.parameters[name]
-    position, counted = scope.row_major(dims, scope.ordinal_of), pl.int_range(pl.len(), dtype=pl.Int64)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
-    in_order = (position == counted).all() & (pl.len() == cells)
-    if table.select(in_order).pipe(collected).item():
-        return table.select(VALUE).pipe(collected).get_column(VALUE)
-    held = table.select(position.alias('#position'), VALUE).pipe(collected).sort('#position')
-    if not held.select((pl.col('#position') == counted).all() & (pl.len() == cells)).item():
+    position = scope.row_major(dims, scope.ordinal_of).alias('#position')
+    held = scope.data.parameters[name].select(position, VALUE).pipe(collected)
+    at, column = held.get_column('#position'), held.get_column(VALUE)
+    if at.len() == cells and (at == pl.int_range(cells, dtype=pl.Int64, eager=True)).all():
+        return column
+    row = np.full(cells, -1, dtype=np.int64)
+    row[at.to_numpy()] = np.arange(at.len(), dtype=np.int64)
+    if at.len() != cells or row.min() < 0:
         msg = f"parameter '{name}' is as tall as the product of its dims and does not cover it"
         raise SpecsolveError(msg)
-    return held.get_column(VALUE)
+    return column.gather(row)
 
 
 def _columns_by_position(scope: Scope, name: str) -> np.ndarray:

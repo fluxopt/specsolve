@@ -99,6 +99,8 @@ class Scope:
         subject: str,
         how: JoinStrategy = 'left',
         maintain_order: MaintainOrderJoin | None = None,
+        *,
+        by_position: bool = True,
     ) -> pl.LazyFrame:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
@@ -107,13 +109,15 @@ class Scope:
         every row of *frame*, reading null where the parameter has no row, which a
         cross join with its empty table would not. A parameter with a row at
         every coordinate is read at each row's [`position`][Scope.position]
-        instead, which is what a left or an inner join of it finds.
+        instead, which is what a left or an inner join of it finds, unless
+        *by_position* is false.
         """
         declaration = self.program.parameters[param]
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
-        position = self.position(declaration.dims) if how in ('left', 'inner') and dense.covers(self, param) else None
+        reads = by_position and how in ('left', 'inner') and dense.covers(self, param)
+        position = self.position(declaration.dims) if reads else None
         if position is not None:
             return frame.with_columns(pl.lit(dense.column(self, param)).gather(position).alias(alias))
         table = self.data.parameters[param].rename({VALUE: alias})
