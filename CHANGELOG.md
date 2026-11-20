@@ -21,6 +21,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(sweep): an archived sweep keyed by datetimes in a time zone reads back ([#2114](https://github.com/fluxopt/specsolve/pull/2114))
 - fix(result): a save replaces what its directory held, and never the files it is reading ([#2115](https://github.com/fluxopt/specsolve/pull/2115))
 - fix(sweep): a sweep that solved and holds no frame of a kind no longer says its models did not solve ([#2118](https://github.com/fluxopt/specsolve/pull/2118))
+- fix(sweep): a sweep that cannot read an unnamed expression names the archive that can ([#2119](https://github.com/fluxopt/specsolve/pull/2119))
 
 ## 0.11.2 (2026-11-19)
 
