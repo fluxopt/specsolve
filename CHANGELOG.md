@@ -37,6 +37,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2122](https://github.com/fluxopt/specsolve/pull/2122))
 - perf(data): a build reads, checks and attaches a parameter only when a row, a bound, an assumption or a later read asks for it ([#2123](https://github.com/fluxopt/specsolve/pull/2123))
 - perf(engine): a variable times a parameter that is zero everywhere adds no term to the objective ([#2128](https://github.com/fluxopt/specsolve/pull/2128))
+- perf(engine): a constraint computes its terms only at the rows it keeps, and a product only where its parameter has rows ([#2129](https://github.com/fluxopt/specsolve/pull/2129))
 
 ## 0.11.2 (2026-11-19)
 
