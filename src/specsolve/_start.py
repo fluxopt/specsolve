@@ -10,12 +10,10 @@ a build's labels is the engine's
 from __future__ import annotations
 
 import warnings
-from functools import partial
 from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import polars as pl
 
-from specsolve._axes import Axis
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._messages import unknown_name_message
@@ -31,7 +29,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Constraint, Program, Variable
 
-    from specsolve._axes import Slice, Slices
+    from specsolve._axes import Axis, Slice
     from specsolve._inputs import Label, Source
 
 
@@ -167,9 +165,8 @@ def _refuse_unknown_statuses_of(tables: Mapping[str, Mapping[str, Source]], prog
 
 def slice_starts(
     start: Sweep | Result | Start | Literal['previous'] | None,
-    axis: Axis | Slices,
+    axis: Axis,
     slices: Sequence[Slice],
-    key_name: str,
     program: Program,
 ) -> Sequence[Start | Literal['previous'] | None]:
     """What each slice starts from: its cut of *start*, as it cut its sources, or the slice before it.
@@ -190,17 +187,16 @@ def slice_starts(
     refuse_unknown_start_word(start)
     if start is None or isinstance(start, str):
         return [start] * len(slices)
-    column = axis.dim if isinstance(axis, Axis) else key_name
+    column = axis.dim
     tables = _start_tables(start, column)
     refuse_unknown_start(cast('Start', tables), program)
     _refuse_unknown_statuses_of(tables, program)
     starts: list[Start | None] = []
     empty: list[Label] = []
     for current in slices:
-        cut = current.cut or partial(_one_key, key_name, current.key)
         given: dict[str, dict[str, Source]] = {}
         for reader, named in tables.items():
-            pieces = {name: _cut_one(obj, column, cut) for name, obj in named.items()}
+            pieces = {name: _cut_one(obj, column, current.cut) for name, obj in named.items()}
             if held := {name: piece for name, piece in pieces.items() if piece is not None}:
                 given[reader] = held
         if not given:
@@ -239,8 +235,3 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
     if isinstance(start, Sweep):
         return {reader: dict(named) for reader, named in start._start(column).items()}
     return {reader: dict(named) for reader, named in cast('Mapping[str, Mapping[str, Source]]', start).items()}
-
-
-def _one_key(key_name: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
-    """*table*'s rows of the slice *key* that [`Slices`][specsolve._axes.Slices] holds, without the key column."""
-    return table.filter(pl.col(key_name) == key).drop(key_name)

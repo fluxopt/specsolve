@@ -538,24 +538,8 @@ def test_stitch_keeps_the_whole_of_the_final_short_window():
     )
 
 
-def test_a_hand_built_axis_answers_keyed_by_what_it_was_told():
-    """A list of slices names no dimension and records no ownership, so its slices are its answer.
-
-    The windows below are cut by `EachWindow.slices`, but solved as a list
-    they carry no way back to `snapshot`, so nothing is stitched.
-    """
-    sources = horizon_sources(12)
-    windows = sps.EachWindow('snapshot', steps=3, lookahead=3).slices(WINDOW, sources)
-
-    runs = sps.solve_over(WINDOW, sources, sps.Slices(windows, key_name='window'))
-    assert runs.primal('soc').columns == ['window', 'snapshot', 'value'], 'a hand-built axis keys by what it was told'
-    assert runs.primal('soc').height == 21, 'every row every slice solved, since nothing says which a slice owns'
-
-
-def _hand_built(tmp_path):
-    sources = horizon_sources(12)
-    windows = sps.EachWindow('snapshot', steps=3, lookahead=3).slices(WINDOW, sources)
-    return sps.solve_over(WINDOW, sources, sps.Slices(windows, key_name='window'), spill_to=tmp_path / 'runs')
+def _spilled_by_label(tmp_path):
+    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'runs')
 
 
 @pytest.mark.parametrize(
@@ -565,7 +549,7 @@ def _hand_built(tmp_path):
         pytest.param(lambda sweep, tmp_path: sweep.dual('balance', per_window=True), id='a-coordinate-dual'),
         pytest.param(lambda sweep, tmp_path: sweep.to_dataset(per_window=True), id='a-coordinate-dataset'),
         pytest.param(
-            lambda sweep, tmp_path: _hand_built(tmp_path).scan('soc', per_window=True), id='a-spilled-hand-built-scan'
+            lambda sweep, tmp_path: _spilled_by_label(tmp_path).scan('p', per_window=True), id='a-spilled-scan'
         ),
     ],
 )
@@ -1673,40 +1657,44 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
     assert sps.scan_sweep(out).records.equals(ran.records)
 
 
-def test_a_sweep_keyed_in_more_than_one_type_is_refused(tmp_path) -> None:
-    """Refused rather than widened: the caller's own labels are not ours to change."""
-    sources = scenario_sources()
+def _typed_apart(in_load: object, in_cost: object) -> dict[str, object]:
+    """Dispatch sources whose `load` and `cost` each carry one `draw`, typed as the two labels are."""
+    load = pl.DataFrame({'draw': [in_load] * 4, 'snapshot': range(4), 'value': [5.0, 6.0, 7.0, 8.0]})
+    cost = pl.DataFrame({'draw': [in_cost] * 2, 'generator': GENERATORS, 'value': [1.0, 50.0]})
+    return {**STATIC, 'snapshot': range(4), 'load': load, 'cost': cost}
+
+
+@pytest.mark.filterwarnings('ignore:.* has no rows for draw')
+def test_a_sweep_keyed_in_more_than_one_type_is_refused() -> None:
+    """Refused rather than widened: the caller's own labels are not ours to change.
+
+    Two sources carry the axis, one as integers and one as floats.
+    """
     with pytest.raises(sps.errors.SpecsolveError, match='more than one type'):
-        sps.solve_over(DISPATCH, sources, sps.Slices([(1, sources), (2.5, sources)], key_name='draw'))
+        sps.solve_over(DISPATCH, _typed_apart(1, 2.5), sps.EachLabel('draw'))
 
 
+@pytest.mark.filterwarnings('ignore:.* has no rows for draw')
 @pytest.mark.parametrize(
     ('keys', 'match'),
     [
-        pytest.param(['a', 'a'], "'a' names more than one slice", id='a repeated key'),
         pytest.param(
             [float('nan'), float('nan')], "'nan' names more than one slice", id='two nan, unequal yet one text'
         ),
-        pytest.param([1, True], "'True' is written as '1'", id='a bool among ints'),
-        pytest.param(
-            [datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC), datetime.datetime(2021, 1, 1)],
-            "'2021-01-01 00:00:00' is written as '2021-01-01 00:00:00\\+00:00'",
-            id='a naive datetime among aware ones',
-        ),
+        pytest.param([0, True], "'True' is written as '1'", id='a bool among ints'),
     ],
 )
 def test_a_key_that_cannot_name_one_slice_by_its_text_is_refused_before_a_slice_is_taken(tmp_path, keys, match):
     """The record and metrics name a slice by its key's text, and are typed back by matching that text.
 
-    A hand-built list with two keys of one text, or a key the sweep's one type
-    rewrote, failed in polars' ``replace_strict`` when the fold ended — after
-    every slice had solved — and again on every ``scan_sweep`` of the spill.
+    Two sources that carry the axis under two keys of one text, or a key the
+    sweep's one type rewrote, failed in polars' ``replace_strict`` when the
+    fold ended — after every slice had solved — and again on every
+    ``scan_sweep`` of the spill.
     """
-    base = scenario_sources()
-    sources = {**base, 'load': _draw(base, 'low')}
     out = tmp_path / 'spill'
     with pytest.raises(sps.errors.SpecsolveError, match=match):
-        sps.solve_over(DISPATCH, sources, sps.Slices([(key, sources) for key in keys], key_name='draw'), spill_to=out)
+        sps.solve_over(DISPATCH, _typed_apart(*keys), sps.EachLabel('draw'), spill_to=out)
     assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
 
 
@@ -1805,55 +1793,6 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
             read('q')
 
 
-def test_slices_written_by_hand_are_solved_as_written_under_the_key_they_name():
-    """`Slices` takes `(key, sources)` pairs.
-
-    The pairs cannot say what their keys are labels *of*, so `key_name=` has
-    no default there.
-    """
-    base = scenario_sources()
-    slices = [(name, {**base, 'load': _draw(base, name)}) for name in ('low', 'high')]
-
-    with pytest.raises(TypeError, match='key_name'):
-        sps.Slices(slices)  # pyrefly: ignore[missing-argument] — the refusal under test
-
-    runs = sps.solve_over(DISPATCH, base, over=sps.Slices(slices, key_name='draw'))
-    assert runs.keys == ['low', 'high']
-    assert runs.records.columns[0] == 'draw'
-    assert runs.primal('p').columns[0] == 'draw', 'both frames key the same way, or they stop joining'
-
-
-#: The second slice of a two-slice hand-built axis, each naming *less* than the
-#: first. Neither class axis can produce one.
-NARROWED = [
-    pytest.param(lambda base: {'load': _draw(base, 'high'), 'snapshot': range(4)}, id='fewer sources'),
-    pytest.param(lambda base: {**base, 'load': _draw(base, 'high', 2)}, id='no index'),
-]
-
-
-@pytest.mark.parametrize('second', NARROWED)
-def test_a_hand_built_slice_that_names_less_does_not_inherit_the_last_one(second):
-    """A slice says what the whole model attaches, whichever way the sweep runs.
-
-    A serial fold updates and keeps what the last slice attached, where a
-    pooled fold builds each slice alone. The failure is a disagreement between
-    the two: either outcome on its own reads as an answer.
-    """
-    base = scenario_sources()
-    slices = [('low', {**base, 'load': _draw(base, 'low'), 'snapshot': range(4)}), ('high', second(base))]
-
-    def fold(executor: object) -> object:
-        try:
-            return sps.solve_over(
-                DISPATCH, base, sps.Slices(slices, key_name='draw'), executor=executor
-            ).objective.to_dicts()
-        except sps.errors.DataError as exc:
-            return str(exc)
-
-    with ThreadPoolExecutor(2) as pool:
-        assert fold(None) == fold(pool), 'a sweep answers the slice it was given, not the one before it'
-
-
 def test_an_axis_key_name_overrides_what_it_derived_and_refuses_a_collision():
     """The derived name is right by default and the caller's word wins.
 
@@ -1889,13 +1828,13 @@ def test_an_archive_runs_again_under_the_key_name_the_sweep_ran_with(tmp_path):
 @pytest.mark.parametrize(
     'over',
     [
-        pytest.param([('low', {}), ('high', {})], id='pairs-in-no-axis'),
+        pytest.param([('low', {}), ('high', {})], id='a-list-of-pairs'),
         pytest.param('scenario', id='the-name-of-a-dimension'),
     ],
 )
 def test_an_over_that_is_no_axis_is_refused_before_anything_is_read(over):
     """Anything else reached the first attribute an axis has, and raised an `AttributeError` from inside."""
-    with pytest.raises(sps.errors.SpecsolveError, match=r'over= takes EachLabel, EachWindow or Slices') as raised:
+    with pytest.raises(sps.errors.SpecsolveError, match=r'over= takes EachLabel or EachWindow') as raised:
         sps.solve_over(DISPATCH, scenario_sources(), over)
     assert f'(got {type(over).__name__})' in str(raised.value), 'the refusal names what it was given'
 
@@ -2175,6 +2114,15 @@ def test_a_slice_that_leaves_nothing_to_carry_stops_the_sweep_by_name():
     assert 'slice 8' in str(raised.value), 'the message names the slice that had nothing to start from'
 
 
+def _with_a_short_last_scenario() -> tuple[dict[str, object], dict[str, object]]:
+    """Scenario sources whose last scenario in key order is `top`, whole and then short of two snapshots."""
+    base = scenario_sources()
+    whole = base['load'].with_columns(pl.col('scenario').replace('high', 'top'))
+    rest = whole.filter(pl.col('scenario') != 'top')
+    short = pl.DataFrame({'scenario': ['top', 'top'], 'snapshot': [0, 1], 'value': [1.0, 2.0]})
+    return {**base, 'load': whole}, {**base, 'load': pl.concat([rest, short])}
+
+
 @pytest.mark.parametrize('make_executor', [pytest.param(None, id='serial'), *EXECUTORS[:2]])
 def test_a_failing_slice_is_named(make_executor):
     """Slice three of three fails to build, and the traceback says so.
@@ -2182,15 +2130,12 @@ def test_a_failing_slice_is_named(make_executor):
     The error is the engine's own, with a note added, so a caller matching on
     the message still matches.
     """
-    base = scenario_sources()
-    slices = [(k, {**base, 'load': _draw(base, k)}) for k in ('low', 'mid')]
-    slices.append(('bad', {**slices[0][1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})}))
     with (
         _entered(make_executor() if make_executor else None) as executor,
         pytest.raises(sps.errors.DataError) as raised,
     ):
-        sps.solve_over(DISPATCH, base, sps.Slices(slices, key_name='draw'), executor=executor)
-    assert any("slice 'bad'" in note and '3 of 3' in note for note in raised.value.__notes__), (
+        sps.solve_over(DISPATCH, _with_a_short_last_scenario()[1], sps.EachLabel('scenario'), executor=executor)
+    assert any("slice 'top'" in note and '3 of 3' in note for note in raised.value.__notes__), (
         'the note names the slice by key and by position'
     )
 
@@ -2244,10 +2189,10 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
 
 
 def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
-    """`axis.slices(spec, sources)` is the hand-built list the sweep would have run.
+    """`axis.slices(spec, sources)` is the list of slices the sweep would have run.
 
-    One slice builds alone, and the list solved hand-built gives the same
-    answers under the axis's own key.
+    One slice builds alone, and each solved alone reaches the objective its
+    window did.
     """
     sources = horizon_sources(12)
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3)
@@ -2257,10 +2202,9 @@ def test_an_axis_hands_out_its_slices_so_one_can_be_built_alone():
     with sps.build(WINDOW, slices[1][1]) as model:
         assert str(model.row('soc_open', snapshot=3)).startswith('soc_open[snapshot=3]'), 'one window builds alone'
 
-    by_axis = sps.solve_over(WINDOW, sources, axis)
-    by_hand = sps.solve_over(WINDOW, sources, sps.Slices(slices, key_name='snapshot_start'))
-    assert answer_of(by_hand).equals(answer_of(by_axis))
-    assert by_hand.primal('soc').equals(by_axis.primal('soc', per_window=True))
+    by_axis = sps.solve_over(WINDOW, sources, axis).records['objective'].to_list()
+    alone = [sps.solve(WINDOW, cut).objective for _, cut in slices]
+    assert alone == pytest.approx(by_axis), 'each window solved alone is the window the sweep solved'
 
 
 @pytest.mark.parametrize('make_executor', [pytest.param(None, id='serial'), *EXECUTORS])
@@ -2391,21 +2335,20 @@ def test_scan_reads_an_in_memory_sweep_too(sweep):
 def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
     """The slices that solved before the failure are not solved again.
 
-    Three hand-built slices, the third of which cannot build; the second run
-    with the same directory builds one model, and comes back identical to a
-    sweep that never failed.
+    Three scenarios, the third of which cannot build; the second run with the
+    same directory builds one model, and comes back identical to a sweep that
+    never failed.
     """
-    base = scenario_sources()
-    good = [(k, {**base, 'load': _draw(base, k)}) for k in ('low', 'mid', 'high')]
-    bad = [*good[:2], ('high', {**good[0][1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})})]
+    good, bad = _with_a_short_last_scenario()
+    axis = sps.EachLabel('scenario')
     with pytest.raises(sps.errors.DataError):
-        sps.solve_over(DISPATCH, base, sps.Slices(bad, key_name='draw'), spill_to=tmp_path)
+        sps.solve_over(DISPATCH, bad, axis, spill_to=tmp_path)
 
     built = builds(driver)
-    resumed = sps.solve_over(DISPATCH, base, sps.Slices(good, key_name='draw'), spill_to=tmp_path)
+    resumed = sps.solve_over(DISPATCH, good, axis, spill_to=tmp_path)
     assert len(built) == 1, 'only the slice that failed is built again'
 
-    fresh = sps.solve_over(DISPATCH, base, sps.Slices(good, key_name='draw'))
+    fresh = sps.solve_over(DISPATCH, good, axis)
     assert answer_of(resumed).equals(answer_of(fresh))
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 

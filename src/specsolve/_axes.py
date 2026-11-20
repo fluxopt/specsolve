@@ -4,8 +4,7 @@ An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
 into windows of its labels, and also says how each window's frames are
-stitched back over that dimension. [`Slices`][] cuts nothing: it holds
-slices written by hand.
+stitched back over that dimension.
 """
 
 from __future__ import annotations
@@ -49,10 +48,10 @@ class Slice(NamedTuple):
 
     key: Label
     sources: Mapping[str, Source]
-    seam: Label | None = None
     #: How this slice cuts a table that carries the sliced dimension, as it
-    #: cut its sources; ``None`` for a slice written by hand.
-    cut: Callable[[pl.LazyFrame], pl.LazyFrame] | None = None
+    #: cut its sources.
+    cut: Callable[[pl.LazyFrame], pl.LazyFrame]
+    seam: Label | None = None
 
 
 @dataclass(frozen=True)
@@ -136,7 +135,7 @@ class EachLabel:
         return {'each': 'label', 'dim': self.dim, **_where_set(self)}
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what [`Slices`][] takes.
+        """The ``(key, sources)`` list this axis would run on *spec*.
 
         For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
         """
@@ -180,7 +179,7 @@ class EachLabel:
         out: list[Slice] = []
         for key in labels:
             cut = partial(_one_label, self.dim, key)
-            out.append(Slice(key, {**sources, **{name: cut(table) for name, table in carrying.items()}}, cut=cut))
+            out.append(Slice(key, {**sources, **{name: cut(table) for name, table in carrying.items()}}, cut))
         return out, None
 
 
@@ -233,12 +232,11 @@ class EachWindow:
     key_name: str | None = field(default=None, kw_only=True)
 
     def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec* — what [`Slices`][] takes.
+        """The ``(key, sources)`` list this axis would run on *spec*.
 
         For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
-        The pairs carry no ownership: solved through [`Slices`][], the
-        answer is keyed by slice rather than stitched, and nothing is carried
-        between them.
+        A pair holds the window's lookahead rows too, and nothing a carry
+        would hand it.
         """
         return _slices(self, spec, sources)
 
@@ -325,7 +323,7 @@ class EachWindow:
             }
             seam = window[owns - 1]
             out.append(
-                Slice(window[0], {**sources, **cut, self.dim: window}, seam, partial(_one_window, self.dim, window))
+                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), seam)
             )
             owned.extend({key_name: window[0], self.dim: label} for label in window[:owns])
             start += owns
@@ -362,27 +360,6 @@ Axis = EachLabel | EachWindow
 
 #: Each axis by the name ``to_dict`` writes under ``each``.
 _EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'window': EachWindow}
-
-
-@dataclass(frozen=True, eq=False)
-class Slices:
-    """One slice per ``(key, sources)`` pair, written by hand.
-
-    Each pair is a whole set of sources, solved as its own model, so nothing
-    is cut, carried or stitched, and the answer is keyed by slice. The pairs
-    are unrelated questions to an archive, which refuses them.
-    """
-
-    #: The pairs, each a key and the whole sources of one model.
-    slices: Sequence[tuple[Label, Mapping[str, Source]]]
-    #: What the keys are labels of: the key column in every table of the answer.
-    key_name: str = field(kw_only=True)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, 'slices', tuple(self.slices))
-
-    def _key_name(self) -> str:
-        return self.key_name
 
 
 def _where_set(axis: Axis) -> dict[str, object]:
@@ -422,7 +399,7 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
 
 
 def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as the ``(key, sources)`` pairs [`Slices`][] takes."""
+    """*axis*'s slices of *sources* for *spec*, as ``(key, sources)`` pairs."""
     program = lowered(spec)
     axis._check_the_program(program, sources)
     return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]
