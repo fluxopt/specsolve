@@ -179,7 +179,7 @@ def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(
     reversed_rows = {**SOURCES, 'a': SOURCES['a'].reverse(), 'b': SOURCES['b'].reverse()}
     in_order, placed = _built(spec, SOURCES, tmp_path / 'in_order.lp', monkeypatch)
     out_of_order, _ = _built(spec, reversed_rows, tmp_path / 'reversed.lp', monkeypatch)
-    assert placed == [BY_POSITION]
+    assert placed == [BY_POSITION], f'two terms over whole tables were placed by {placed}'
     assert out_of_order == in_order, "the order of a table's rows changed the model read from it by position"
 
 
