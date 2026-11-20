@@ -2640,6 +2640,50 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     )
 
 
+@pytest.mark.parametrize(
+    'read',
+    [
+        pytest.param(lambda sweep, spilled: sweep, id='the-sweep-as-it-came-back'),
+        pytest.param(lambda sweep, spilled: sps.scan_sweep(spilled), id='its-spill-scanned'),
+    ],
+)
+def test_the_slices_of_a_carried_sweep_are_as_it_built_them_given_the_sweep(read, tmp_path):
+    """`axis.slices` gave every window the seed, so a window after the first, built alone, was no model the sweep solved.
+
+    Given the sweep, each window holds what the one before it handed on.
+    """
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    sweep = sps.solve_over(WINDOW, sources, axis, spill_to=tmp_path / 'runs')
+    solved = sweep.records['objective'].to_list()
+
+    from_the_seed = [sps.solve(WINDOW, cut).objective for _, cut in axis.slices(WINDOW, sources)]
+    assert from_the_seed[0] == pytest.approx(solved[0]), 'the first window is built from the seed either way'
+    assert from_the_seed[1] != pytest.approx(solved[1]), 'and the second, from the seed, is another model'
+
+    as_built_then = axis.slices(WINDOW, sources, read(sweep, tmp_path / 'runs'))
+    assert [sps.solve(WINDOW, cut).objective for _, cut in as_built_then] == pytest.approx(solved), (
+        'each window built alone is the window the sweep solved'
+    )
+
+
+def test_the_slices_of_a_sweep_that_stopped_end_where_it_did(tmp_path):
+    """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
+    axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
+    sources = horizon_sources()
+    beyond = sources['load'].with_columns(
+        pl.when(pl.col('snapshot').is_between(6, 8)).then(pl.col('value') + 1_000).otherwise(pl.col('value'))
+    )
+    stopped = {**sources, 'load': beyond}
+    with pytest.raises(sps.errors.SpecsolveError, match='leaves nothing to carry'):
+        sps.solve_over(WINDOW, stopped, axis, spill_to=tmp_path / 'runs')
+
+    ran = axis.slices(WINDOW, stopped, sps.scan_sweep(tmp_path / 'runs'))
+    assert [key for key, _ in ran] == [0, 3], 'the window that solved, and the one the sweep stopped at'
+    with sps.solve(WINDOW, ran[1][1]) as alone:
+        assert alone.termination_condition == 'infeasible', 'built alone, it is the window that failed'
+
+
 def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():
     """`as_built` threads a carry for every caller, and asks for a slice's primal only when the next slice is asked for.
 

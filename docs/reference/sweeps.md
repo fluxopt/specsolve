@@ -53,6 +53,18 @@ slices = sps.EachWindow('snapshot', steps=24, lookahead=24).slices('window.yaml'
 sps.build('window.yaml', slices[37][1]).write('window-37.lp')  # the one that was infeasible
 ```
 
+**Under a carry, pass the sweep.** A slice after the first is built from what
+the one before it left, which only the sweep that solved them knows.
+`axis.slices(spec, sources, sweep)` is the slices that sweep ran, each as it
+built it. Without the sweep, every slice holds the seed. A sweep that stopped
+is read back off its spill:
+
+```python
+axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+ran = axis.slices('window.yaml', sources, sps.scan_sweep('runs/'))
+sps.build('window.yaml', ran[-1][1]).write('stopped.lp')  # the window the sweep stopped at
+```
+
 **An axis is also plain data.** `axis.to_dict()` writes it as a mapping, and
 `solve_over` takes that mapping in the axis's place. An archive's `axis.json`
 holds the same mapping. A mapping with a key the axis does not take, or without
