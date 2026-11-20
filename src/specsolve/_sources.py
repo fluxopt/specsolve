@@ -91,7 +91,9 @@ def tidied_and_attached(
 
 
 class OnRead(Mapping[str, pl.LazyFrame]):
-    """Sources by name, each kept once it is read; *pending* names the reads not yet asked for.
+    """Sources by name, each kept once it is read; *pending* holds the read of each one not read yet.
+
+    A read that raises stays pending, so the next ask raises it again.
 
     A sweep of hundreds of PyPSA parameters most of which no live row reads is
     why: reading, checking and attaching every table was most of a small
@@ -105,7 +107,8 @@ class OnRead(Mapping[str, pl.LazyFrame]):
 
     def __getitem__(self, name: str) -> pl.LazyFrame:
         if name not in self._ready:
-            self._ready[name] = self._pending.pop(name)()
+            self._ready[name] = self._pending[name]()
+            del self._pending[name]
         return self._ready[name]
 
     def __contains__(self, name: object) -> bool:
@@ -116,10 +119,6 @@ class OnRead(Mapping[str, pl.LazyFrame]):
 
     def __len__(self) -> int:
         return len(self._names)
-
-    def read(self) -> list[str]:
-        """The names read so far, in the order the sources declare them."""
-        return [name for name in self._names if name in self._ready]
 
 
 @in_memory()
@@ -198,7 +197,12 @@ def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
     ``Int64`` from 0 in index order; a parameter and a relation unchanged.
-    Nothing is read again, so a model archives what its build read.
+    Every source is read here: a parameter a build has not read is read and
+    checked now, and one it has read is not read again.
+
+    Raises:
+        DataError: A parameter a build has not read, as [`tidy_sources`][]
+            refuses it.
     """
     tables = dict(tidied)
     for dim in program.dimensions:

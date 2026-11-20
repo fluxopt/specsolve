@@ -62,7 +62,8 @@ holds each row at most once.
 for a row it builds, a bound, an assumption it checks, or a later read such as
 an expression or an archive. A fault in a parameter that only a declaration
 without a row reads is not refused. [`sps.tidy`](api.md#specsolve.tidy) reads
-and checks every source. A missing key, a missing index, and a fault in a
+and checks every source, and so does a solve with `archive=`, before the solver
+starts. A missing key, a missing index, and a fault in a
 dimension or a relation are refused whatever is read.
 
 **A coordinate has a value, or it has no row.** A null or NaN value is

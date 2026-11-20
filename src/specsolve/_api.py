@@ -194,7 +194,7 @@ class Model:
         self._spec = as_spec(spec)
         self._program = lowered(self._spec)
         self._sources = dict(sources)
-        #: What the last build read, as [`tidy_sources`][] gave it.
+        #: The last build's sources, as [`tidied_and_attached`][] gave them.
         self._tidied: Mapping[str, pl.LazyFrame] = {}
         self._engine = Engine()
         self._fill()
@@ -210,8 +210,10 @@ class Model:
     def _fill(self) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.
 
-        What the build read is kept for an archive: a one-shot iterator is
-        spent by then, and a path may have been rewritten.
+        The build's sources are kept for an archive: a one-shot iterator is
+        spent by then, and a path may have been rewritten. A parameter the
+        build did not read is read and checked when the archive, or another
+        later read, first asks for it.
         """
         try:
             self._tidied, attached = tidied_and_attached(self._program, self._sources)
@@ -339,6 +341,8 @@ class Model:
                 take.
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
+            DataError: A fault in a parameter the build did not read, which
+                an *archive* reads: refused before the solve.
         """
         out = None if archive is None else Path(archive)
         if out is not None:
@@ -351,6 +355,7 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
+        tables = {} if out is None else with_positions(self._program, self._tidied)
         answered = self._with_record_fields(
             self._engine.solve(
                 solver_name,
@@ -364,7 +369,7 @@ class Model:
             also_record or (),
         )
         if out is not None:
-            self._archive(out, answered)
+            self._archive(out, answered, tables)
         return answered
 
     def _with_record_fields(
@@ -397,8 +402,12 @@ class Model:
         """
         return read_start(start, self._program, self._tidied)
 
-    def _archive(self, out: Path, answered: Result) -> None:
-        """Write this model, what is attached to it now, and *answered* to *out*.
+    def _archive(self, out: Path, answered: Result, tables: Mapping[str, pl.LazyFrame]) -> None:
+        """Write this model, *tables* as [`with_positions`][] read them off what is attached now, and *answered* to *out*.
+
+        *tables* are read before the solve that gave *answered*: reading them
+        refuses a fault in a parameter the build did not read, and a refusal
+        after the solve would lose the answer.
 
         The metrics row is written here, not by [`Result.save`][]: it spans the
         model's life, not one solve.
@@ -409,7 +418,7 @@ class Model:
             answered._save(under, write)
             write(taken, under / METRICS_FILE)
 
-        write_archive(out, self._spec, with_positions(self._program, self._tidied), axis=None, answer=answer)
+        write_archive(out, self._spec, tables, axis=None, answer=answer)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
