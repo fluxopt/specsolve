@@ -16,9 +16,10 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
-from specsolve._engine import coverage, labels
+from specsolve._engine import coverage, dense, labels
 from specsolve._engine.attaching import parameters_read
 from specsolve._engine.compiler import Compiler
+from specsolve._engine.dense import Dense
 from specsolve._engine.predicates import holds_nowhere
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.terms import Term, absence_restrictions, cut_to_rows
@@ -178,18 +179,66 @@ class Assembly:
         )
 
     def _matrix_share(
-        self, frames: list[pl.LazyFrame], name: str, *expressions: program.Expression
+        self, stacked: pl.DataFrame, name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
-        """One constraint's share: in ``(row, col)`` order, repeated cells summed.
+        """One constraint's share from its terms' entries: in ``(row, col)`` order, repeated cells summed.
 
         Returns:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
+
+    def _placed_by_join(
+        self,
+        linear: list[tuple[Term, float]],
+        c: program.Constraint,
+        labelled: pl.DataFrame,
+        start: int,
+        *,
+        unrestricted: bool,
+    ) -> pl.DataFrame:
+        """Every entry of *linear* as ``(row, col, coeff)``, each term joined onto the rows *labelled* holds."""
+        if not linear:
+            return _stack([], _MATRIX)
+        frame = labelled.lazy()
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
+        whole = c.where is None and unrestricted
+        frames = []
+        for p, sign in linear:
+            if whole and set(p.dims) == set(c.dims):
+                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+            else:
+                cut = cut_to_rows(p, labelled, self.attached.cardinality).frame
+                placed = join_on(frame, cut, p.dims, 'inner', maintain_order=carried_order)
+            frames.append(
+                placed.select(
+                    'row',
+                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
+                    (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
+                )
+            )
+        return pl.concat(frames).pipe(collected)
+
+    def _placed_by_position(
+        self, linear: list[tuple[Dense, float]], dims: tuple[str, ...], labelled: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
+        """[`_placed_by_join`][]'s entries for terms held by position, and *labelled* cut to the rows they keep.
+
+        The terms' own absences are read off their columns here, where the
+        join path hands them to [`labels.frame`][specsolve._engine.labels.frame]
+        as restrictions. *labelled* numbers its rows in position order, so
+        the entries leave in ``(row, col)`` order and the share is not sorted.
+        """
+        position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
+        positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
+        kept, index, col, coeff = dense.placed(linear, dense.At(dims, positions, self.attached.cardinality))
+        if kept is not None:
+            labelled = labels.renumbered(labelled.filter(pl.Series(kept)), dims, 'row', start)
+        entries = {'row': index + start, 'col': col, 'coeff': coeff}
+        return pl.DataFrame(entries, schema={column: _DTYPES[column] for column in _MATRIX}), labelled
 
     # ------------------------------------------------------------------
     # declarations
@@ -292,17 +341,23 @@ class Assembly:
         linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
-        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
+        by_position = [
+            (p.body, sign) for p, sign in linear if isinstance(p.body, Dense) and p.body.stands_for(p.presences)
+        ]
+        joined: list[tuple[Term, float]] = [] if linear and len(by_position) == len(linear) else linear
+        restrictions = absence_restrictions([p for p, _ in (*joined, *quadratic, *constant)])
         if admitted is None:
             labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
         elif restrictions:
             labelled = labels.narrowed(admitted, c.dims, 'row', start, restrictions)
         else:
             labelled = admitted
-        if restrictions:
-            declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
-            if declared > labelled.height:
-                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
+        declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
+        stacked = None
+        if not joined:
+            stacked, labelled = self._placed_by_position(by_position, c.dims, labelled, start)
+        if declared > labelled.height:
+            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
@@ -320,27 +375,9 @@ class Assembly:
             rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
-        frames = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not restrictions
-        for p, sign in linear:
-            if dense and set(p.dims) == set(c.dims):
-                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
-            else:
-                cut = cut_to_rows(p, labelled, self.attached.cardinality).frame
-                placed = join_on(frame, cut, p.dims, 'inner', maintain_order=carried_order)
-            frames.append(
-                placed.select(
-                    'row',
-                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
-                    (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
-                )
-            )
-        matrix, term_rows = (
-            self._matrix_share(frames, subject, c.lhs, c.rhs)
-            if frames
-            else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
-        )
+        if stacked is None:
+            stacked = self._placed_by_join(linear, c, labelled, start, unrestricted=not restrictions)
+        matrix, term_rows = self._matrix_share(stacked, subject, c.lhs, c.rhs)
         qmatrix = self._quadratic_share(frame, quadratic, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()

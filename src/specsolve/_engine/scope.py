@@ -18,6 +18,7 @@ from specsolve._names import VALUE
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
+    import numpy as np
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
@@ -58,6 +59,8 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false, read once for the build.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+    #: Each array a term reads by position, by what it holds and its name; [`dense`][specsolve._engine.dense] fills it.
+    by_position: dict[tuple[str, str], np.ndarray] = field(default_factory=dict)
     #: Whether each parameter asked about is zero at every row it has.
     _zero: dict[str, bool] = field(default_factory=dict)
     #: Each sparse parameter's labels along each of its dims where they are fewer than the dim's.

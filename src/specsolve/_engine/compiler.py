@@ -25,7 +25,9 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
+from specsolve._engine import dense
 from specsolve._engine.attaching import refuse_a_negative_window
+from specsolve._engine.dense import Dense
 from specsolve._engine.predicates import (
     Carrier,
     compile_predicate,
@@ -96,6 +98,11 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     stacked = Term(dims, pl.concat([p.frame.select(*dims, 'cval') for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
+
+
+def _held(take: dense.Take | None, frame: pl.LazyFrame, absent: Presence | None = None) -> pl.LazyFrame | Dense:
+    """A leaf's body: held by position where *take* reads it there, *frame* otherwise."""
+    return frame if take is None else Dense(take, lambda: frame, absent)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -355,12 +362,12 @@ class Compiler:
                     carrier, condition = compile_predicate(self.scope, p.frame, when, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                    return replace(p, frame=frame, presences=presences, region=both_regions(p.region, when))
+                    return replace(p, body=frame, presences=presences, region=both_regions(p.region, when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
                 frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)
                 presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                return replace(p, dims=out_dims, frame=frame, presences=presences, region=both_regions(p.region, when))
+                return replace(p, dims=out_dims, body=frame, presences=presences, region=both_regions(p.region, when))
 
             return map_terms(ev(r.value), kept)
 
@@ -381,7 +388,7 @@ class Compiler:
         def ev(e: program.Expression) -> CompiledExpression:
             if isinstance(e, program.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
-                return CompiledExpression((), (Term((), frame, 'constant'),))
+                return CompiledExpression((), (Term((), _held(dense.constant(float(e.value)), frame), 'constant'),))
             if isinstance(e, program.ParameterReference):
                 return CompiledExpression((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
@@ -463,7 +470,8 @@ class Compiler:
         frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
         present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
-        return Term(dims, frame, 'constant', presences=presences, parameters=frozenset({name}))
+        take = None if presences else dense.parameter(self.scope, name)
+        return Term(dims, _held(take, frame), 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
@@ -471,7 +479,9 @@ class Compiler:
         frame = self.scope.variables[name].frame.select(
             *dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
         )
-        return Term(dims, frame, 'linear', presences=self._variable_presences(name, dims))
+        presences = self._variable_presences(name, dims)
+        absent = presences[0] if presences else None
+        return Term(dims, _held(dense.variable(self.scope, name), frame, absent), 'linear', presences=presences)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
@@ -543,7 +553,7 @@ class Compiler:
 
         def cut(p: Term) -> Term:
             kept = [pl.col(d).is_in(labels.implode()) for d, labels in support.items() if d in p.dims]
-            return replace(p, frame=p.frame.filter(kept)) if kept else p
+            return replace(p, body=p.frame.filter(kept)) if kept else p
 
         return map_terms(compiled, cut)
 
@@ -556,7 +566,7 @@ class Compiler:
         """
         if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
             return compiled
-        return replace(compiled, constant=tuple(replace(p, frame=_totalled(p)) for p in compiled.constant))
+        return replace(compiled, constant=tuple(replace(p, body=_totalled(p)) for p in compiled.constant))
 
     def _added_up(
         self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
@@ -583,7 +593,7 @@ class Compiler:
         if len(terms) == 1 and terms[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return compiled
-            return CompiledExpression((), (replace(terms[0], frame=_totalled(terms[0])),))
+            return CompiledExpression((), (replace(terms[0], body=_totalled(terms[0])),))
         dims, restrictions = self.scope.spanned(terms), absence_restrictions(terms)
         carrier = masked(self.scope, dims, None)
         for restriction in restrictions:
@@ -679,12 +689,12 @@ class Compiler:
             return p
         if not p.dims:
             zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
-            return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
+            return replace(p, body=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
         first = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
-        return replace(p, frame=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
+        return replace(p, body=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
 
     def _at_term(self, p: Term, a: program.JoinColumns, context: str) -> Term:
         """Spread the dropped dims back out over the added ones — the adjoint of a group.

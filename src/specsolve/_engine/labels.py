@@ -110,9 +110,15 @@ def narrowed(
     surviving = labelled.lazy()
     for restriction in restrictions:
         surviving = restriction.restrict(surviving, restriction.keyed_by or ())
-    kept = in_position_order(surviving.pipe(collected), label).drop(label)
-    return kept.with_row_index(label, offset=start).select(
-        *(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted()
+    return renumbered(in_position_order(surviving.pipe(collected), label), dims, label, start)
+
+
+def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], label: str, start: int) -> pl.DataFrame:
+    """*kept*, some rows of a labelled frame still in label order, numbered again from *start*."""
+    return (
+        kept.drop(label)
+        .with_row_index(label, offset=start)
+        .select(*(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted())
     )
 
 
