@@ -330,7 +330,8 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     term; a coordinate where the divisor is absent leaves the frame, the
     quotient being absent too. The presences of both sides travel out: at a
     read *c* may be a variable at its primal. A product of two terms held by
-    position is held by position.
+    position is held by position, unless *c* spans a dim a sum dropped from
+    *a*: one name would then stand for two labels at a coordinate.
     """
     out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
 
@@ -345,7 +346,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
         return joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
 
     body: pl.LazyFrame | Dense
-    if not divide and isinstance(a.body, Dense) and isinstance(c.body, Dense):
+    if not divide and isinstance(a.body, Dense) and isinstance(c.body, Dense) and not set(a.body.dropped) & set(c.dims):
         body = dense.product(a.body, c.body, tidy)
     else:
         body = tidy()

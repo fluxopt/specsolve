@@ -36,6 +36,7 @@ SPEC = {
         'gone': {'dims': ['i'], 'missing': 'absent'},
         'on': {'dims': ['i'], 'dtype': 'bool'},
         'rare': {'dims': ['i', 'j'], 'dtype': 'bool'},
+        'half': {'dims': ['i', 'j'], 'dtype': 'bool'},
         's': {'dims': []},
     },
     'variables': {
@@ -45,12 +46,17 @@ SPEC = {
         'silent': {'dims': ['i'], 'where': 'on', 'missing': 'neutral', 'bounds': {'lower': 0, 'upper': 10}},
         'total': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
         'late': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
+        'halved': {'dims': ['i', 'j'], 'where': 'half', 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y) + sum(masked) + sum(silent) + total + sum(late)'},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(x) + sum(y) + sum(masked) + sum(silent) + total + sum(late) + sum(halved)',
+    },
 }
 
 #: `i` has 40 labels so that `rare`, true at one coordinate of 80, leaves a
 #: variable masked by it past `dense.CELLS_PER_COLUMN` coordinates per column.
+#: `half` is true at both labels of `j` for every other label of `i`.
 LABELS = list(range(40))
 PAIR = ['p', 'q']
 SOURCES = {
@@ -64,6 +70,9 @@ SOURCES = {
     'on': pl.DataFrame({'i': LABELS, 'value': [n % 3 != 0 for n in LABELS]}),
     'rare': pl.DataFrame(
         {'i': [n for n in LABELS for _ in PAIR], 'j': PAIR * 40, 'value': [n == 7 for n in range(80)]}
+    ),
+    'half': pl.DataFrame(
+        {'i': [n for n in LABELS for _ in PAIR], 'j': PAIR * 40, 'value': [n % 2 == 0 for n in LABELS for _ in PAIR]}
     ),
     's': 2.0,
 }
@@ -157,7 +166,39 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
         pytest.param({'dims': ['i'], 'expression': 'short * x <= 10'}, BY_JOIN, id='a-parameter-short-of-a-row'),
         pytest.param({'dims': ['i'], 'expression': 'gone * x <= 10'}, BY_JOIN, id='a-parameter-absent-at-a-coordinate'),
         pytest.param({'dims': ['i'], 'expression': 'x / a <= 10'}, BY_JOIN, id='a-quotient'),
-        pytest.param({'dims': ['i'], 'expression': 'sum(y, over=j) <= 10'}, BY_JOIN, id='a-sum'),
+        pytest.param({'dims': ['i'], 'expression': 'sum(y, over=j) <= 10'}, BY_POSITION, id='a-sum-over-one-dim'),
+        pytest.param({'dims': [], 'expression': 'sum(y) <= 10'}, BY_POSITION, id='a-sum-over-every-dim'),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'sum(b * y, over=j) - a * x <= 10'},
+            BY_POSITION,
+            id='a-sum-of-a-product-beside-a-plain-term',
+        ),
+        pytest.param({'dims': ['i'], 'expression': 'a * sum(y, over=j) <= 10'}, BY_POSITION, id='a-product-with-a-sum'),
+        pytest.param(
+            {'dims': ['j'], 'expression': 'sum(y, over=i) - sum(sum(y, over=j), over=i) <= 1'},
+            BY_JOIN,
+            id='a-sum-spread-over-a-dim-it-dropped-is-joined',
+        ),
+        pytest.param(
+            {'dims': ['i', 'j'], 'expression': 'y <= sum(y, over=j)'},
+            BY_JOIN,
+            id='a-sum-over-a-dim-the-row-spans-is-joined',
+        ),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'sum(halved, over=j) + x <= 10'},
+            BY_POSITION,
+            id='a-sum-skips-the-slots-its-variable-is-masked-from',
+        ),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'sum(halved, over=j) <= 10'},
+            BY_POSITION,
+            id='a-row-whose-sum-has-no-member-is-not-built',
+        ),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'sum(y, over=j) + shift(x, along=i, offset=1) <= 10'},
+            BY_JOIN,
+            id='a-sum-beside-a-frame',
+        ),
         pytest.param(
             {'dims': ['i'], 'expression': 'x + shift(x, along=i, offset=1) <= 10'},
             BY_JOIN,
@@ -264,6 +305,34 @@ def test_terms_that_name_a_later_variable_first_are_placed_without_a_sort(monkey
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'late - a * x <= 10'}}}
     sps.build(spec, SOURCES).close()
     assert not sorts, f'the share of two terms over two variables was sorted by {sorts}'
+
+
+def test_the_objective_reads_its_terms_by_position(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Each term is a sum over every dim it has, so held by position it is read with no frame."""
+    held = []
+    costs = assembly.Assembly._costs
+
+    def spied(self, p: Term) -> pl.DataFrame:
+        held.append(isinstance(p.body, dense.Dense))
+        return costs(self, p)
+
+    spec = {
+        **SPEC,
+        'constraints': {'row': {'dims': ['i'], 'expression': 'x <= 10'}},
+        'objective': {
+            'sense': 'maximize',
+            'expression': 'sum(a * x) - 2 * sum(b * y) + sum(masked) + total + sum(short * late) + sum(halved)',
+        },
+    }
+    with monkeypatch.context() as patched:
+        patched.setattr(assembly.Assembly, '_costs', spied)
+        sps.write(spec, SOURCES, tmp_path / 'built.lp')
+    assert held == [True, True, True, True, False, True], (
+        'every term but the one over a parameter short of a row is read by position'
+    )
+    assert (tmp_path / 'built.lp').read_text() == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch), (
+        'reading the objective by position changed the written model'
+    )
 
 
 def test_a_variable_masked_to_few_coordinates_is_not_held_by_position(

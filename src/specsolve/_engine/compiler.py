@@ -633,14 +633,23 @@ class Compiler:
         """Drop the summed dims — not an aggregate; the terminal ``sum(coeff)`` at assembly collapses the rows.
 
         Constructed rather than ``replace``d so presence is dropped: a reduction
-        skips absent slots.
+        skips absent slots. A linear term held by position stays held, still
+        ranging over the dims it lost.
         """
         missing = [d for d in over if d not in p.dims]
         if missing:
             refuse_a_term_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
-        frame = p.frame.select(*keep, *p.carried)
-        return self._empty_sums(Term(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
+
+        def tidy() -> pl.LazyFrame:
+            return p.frame.select(*keep, *p.carried)
+
+        body: pl.LazyFrame | Dense
+        if p.kind == 'linear' and isinstance(p.body, Dense) and p.body.stands_for(p.presences):
+            body = dense.reduced(p.body, over, tidy)
+        else:
+            body = tidy()
+        return self._empty_sums(Term(keep, body, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
     def _group_term(self, p: Term, columns: program.JoinColumns, context: str) -> Term:
         """Relabel the dims the join drops to the ones it adds, through its relation.

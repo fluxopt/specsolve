@@ -63,6 +63,10 @@ class At:
     def __len__(self) -> int:
         return len(self._over[self.dims])
 
+    def cardinality(self, dim: str) -> int:
+        """How many labels *dim* has."""
+        return self._cardinality[dim]
+
     def over(self, dims: tuple[str, ...]) -> Integers:
         """Each coordinate's position in the product of *dims*, which are among this one's, in the order given."""
         if dims not in self._over:
@@ -71,6 +75,16 @@ class At:
                 position = position * self._cardinality[d] + self.ordinal(d)
             self._over[dims] = position
         return self._over[dims]
+
+    def spread(self, dims: tuple[str, ...]) -> At:
+        """Each coordinate repeated at every label of *dims*, which are none of this one's: the product, in its order."""
+        if not dims:
+            return self
+        labels = math.prod(self._cardinality[d] for d in dims)
+        positions = np.repeat(self._over[self.dims] * labels, labels) + np.tile(
+            np.arange(labels, dtype=np.int64), len(self)
+        )
+        return At((*self.dims, *dims), positions, self._cardinality)
 
     def only(self, kept: np.ndarray[tuple[int, ...], np.dtype[np.bool_]]) -> At:
         """The coordinates *kept* marks, in the order they are in."""
@@ -95,6 +109,9 @@ class Dense:
     time something asks. ``absent`` is the presence a coordinate without a
     column stands for, where the term's variable is masked and removes the
     row it is missing from; ``None`` where a missing column is a zero.
+    ``dropped`` are the dims a sum took from the term: it still has an entry
+    at each of their labels, so it is read at coordinates
+    [`spread`][At.spread] over them.
     """
 
     def __init__(
@@ -104,11 +121,13 @@ class Dense:
         columns: Columns | None = None,
         reach: int = -1,
         absent: Presence | None = None,
+        dropped: tuple[str, ...] = (),
     ) -> None:
         self.values = values
         self.columns = columns
         self.reach = reach
         self.absent = absent
+        self.dropped = dropped
         self._tidy = tidy
 
     @cached_property
@@ -185,7 +204,7 @@ def _held(scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.nd
 
 def negated(body: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     """``-body``, *tidy* being the same on the join path."""
-    return Dense(lambda at: -body.values(at), tidy, body.columns, body.reach, body.absent)
+    return Dense(lambda at: -body.values(at), tidy, body.columns, body.reach, body.absent, body.dropped)
 
 
 def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
@@ -194,7 +213,7 @@ def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     Each factor reads the coordinate along its own dims, which is the
     broadcast the join makes by matching the dims the two share.
     """
-    return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.reach, a.absent)
+    return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.reach, a.absent, a.dropped)
 
 
 def _values_by_position(scope: Scope, name: str) -> Floats:
@@ -236,6 +255,24 @@ def _columns_by_position(scope: Scope, name: str) -> Entries:
     return out
 
 
+def reduced(body: Dense, dims: tuple[str, ...], tidy: Callable[[], pl.LazyFrame]) -> Dense:
+    """*body* summed over *dims*, *tidy* being the same on the join path.
+
+    Nothing is added up here: the term keeps an entry at every label of
+    *dims*, as its frame keeps a row, and the matrix adds the entries that
+    land on one cell. A sum skips the slots its variable is absent from, so a
+    missing column is no longer an absence.
+    """
+    return Dense(body.values, tidy, body.columns, body.reach, None, (*body.dropped, *dims))
+
+
+def entries(body: Dense, at: At) -> tuple[Integers | Entries, Floats | float]:
+    """*body*'s columns and values at *at*, one of each at every label of the dims a sum dropped."""
+    assert body.columns is not None, 'a term with entries carries a variable'
+    wide = at.spread(body.dropped)
+    return body.columns(wide), body.values(wide)
+
+
 def placed(
     terms: Sequence[tuple[Dense, float]], at: At
 ) -> tuple[At, np.ndarray[tuple[int, ...], np.dtype[np.bool_]] | None, Integers, Entries, Floats]:
@@ -250,10 +287,11 @@ def placed(
         The coordinates that keep a row, and which of *at* they are, ``None``
         for all of them. Then the entries as ``(index, col, coeff)`` in
         *index* order, *index* counting the coordinates kept. A term whose
-        variable has no column at a coordinate holds no entry there. Within
-        a coordinate the terms are laid out by ``reach``, which is column
-        order for terms over different variables, so their share is not
-        sorted.
+        variable has no column at a coordinate holds no entry there, and a
+        term a sum reduced holds one at every label of the dims it dropped.
+        Within a coordinate the terms are laid out by ``reach``, which is
+        column order for unreduced terms over different variables, so their
+        share is not sorted.
     """
     kept = None
     for body, _ in terms:
@@ -266,19 +304,24 @@ def placed(
     if kept is not None:
         at = at.only(kept)
 
-    count = len(terms)
-    cols = np.empty(len(at) * count, dtype=np.int32)
-    coeffs = np.empty(len(at) * count, dtype=np.float64)
-    holed = False
-    for slot, (body, sign) in enumerate(sorted(terms, key=lambda term: term[0].reach)):
-        column = _columns_of(body, at)
-        cols[slot::count] = column
+    ordered = sorted(terms, key=lambda term: term[0].reach)
+    each = [math.prod(at.cardinality(d) for d in body.dropped) for body, _ in ordered]
+    count = sum(each)
+    cols = np.empty((len(at), count), dtype=np.int32)
+    coeffs = np.empty((len(at), count), dtype=np.float64)
+    holed, slot = False, 0
+    for (body, sign), held in zip(ordered, each, strict=True):
+        column, value = entries(body, at)
+        cols[:, slot : slot + held] = column.reshape(len(at), held)
         holed = holed or bool(column.size and column.min() < 0)
-        np.multiply(body.values(at), sign, out=coeffs[slot::count])
+        shaped = value if isinstance(value, float) else value.reshape(len(at), held)
+        np.multiply(shaped, sign, out=coeffs[:, slot : slot + held])
+        slot += held
     index = np.repeat(np.arange(len(at), dtype=np.int64), count)
+    cols, coeffs = cols.reshape(-1), coeffs.reshape(-1)
     if holed:
-        held = cols >= 0
-        return at, kept, index[held], cols[held], coeffs[held]
+        kept_entries = cols >= 0
+        return at, kept, index[kept_entries], cols[kept_entries], coeffs[kept_entries]
     return at, kept, index, cols, coeffs
 
 

@@ -373,7 +373,9 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         by_position = [
-            (p.body, sign) for p, sign in linear if isinstance(p.body, Dense) and p.body.stands_for(p.presences)
+            (p.body, sign)
+            for p, sign in linear
+            if isinstance(p.body, Dense) and p.body.stands_for(p.presences) and not set(p.body.dropped) & set(c.dims)
         ]
         positional = bool(linear) and len(by_position) == len(linear)
         restrictions = absence_restrictions(
@@ -547,14 +549,29 @@ class Assembly:
         self.quad = self._objective_quadratic(comp.quadratic, o.expression)
         if not comp.linear:
             return None
-        frames = [
-            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.linear
-        ]
-        stacked = pl.concat(frames).pipe(collected)
+        stacked = pl.concat([self._costs(p) for p in comp.linear])
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, 'coeff')
         return objective
+
+    def _costs(self, p: Term) -> pl.DataFrame:
+        """One linear term of the objective as ``(col, coeff)``, one row per entry it holds.
+
+        A term held by position is read at every coordinate of its dims and
+        of the dims its sums dropped, with no frame formed. A coordinate
+        where its variable has no column holds no entry, as the frame holds
+        no row there, whichever way the variable reads a missing row.
+        """
+        if not isinstance(p.body, Dense) or p.body.columns is None:
+            cost = p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff'))
+            return cost.pipe(collected)
+        cardinality = self.attached.cardinality
+        whole = np.arange(math.prod(cardinality[d] for d in p.dims), dtype=np.int64)
+        col, coeff = dense.entries(p.body, dense.At(p.dims, whole, cardinality))
+        held = col >= 0
+        costs = {'col': col[held].astype(np.int32), 'coeff': np.broadcast_to(coeff, col.shape)[held]}
+        return pl.DataFrame(costs, schema={column: _DTYPES[column] for column in _OBJ})
 
     def _objective_quadratic(self, quadratic: tuple[Term, ...], expression: program.Expression) -> pl.DataFrame | None:
         """The objective's quadratic part as ``(col_l, col_r, coeff)``, or ``None``.
