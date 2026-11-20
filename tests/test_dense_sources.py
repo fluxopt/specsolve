@@ -85,3 +85,23 @@ def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatc
     }
     sps.build(spec, sources).close()
     assert sorted(reads) == ['g', 't'], f'the labels were read as {sorted(reads)}, where each dimension once is enough'
+
+
+def test_a_dimension_is_cast_into_its_enum_by_one_expression_however_many_tables_carry_it(monkeypatch):
+    """Building a cast to an `Enum` of many labels costs a fixed time per expression, and PyPSA casts hundreds of tables."""
+    built, real = [], pl.Expr.cast
+
+    def counted(self, dtype, *args, **kwargs):
+        if isinstance(dtype, pl.Enum):
+            built.append(tuple(dtype.categories))
+        return real(self, dtype, *args, **kwargs)
+
+    monkeypatch.setattr(pl.Expr, 'cast', counted)
+    spec = {**SPEC, 'parameters': {**SPEC['parameters'], 'cost': {'dims': ['g']}, 'floor': {'dims': ['g']}}}
+    sources = _sources(_dense()) | {
+        'cost': pl.DataFrame({'g': GENERATORS, 'value': 1.0}),
+        'floor': pl.DataFrame({'g': GENERATORS, 'value': 0.0}),
+    }
+    sps.build(spec, sources).close()
+    casts = sum(1 for categories in built if categories == tuple(GENERATORS))
+    assert casts == 2, f'`g` was cast by {casts} expressions: one for its labels and one shared by its three tables'
