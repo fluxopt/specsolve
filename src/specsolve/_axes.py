@@ -4,9 +4,7 @@ An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
 into windows of its labels, and also says how each window's frames are
-stitched back over that dimension. An axis's ``carry=`` is resolved here too:
-what one slice hands the next is read the same way by the sweep that solves
-them and by the archive that rebuilds them.
+stitched back over that dimension.
 """
 
 from __future__ import annotations
@@ -360,89 +358,6 @@ class EachWindow:
 #: An axis that cuts one set of sources into slices.
 Axis = EachLabel | EachWindow
 
-
-@dataclass(frozen=True)
-class CarryRule:
-    """One resolved carry: which variable moves into a parameter, and how.
-
-    ``dropped`` is the one dimension the carry collapses, and ``None`` where the
-    whole frame moves forward.
-    """
-
-    variable: str
-    dropped: str | None
-
-    @classmethod
-    def resolved(cls, program: Program, parameter: str, variable: str) -> CarryRule:
-        """One carry checked against the plan, without reading data."""
-        if parameter not in program.parameters:
-            raise SpecsolveError(f'carry writes parameter {parameter!r}, which the spec does not declare')
-        if variable not in program.variables:
-            raise SpecsolveError(f'carry reads variable {variable!r}, which the spec does not declare')
-        over = list(program.parameters[parameter].dims)
-        source = list(program.variables[variable].dims)
-        if missing := [d for d in over if d not in source]:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} cannot line up: {parameter!r} is over {over}, and '
-                f'{variable!r} is over {source}, which has no {missing}. A carry copies a variable into a '
-                f'parameter, so the parameter cannot be over more than the variable is.'
-            )
-        dropped = [d for d in source if d not in over]
-        if len(dropped) > 1:
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
-                f'{source} and {parameter!r} over {over}. A carry collapses the one dimension the sweep '
-                f'advances along, so reduce the others in the YAML — a derived variable is where the oracle '
-                f'can see the math.'
-            )
-        return cls(variable, dropped[0] if dropped else None)
-
-    def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, seam: Label | None
-    ) -> pl.DataFrame:
-        """What this rule hands the next slice, read out of one slice's primals.
-
-        The row handed on is the one at *seam*, the last label the slice owns,
-        never a lookahead row.
-        """
-        frame = frames[self.variable]
-        if self.dropped is None:
-            return frame
-        assert seam is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == seam).drop(self.dropped)
-        if picked.is_empty():
-            raise SpecsolveError(
-                f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {seam!r}, the last label it owns, so there is no '
-                f'value there to hand forward.'
-            )
-        return picked
-
-
-def carry_plan(program: Program, axis: Axis) -> dict[str, CarryRule]:
-    """Each carry of *axis* resolved against *program*, by the parameter it writes.
-
-    Raises:
-        SpecsolveError: As [`CarryRule.resolved`][] raises it.
-    """
-    return {parameter: CarryRule.resolved(program, parameter, variable) for parameter, variable in axis.carry.items()}
-
-
-def handed_on(
-    plan: Mapping[str, CarryRule], primals: Mapping[str, pl.DataFrame], current: Slice
-) -> dict[str, pl.DataFrame]:
-    """What the slice after *current* takes from *current*'s *primals*, by the parameter each carry writes."""
-    return {
-        parameter: rule.value_from(primals, parameter, current.key, current.seam) for parameter, rule in plan.items()
-    }
-
-
-def cut(axis: Axis, program: Program, sources: Mapping[str, Source]) -> list[Slice]:
-    """*axis*'s slices of *sources* for *program*, checked as a sweep checks them before it takes one."""
-    axis._check_the_program(program, sources)
-    return axis._slice(program, sources, axis._key_name())[0]
-
-
 #: Each axis by the name ``to_dict`` writes under ``each``.
 _EACH: dict[str, type[EachLabel] | type[EachWindow]] = {'label': EachLabel, 'window': EachWindow}
 
@@ -485,7 +400,9 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
 
 def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
     """*axis*'s slices of *sources* for *spec*, as ``(key, sources)`` pairs."""
-    return [(current.key, current.sources) for current in cut(axis, lowered(spec), sources)]
+    program = lowered(spec)
+    axis._check_the_program(program, sources)
+    return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]
 
 
 def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

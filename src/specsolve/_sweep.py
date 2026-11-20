@@ -632,9 +632,9 @@ class Sweep:
         the sweep holds, live or off disk. Anything else is valued at each
         slice's own solution with no re-solve, which needs the spec, sources
         and axis the sweep [`load_archive`][specsolve._archive.load_archive]
-        hands back carries; a Sweep a live solve returned retains no model. A
-        parameter the sweep **carried** reads as each slice was solved with
-        it, the answer of the slice before.
+        hands back carries; a Sweep a live solve returned retains no model. An
+        expression over a parameter the sweep **carried** is refused, that
+        value being a previous slice's answer rather than stored data.
 
         In an EachWindow sweep's answer each coordinate carries the value of
         the window that owns it, so a sum does not double-count the lookahead.
@@ -648,8 +648,9 @@ class Sweep:
         Raises:
             SpecsolveError: No slice produced a declared *expression* (an
                 evaluation that failed on every slice carries its own reason);
-                an undeclared expression on a Sweep with no model behind it; a
-                quantity reduced over an EachWindow sweep's windowed dimension, which
+                an undeclared expression on a Sweep with no model behind it, or
+                one that reads a parameter the sweep carried; a quantity
+                reduced over an EachWindow sweep's windowed dimension, which
                 has an answer only per window; or ``per_window`` as
                 [`primal`][] raises it.
             LanguageError: A construct outside the language, or a name the spec
