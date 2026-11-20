@@ -18,6 +18,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): sources that type a sweep's column differently are refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
 - fix(sweep): a row with no label in the column a sweep cuts on is refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
+- fix(sweep): an archived sweep keyed by datetimes in a time zone reads back ([#2114](https://github.com/fluxopt/specsolve/pull/2114))
 
 ## 0.11.2 (2026-11-19)
 
