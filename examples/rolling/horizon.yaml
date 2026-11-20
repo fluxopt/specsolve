@@ -1,63 +1,63 @@
 description: >-
-  Storage dispatch over one window of a rolling horizon. The model never
-  mentions the global clock: it is written over t, a local index dense from
-  zero that the window strategy supplies, because "the first snapshot of this
-  window" is not a literal in global numbering.
+  Storage dispatch over a horizon, written once and solved whole or a window
+  at a time. A window is the same model over its own snapshots, and
+  position(snapshot) == 0 is the first snapshot of whichever window is being
+  solved, so the seam needs no literal.
 version: 0
 
 dimensions:
-  t: {dtype: int, description: "local index of a snapshot inside the window", ordered: true}
+  snapshot: {dtype: int, description: "the hours of the horizon, in order", ordered: true}
   generator: {dtype: str, description: "generating units"}
 
 parameters:
-  p_max: {dims: [t, generator], description: "availability — wind blows at night, not by day"}
+  p_max: {dims: [snapshot, generator], description: "availability — wind blows at night, not by day"}
   cost: {dims: [generator], description: "marginal cost"}
-  load: {dims: [t], description: "demand to be met"}
+  load: {dims: [snapshot], description: "demand to be met"}
   soc_initial: {dims: [], description: "what the previous window carried across"}
 
 variables:
   p:
-    description: output of a generator in a local snapshot
-    dims: [t, generator]
+    description: output of a generator in a snapshot
+    dims: [snapshot, generator]
     bounds: {lower: 0, upper: p_max}
   charge:
     description: energy into the store
-    dims: [t]
+    dims: [snapshot]
     bounds: {lower: 0, upper: 25}
   discharge:
     description: energy out of the store
-    dims: [t]
+    dims: [snapshot]
     bounds: {lower: 0, upper: 25}
   soc:
-    description: state of charge at the end of a local snapshot
-    dims: [t]
+    description: state of charge at the end of a snapshot
+    dims: [snapshot]
     bounds: {lower: 0, upper: 120}
 
 constraints:
   balance:
     description: generation plus what the store gives back covers the load, net of charging
-    dims: [t]
+    dims: [snapshot]
     expression: sum(p, over=generator) + discharge - charge == load
 
   soc_open:
     description: >-
-      the seam — at the window's first local row the level comes from what the
+      the seam — at the window's first row the level comes from what the
       previous window carried across
-    dims: [t]
-    where: 't == 0'
+    dims: [snapshot]
+    where: 'position(snapshot) == 0'
     expression: soc == soc_initial + charge * 0.9 - discharge
 
   soc_step:
     description: >-
       everywhere else the level comes from the row before; with no edge given
       the first row drops out on its own, so nothing has to restate the origin
-    dims: [t]
-    expression: soc == shift(soc, along=t, offset=1) + charge * 0.9 - discharge
+    dims: [snapshot]
+    expression: soc == shift(soc, along=snapshot, offset=1) + charge * 0.9 - discharge
 
 expressions:
   spend:
     expression: sum(p * cost, over=generator)
-    description: what the fleet costs to run in a local snapshot
+    description: what the fleet costs to run in a snapshot
 
 objective:
   sense: minimize

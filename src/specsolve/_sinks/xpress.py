@@ -10,9 +10,13 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -62,6 +66,7 @@ class Xpress(Solver):
     _p: Any
 
     #: One package, and it carries its own solver library.
+    name = 'xpress'
     requires = ('xpress',)
     recorded_options = frozenset(
         {
@@ -78,6 +83,11 @@ class Xpress(Solver):
         }
     )
     unavailable_message = 'The xpress sink requires the [xpress] extra: pip install "specsolve[xpress]"'
+
+    dual_ray_advice = (
+        "re-solve with solver_options={'presolve': 0}: xpress has a ray only where the simplex found the "
+        'infeasibility, and none where presolve found it first'
+    )
 
     #: Xpress branches on a set natively. The Optimizer takes a Hessian; this
     #: sink does not hand it one.
@@ -122,7 +132,7 @@ class Xpress(Solver):
         codes = (AT_LOWER, BASIC, AT_UPPER, SUPERBASIC)
         return basis_codes(columns, codes), basis_codes(rows, codes)
 
-    def _warm(self, basis: Basis) -> None:
+    def _start_from_basis(self, basis: Basis) -> None:
         """``loadBasis``, which takes rows first, with ``keepbasis`` back on.
 
         A row's status is its slack's, and a binding ``<=`` row holds its
@@ -133,7 +143,7 @@ class Xpress(Solver):
         columns = solver_codes(basis.columns, {BASIC: 1, AT_LOWER: 0, AT_UPPER: 2, FIXED: 0, SUPERBASIC: 3})
         self._p.loadBasis(rows, columns)
 
-    def _start(self, values: Any) -> None:
+    def _start_from_values(self, values: Any) -> None:
         """``addMipSol`` over the columns given a value, or for an LP ``loadLPSol``, which takes only a value for every column."""
         import numpy as np
 
@@ -189,7 +199,7 @@ class Xpress(Solver):
         """``keepbasis = 0``: the next solve ignores the basis this one left.
 
         ``problem.reset()`` would clear the model too. The control is durable;
-        [`_warm`][] turns it back on.
+        [`_start_from_basis`][] turns it back on.
         """
         self._p.controls.keepbasis = 0
 
