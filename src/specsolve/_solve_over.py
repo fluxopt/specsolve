@@ -8,7 +8,8 @@ driver above [`specsolve._api`][], built from the public verbs.
     rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
-[`specsolve._sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
+[`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,
+as the driver builds it. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
 from __future__ import annotations
