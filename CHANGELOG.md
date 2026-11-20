@@ -13,6 +13,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - refactor(api): an axis names its own key column, and slices written by hand go in Slices ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(api): sweep.record is sweep.records, model.check for a sink is model.check_sink, record_options is also_record, and workers_share_fs is shared_filesystem ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a window over a dimension that is not declared ordered is refused ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a start with a basis status that is none is refused before a slice is solved ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 
 ## 0.11.2 (2026-11-19)
