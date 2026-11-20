@@ -13,6 +13,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(data): an assumption whose where admits no coordinate is not read ([#2107](https://github.com/fluxopt/specsolve/pull/2107))
 - perf(api): a build attaches its sources once, not again after reading the assumptions ([#2108](https://github.com/fluxopt/specsolve/pull/2108))
 - perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2111](https://github.com/fluxopt/specsolve/pull/2111))
+- perf(engine): every where is folded once over the flags the data settles, so PyPSA's spec builds 1.1–1.2× faster ([#2112](https://github.com/fluxopt/specsolve/pull/2112))
 
 ## 0.11.2 (2026-11-19)
 
