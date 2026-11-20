@@ -843,13 +843,22 @@ def _none_answered(kind: str, left_out: Mapping[str, str]) -> str | None:
 
 
 def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], records: pl.DataFrame) -> str:
-    """The message for *name* having no frame, whether undeclared or produced by no slice."""
+    """The message for *name* having no frame, whether undeclared or produced by no slice.
+
+    A sweep with no frame of a kind solved nothing only where no slice left
+    values: a spec that declares no expression leaves none however it solved.
+    """
     conditions = ', '.join(sorted(set(records['termination_condition'].to_list())))
     if held:
         listed = ', '.join(repr(k) for k in sorted(held))
         return (
             f'no {kind} {name!r} in this sweep — it holds {listed}. '
             f'If the spec declares it, no slice produced one: all {records.height} terminated {conditions}.'
+        )
+    if solved := records['has_primal'].sum():
+        return (
+            f'this sweep holds no {kind} frames, though {solved} of its {records.height} slices left values '
+            f'(they terminated {conditions}). If the spec declares one, no slice produced it.'
         )
     return (
         f'this sweep holds no {kind} frames at all — every one of its {records.height} slices '

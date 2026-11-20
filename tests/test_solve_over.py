@@ -431,6 +431,20 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
     assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
 
 
+def test_a_sweep_that_solved_and_holds_no_expression_does_not_blame_the_solve(sweep):
+    """A kind the sweep holds no frame of was read as a sweep that solved nothing.
+
+    The dispatch spec declares no expression, so every slice is optimal and
+    the sweep holds none. The refusal said the slices terminated optimal and
+    that the models did not solve, in one breath.
+    """
+    assert sweep.records['has_primal'].all()
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no named expression frames') as raised:
+        sweep.evaluate('2 * p')
+    assert 'did not solve' not in str(raised.value), 'every slice solved, and the refusal does not say otherwise'
+    assert '3 of its 3 slices left values' in str(raised.value), 'the refusal says what is true of them'
+
+
 def test_a_slice_that_reached_no_objective_does_not_poison_the_sweep():
     """`objective` is a table, and in a table an absent number is null.
 
