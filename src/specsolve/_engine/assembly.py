@@ -229,8 +229,8 @@ class Assembly:
         join path hands them to [`labels.frame`][specsolve._engine.labels.frame]
         as restrictions. *labelled* numbers its rows in position order, so
         the entries leave in row order; ``None`` stands for every coordinate
-        of *dims*, and the rows are then labelled from the coordinates kept,
-        the whole product never being a frame.
+        of *dims*. Where the terms then drop some, the rows are labelled from
+        the coordinates kept and the whole product is never a frame.
         """
         cardinality = self.attached.cardinality
         if labelled is None:
@@ -239,7 +239,9 @@ class Assembly:
             position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
             positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
         at, kept, index, col, coeff = dense.placed(linear, dense.At(dims, positions, cardinality))
-        if labelled is None:
+        if labelled is None and kept is None:
+            labelled = labels.frame(self.scope, dims, None, 'row', start)
+        elif labelled is None:
             labelled = labels.at(self.scope, at, 'row', start)
         elif kept is not None:
             labelled = labels.renumbered(labelled.filter(pl.Series(kept)), dims, 'row', start)
