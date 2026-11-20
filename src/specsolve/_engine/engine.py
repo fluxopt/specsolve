@@ -154,11 +154,13 @@ class Engine:
         if attached is None:
             with _clocked(self._seconds, 'attach'):
                 attached = attach(program, sources)
-        self._measured.sparse = short_parameters(program, attached)
         settled_program, tests = _settled_wheres(program, attached)
         assembly = Assembly(settled_program, attached, self._measured, tests)
-        with _clocked(self._seconds, 'build'):
-            self._built = assembly.run()
+        try:
+            with _clocked(self._seconds, 'build'):
+                self._built = assembly.run()
+        finally:
+            self._measured.sparse = short_parameters(program, attached)
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the frames

@@ -7,19 +7,20 @@ every source; this shapes each and encodes the string dimensions.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
 
-from specsolve._collect import collected, collected_all, in_memory
+from specsolve._collect import collected, in_memory
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterator
 
     from mathspec import program
 
@@ -63,18 +64,19 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
     [`in_memory`][], since every read holds one table whole. A dimension's
-    cast is built once and the parameters are cast in one batch: building a
-    cast to an ``Enum`` of many labels costs a fixed time per expression, and
-    PyPSA's spec casts hundreds of tables over the same dozen dimensions.
+    cast is built once: building a cast to an ``Enum`` of many labels costs a
+    fixed time per expression, and PyPSA's spec casts hundreds of tables over
+    the same dozen dimensions. A parameter is attached the first time
+    something reads it, so one no live row reads is never cast, checked or
+    filled ([`_Parameters`][]).
 
     Raises:
-        DataError: A parameter or a relation that refuses a missing row has none
-            at some coordinate.
+        DataError: A relation that refuses a missing row has none at some
+            coordinate; a parameter that does is refused when it is read.
     """
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
-        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
     enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
     for d, enum in enums.items():
@@ -83,47 +85,114 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
         if casts:
             relations[name] = relations[name].with_columns(casts)
-    cast_to = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
-    cast: dict[str, pl.LazyFrame] = {}
-    for name, p in program.parameters.items():
-        frame = _plain_strings(parameters[name], p.dims)
-        casts = [cast_to[d] for d in p.dims if d in cast_to]
-        if p.dtype == 'float':
-            casts.append(_AS_FLOAT)
-        if casts:
-            cast[name] = frame.lazy().with_columns(casts)
-        else:
-            parameters[name] = frame
-    with in_memory():
-        parameters |= dict(zip(cast, collected_all(cast.values()), strict=True))
-
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
             key = relation.key or relation.roles
             _refuse_a_missing_row(
                 'relation', name, relations[name].select(*key).unique(), key, relation.dim, dimensions
             )
-    given: dict[str, pl.LazyFrame] = {}
-    for name, p in program.parameters.items():
-        if p.missing in ('absent', 'neutral', None):
-            continue
-        if p.missing == 'refused':
-            _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
-            continue
-        frame = parameters[name]
-        if frame.height < math.prod(dimensions[d].height for d in p.dims):
-            given[name] = frame.select(*p.dims).lazy()
-            parameters[name] = _filled(frame, p.dims, p.missing, dimensions)
 
+    attached = _Parameters(program, sources, dimensions, {d: pl.col(d).cast(enum) for d, enum in enums.items()})
     return AttachedSources(
-        parameters={name: f.lazy() for name, f in parameters.items()},
+        parameters=_View(attached, lambda one: one.frame.lazy()),
         dimensions={d: f.lazy() for d, f in dimensions.items()},
         relations={name: f.lazy() for name, f in relations.items()},
         cardinality={d: f.height for d, f in dimensions.items()},
-        parameter_rows={name: f.height for name, f in parameters.items()},
+        parameter_rows=_View(attached, lambda one: one.frame.height),
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
-        given=given,
+        given=_View(attached, lambda one: one.given, only_where_set=True),
     )
+
+
+@dataclass(frozen=True)
+class _Attached:
+    """One parameter attached: its frame, and the coordinates the data gave where a ``missing:`` value filled the rest."""
+
+    frame: pl.DataFrame
+    given: pl.LazyFrame | None
+
+
+class _Parameters:
+    """Each parameter attached the first time something reads it, then kept.
+
+    A parameter that no live row reads is never cast, checked or filled. The
+    order of the program is kept for every walk over all of them.
+    """
+
+    def __init__(
+        self,
+        program: program.Program,
+        sources: Mapping[str, pl.LazyFrame],
+        dimensions: Mapping[str, pl.DataFrame],
+        cast_to: Mapping[str, pl.Expr],
+    ) -> None:
+        self.program = program
+        self.names = list(program.parameters)
+        self._sources = sources
+        self._dimensions = dimensions
+        self._cast_to = cast_to
+        self._attached: dict[str, _Attached] = {}
+
+    def __getitem__(self, name: str) -> _Attached:
+        if name not in self._attached:
+            self._attached[name] = self._attach(name, self.program.parameters[name])
+        return self._attached[name]
+
+    def read(self) -> list[str]:
+        """The parameters attached so far, in the program's order."""
+        return [name for name in self.names if name in self._attached]
+
+    def _attach(self, name: str, p: program.Parameter) -> _Attached:
+        with in_memory():
+            frame = _plain_strings(self._sources[name].pipe(collected), p.dims)
+        casts = [self._cast_to[d] for d in p.dims if d in self._cast_to]
+        if p.dtype == 'float':
+            casts.append(_AS_FLOAT)
+        if casts:
+            frame = frame.with_columns(casts)
+        if p.missing == 'refused':
+            _refuse_a_missing_row('parameter', name, frame, p.dims, lambda d: d, self._dimensions)
+        if p.missing in ('absent', 'neutral', 'refused', None):
+            return _Attached(frame, None)
+        if frame.height < math.prod(self._dimensions[d].height for d in p.dims):
+            return _Attached(_filled(frame, p.dims, p.missing, self._dimensions), frame.select(*p.dims).lazy())
+        return _Attached(frame, None)
+
+
+class _View[V](Mapping[str, V]):
+    """One field of every parameter as [`_Parameters`][] attaches it, by name; with *only_where_set*, only the parameters where the field is set."""
+
+    def __init__(
+        self, parameters: _Parameters, field: Callable[[_Attached], V | None], *, only_where_set: bool = False
+    ) -> None:
+        self.parameters = parameters
+        self._field = field
+        self._only_where_set = only_where_set
+
+    def __getitem__(self, name: str) -> V:
+        if name not in self.parameters.program.parameters:
+            raise KeyError(name)
+        value = self._field(self.parameters[name])
+        if value is None:
+            raise KeyError(name)
+        return value
+
+    def __contains__(self, name: object) -> bool:
+        if not isinstance(name, str) or name not in self.parameters.program.parameters:
+            return False
+        return not self._only_where_set or self._field(self.parameters[name]) is not None
+
+    def __iter__(self) -> Iterator[str]:
+        return (name for name in self.parameters.names if name in self)
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
+
+
+def parameters_read(attached: AttachedSources) -> list[str]:
+    """The parameters *attached* has attached so far, in the program's order; every one where they were attached at once."""
+    rows = attached.parameter_rows
+    return rows.parameters.read() if isinstance(rows, _View) else list(rows)
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:

@@ -17,6 +17,7 @@ from mathspec import program
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
+from specsolve._engine.attaching import parameters_read
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.predicates import holds_nowhere
 from specsolve._engine.scope import Scope, join_on
@@ -495,13 +496,15 @@ class Assembly:
 
 
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
-    """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
+    """Which of the parameters the build read arrived short, and by how much: ``name -> (reach, rows)``.
 
     The door refuses duplicates and strangers, so a parameter's height is the
-    number of coordinates it covers.
+    number of coordinates it covers. A parameter the build never read is not
+    asked about, since asking would read it.
     """
     short: dict[str, tuple[int, int]] = {}
-    for name, p in program.parameters.items():
+    for name in parameters_read(attached):
+        p = program.parameters[name]
         if not p.dims:
             continue
         reach = math.prod(attached.cardinality[d] for d in p.dims)

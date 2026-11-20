@@ -58,6 +58,13 @@ holds each row at most once.
 
 ## What attaching refuses and accepts
 
+**A parameter is checked when the build reads it.** A build reads a parameter
+for a row it builds, a bound, an assumption it checks, or a later read such as
+an expression or an archive. A fault in a parameter that only a declaration
+without a row reads is not refused. [`sps.tidy`](api.md#specsolve.tidy) reads
+and checks every source. A missing key, a missing index, and a fault in a
+dimension or a relation are refused whatever is read.
+
 **A coordinate has a value, or it has no row.** A null or NaN value is
 refused.
 
@@ -111,7 +118,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | an undeclared column in a table | ignored |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
-| a coordinate with no row, of a parameter declared `missing: absent`, `neutral` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
+| a coordinate with no row, of a parameter declared `missing: absent`, `neutral` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters the build read ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |
 | a value that is readable and wrong | bound as given |
 
 ## The tables a solve reads

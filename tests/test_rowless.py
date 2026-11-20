@@ -432,3 +432,47 @@ def test_declarations_that_hold_no_row_over_the_same_dims_share_one_empty_frame(
     assert built == [(('g', 't'), 'row')], (
         f'empty frames were built for {built}, where one per dims and label is enough'
     )
+
+
+#: `cost` has a null value, which the door refuses where it is read; only `gated`,
+#: which `flag` switches off, reads it.
+UNREAD_SPEC = {
+    **TABLED_SPEC,
+    'parameters': {**TABLED_SPEC['parameters'], 'cost': {'dims': ['g', 't']}},
+    'constraints': {'gated': {'dims': ['g', 't'], 'where': 'flag', 'expression': 'x <= cost'}},
+}
+BAD_COST = pl.DataFrame({'g': ['a', 'b'], 't': [1, 1], 'value': [1.0, None]})
+
+
+def test_a_parameter_no_live_row_reads_is_not_read_and_its_faults_are_not_refused(monkeypatch):
+    """As linopy refuses only what a live row reads: PyPSA hands over hundreds of tables, most of them feeding nothing."""
+    from specsolve import _sources as reading
+
+    checked, real = [], reading._checked_parameter
+
+    def spied(name, *args, **kwargs):
+        checked.append(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(reading, '_checked_parameter', spied)
+    with sps.build(UNREAD_SPEC, TABLED_SOURCES | {'cost': BAD_COST}) as model:
+        assert model.diagnostics().rows == 0, '`flag` has no row, so `gated` holds none'
+    assert 'cost' not in checked, 'only `gated` reads `cost`, and it holds no row, yet `cost` was read'
+
+
+@pytest.mark.parametrize(
+    'read',
+    [
+        pytest.param(
+            lambda: sps.build(
+                {**UNREAD_SPEC, 'constraints': {'live': {'dims': ['g', 't'], 'expression': 'x <= cost'}}},
+                TABLED_SOURCES | {'cost': BAD_COST},
+            ),
+            id='a-live-row-reads-it',
+        ),
+        pytest.param(lambda: sps.tidy(UNREAD_SPEC, TABLED_SOURCES | {'cost': BAD_COST}), id='tidy-reads-every-source'),
+    ],
+)
+def test_a_fault_in_a_parameter_that_is_read_is_still_refused(read):
+    with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+        read()

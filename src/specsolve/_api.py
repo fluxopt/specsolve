@@ -120,7 +120,8 @@ def check(spec: Buildable) -> Program:
 def tidy(spec: Buildable, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
     """The tables a solve of *spec* attaches from *sources*, one per name the spec declares.
 
-    Every source is read and checked as [`build`][] does. The tables are what
+    Every source is read and checked as [`build`][] checks the ones it reads;
+    `tidy` reads them all. The tables are what
     an archive holds under ``sources/``, less its ``specsolve_run`` column, so
     a returned table goes back in as a source unchanged.
 
@@ -216,7 +217,7 @@ class Model:
         self._program = lowered(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
-        self._tidied: dict[str, pl.LazyFrame] = {}
+        self._tidied: Mapping[str, pl.LazyFrame] = {}
         self._engine = Engine()
         self._fill()
 
