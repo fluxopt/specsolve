@@ -125,6 +125,21 @@ def at(scope: Scope, coordinates: At, label: str, start: int) -> pl.DataFrame:
     return pl.DataFrame([*columns, numbered.set_sorted()])
 
 
+def narrowed(
+    labelled: pl.DataFrame, dims: tuple[str, ...], label: str, start: int, restrictions: Sequence[Presence]
+) -> pl.DataFrame:
+    """*labelled*, as [`frame`][] labelled a ``where`` without *restrictions*, cut to them and numbered again from *start*.
+
+    The frame [`frame`][] gives with the restrictions, without reading the
+    ``where`` a second time: both number the survivors in position order, and
+    *labelled*'s labels already run in it.
+    """
+    surviving = labelled.lazy()
+    for restriction in restrictions:
+        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
+    return renumbered(in_position_order(surviving.pipe(collected), label), dims, label, start)
+
+
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
     """[`frame`][]'s answer for a declaration that holds no row, read without a query: no row, in its columns and dtypes.
 

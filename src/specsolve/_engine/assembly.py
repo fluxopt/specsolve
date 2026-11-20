@@ -382,8 +382,10 @@ class Assembly:
         labelled: pl.DataFrame | None
         if positional and admitted is None and c.dims and not restrictions:
             labelled = None
-        elif admitted is None or restrictions:
-            labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+        elif admitted is None:
+            labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
+        elif restrictions:
+            labelled = labels.narrowed(admitted, c.dims, 'row', start, restrictions)
         else:
             labelled = admitted
         declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
