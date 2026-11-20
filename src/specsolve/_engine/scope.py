@@ -60,6 +60,8 @@ class Scope:
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
     #: Whether each parameter asked about is zero at every row it has.
     _zero: dict[str, bool] = field(default_factory=dict)
+    #: Each sparse parameter's labels along each of its dims where they are fewer than the dim's.
+    _support: dict[str, dict[str, pl.Series]] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -112,6 +114,21 @@ class Scope:
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
         return join_on(frame, table, declaration.dims, how, maintain_order)
+
+    def support(self, param: str) -> dict[str, pl.Series]:
+        """The labels *param* has a row at along each of its dims, where they are fewer than the dim's; read once per build."""
+        if param not in self._support:
+            dims = self.program.parameters[param].dims
+            held: dict[str, pl.Series] = {}
+            rows = self.data.parameter_rows.get(param)
+            if rows is not None and rows < math.prod(self.data.cardinality[d] for d in dims):
+                table = self.data.parameters[param].pipe(collected)
+                for d in dims:
+                    labels = table.get_column(d).unique()
+                    if labels.len() < self.data.cardinality[d]:
+                        held[d] = labels
+            self._support[param] = held
+        return self._support[param]
 
     def is_zero(self, param: str) -> bool:
         """Whether *param* is zero at every row it has, any value ``missing:`` fills included; read once per build."""

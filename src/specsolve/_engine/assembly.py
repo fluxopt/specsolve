@@ -20,7 +20,7 @@ from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.predicates import holds_nowhere
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Term, absence_restrictions, cut_to_rows
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
@@ -324,7 +324,8 @@ class Assembly:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
             else:
-                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
+                cut = cut_to_rows(p, labelled, self.attached.cardinality).frame
+                placed = join_on(frame, cut, p.dims, 'inner', maintain_order=carried_order)
             frames.append(
                 placed.select(
                     'row',

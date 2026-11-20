@@ -23,7 +23,7 @@ from specsolve._engine.scope import join_on
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from polars._typing import JoinStrategy
 
@@ -166,6 +166,23 @@ class CompiledExpression:
     linear: tuple[Term, ...]
     constant: tuple[Term, ...]
     quadratic: tuple[Term, ...] = ()
+
+
+def cut_to_rows(p: Term, rows: pl.DataFrame, cardinality: Mapping[str, int]) -> Term:
+    """*p* cut to the labels *rows* holds along each of its dims, where they are fewer than the dim's.
+
+    Written as a filter on each dim rather than a join, so polars carries it
+    down to every input that holds the dim, and the term is computed only
+    there: a constraint's rows are often a fraction of the product its terms
+    are read over. The cut keeps a superset of the rows, which the join onto
+    them then makes exact.
+    """
+    kept = [
+        pl.col(d).is_in(labels.implode())
+        for d in p.dims
+        if d in rows.columns and (labels := rows.get_column(d).unique()).len() < cardinality[d]
+    ]
+    return replace(p, frame=p.frame.filter(kept)) if kept else p
 
 
 def constant_scalar(p: Term) -> pl.LazyFrame:

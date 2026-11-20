@@ -412,7 +412,12 @@ class Compiler:
                     for f, g in ((e.left, e.right), (e.right, e.left))
                 ):
                     return CompiledExpression((), ())
-                return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
+                left, right = ev(e.left), ev(e.right)
+                if isinstance(e.right, program.ParameterReference):
+                    left = self._within(left, e.right.name)
+                if isinstance(e.left, program.ParameterReference):
+                    right = self._within(right, e.left.name)
+                return product(self._factor(left, e.left), self._factor(right, e.right))
             if isinstance(e, program.Divide):
                 return quotient(e)
             if isinstance(e, program.Power):
@@ -528,6 +533,25 @@ class Compiler:
             present = pl.LazyFrame({PRESENT: [True]}).join(count, how='cross').filter(pl.col('__zeros__') == 0)
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
+
+    def _within(self, compiled: CompiledExpression, param: str) -> CompiledExpression:
+        """*compiled*, the other factor of a product with parameter *param*, cut to the labels *param* has rows at.
+
+        The product joins inner on the dims they share, so a row of the other
+        factor outside them never reaches it. Cut first, as a filter polars
+        carries into the factor, a sum the factor holds is taken only where the
+        product keeps it: PyPSA weighs each store's withdrawal, summed over every
+        snapshot, by a weight that only some stores have.
+        """
+        support = self.scope.support(param)
+        if not support:
+            return compiled
+
+        def cut(p: Term) -> Term:
+            kept = [pl.col(d).is_in(labels.implode()) for d, labels in support.items() if d in p.dims]
+            return replace(p, frame=p.frame.filter(kept)) if kept else p
+
+        return map_terms(compiled, cut)
 
     def _factor(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
         """A product's factor with each constant term added up to one value per coordinate ([`_totalled`][]).
