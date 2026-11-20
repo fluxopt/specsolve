@@ -28,6 +28,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(api): a build attaches its sources once, not again after reading the assumptions ([#2131](https://github.com/fluxopt/specsolve/pull/2131))
 - perf(engine): every where is folded once over the flags the data settles, so a declaration that holds no row is skipped without reading its grid ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2133](https://github.com/fluxopt/specsolve/pull/2133))
+- perf(data): a build reads each dimension's labels once and shares one empty frame per dims, not one per parameter or declaration ([#2134](https://github.com/fluxopt/specsolve/pull/2134))
 
 ## 0.11.2 (2026-11-19)
 
