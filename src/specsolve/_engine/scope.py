@@ -18,6 +18,7 @@ from specsolve._names import VALUE
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
+    import numpy as np
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
@@ -58,6 +59,8 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false, read once for the build.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+    #: Each array a term reads by position, by what it holds and its name; [`dense`][specsolve._engine.dense] fills it.
+    by_position: dict[tuple[str, str], np.ndarray] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""

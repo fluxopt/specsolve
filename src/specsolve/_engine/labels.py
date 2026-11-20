@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
+    from specsolve._engine.dense import At
     from specsolve._engine.scope import Scope
     from specsolve._engine.terms import Presence
 
@@ -96,6 +97,32 @@ def frame(
     if dropped:
         materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
     return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
+
+
+def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], label: str, start: int) -> pl.DataFrame:
+    """*kept*, some rows of a labelled frame still in label order, numbered again from *start*."""
+    return (
+        kept.drop(label)
+        .with_row_index(label, offset=start)
+        .select(*(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted())
+    )
+
+
+def at(scope: Scope, coordinates: At, label: str, start: int) -> pl.DataFrame:
+    """[`frame`][]'s answer for *coordinates*, which ascend in position, numbered from *start*.
+
+    Each label is read off its dimension at the coordinate's ordinal, so the
+    product the coordinates lie in is never formed: a constraint a masked
+    variable cuts to half its coordinates holds half the frame, not the whole
+    of it first. Over no dims [`frame`][] keys the one row itself.
+    """
+    assert coordinates.dims, 'a declaration over no dims is one row, which frame() labels'
+    columns = [
+        scope.data.dimensions[d].pipe(collected).sort('ord').get_column('val').gather(coordinates.ordinal(d)).alias(d)
+        for d in coordinates.dims
+    ]
+    numbered = pl.int_range(start, start + len(coordinates), dtype=pl.Int64, eager=True).alias(label)
+    return pl.DataFrame([*columns, numbered.set_sorted()])
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:

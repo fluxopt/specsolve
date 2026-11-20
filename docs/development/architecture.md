@@ -176,6 +176,15 @@ leaves no model.
 `(dims…, var_label)`. A linear expression is `(dims…, var_label, coeff)` plus a
 constant term. A mask is a missing row, and broadcasting is a join.
 
+**A term over data with a row at every coordinate is also held by position**
+(`dense.py`). A coordinate's row-major position is then the key, and an
+alignment is an index rather than a join. Such a term still carries its tidy
+frame, so an operator with no positional arm reads the frame and the term is a
+frame from there on. Negation, a product with a constant term and a
+constraint's share of the matrix have a positional arm. A constraint takes it
+only when every linear term it holds is held by position, and
+`pixi run test-by-join` builds the whole suite with none held.
+
 **Labels are dense `0..n-1`, row-major over the masked coordinate product.**
 So `var_label` is the solver column, `row` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
@@ -219,6 +228,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/predicates.py` | a `where:` mask as a boolean query |
 | `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
+| `_engine/dense.py` | a term held by position: a value at every coordinate of its dims, read by index |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |

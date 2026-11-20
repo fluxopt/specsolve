@@ -99,6 +99,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='read and write every file through pyarrow, as specsolve does where polars has no parquet',
     )
     parser.addoption(
+        '--terms-by-join',
+        action='store_true',
+        default=False,
+        help='hold no term by position, so the joins place every constraint the suite builds',
+    )
+    parser.addoption(
         '--sweep-shard',
         default='0/1',
         help='run the i-th of n equal strides of the sweep, as `i/n`; the CI job takes one per matrix leg',
@@ -106,11 +112,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet."""
+    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--terms-by-join``, no leaf is held by position."""
     if config.getoption('--parquet-via-pyarrow'):
         from specsolve import _parquet as parquet
 
         parquet._polars_has_parquet = cache(lambda: False)
+    if config.getoption('--terms-by-join'):
+        from specsolve._engine import dense
+
+        dense.constant = dense.parameter = dense.variable = lambda *args: None
 
 
 @pytest.fixture
@@ -118,6 +128,13 @@ def polars_parquet(request: pytest.FixtureRequest) -> None:
     """Skip where ``--parquet-via-pyarrow`` takes away the polars parquet this test needs."""
     if request.config.getoption('--parquet-via-pyarrow'):
         pytest.skip('--parquet-via-pyarrow takes away the polars parquet this test needs')
+
+
+@pytest.fixture
+def terms_by_position(request: pytest.FixtureRequest) -> None:
+    """Skip where ``--terms-by-join`` takes away the reading by position this test is about."""
+    if request.config.getoption('--terms-by-join'):
+        pytest.skip('--terms-by-join holds no term by position, which this test is about')
 
 
 # ---------------------------------------------------------------------------
