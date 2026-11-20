@@ -15,6 +15,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - refactor(api): sweep.record is sweep.records, model.check for a sink is model.check_sink, record_options is also_record, and workers_share_fs is shared_filesystem ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a window over a dimension that is not declared ordered is refused ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): sources that type a sweep's column differently are refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
 
 ## 0.11.2 (2026-11-19)
 
