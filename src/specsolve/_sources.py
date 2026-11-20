@@ -120,8 +120,9 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
+    labels: dict[str, pl.Series] = {}
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels=labels)
 
     for dname in program.dimensions:
         if dname not in sources:
@@ -714,8 +715,12 @@ def _checked_parameter(
     table: pl.LazyFrame,
     sources: Mapping[str, pl.LazyFrame],
     kind: str = 'parameter',
+    labels: dict[str, pl.Series] | None = None,
 ) -> pl.LazyFrame:
     """*table* held to what its declaration claims, collected once.
+
+    *labels* holds each dimension's labels once read, for a caller checking
+    many tables over the same dimensions to read each index once.
 
     The collect is the one model-sized materialisation on the way in.
 
@@ -735,14 +740,19 @@ def _checked_parameter(
     frame = in_microseconds(
         table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
     )
-    _check_one_row_per_coordinate(name, p, frame, sources, kind)
+    _check_one_row_per_coordinate(name, p, frame, sources, kind, {} if labels is None else labels)
     _check_values_are_present(name, p, frame, kind)
     _check_value_dtype(name, p, frame, kind)
     return frame.lazy()
 
 
 def _check_one_row_per_coordinate(
-    name: str, p: Parameter, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str,
+    p: Parameter,
+    frame: pl.DataFrame,
+    sources: Mapping[str, pl.LazyFrame],
+    kind: str,
+    read_labels: dict[str, pl.Series],
 ) -> None:
     """A table of values is a function of its dims: one row per coordinate, every label a real one.
 
@@ -759,7 +769,11 @@ def _check_one_row_per_coordinate(
             )
         return
 
-    known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
+    known = {
+        d: read_labels[d] if d in read_labels else read_labels.setdefault(d, _labels_of(d, sources[d]))
+        for d in p.dims
+        if d in sources
+    }
     for d, labels in known.items():
         _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
     answers = _key_answers(p.dims, frame, known)
