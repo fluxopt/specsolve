@@ -32,6 +32,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(data): each dimension's cast into its Enum is built once and the parameters are cast in one batch ([#2135](https://github.com/fluxopt/specsolve/pull/2135))
 - perf(engine): a case that claims no coordinate builds no term ([#2136](https://github.com/fluxopt/specsolve/pull/2136))
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2137](https://github.com/fluxopt/specsolve/pull/2137))
+- perf(engine): a variable times a parameter that is zero everywhere adds no term to the objective ([#2139](https://github.com/fluxopt/specsolve/pull/2139))
 - perf(engine): a constraint with a where reads it once when a parameter of its expression is absent at some rows ([#2141](https://github.com/fluxopt/specsolve/pull/2141))
 
 ## 0.11.2 (2026-11-19)
