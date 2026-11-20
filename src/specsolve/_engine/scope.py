@@ -58,6 +58,8 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false, read once for the build.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+    #: Each dense parameter's values by position, formed the first time a join reads it.
+    _by_position: dict[str, pl.Series] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -105,11 +107,36 @@ class Scope:
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
+        if how in ('left', 'inner') and (values := self._dense(param, declaration.dims)) is not None:
+            position = self.row_major(declaration.dims, self.ordinal_of)
+            return frame.with_columns(pl.lit(values).gather(position).alias(alias))
         table = self.data.parameters[param].rename({VALUE: alias})
         if not declaration.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
         return join_on(frame, table, declaration.dims, how, maintain_order)
+
+    def _dense(self, param: str, dims: tuple[str, ...]) -> pl.Series | None:
+        """*param*'s values in row-major position over *dims*, where it has a row at every coordinate; ``None`` otherwise.
+
+        A dense parameter is then read onto a frame by gathering at the
+        frame's position instead of joining on every dim, and with a value at
+        every coordinate a left and an inner join are the same. Only a numeric
+        or boolean parameter over a product of at most 10M cells is held.
+        """
+        if param in self._by_position:
+            return self._by_position[param]
+        cells = math.prod(self.data.cardinality[d] for d in dims)
+        if not dims or cells > 10_000_000 or self.data.parameter_rows.get(param) != cells:
+            return None
+        table = self.data.parameters[param]
+        dtype = table.collect_schema()[VALUE]
+        if not (dtype.is_numeric() or dtype == pl.Boolean):
+            return None
+        placed = table.select(self.row_major(dims, self.ordinal_of).alias('#position'), VALUE).pipe(collected)
+        values = placed.sort('#position').get_column(VALUE).rename(VALUE)
+        self._by_position[param] = values
+        return values
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
