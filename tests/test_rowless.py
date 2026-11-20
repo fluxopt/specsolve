@@ -523,3 +523,54 @@ def test_a_term_over_its_blocks_dims_is_placed_by_position_where_the_product_is_
         assert model.diagnostics().rows == rows, f'`{where}` admits {rows} of the 100 rows'
         assert model.solve().objective == pytest.approx(100 - rows * 0.5), 'each kept row holds its x to 0.5'
     assert lookups == [looked_up], f'the lookup was formed {lookups}, where {looked_up} is expected'
+
+
+#: `square` is zero at every unit, as PyPSA's quadratic costs are on most networks.
+ZERO_SPEC = {
+    'dimensions': {'g': {}},
+    'parameters': {'square': {'dims': ['g']}, 'cost': {'dims': ['g']}},
+    'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(x * x * square) - sum(x * cost)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('square', 'quadratic', 'objective'),
+    [
+        pytest.param([0.0, 0.0], 0, -2.0, id='a-cost-zero-everywhere-builds-no-term'),
+        pytest.param([0.0, 2.0], 1, -1.125, id='a-cost-nonzero-somewhere-builds-its-term'),
+    ],
+)
+def test_a_variable_times_a_parameter_zero_everywhere_adds_nothing_to_the_objective(
+    monkeypatch, square, quadratic, objective
+):
+    """PyPSA prices the square of every unit's dispatch, and most networks price it at zero."""
+    from specsolve._engine import assembly as assembly_module
+
+    compiled, real = [], assembly_module.Assembly._objective_quadratic
+
+    def spied(self, terms, expression):
+        compiled.append(len(terms))
+        return real(self, terms, expression)
+
+    monkeypatch.setattr(assembly_module.Assembly, '_objective_quadratic', spied)
+    sources = {
+        'g': ['a', 'b'],
+        'square': pl.DataFrame({'g': ['a', 'b'], 'value': square}),
+        'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(ZERO_SPEC, sources) as model:
+        assert model.solve().objective == pytest.approx(objective), 'b settles at x = 0.25 where its square is priced'
+    assert compiled == [quadratic], f'the objective compiled {compiled} quadratic terms, where {quadratic} are needed'
+
+
+def test_a_constraint_times_a_parameter_zero_everywhere_keeps_its_rows():
+    """A zero coefficient keeps its row in a constraint: only the objective, which only sums, drops it."""
+    spec = {**ZERO_SPEC, 'constraints': {'scaled': {'dims': ['g'], 'expression': 'x * square <= 1'}}}
+    sources = {
+        'g': ['a', 'b'],
+        'square': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 0.0]}),
+        'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(spec, sources) as model:
+        assert model.diagnostics().rows == 2, 'both rows of `scaled` are built, their coefficient zero'

@@ -190,14 +190,23 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def expression(
-        self, expr: program.Expression, context: str, *, admits_quadratic: bool = False, reported: bool = False
+        self,
+        expr: program.Expression,
+        context: str,
+        *,
+        admits_quadratic: bool = False,
+        reported: bool = False,
+        sums: bool = False,
     ) -> CompiledExpression:
         """Compile an expression into linear, quadratic and constant terms.
 
         *admits_quadratic* is the position's ceiling: whether it may hold a
         product of two variables, as the objective and a quadratic constraint
         may. *reported* is set by a read, where a quotient is absent wherever
-        its divisor is zero ([`_read_divisor`][]). The asserts are the
+        its divisor is zero ([`_read_divisor`][]). *sums* is set where the
+        expression is only ever summed, as the objective is: there a variable
+        times a parameter that is zero at every row builds no term, where in a
+        constraint it would still keep its row. The asserts are the
         plan-boundary backstop to ``mathspec.degree``. No join in the walk
         maintains order; every consumer verifies order where it reads.
         """
@@ -390,6 +399,13 @@ class Compiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
+                if sums and any(
+                    isinstance(f, program.ParameterReference)
+                    and program.carries_variable(g)
+                    and self.scope.is_zero(f.name)
+                    for f, g in ((e.left, e.right), (e.right, e.left))
+                ):
+                    return CompiledExpression((), ())
                 return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
                 return quotient(e)
