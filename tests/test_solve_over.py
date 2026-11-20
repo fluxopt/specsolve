@@ -2585,8 +2585,13 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     """A Sweep a live solve returned retains no model, so an undeclared expression says why — the archive is what carries one — while a declared name is stitched from what the sweep holds."""
     spec = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
     runs = sps.solve_over(spec, scenario_sources(), sps.EachLabel('scenario'))
-    with pytest.raises(sps.errors.SpecsolveError, match='no model behind it'):
+    with pytest.raises(sps.errors.SpecsolveError, match='no model behind it') as refused:
         runs.evaluate('sum(p, over=generator)')
+    assert 'archive=' in str(refused.value), 'the refusal names what gives a sweep its models back'
+    assert 'load_archive' in str(refused.value), 'and where the sweep that reads any expression comes from'
+    assert 'sps.solve(' not in str(refused.value), (
+        "one solve of a sweep's sources is another question, and here it is refused: they hold a row per scenario"
+    )
     assert runs.evaluate('spend')['scenario'].n_unique() == len(runs), (
         'the declared name answers without a model, stitched from every slice'
     )
