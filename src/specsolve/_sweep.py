@@ -387,6 +387,7 @@ class Sweep:
                     for name, frame in produced.items():
                         frames[kind][name].append(with_key(frame, key_name, key, key_dtype))
         keyed = pl.Series(key_name, keys, dtype=key_dtype)
+        texts = [str(key) for key in keys]
         if spill is not None:
             slices = spill.frames(eager=False)
         else:
@@ -395,8 +396,8 @@ class Sweep:
             }
         folded = cls(
             key_name=key_name,
-            records=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed),
-            metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed),
+            records=_rekeyed(pl.DataFrame([row._asdict() for row in rows], schema=RECORD_SCHEMA), keyed, texts),
+            metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed, texts),
             spec=spec,
             _slices=slices,
             _no_duals=no_duals,
@@ -911,8 +912,8 @@ def _opened_sweep(under: Path) -> Sweep:
     keys = parquet.read(under / KEYS_FILE, columns=[key_name]).to_series()
     return Sweep(
         key_name=key_name,
-        records=_rekeyed(consolidated(under, RECORD_FILE), keys),
-        metrics=_rekeyed(consolidated(under, METRICS_FILE), keys),
+        records=_rekeyed(consolidated(under, RECORD_FILE), keys, found['keys']),
+        metrics=_rekeyed(consolidated(under, METRICS_FILE), keys, found['keys']),
         spec=read_spec(under),
         _no_duals=no_duals,
         _absent=absent,
@@ -923,11 +924,12 @@ def _opened_sweep(under: Path) -> Sweep:
     )
 
 
-def _rekeyed(table: pl.DataFrame, keys: pl.Series) -> pl.DataFrame:
+def _rekeyed(table: pl.DataFrame, keys: pl.Series, texts: Sequence[str]) -> pl.DataFrame:
     """*table* with the typed key prepended, matched on the text each row's ``slice`` holds.
 
     Matched rather than placed by position, so a spill an interrupted fold
-    left reads back the slices it finished.
+    left reads back the slices it finished. *texts* are the keys as the solve
+    wrote them, in the order of *keys*: an archive holds a datetime key in
+    UTC, whose own text is no longer the one a record names its slice by.
     """
-    texts = [str(key) for key in keys.to_list()]
     return table.select(pl.col('slice').replace_strict(texts, keys, return_dtype=keys.dtype).alias(keys.name), pl.all())
