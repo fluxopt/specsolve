@@ -245,6 +245,82 @@ TABLED_SOURCES = {
 }
 
 
+def _labelled_wheres(monkeypatch: pytest.MonkeyPatch, spec: dict) -> tuple[int, int, list]:
+    """The model's columns and rows, and every `where` the build labelled over the product of its declaration's dims."""
+    frame, labelled = labels.frame, []
+
+    def spied_frame(scope, dims, where, *args, **kwargs):
+        if where is not None:
+            labelled.append(where)
+        return frame(scope, dims, where, *args, **kwargs)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(spec, TABLED_SOURCES) as model:
+        diagnostics = model.diagnostics()
+        return diagnostics.columns, diagnostics.rows, labelled
+
+
+@pytest.mark.parametrize(
+    ('where', 'rows'),
+    [
+        pytest.param('flag', 0, id='a-parameter-without-a-row'),
+        pytest.param('cap > 3', 0, id='a-comparison-no-row-passes'),
+        pytest.param('flagged', 0, id='a-named-condition-read-as-its-body'),
+        pytest.param('cap > 1 AND flag', 0, id='one-condition-of-an-and'),
+        pytest.param('flag OR cap > 3', 0, id='both-sides-of-an-or'),
+        pytest.param('count(on, over=e) > 0', 0, id='a-count-along-a-dimension-without-a-label'),
+        pytest.param('NOT flag', 6, id='a-negation-of-a-parameter-without-a-row-admits-every-row'),
+        pytest.param('flag OR cap > 2', 3, id='an-or-one-side-of-which-admits-rows'),
+        pytest.param('count(on, over=e) == 0', 6, id='a-count-along-a-dimension-without-a-label-that-holds'),
+        pytest.param('cap > 2', 3, id='a-comparison-one-label-passes-admits-its-rows'),
+    ],
+)
+def test_a_where_that_admits_nothing_is_decided_without_its_product(monkeypatch, where, rows):
+    """PyPSA's spec gates most unit-by-snapshot declarations on a per-unit flag no unit of a network sets, or on a curve no unit has.
+
+    The flag's table, or the empty dimension the curve counts along, answers
+    whether the declaration holds a row; labelling the product of its dims to
+    find none read the whole product.
+    """
+    spec = {**TABLED_SPEC, 'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}}}
+    _, built, labelled = _labelled_wheres(monkeypatch, spec)
+    assert built == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+    if not rows:
+        assert not labelled, f'`{where}` admits no row, yet `probe` was labelled over its product'
+
+
+def test_a_variable_whose_where_one_parameter_empties_is_not_labelled(monkeypatch):
+    variables = {**TABLED_SPEC['variables'], 'gated': {'dims': ['g', 't'], 'where': 'flag', 'bounds': {'lower': 0}}}
+    columns, _, labelled = _labelled_wheres(monkeypatch, {**TABLED_SPEC, 'variables': variables})
+    assert columns == 6, '`gated` holds no column, so the model has the 6 of `x` alone'
+    assert not labelled, '`flag` has no row, yet `gated` was labelled over its product'
+
+
+@pytest.mark.parametrize(
+    ('where', 'refused'),
+    [
+        pytest.param('flag', False, id='a-where-that-admits-nothing-is-not-read'),
+        pytest.param('cap > 2', True, id='a-where-that-admits-a-unit-is-still-checked-there'),
+    ],
+)
+def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypatch, where, refused):
+    """`cap > 10` fails at every unit, so the data is refused exactly where the `where` admits one."""
+    spec = {**TABLED_SPEC, 'assumptions': {'large': {'holds': 'cap > 10', 'where': where}}}
+    real, read = _assumptions.masked, []
+
+    def spied(scope, dims, mask):
+        read.append(tuple(dims))
+        return real(scope, dims, mask)
+
+    monkeypatch.setattr(_assumptions, 'masked', spied)
+    if refused:
+        with pytest.raises(sps.errors.DataError, match='large'):
+            sps.build(spec, TABLED_SOURCES)
+        return
+    sps.build(spec, TABLED_SOURCES).close()
+    assert not read, f'`{where}` admits no unit, yet `large` was read over {read}'
+
+
 def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
     from specsolve._engine import engine as engine_module
@@ -273,3 +349,61 @@ def test_a_build_with_assumptions_reports_the_time_its_attach_took():
     with sps.build(spec, TABLED_SOURCES) as model:
         seconds = model.diagnostics().seconds
     assert seconds.get('attach', 0.0) > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
+
+
+#: `active` is true at every `(g, t)`, as PyPSA's is on a network without
+#: investment periods; `level` is given at `(a, 1)` alone and filled with 0.
+EVERYWHERE_SOURCES = TABLED_SOURCES | {
+    'active': pl.DataFrame({'g': ['a', 'a', 'a', 'b', 'b', 'b'], 't': [1, 2, 3] * 2, 'value': [True] * 6}),
+    'level': pl.DataFrame({'g': ['a'], 't': [1], 'value': [5.0]}),
+}
+EVERYWHERE_PARAMETERS = {
+    **TABLED_SPEC['parameters'],
+    'active': {'dims': ['g', 't'], 'dtype': 'bool'},
+    'level': {'dims': ['g', 't'], 'missing': 0.0},
+}
+
+
+@pytest.mark.parametrize(
+    ('where', 'active', 'rows', 'read'),
+    [
+        pytest.param('active', [True] * 6, 6, [], id='a-flag-true-everywhere-is-dropped'),
+        pytest.param('active', [True] * 5 + [False], 5, [('g', 't')], id='a-flag-false-somewhere-is-kept'),
+        pytest.param('level', [True] * 6, 1, [('g', 't')], id='a-filled-parameter-holds-only-where-given'),
+        pytest.param('cap > 2 AND active', [True] * 6, 3, [('g',)], id='the-rest-of-an-and-is-kept'),
+    ],
+)
+def test_a_condition_that_holds_everywhere_is_dropped_from_its_where(monkeypatch, where, active, rows, read):
+    """PyPSA gates nearly every declaration on `active`, which holds everywhere without investment periods.
+
+    Kept, it reads every declaration at unit-by-snapshot and keeps it off the
+    path of a declaration without a `where`.
+    """
+    spec = {
+        **TABLED_SPEC,
+        'parameters': EVERYWHERE_PARAMETERS,
+        'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}},
+    }
+    sources = EVERYWHERE_SOURCES | {'active': EVERYWHERE_SOURCES['active'].with_columns(value=pl.Series(active))}
+    frame, labelled = labels.frame, []
+
+    def spied_frame(scope, dims, mask, *args, **kwargs):
+        if mask is not None:
+            labelled.append(tuple(sorted(mask.dims)))
+        return frame(scope, dims, mask, *args, **kwargs)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(spec, sources) as model:
+        assert model.diagnostics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+    assert labelled == read, f'`probe` was labelled over {labelled}, where what is left of `{where}` reads {read}'
+
+
+def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Path):
+    spec = {**TABLED_SPEC, 'parameters': EVERYWHERE_PARAMETERS}
+    gated = {**spec, 'constraints': {'probe': {'dims': ['g', 't'], 'where': 'active', 'expression': 'x <= 0.5'}}}
+    plain = {**spec, 'constraints': {'probe': {'dims': ['g', 't'], 'expression': 'x <= 0.5'}}}
+    sps.write(gated, EVERYWHERE_SOURCES, tmp_path / 'gated.lp')
+    sps.write(plain, EVERYWHERE_SOURCES, tmp_path / 'plain.lp')
+    assert (tmp_path / 'gated.lp').read_text() == (tmp_path / 'plain.lp').read_text(), (
+        'a where that holds everywhere changed the written model'
+    )
