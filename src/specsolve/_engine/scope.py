@@ -7,7 +7,7 @@ a variable is built has to see its frame.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -56,6 +56,8 @@ class Scope:
     program: program.Program
     data: AttachedSources
     variables: Mapping[str, Labelled]
+    #: Each condition test the data settles at every coordinate, true or false, read once for the build.
+    settled: Mapping[program.Condition, bool] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
