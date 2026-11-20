@@ -10,30 +10,22 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
 from mathspec.program import Parameter
 
-from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve._messages import coordinate_text, coordinates_text, unknown_name_message
+from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
-from specsolve._result import Start
-from specsolve.errors import DataError, SpecsolveError
+from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from mathspec.program import (
-        Constraint,
-        Dimension,
-        Program,
-        Relation,
-        Variable,
-    )
+    from mathspec.program import Dimension, Program, Relation
 
     from specsolve._engine.attaching import AttachedSources
     from specsolve._inputs import Label, Source
@@ -164,7 +156,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> OnRead:
     def reading(pname: str, pdef: Parameter) -> Callable[[], pl.LazyFrame]:
         def read() -> pl.LazyFrame:
             with in_memory():
-                frame = _parameter_frame(pname, pdef, data[pname], indexes)
+                frame = parameter_frame(pname, pdef, data[pname], indexes)
                 return _checked_parameter(pname, pdef, frame, indexes, labels=labels)
 
         return read
@@ -201,7 +193,7 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
 
 
-def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
     """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
@@ -280,6 +272,18 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     return labels.lazy()
 
 
+def index_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
+    """*dim*'s labels as the door reads its index out of *data*, in index order.
+
+    Raises:
+        DataError: No index for *dim*, or one the door refuses.
+    """
+    if dim not in data:
+        raise DataError(_no_index_source_message(dim))
+    _refuse_a_relation_on_the_index(program, dim, data[dim])
+    return _labels_of(dim, _index(data[dim], dim, program.dimensions[dim].dtype))
+
+
 def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
     """Refuse an index holding a null: a coordinate is a label, and a null names none."""
     if not (nulls := labels.null_count()):
@@ -350,17 +354,21 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
             raise DataError(_unsupplied_relation_message(name, relation))
 
     for dim in program.dimensions:
-        if dim not in data:
-            continue
-        carried = _column_names(data[dim], dim)
-        for name in _relations_over(program, dim):
-            if name in carried:
-                raise DataError(
-                    f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
-                    f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
-                    f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
-                    f'the rows it holds.'
-                )
+        if dim in data:
+            _refuse_a_relation_on_the_index(program, dim, data[dim])
+
+
+def _refuse_a_relation_on_the_index(program: Program, dim: str, index: Source) -> None:
+    """Refuse an *index* of *dim* that carries a column named for a relation over *dim*."""
+    carried = _column_names(index, dim)
+    for name in _relations_over(program, dim):
+        if name in carried:
+            raise DataError(
+                f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
+                f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
+                f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
+                f'the rows it holds.'
+            )
 
 
 def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
@@ -534,7 +542,7 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
 # ---------------------------------------------------------------------------
 
 
-def _parameter_frame(
+def parameter_frame(
     name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy frame, whatever shape it took.
@@ -560,100 +568,20 @@ def _parameter_frame(
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
 
 
-def read_start(
-    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
-) -> dict[str, dict[str, pl.LazyFrame]]:
-    """*start*'s tables, each read and checked as a parameter's source is, over its declaration's dims.
-
-    Every shape a parameter takes is read, from a parquet path to one number
-    for every coordinate; *indexes* holds each dimension's labels under its
-    own name. ``primal`` holds numbers, and ``variable_basis`` and
-    ``constraint_basis`` hold basis statuses in their words.
-
-    Raises:
-        SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
-            status outside the five words.
-        DataError: A table a parameter over the same dims would be refused
-            for.
-    """
-    refuse_unknown_start(start, program)
-    read: dict[str, dict[str, pl.LazyFrame]] = {}
-    for reader, tables in _by_reader(start).items():
-        per, declared = _read_by(reader, program)
-        dtype = 'float' if reader == 'primal' else 'str'
-        read[reader] = {}
-        for name, obj in tables.items():
-            kind = f'start= under {reader!r} for {per}'
-            frame = _read_values(kind, name, declared[name].dims, obj, indexes, dtype)
-            if reader != 'primal':
-                _refuse_unknown_statuses(kind, name, frame)
-            read[reader][name] = frame
-    return read
-
-
-def refuse_unknown_start_word(start: object) -> None:
-    """Refuse a *start* given as a word other than ``'previous'``.
-
-    Raises:
-        SpecsolveError: Any other string.
-    """
-    if isinstance(start, str) and start != 'previous':
-        raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
-
-
-def refuse_unknown_start(start: Start, program: Program) -> None:
-    """Refuse a *start* keyed by no reader [`Start`][specsolve.types.Start] takes, or naming no declaration its reader reads.
-
-    Asked of the names alone, so a sweep asks it before a slice is built.
-
-    Raises:
-        SpecsolveError: A key that names no reader, or a name the reader has
-            no declaration for.
-    """
-    readers = tuple(Start.__annotations__)
-    by_reader = _by_reader(start)
-    if unknown := sorted(set(by_reader) - set(readers)):
-        raise SpecsolveError(
-            f'start= takes, under the name of the reader that returns it, a table per declaration: '
-            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
-        )
-    for reader, tables in by_reader.items():
-        per, declared = _read_by(reader, program)
-        if missing := next((name for name in tables if name not in declared), None):
-            raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, missing, declared)}')
-
-
-def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
-    """*start* as the mapping it is, whatever keys it was given."""
-    return cast('Mapping[str, Mapping[str, Source]]', start)
-
-
-def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable] | Mapping[str, Constraint]]:
-    """What *reader* holds a table per, and those declarations by name."""
-    if reader == 'constraint_basis':
-        return 'constraint', program.constraints
-    return 'variable', program.variables
-
-
-def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
-    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve._answer_layout.BASIS_STATUSES]."""
-    held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
-    if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
-        raise SpecsolveError(
-            f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
-            f'{", ".join(map(repr, BASIS_STATUSES))}.'
-        )
-
-
-def _read_values(
+def read_values(
     kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame], dtype: str
 ) -> pl.LazyFrame:
     """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
 
-    *kind* and *name* say whose values they are in a refusal.
+    For values that are no parameter's, such as a start's. *kind* and *name*
+    say whose they are in a refusal, and *indexes* holds each dimension's
+    labels under its own name.
+
+    Raises:
+        DataError: A table a parameter over the same dims would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
+    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -671,7 +599,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
     else:
         least = (
-            _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
+            parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
         )
     return 0 if least is None else int(least)
 
@@ -933,6 +861,11 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
+def declared_dtype_of(column: pl.DataType) -> str | None:
+    """The declared dtype a polars column is, or ``None`` for a column no declaration names."""
+    return next((name for name, types in _COLUMNS.items() if column in types), None)
+
+
 def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the declaration claims.
 
@@ -942,7 +875,7 @@ def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) 
     column = frame.schema[VALUE]
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
-    arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
+    arrived = declared_dtype_of(column) or str(column)
     raise DataError(
         f"{kind} '{name}' is declared '{p.dtype}' and its values arrived as '{arrived}'. "
         f'A declared dtype is a claim about the values, and it is checked here — the file '

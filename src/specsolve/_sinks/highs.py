@@ -10,10 +10,15 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    BASIS_STATUSES,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -185,6 +190,7 @@ class Highs(Solver):
     _column_vectors: ColumnVectors
     _row_vectors: RowVectors
 
+    name = 'highs'
     requires = ('highspy',)
     recorded_options = frozenset(
         {
@@ -248,7 +254,7 @@ class Highs(Solver):
             basis_codes(_values(basis.row_status), codes),
         )
 
-    def _warm(self, basis: Basis) -> None:
+    def _start_from_basis(self, basis: Basis) -> None:
         """``setBasis``, a nonbasic ``fixed`` at ``kLower`` and ``superbasic`` at ``kZero``.
 
         highspy takes a basis only as a list of ``HighsBasisStatus`` members, so
@@ -268,7 +274,7 @@ class Highs(Solver):
         hint.valid = True
         _took(self._handle.setBasis(hint), 'the basis')
 
-    def _start(self, values: Any) -> None:
+    def _start_from_values(self, values: Any) -> None:
         """``setSolution`` in its sparse form, which completes the columns it is not given, for an LP as for a mixed-integer model."""
         import numpy as np
 

@@ -714,10 +714,11 @@ same on every case's `2xs` and `xs` rungs on every pull request. The phases are
 `window`, `window-reshaped`, `window-one`, `window-coefficient` and
 `window-cold`, and only `bench.tidy` renders them.
 
-`test_sweep` is `solve_over` across four hand-built slices of one rung, folded
-in order on one model: the first slice loads and the rest push, which the test
-asserts. A sweep cannot be timed short of its solves, so the solver runs on
-every slice, and the sweep's own per-slice clocks are summed into the result's
+`test_sweep` is `solve_over` across four scenarios of one rung, each with the
+same values, folded in order on one model: the first slice loads and the rest
+push, which the test asserts. A sweep cannot be timed short of its solves, so
+the solver runs on every slice, and the sweep's own per-slice clocks are summed
+into the result's
 phases — `solve_seconds` is what the wall time owes the solver, and the rest is
 the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under

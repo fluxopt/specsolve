@@ -22,7 +22,6 @@ from mathspec import program
 from mathspec.program import walk
 
 from specsolve import _sinks as sinks
-from specsolve._answer_layout import BASIS, BASIS_STATUSES, kinds_of
 from specsolve._collect import in_memory
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
@@ -37,8 +36,9 @@ from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.predicates import folded, holds_everywhere, settled
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
-from specsolve._result import ConstraintRow, Diagnostics, Result
-from specsolve._sinks.solver import Basis
+from specsolve._outputs import kinds_of
+from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
+from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     import numpy as np
     from polars._typing import PolarsDataType
 
-    from specsolve._answer_layout import Output
+    from specsolve._outputs import Output
     from specsolve._result import InfeasibleSubsystem
     from specsolve._sinks.solver import SolveAnswer
     from specsolve._status import SolveStatus
@@ -182,11 +182,11 @@ class Engine:
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
-        self.check(suffix)
+        self.check_sink(suffix)
         with _clocked(self._seconds, 'write'):
             chosen.write(self._model.handoff, path)
 
-    def check(self, sink: str) -> None:
+    def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
         Read off the hand-off, so a square the data prices at zero or an
@@ -211,7 +211,7 @@ class Engine:
         kept forgets its last run unless *carry_on*. Counts toward neither
         ``solves`` nor ``loads``, so timing this alone leaves them true.
         """
-        self.check(solver_name)
+        self.check_sink(solver_name)
         self._solved = None
         with _clocked(self._seconds, 'handoff'):
             held = self._solver
@@ -245,13 +245,13 @@ class Engine:
                 for [`evaluate`][specsolve._result.Result.evaluate], or
                 ``None`` for a build from an already-lowered ``Program``.
             outputs: Which of
-                [`OUTPUTS`][specsolve._answer_layout.OUTPUTS] the
+                [`OUTPUTS`][specsolve._outputs.OUTPUTS] the
                 result carries, already checked.
             start: ``'previous'``, to carry on from the last solve while its
                 solver stays loaded and begin from nothing otherwise; ``None``,
                 to begin from nothing; or an earlier answer or a
                 [`Start`][specsolve.types.Start] already read
-                ([`read_start`][specsolve._sources.read_start]), matched by
+                ([`read_start`][specsolve._start.read_start]), matched by
                 coordinate: an LP from a basis where one is given
                 ([`matched_basis`][specsolve._engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
@@ -268,9 +268,9 @@ class Engine:
         matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
         solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
         if isinstance(matched, Basis):
-            solver.warm(matched)
+            solver.start_from_basis(matched)
         elif matched is not None:
-            solver.start(matched)
+            solver.start_from_values(matched)
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:
@@ -333,15 +333,15 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
-        expressions, evaluate = self._readers(answer.primal, answer.dual, no_duals, lower)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
-            _primals=primals,
-            _duals=duals,
-            _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
-            _expressions=expressions,
-            _evaluate=evaluate,
+            _frames={
+                'primal': primals,
+                'dual': duals,
+                **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
+            },
+            _expressions=self._expressions(answer.primal, answer.dual, no_duals, lower),
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
@@ -367,9 +367,7 @@ class Engine:
         assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
         found = self._solver.infeasible_subsystem()
         if found is None:
-            raise SpecsolveError(
-                _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
-            )
+            raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
 
     def diagnostics(self) -> Diagnostics:
@@ -415,7 +413,7 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
@@ -452,27 +450,25 @@ class Engine:
             for name, v in model.program.variables.items()
         }
 
-    def _readers(
+    def _expressions(
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
         no_duals: str | None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-    ) -> tuple[
-        dict[str, Callable[[], pl.DataFrame]],
-        Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
-    ]:
-        """What [`evaluate`][specsolve._result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
+    ) -> Expressions:
+        """What [`evaluate`][specsolve._result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
 
-        Both close over a snapshot the result owns, including a copy of the
-        variable registry, so they keep answering after an update or ``close()``.
+        The readers close over a snapshot the result owns, including a copy of
+        the variable registry, so they keep answering after an update or
+        ``close()``. A solve that left no primal has none.
         """
         if primal is None:
-            return {}, None
+            return Expressions()
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
         compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
-        return readback.readers(compiler, model.program.expressions, lower)
+        return readback.expressions(compiler, model.program.expressions, lower)
 
     def reconstruct(
         self,
@@ -499,8 +495,7 @@ class Engine:
             if duals is not None
             else None
         )
-        _, evaluate = self._readers(primal, dual, no_duals, lower)
-        return evaluate
+        return self._expressions(primal, dual, no_duals, lower).undeclared
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
@@ -544,11 +539,11 @@ def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataTy
     )
 
 
-def expression_readers(
+def expressions_of(
     program: program.Program,
     sources: Mapping[str, pl.LazyFrame],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
+) -> Expressions:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
     Args:
@@ -560,11 +555,10 @@ def expression_readers(
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
-        One deferred reader per declared named expression, and the ad-hoc
-        evaluator; either compiles on call.
+        The readers, each of which compiles on call.
     """
     compiler = Compiler(Scope(program, attach(program, sources), {}))
-    return readback.readers(compiler, program.expressions, lower)
+    return readback.expressions(compiler, program.expressions, lower)
 
 
 def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:
@@ -593,13 +587,7 @@ def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:
             f'{status.termination_condition!r} rather than infeasible. Read dual() for the prices of a '
             f'model that does have one.'
         )
-    asks = {
-        'gurobi': "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the "
-        'solve to compute the certificate at all',
-        'xpress': "re-solve with solver_options={'presolve': 0}: xpress has a ray only where the simplex "
-        'found the infeasibility, and none where presolve found it first',
-    }
-    ask = asks.get(solver_name)
+    ask = sinks.SOLVERS[solver_name].dual_ray_advice
     return f'the model is infeasible, and the {solver_name} sink returned no dual ray to certify it. ' + (
         f'{ask}.' if ask else 'A ray comes from the simplex, so a run that never reached it has none to give.'
     )
