@@ -340,7 +340,7 @@ def test_every_repository_path_a_workflow_names_exists():
 #: What a caller calls, by role (hard rule 5). Everything ``specsolve`` binds.
 PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
-    'run it many times': {'solve_over', 'EachLabel', 'EachWindow'},
+    'run it many times': {'solve_over', 'build_slice', 'EachLabel', 'EachWindow'},
     'see what it reads': {'tidy'},
     'read it back': {
         'load_archive',
@@ -645,8 +645,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve._axes import EachLabel, EachWindow
-    from specsolve._solve_over import solve_over
+    from specsolve._solve_over import build_slice, solve_over
 
     doors = {
         'build': specsolve.build,
@@ -657,8 +656,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'Model': specsolve.types.Model.__init__,
         'Model.update': specsolve.types.Model.update,
         'solve_over': solve_over,
-        'EachLabel.slices': EachLabel.slices,
-        'EachWindow.slices': EachWindow.slices,
+        'build_slice': build_slice,
     }
     assert sources_annotations(doors) == {'Mapping[str, Source]'}, (
         f'every door takes sources as Mapping[str, Source], and these do not: {sources_annotations(doors)}'
