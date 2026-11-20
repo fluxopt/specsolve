@@ -99,14 +99,9 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _held(
-    values: dense.Values | None,
-    frame: pl.LazyFrame,
-    columns: dense.Columns | None = None,
-    absent: Presence | None = None,
-) -> pl.LazyFrame | Dense:
-    """A leaf's body: held by position where *values* reads it there, *frame* otherwise."""
-    return frame if values is None else Dense(values, lambda: frame, columns, absent)
+def _held(values: dense.Values | None, frame: pl.LazyFrame) -> pl.LazyFrame | Dense:
+    """A constant leaf's body: held by position where *values* reads it there, *frame* otherwise."""
+    return frame if values is None else Dense(values, lambda: frame)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -477,9 +472,16 @@ class Compiler:
             *dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
         )
         presences = self._variable_presences(name, dims)
+        return Term(dims, self._variable_body(name, frame, presences), 'linear', presences=presences)
+
+    def _variable_body(self, name: str, frame: pl.LazyFrame, presences: tuple[Presence, ...]) -> pl.LazyFrame | Dense:
+        """A variable's body at unit coefficient: held by position where its columns are, *frame* otherwise."""
         columns = dense.variable(self.scope, name)
-        body = _held(None if columns is None else dense.unit, frame, columns, presences[0] if presences else None)
-        return Term(dims, body, 'linear', presences=presences)
+        if columns is None:
+            return frame
+        held = self.scope.variables[name]
+        absent = presences[0] if presences else None
+        return Dense(dense.unit, lambda: frame, columns, held.start + held.height - 1, absent)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""

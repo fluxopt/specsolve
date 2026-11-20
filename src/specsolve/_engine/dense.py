@@ -90,11 +90,11 @@ class Dense:
 
     ``values`` reads it at the coordinates of an [`At`][] over dims that
     include its own, and ``columns`` the column under it there, ``None`` for
-    a constant term. ``frame`` is the same term as the join path reads it,
-    formed the first time something asks. ``absent`` is the presence a
-    coordinate without a column stands for, where the term's variable is
-    masked and removes the row it is missing from; ``None`` where a missing
-    column is a zero.
+    a constant term. ``reach`` is the last column its variable can hold.
+    ``frame`` is the same term as the join path reads it, formed the first
+    time something asks. ``absent`` is the presence a coordinate without a
+    column stands for, where the term's variable is masked and removes the
+    row it is missing from; ``None`` where a missing column is a zero.
     """
 
     def __init__(
@@ -102,10 +102,12 @@ class Dense:
         values: Values,
         tidy: Callable[[], pl.LazyFrame],
         columns: Columns | None = None,
+        reach: int = -1,
         absent: Presence | None = None,
     ) -> None:
         self.values = values
         self.columns = columns
+        self.reach = reach
         self.absent = absent
         self._tidy = tidy
 
@@ -183,7 +185,7 @@ def _held(scope: Scope, key: tuple[str, str], read: Callable[[Scope, str], np.nd
 
 def negated(body: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     """``-body``, *tidy* being the same on the join path."""
-    return Dense(lambda at: -body.values(at), tidy, body.columns, body.absent)
+    return Dense(lambda at: -body.values(at), tidy, body.columns, body.reach, body.absent)
 
 
 def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
@@ -192,7 +194,7 @@ def product(a: Dense, c: Dense, tidy: Callable[[], pl.LazyFrame]) -> Dense:
     Each factor reads the coordinate along its own dims, which is the
     broadcast the join makes by matching the dims the two share.
     """
-    return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.absent)
+    return Dense(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.reach, a.absent)
 
 
 def _values_by_position(scope: Scope, name: str) -> Floats:
@@ -240,42 +242,39 @@ def placed(
     """The matrix entries of *terms*, each a body and its sign, at the coordinates *at*.
 
     A coordinate where a term is ``absent`` keeps no row, and which those are
-    is read first, so every term is read only where a row stands.
+    is read first, so every term is read only where a row stands, and one
+    term at a time, so no more than one term's arrays stand beside the
+    entries.
 
     Returns:
         The coordinates that keep a row, and which of *at* they are, ``None``
         for all of them. Then the entries as ``(index, col, coeff)`` in
         *index* order, *index* counting the coordinates kept. A term whose
         variable has no column at a coordinate holds no entry there. Within
-        a coordinate the terms are laid out by the furthest column each
-        reaches, which is column order for terms over different variables, so
-        their share is not sorted.
+        a coordinate the terms are laid out by ``reach``, which is column
+        order for terms over different variables, so their share is not
+        sorted.
     """
-    read: dict[int, Integers | Entries] = {}
     kept = None
-    for i, (body, _) in enumerate(terms):
+    for body, _ in terms:
         if body.absent is None:
             continue
-        read[i] = _columns_of(body, at)
-        if read[i].size and read[i].min() < 0:
-            there = read[i] >= 0
+        column = _columns_of(body, at)
+        if column.size and column.min() < 0:
+            there = column >= 0
             kept = there if kept is None else kept & there
     if kept is not None:
         at = at.only(kept)
-        read.clear()
 
     count = len(terms)
-    for i, (body, _) in enumerate(terms):
-        if i not in read:
-            read[i] = _columns_of(body, at)
     cols = np.empty(len(at) * count, dtype=np.int32)
     coeffs = np.empty(len(at) * count, dtype=np.float64)
     holed = False
-    for slot, i in enumerate(sorted(range(count), key=lambda i: _furthest(read[i]))):
-        column = read.pop(i)
+    for slot, (body, sign) in enumerate(sorted(terms, key=lambda term: term[0].reach)):
+        column = _columns_of(body, at)
         cols[slot::count] = column
         holed = holed or bool(column.size and column.min() < 0)
-        np.multiply(terms[i][0].values(at), terms[i][1], out=coeffs[slot::count])
+        np.multiply(body.values(at), sign, out=coeffs[slot::count])
     index = np.repeat(np.arange(len(at), dtype=np.int64), count)
     if holed:
         held = cols >= 0
@@ -286,8 +285,3 @@ def placed(
 def _columns_of(body: Dense, at: At) -> Integers | Entries:
     assert body.columns is not None, 'a term placed on a row carries a variable'
     return body.columns(at)
-
-
-def _furthest(column: Integers | Entries) -> int:
-    """The largest column a term reaches, ``-1`` where it reaches none."""
-    return int(column.max()) if column.size else -1
