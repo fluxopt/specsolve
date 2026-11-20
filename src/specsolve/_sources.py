@@ -221,6 +221,7 @@ def index_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.S
     """
     if dim not in data:
         raise DataError(_no_index_source_message(dim))
+    _refuse_a_relation_on_the_index(program, dim, data[dim])
     return _labels_of(dim, _index(data[dim], dim, program.dimensions[dim].dtype))
 
 
@@ -294,17 +295,21 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
             raise DataError(_unsupplied_relation_message(name, relation))
 
     for dim in program.dimensions:
-        if dim not in data:
-            continue
-        carried = _column_names(data[dim], dim)
-        for name in _relations_over(program, dim):
-            if name in carried:
-                raise DataError(
-                    f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
-                    f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
-                    f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
-                    f'the rows it holds.'
-                )
+        if dim in data:
+            _refuse_a_relation_on_the_index(program, dim, data[dim])
+
+
+def _refuse_a_relation_on_the_index(program: Program, dim: str, index: Source) -> None:
+    """Refuse an *index* of *dim* that carries a column named for a relation over *dim*."""
+    carried = _column_names(index, dim)
+    for name in _relations_over(program, dim):
+        if name in carried:
+            raise DataError(
+                f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
+                f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
+                f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
+                f'the rows it holds.'
+            )
 
 
 def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:

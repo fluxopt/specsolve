@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, TypeGuard, get_args
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Collection, Iterable, Mapping
 
 #: What an answer carries only where the solve asked for it with ``outputs=``,
 #: beside the primal, the duals and the declared expressions it always
@@ -101,7 +101,7 @@ def checked_outputs(outputs: Iterable[str]) -> frozenset[Output]:
     return frozenset(filter(is_output, asked))
 
 
-def kinds_of(outputs: Iterable[Output]) -> tuple[str, ...]:
+def kinds_of(outputs: Collection[Output]) -> tuple[str, ...]:
     """Each of the [`OUTPUT_KINDS`][] *outputs* carry."""
     return tuple(kind for kind, carried in OUTPUT_KINDS.items() if carried.output in outputs)
 

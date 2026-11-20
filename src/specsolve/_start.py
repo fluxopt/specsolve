@@ -81,12 +81,17 @@ def read_start(
         dtype = 'float' if reader == 'primal' else 'str'
         read[reader] = {}
         for name, obj in tables.items():
-            kind = f'start= under {reader!r} for {per}'
+            kind = _kind(reader, per)
             frame = read_values(kind, name, declared[name].dims, obj, indexes, dtype)
             if reader != 'primal':
                 _refuse_unknown_statuses(kind, name, frame)
             read[reader][name] = frame
     return read
+
+
+def _kind(reader: str, per: str) -> str:
+    """How a refusal names a table of *start*: the reader it is under, and what it holds a table per."""
+    return f'start= under {reader!r} for {per}'
 
 
 def refuse_unknown_start_word(start: object) -> None:
@@ -143,6 +148,21 @@ def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
         )
 
 
+def _refuse_unknown_statuses_of(tables: Mapping[str, Mapping[str, Source]], program: Program) -> None:
+    """Refuse a basis table of a start that holds a status outside [`BASIS_STATUSES`][], before a slice is cut.
+
+    Each slice checks its own cut when it is solved, which is after the
+    slices before it have solved and spilled.
+    """
+    for reader, named in tables.items():
+        if reader == 'primal':
+            continue
+        per, _ = _read_by(reader, program)
+        for name, obj in named.items():
+            if (table := as_frame(obj)) is not None and VALUE in table.collect_schema().names():
+                _refuse_unknown_statuses(_kind(reader, per), name, table)
+
+
 def slice_starts(
     start: Sweep | Result | Start | Literal['previous'] | None,
     axis: Axis,
@@ -170,6 +190,7 @@ def slice_starts(
     column = axis.dim
     tables = _start_tables(start, column)
     refuse_unknown_start(cast('Start', tables), program)
+    _refuse_unknown_statuses_of(tables, program)
     starts: list[Start | None] = []
     empty: list[Label] = []
     for current in slices:

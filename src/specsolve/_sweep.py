@@ -253,8 +253,12 @@ class Spill:
         self._write(record, self._file('record', position))
 
     def take(self, other: Spill) -> None:
-        """Every slice *other* holds, written here file for file, so a sweep too large to hold is copied without being held."""
-        for held in (*KINDS, 'record', 'metrics'):
+        """Every slice *other* holds, written here file for file, so a sweep too large to hold is copied without being held.
+
+        The records land last, as [`write`][] lands one, since a record is
+        what says its slice is done.
+        """
+        for held in (*KINDS, 'metrics', 'record'):
             if (other.directory / held).is_dir():
                 shutil.copytree(
                     other.directory / held,

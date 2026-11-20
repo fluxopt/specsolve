@@ -48,7 +48,8 @@ class Provenance(NamedTuple):
     #: ``{}`` where none were passed. An option that changes the answer, such
     #: as a time limit or a gap, keeps its value, and an infinite or ``nan``
     #: one is the string ``"inf"``, ``"-inf"`` or ``"nan"``; any other has the
-    #: value ``<not recorded>``, so a licence credential never reaches an archive.
+    #: value ``<not recorded>``, so a licence credential reaches an archive
+    #: only where ``also_record`` names it.
     solver_options: str | None = None
     specsolve_version: str | None = None
     mathspec_version: str | None = None
