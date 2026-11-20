@@ -236,6 +236,8 @@ class Spill:
         only when the fold ends is lost to a sweep that stopped before then.
         The first slice to give a reason keeps it.
         """
+        if answer.no_duals is None and not answer.no_expressions:
+            return
         no_duals, absent = read_reasons(self.directory)
         known = absent.get('expression', {})
         if (answer.no_duals is None or no_duals is not None) and set(answer.no_expressions) <= set(known):
