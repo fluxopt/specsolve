@@ -19,6 +19,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(sweep): sources that type a sweep's column differently are refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
 - fix(sweep): a row with no label in the column a sweep cuts on is refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
 - fix(sweep): an archived sweep keyed by datetimes in a time zone reads back ([#2114](https://github.com/fluxopt/specsolve/pull/2114))
+- fix(result): a save replaces what its directory held, and never the files it is reading ([#2115](https://github.com/fluxopt/specsolve/pull/2115))
 
 ## 0.11.2 (2026-11-19)
 

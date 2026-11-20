@@ -19,9 +19,13 @@ import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
+    KEYS_FILE,
+    MANIFEST_FILE,
     METRICS_FILE,
+    OWNED_FILE,
     RECORD_FILE,
     check_format,
+    clear_the_answer,
     consolidated,
     read_outputs,
     read_reasons,
@@ -62,13 +66,6 @@ _LABELS: Mapping[str, str] = MappingProxyType(
         **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
     }
 )
-
-
-#: A spilled sweep's manifest, its keys as their own type, and the coordinates
-#: each window owns.
-MANIFEST_FILE = 'sweep.json'
-KEYS_FILE = 'keys.parquet'
-OWNED_FILE = 'owned.parquet'
 
 
 @dataclass(frozen=True)
@@ -724,6 +721,10 @@ class Sweep:
         it back without solving a slice. A sweep whose every slice terminated
         without values writes each slice's record and no frames.
 
+        Whatever a previous save left in *directory* is removed first; files
+        outside the layout are left alone. A sweep whose slices already lie
+        in *directory* is left as it is.
+
         Returns:
             The directory.
 
@@ -743,6 +744,7 @@ class Sweep:
         if on_disk is not None and on_disk.directory.resolve() == out.resolve():
             return out
         by_slice = self._frames_by_slice() if on_disk is None else []
+        clear_the_answer(out)
         spill = Spill.opened(
             out,
             self.key_name,

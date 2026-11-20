@@ -22,11 +22,10 @@ import polars as pl
 import polars.selectors as cs
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import FORMAT_FILE, write_format, write_whole
+from specsolve._answer_layout import FORMAT_FILE, MANIFEST_FILE, OWNED_FILE, write_format, write_whole
 from specsolve._inputs import lowered
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._outputs import OUTPUT_KINDS
-from specsolve._sweep import MANIFEST_FILE, OWNED_FILE
 from specsolve.errors import LayoutError
 
 if TYPE_CHECKING:

@@ -119,6 +119,11 @@ RECORD_FILE = 'record.parquet'
 SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
+#: A saved sweep's manifest, its keys as their own type, and the coordinates
+#: each window owns.
+MANIFEST_FILE = 'sweep.json'
+KEYS_FILE = 'keys.parquet'
+OWNED_FILE = 'owned.parquet'
 
 
 def consolidated(under: Path, file: str) -> pl.DataFrame:
@@ -142,12 +147,18 @@ def consolidated(under: Path, file: str) -> pl.DataFrame:
 
 
 def clear_the_answer(directory: Path) -> None:
-    """Remove what a saved answer holds, leaving anything else in *directory* alone."""
+    """Remove what a saved answer or a saved sweep holds, leaving anything else in *directory* alone.
+
+    Both are removed whichever is about to be written, so a directory never
+    reads as an answer and as a sweep at once.
+    """
     import shutil
 
-    for kind in KINDS:
-        shutil.rmtree(directory / kind, ignore_errors=True)
-    for member in (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE):
+    per_slice = (file.removesuffix('.parquet') for file in (RECORD_FILE, METRICS_FILE))
+    for held in (*KINDS, *per_slice):
+        shutil.rmtree(directory / held, ignore_errors=True)
+    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, OWNED_FILE)
+    for member in whole:
         (directory / member).unlink(missing_ok=True)
 
 

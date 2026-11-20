@@ -394,6 +394,9 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
+    #: The directory this answer's frames are scanned off, which a save must
+    #: not clear. ``None`` for an answer held in memory.
+    _scanned_from: Path | None = None
 
     @property
     def status(self) -> str:
@@ -793,7 +796,8 @@ class Result:
         to solve the model again and save it.
 
         Whatever a previous save left in *directory* is removed first; files
-        outside the layout are left alone.
+        outside the layout are left alone. A result scanned off *directory*
+        is already there, and is left as it is.
 
         Returns:
             The directory.
@@ -810,6 +814,8 @@ class Result:
         import polars as pl
 
         carried = self._unclosed('the solution')
+        if self._scanned_from is not None and self._scanned_from.resolve() == out.resolve():
+            return out
         clear_the_answer(out)
         write_format(out, outputs_of(kind for kind in carried if kind in OUTPUT_KINDS))
         write_spec(out, self._spec)
@@ -944,4 +950,5 @@ def _answer_under(out: Path, *, eager: bool) -> Result:
         _solved_at=record.solved_at,
         _run=record.specsolve_run,
         _provenance=record.provenance,
+        _scanned_from=None if eager else out,
     )

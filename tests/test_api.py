@@ -702,6 +702,27 @@ def test_a_solve_that_left_no_values_loads_back_and_still_has_none(tmp_path):
         loaded.primal('p')
 
 
+def test_a_scanned_result_saved_where_it_was_scanned_keeps_its_files(dispatch_solution, tmp_path):
+    """A save clears what the directory held, and a scanned result had yet to read the files it cleared."""
+    saved = dispatch_solution.save(tmp_path / 'answer')
+    with sps.scan_result(saved) as scanned:
+        assert scanned.save(saved) == saved
+    with sps.load_result(saved) as loaded:
+        assert loaded.primal('p').equals(dispatch_solution.primal('p')), 'every value is still there'
+
+
+def test_a_result_saved_over_a_sweep_leaves_none_of_the_sweep(dispatch_solution, dispatch_yaml, tmp_path):
+    """A save removed what a saved result holds and left a saved sweep's own files beside the new answer."""
+    from tests.test_solve_over import DISPATCH, scenario_sources
+
+    out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario')).save(tmp_path / 'answer')
+    dispatch_solution.save(out)
+    held = sorted(path.name for path in out.iterdir())
+    assert held == ['dual', 'format.json', 'primal', 'record.parquet', 'spec.yaml'], (
+        'the answer of one solve, and no key, manifest or per-slice record of the sweep'
+    )
+
+
 def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
     empty = tmp_path / 'nothing'
     empty.mkdir()
