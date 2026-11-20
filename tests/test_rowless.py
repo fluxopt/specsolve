@@ -395,3 +395,19 @@ def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Pat
     assert (tmp_path / 'gated.lp').read_text() == (tmp_path / 'plain.lp').read_text(), (
         'a where that holds everywhere changed the written model'
     )
+
+
+def test_declarations_that_hold_no_row_over_the_same_dims_share_one_empty_frame(monkeypatch):
+    """PyPSA's spec has hundreds of declarations without a row, and an empty frame built for each was a fixed cost each."""
+    built, real = [], labels.nothing
+
+    def counted(scope, dims, label):
+        built.append((tuple(dims), label))
+        return real(scope, dims, label)
+
+    monkeypatch.setattr(labels, 'nothing', counted)
+    constraints = {f'gated_{i}': {'dims': ['g', 't'], 'where': 'flag', 'expression': 'x >= 0'} for i in range(3)}
+    sps.build({**TABLED_SPEC, 'constraints': constraints}, TABLED_SOURCES).close()
+    assert built == [(('g', 't'), 'row')], (
+        f'empty frames were built for {built}, where one per dims and label is enough'
+    )

@@ -114,6 +114,8 @@ class Assembly:
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
         self.obj_sense: ObjectiveSense | None = None
+        #: One empty labelled frame per dims and label, shared by every declaration that holds no row.
+        self._empty: dict[tuple[tuple[str, ...], str], pl.DataFrame] = {}
 
     def run(self) -> BuiltModel:
         """Build every declaration, then freeze what they produced.
@@ -195,7 +197,7 @@ class Assembly:
         """
         start = self.n_cols
         if self._holds_nothing(v.dims, v.where):
-            labelled = labels.nothing(self.scope, v.dims, 'var_label')
+            labelled = self._nothing(v.dims, 'var_label')
         else:
             labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
@@ -271,7 +273,7 @@ class Assembly:
         """
         start = self.n_rows
         if self._holds_nothing(c.dims, c.where):
-            return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
+            return self._without_a_row(name, self._nothing(c.dims, 'row'), start)
         admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
@@ -341,6 +343,13 @@ class Assembly:
     def _over_nothing(self, dims: tuple[str, ...]) -> bool:
         """Whether a declaration over *dims* spans a dimension without a label, so it holds nothing whatever its data."""
         return any(not self.attached.cardinality[d] for d in dims)
+
+    def _nothing(self, dims: tuple[str, ...], label: str) -> pl.DataFrame:
+        """[`labels.nothing`][specsolve._engine.labels.nothing], built once per dims and label and then shared."""
+        key = (dims, label)
+        if key not in self._empty:
+            self._empty[key] = labels.nothing(self.scope, dims, label)
+        return self._empty[key]
 
     def _holds_nothing(self, dims: tuple[str, ...], where: program.Mask | None) -> bool:
         """Whether a declaration over *dims* holds no row, known without labelling it: [`_over_nothing`][], or a *where* the data settled false."""
