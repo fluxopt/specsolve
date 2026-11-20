@@ -22,7 +22,6 @@ from mathspec.errors import did_you_mean
 
 from specsolve._collect import collected
 from specsolve._frames import as_frame
-from specsolve._inputs import lowered
 from specsolve._names import VALUE
 from specsolve._sources import declared_dtype_of, in_microseconds, index_labels, least_value, parameter_frame
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
@@ -32,7 +31,7 @@ if TYPE_CHECKING:
 
     from mathspec.program import Program
 
-    from specsolve._inputs import Label, Source, SpecLike
+    from specsolve._inputs import Label, Source
 
 
 #: The key [`EachLabel.to_dict`][] and [`EachWindow.to_dict`][] write an axis's carry under.
@@ -135,13 +134,6 @@ class EachLabel:
         """
         return {'each': 'label', 'dim': self.dim, **_where_set(self)}
 
-    def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec*.
-
-        For building one slice alone: ``sps.build(spec, axis.slices(spec, sources)[3][1])``.
-        """
-        return _slices(self, spec, sources)
-
     def _key_name(self) -> str:
         return self.dim if self.key_name is None else self.key_name
 
@@ -231,15 +223,6 @@ class EachWindow:
     #: What to call the key column in every table of the answer; ``None``
     #: takes the default the class documents.
     key_name: str | None = field(default=None, kw_only=True)
-
-    def slices(self, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-        """The ``(key, sources)`` list this axis would run on *spec*.
-
-        For building one window alone: ``sps.build(spec, axis.slices(spec, sources)[37][1])``.
-        A pair holds the window's lookahead rows too, and nothing a carry
-        would hand it.
-        """
-        return _slices(self, spec, sources)
 
     def __post_init__(self) -> None:
         blocks = [self.steps] if isinstance(self.steps, int) else list(self.steps)
@@ -491,13 +474,6 @@ def axis_from(given: Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any
             f'required: {wrong}.'
         )
     return kind(**keys)
-
-
-def _slices(axis: Axis, spec: SpecLike, sources: Mapping[str, Source]) -> list[tuple[Label, Mapping[str, Source]]]:
-    """*axis*'s slices of *sources* for *spec*, as ``(key, sources)`` pairs."""
-    program = lowered(spec)
-    axis._check_the_program(program, sources)
-    return [(current.key, current.sources) for current in axis._slice(program, sources, axis._key_name())[0]]
 
 
 def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:

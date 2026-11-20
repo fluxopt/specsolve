@@ -8,7 +8,8 @@ driver above [`specsolve._api`][], built from the public verbs.
     rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
-[`specsolve._sweep`][]. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
+[`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,
+as the driver builds it. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
 from __future__ import annotations
@@ -18,8 +19,11 @@ from collections.abc import Iterator, Mapping
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
+
+import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
@@ -39,7 +43,6 @@ from specsolve.errors import DataError, SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
-    import polars as pl
     from mathspec.program import Program
     from mathspec.spec import Spec
 
@@ -157,11 +160,7 @@ def solve_over(
             or a *start* that leaves a slice no row, which starts that slice
             from nothing.
     """
-    axis = axis_from(over) if isinstance(over, Mapping) else over
-    if not isinstance(axis, Axis):
-        raise SpecsolveError(
-            f"over= takes EachLabel or EachWindow, or the mapping an axis's to_dict writes (got {type(over).__name__})."
-        )
+    axis = _as_axis(over)
     carry = axis.carry
     if carry and executor is not None:
         raise SpecsolveError(
@@ -203,6 +202,114 @@ def solve_over(
     if out is not None:
         _archive_the_sweep(out, document, program, axis, sources, folded, slices[0].sources)
     return folded
+
+
+def build_slice(
+    spec: SpecLike,
+    sources: Mapping[str, Source],
+    over: Axis | Mapping[str, Any],  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    key: Label,
+    *,
+    sweep: Sweep | None = None,
+) -> Model:
+    """Build the model of one slice of *over*, as [`solve_over`][] builds it.
+
+    For looking at one slice alone: writing its LP file, reading a row, or
+    solving it with other options.
+
+    Args:
+        spec: As [`solve_over`][] takes it.
+        sources: The sources the sweep is cut from, as [`solve_over`][] takes
+            them. A parameter the axis carries is a source like any other:
+            the slice is built from the value given here, whichever slice it
+            is.
+        over: The axis, as [`solve_over`][] takes it.
+        key: The slice's key, one of [`Sweep.keys`][]: the label of an
+            [`EachLabel`][] slice, or the first label of an [`EachWindow`][]
+            window.
+        sweep: A sweep solved over these sources and this axis. Each carried
+            parameter is then what the slice before *key* left in it, in
+            place of the value in *sources*, so the model is the one that
+            sweep solved. The first slice has none before it and takes
+            *sources* as given, and so does every slice of an axis without a
+            carry.
+
+    Returns:
+        The slice's model, as [`build`][specsolve._api.build] returns it.
+
+    Raises:
+        SpecsolveError: A *key* that is no slice of the axis, a *sweep* in
+            which the slice before *key* did not run or left no values, or an
+            axis or a carry [`solve_over`][] refuses.
+        DataError: As [`solve_over`][] raises it.
+    """
+    axis = _as_axis(over)
+    document = as_spec(spec)
+    sources = _materialised(sources)
+    program = check(document)
+    plan = carry_plan(program, axis)
+    _check_the_carry(plan, axis, sources, program)
+    axis._check_the_program(program, sources)
+    slices, _ = axis._slice(program, sources, axis._key_name())
+    keys = [current.key for current in slices]
+    if key not in keys:
+        raise SpecsolveError(
+            f'key={key!r} is no slice of this axis, whose {len(keys)} slices are keyed {_listed(keys)}. A key is '
+            f'the label of an EachLabel slice, or the first label of an EachWindow window.'
+        )
+    position = keys.index(key)
+    if sweep is None or position == 0:
+        return build(document, slices[position].sources)
+    carried = sorted({rule.variable for rule in plan.values()})
+    left = partial(_left_in, sweep, carried, isinstance(axis, EachWindow), key)
+    *_, current = as_built(slices[position - 1 : position + 1], plan, left)
+    return build(document, current.sources)
+
+
+def _as_axis(over: Axis | Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
+    """*over* as the axis it names, a mapping read as an axis's ``to_dict`` writes it."""
+    axis = axis_from(over) if isinstance(over, Mapping) else over
+    if not isinstance(axis, Axis):
+        raise SpecsolveError(
+            f"over= takes EachLabel or EachWindow, or the mapping an axis's to_dict writes (got {type(over).__name__})."
+        )
+    return axis
+
+
+def _left_in(
+    sweep: Sweep, variables: Sequence[str], per_window: bool, key: Label, before: Slice
+) -> dict[str, pl.DataFrame]:
+    """What the slice *before* left in *sweep* of each of *variables*, for the slice *key* to be built from.
+
+    A carried sweep stops at the first slice that leaves nothing to carry, so
+    the slice after one that did not solve was never built, and neither was
+    any slice after that one. Both are refused, since the frames read here
+    would be empty and the model built from them one no sweep solved.
+    """
+    column = sweep.key_name
+    ran = sweep.records.filter(pl.col(column) == before.key)
+    if ran.is_empty():
+        raise SpecsolveError(
+            f'sweep= did not run slice {before.key!r}, the one before {key!r}, so it holds no {list(variables)} '
+            f'to build slice {key!r} from. It ran {len(sweep)} slice(s), keyed {_listed(sweep.keys)}. Without '
+            f'sweep=, the slice is built from the sources as given.'
+        )
+    if not ran['has_primal'][0]:
+        raise SpecsolveError(
+            f'slice {before.key!r} terminated {ran["termination_condition"][0]} in sweep=, so it left no '
+            f'{list(variables)} to build slice {key!r} from. A carried sweep stops at the first slice that '
+            f'leaves nothing to carry, so slice {before.key!r} is the one to build.'
+        )
+    return {
+        name: sweep.scan(name, per_window=per_window).filter(pl.col(column) == before.key).drop(column).pipe(collected)
+        for name in variables
+    }
+
+
+def _listed(keys: Sequence[Label]) -> str:
+    """*keys* as a message names them: the first five, and how many follow."""
+    shown = ', '.join(repr(key) for key in keys[:5])
+    return shown if len(keys) <= 5 else f'{shown} and {len(keys) - 5} more'
 
 
 def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:

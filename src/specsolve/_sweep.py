@@ -425,6 +425,11 @@ class Sweep:
 
     @property
     def keys(self) -> list[Label]:
+        """Each slice's key, in slice order.
+
+        A key is the label of an [`EachLabel`][] slice, or the first label of
+        an [`EachWindow`][] window.
+        """
         return self.records[self.key_name].to_list()
 
     def _start(self, column: str) -> dict[str, dict[str, pl.DataFrame]]:
