@@ -18,6 +18,8 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
+from mathspec import program
+from mathspec.program import walk
 
 from specsolve import _sinks as sinks
 from specsolve._answer_layout import BASIS, BASIS_STATUSES, kinds_of
@@ -43,7 +45,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
     import numpy as np
-    from mathspec import program
     from polars._typing import PolarsDataType
 
     from specsolve._answer_layout import Output
@@ -154,7 +155,8 @@ class Engine:
             with _clocked(self._seconds, 'attach'):
                 attached = attach(program, sources)
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(_settled_wheres(program, attached), attached, self._measured)
+        settled_program, tests = _settled_wheres(program, attached)
+        assembly = Assembly(settled_program, attached, self._measured, tests)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
 
@@ -640,8 +642,10 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
 
 
-def _settled_wheres(lowered: program.Program, attached: AttachedSources) -> program.Program:
-    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles.
+def _settled_wheres(
+    lowered: program.Program, attached: AttachedSources
+) -> tuple[program.Program, Mapping[program.Condition, bool]]:
+    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles, and those tests.
 
     Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
     not once per declaration. A ``where`` that folds to true is dropped, so
@@ -649,12 +653,18 @@ def _settled_wheres(lowered: program.Program, attached: AttachedSources) -> prog
     and terms placed on their rows without a join. One that folds to false
     is kept as that literal, and the declaration is skipped with no further
     read. The program the model keeps is this one, so readback reads the
-    declarations it built. The tests read one parameter's table whole, so
-    they run on the in-memory engine whatever the model's size.
+    declarations it built. The conditions of every ``cases:`` region the rows
+    and bounds read are settled in the same batch, for the compiler to fold.
+    The tests read one parameter's table whole, so they run on the in-memory
+    engine whatever the model's size.
     """
     declared = [*lowered.variables.values(), *lowered.constraints.values()]
+    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
+    regions = [
+        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+    ]
     with in_memory():
-        tests = settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+        tests = settled(Scope(lowered, attached, {}), [*(d.where for d in declared if d.where is not None), *regions])
 
     def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
         out = {}
@@ -668,7 +678,8 @@ def _settled_wheres(lowered: program.Program, attached: AttachedSources) -> prog
         return out
 
     if not tests:
-        return lowered
-    return dataclasses.replace(
+        return lowered, tests
+    narrowed_program = dataclasses.replace(
         lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints)
     )
+    return narrowed_program, tests

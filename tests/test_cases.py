@@ -525,3 +525,29 @@ def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, d
     with differential(DELAYED, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
     assert built == [terms], f'`held` compiles {terms} term(s): one per region that claims a unit'
+
+
+@pytest.mark.parametrize(
+    ('delay', 'objective', 'reads'),
+    [
+        pytest.param([0, 0], 4.0, 'no unit is delayed, so every p is held to 0.5', id='settled-false'),
+        pytest.param(
+            [1, 1], 5.0, 'every unit reads p one step late, so each last p is free up to 1', id='settled-true'
+        ),
+    ],
+)
+def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkeypatch, delay, objective, reads):
+    """`delay > 0` holds at no unit, or at every unit, and either is read once for the build rather than per region."""
+    from specsolve._engine import compiler as compiler_module
+
+    read, real = [], compiler_module.masked
+
+    def spied(scope, dims, mask):
+        read.append(tuple(dims))
+        return real(scope, dims, mask)
+
+    monkeypatch.setattr(compiler_module, 'masked', spied)
+    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    with differential(DELAYED, sources) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+    assert not read, f'a region whose condition the data settles was read over {read}'
