@@ -26,17 +26,21 @@ sweep, solve the base as a sweep of one slice.
 
 A single solve writes one file per table. A sweep writes one file per slice,
 in a directory of the same name, as `spill_to=` and `Sweep.save` do. So a
-table of the answer is two globs:
+table of the answer is two globs. polars refuses a glob that matches no file,
+so expand them first, and a folder of only solves or only sweeps reads too:
 
 ```python
+from glob import glob
+
 import polars as pl
 
-answers = pl.concat(
-    [pl.read_parquet('runs/*/answer/record.parquet'), pl.read_parquet('runs/*/answer/record/*.parquet')]
-)
-metrics = pl.concat(
-    [pl.read_parquet('runs/*/answer/metrics.parquet'), pl.read_parquet('runs/*/answer/metrics/*.parquet')]
-)
+
+def files(*patterns):
+    return sorted(file for pattern in patterns for file in glob(pattern))
+
+
+answers = pl.read_parquet(files('runs/*/answer/record.parquet', 'runs/*/answer/record/*.parquet'))
+metrics = pl.read_parquet(files('runs/*/answer/metrics.parquet', 'runs/*/answer/metrics/*.parquet'))
 catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
@@ -76,15 +80,13 @@ pl.read_parquet('runs/base/answer/primal/p.parquet').head(3)
 **A sweep's files add its key column**, so union solves and sweeps by name:
 
 ```python
-from glob import glob
-
-files = sorted(glob('runs/*/answer/primal/p.parquet') + glob('runs/*/answer/primal/p/*.parquet'))
-p = pl.concat([pl.read_parquet(file) for file in files], how='diagonal')
+held = files('runs/*/answer/primal/p.parquet', 'runs/*/answer/primal/p/*.parquet')
+p = pl.concat([pl.read_parquet(file) for file in held], how='diagonal')
 ```
 
 **A rolling horizon's files hold every row each window solved.** Where the
 windows look ahead, `answer/owned.parquet` lists the rows each window owns:
-join on the key and the windowed dimension to keep those.
+join on `specsolve_run`, the key and the windowed dimension to keep those.
 
 Every column has a type that parquet readers agree on
 ([the rule](../reference/data.md#column-types-in-an-archive)).
@@ -181,7 +183,11 @@ DuckDB reads a directory archive as it is:
 
 ```sql
 select specsolve_run, slice, rows, nonzeros, build_seconds, solve_seconds
-from read_parquet('runs/*/answer/metrics/*.parquet')
+from (
+    select * from read_parquet('runs/*/answer/metrics.parquet')
+    union all
+    select * from read_parquet('runs/*/answer/metrics/*.parquet')
+) as metrics
 order by build_seconds + solve_seconds desc;
 ```
 
