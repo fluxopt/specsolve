@@ -150,6 +150,27 @@ def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(m
     assert not unrestricted, f'`capped` was labelled over its full product {unrestricted} before its restriction'
 
 
+def test_a_constraint_with_a_where_and_restrictions_reads_its_where_once(monkeypatch):
+    """The `where` labels the rows, and the restrictions only cut them: reading it again for the cut cost the whole read twice."""
+    spec = {
+        **SPARSE_SPEC,
+        'parameters': {**SPARSE_SPEC['parameters'], 'on': {'dims': ['g'], 'dtype': 'bool'}},
+        'constraints': {'capped': {**SPARSE_SPEC['constraints']['capped'], 'where': 'on'}},
+    }
+    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, False]})}
+    frame, read = labels.frame, []
+
+    def spied_frame(scope, dims, where, *args, **kwargs):
+        if where is not None:
+            read.append(tuple(dims))
+        return frame(scope, dims, where, *args, **kwargs)
+
+    monkeypatch.setattr(labels, 'frame', spied_frame)
+    with sps.build(spec, sources) as model:
+        assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
+    assert read == [('g', 'h')], f'`capped` read its `where` {len(read)} times, where once labels it'
+
+
 #: `e` has no label, so `count(on, over=e)` is 0 at every `g`.
 COUNTED_SPEC = {
     'dimensions': {'g': {}, 'e': {}},
