@@ -314,17 +314,17 @@ def _serially(
         return primals
 
     try:
-        for position, (current, sources) in enumerate(as_built(slices, plan, left)):
+        for position, current in enumerate(as_built(slices, plan, left)):
             if spill is not None and spill.done(position):
                 answer = spill.read_back(position)
                 primals = spill.written('primal', position, carried)
             else:
                 with _named_slice(current.key, position, len(slices)):
                     if model is None:
-                        model, before = build(document, sources), None
+                        model, before = build(document, current.sources), None
                     else:
                         before = model.diagnostics()
-                        model.update(sources)
+                        model.update(current.sources)
                     result = model.solve(**solving, start=starts[position])
                     answer = _answers(result, _slice_metrics(model.diagnostics(), before))
                 primals = answer.frames.get('primal', {})

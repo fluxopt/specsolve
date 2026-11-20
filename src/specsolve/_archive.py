@@ -301,11 +301,11 @@ def _per_slice(
     program = lowered(spec)
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
     slices, _ = axis._slice(program, sources, sweep.key_name)
-    for current, built_from in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
+    for current in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
         frames = solved.get(current.key, {})
         if not frames.get('primal'):
             continue
-        model = build(spec, built_from)
+        model = build(spec, current.sources)
         yield current.key, model._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
 
 

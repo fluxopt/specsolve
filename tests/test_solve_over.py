@@ -2654,14 +2654,14 @@ def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():
         return {'state': pl.DataFrame({'value': [float(len(asked))]})}
 
     walk = as_built(slices, {'seed': CarryRule('state', None)}, primals_of)
-    first, built = next(walk)
-    assert (first.key, built['seed'], asked) == ('a', 'the seed of a', []), (
+    first = next(walk)
+    assert (first.key, first.sources['seed'], asked) == ('a', 'the seed of a', []), (
         'the first slice is its own cut, and no primal is asked for yet'
     )
-    rest = [built for _, built in walk]
+    rest = list(walk)
     assert asked == ['a', 'b'], 'each slice is asked once the next one is, and the last never'
-    assert [built['seed'].item() for built in rest] == [1.0, 2.0], 'each takes what the one before it handed on'
-    assert [built['own'] for built in rest] == ['b', 'c'], 'beside its own cut of everything else'
+    assert [built.sources['seed'].item() for built in rest] == [1.0, 2.0], 'each takes what the one before it handed on'
+    assert [built.sources['own'] for built in rest] == ['b', 'c'], 'beside its own cut of everything else'
 
 
 #: Two draws chained by a carry that switches a variable off: `p` exists only while `seed` is positive.

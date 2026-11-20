@@ -5,7 +5,7 @@ slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
 into windows of its labels, and also says how each window's frames are
 stitched back over that dimension. An axis's ``carry=`` is threaded here too:
-[`as_built`][] gives each slice with the sources it is built from.
+[`as_built`][] gives each slice as it is built.
 """
 
 from __future__ import annotations
@@ -431,8 +431,8 @@ def as_built(
     slices: Sequence[Slice],
     plan: Mapping[str, CarryRule],
     primals_of: Callable[[Slice], Mapping[str, pl.DataFrame]],
-) -> Iterator[tuple[Slice, Mapping[str, Source]]]:
-    """Each slice with the sources it is built from: its cut, and what the slice before it handed on.
+) -> Iterator[Slice]:
+    """Each slice as it is built: its sources are its cut, and what the slice before it handed on.
 
     This is the one place a carry is threaded, whether the slices are being
     solved, read back off a spill, or rebuilt from an archive. *primals_of*
@@ -449,7 +449,7 @@ def as_built(
                 parameter: rule.value_from(primals, parameter, before.key, before.seam)
                 for parameter, rule in plan.items()
             }
-        yield current, {**current.sources, **handed}
+        yield current._replace(sources={**current.sources, **handed})
         before = current
 
 
