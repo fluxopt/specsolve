@@ -26,6 +26,8 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -99,13 +101,19 @@ class BuiltModel:
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
-    def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
+    def __init__(
+        self,
+        program: program.Program,
+        attached: AttachedSources,
+        measured: Measured,
+        settled: Mapping[program.Condition, bool] | None = None,
+    ) -> None:
         self.program = program
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
-        self.scope = Scope(program, attached, self.variables)
+        self.scope = Scope(program, attached, self.variables, {} if settled is None else settled)
         self.compiler = Compiler(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
