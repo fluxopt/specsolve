@@ -117,8 +117,11 @@ def narrowed(
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
-    """[`frame`][]'s answer over dims one of which has no label, read without a query: no row, in its columns and dtypes."""
-    schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
+    """[`frame`][]'s answer for a declaration that holds no row, read without a query: no row, in its columns and dtypes.
+
+    With no dims that is ``([`UNIT`][], label)``, as [`frame`][] keys a scalar.
+    """
+    schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims} if dims else {UNIT: pl.Int64}
     return pl.DataFrame(schema=schema | {label: pl.Int64})
 
 
