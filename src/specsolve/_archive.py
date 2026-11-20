@@ -30,13 +30,12 @@ from specsolve._archive_layout import (
     SPEC_MEMBER,
     opened,
 )
-from specsolve._axes import axis_from
+from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import lower_expression, lowered
 from specsolve._names import RUN
 from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
-from specsolve._solve_over import CarryRule
 from specsolve._sweep import Sweep, load_sweep, scan_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
@@ -300,18 +299,14 @@ def _per_slice(
     wherever a ``where`` reads the carried parameter.
     """
     program = lowered(spec)
-    plan = {parameter: CarryRule.resolved(program, parameter, variable) for parameter, variable in axis.carry.items()}
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
     slices, _ = axis._slice(program, sources, sweep.key_name)
-    handed: dict[str, pl.DataFrame] = {}
-    for current in slices:
+    for current, built_from in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
         frames = solved.get(current.key, {})
         if not frames.get('primal'):
             continue
-        model = build(spec, {**current.sources, **handed})
+        model = build(spec, built_from)
         yield current.key, model._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
-        if current is not slices[-1]:
-            handed = {p: rule.value_from(frames['primal'], p, current.key, current.seam) for p, rule in plan.items()}
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

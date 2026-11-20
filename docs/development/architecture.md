@@ -211,7 +211,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
 | `_solve_over.py` | a sweep's driver: one plan per slice, folded |
-| `_axes.py` | how a sweep cuts its sources, and the stitch back |
+| `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
 | `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable frames built so far |
 | `_engine/compiler.py` | plan → lazy queries |
