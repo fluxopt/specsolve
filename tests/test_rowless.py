@@ -476,3 +476,61 @@ def test_a_parameter_no_live_row_reads_is_not_read_and_its_faults_are_not_refuse
 def test_a_fault_in_a_parameter_that_is_read_is_still_refused(read):
     with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
         read()
+
+
+UNREAD_SOURCES = TABLED_SOURCES | {'cost': BAD_COST}
+
+#: `UNREAD_SPEC` with `t` ordered, which a window needs.
+WINDOWED_SPEC = {**UNREAD_SPEC, 'dimensions': {**UNREAD_SPEC['dimensions'], 't': {'dtype': 'int', 'ordered': True}}}
+
+#: `cap` once per scenario, which cuts a sweep into two slices.
+BY_SCENARIO = {
+    'cap': pl.DataFrame({'scenario': ['lo', 'lo', 'hi', 'hi'], 'g': ['a', 'b'] * 2, 'value': [2.0, 3.0, 4.0, 5.0]})
+}
+
+
+@pytest.mark.xfail(raises=AssertionError, reason='an archive reads what the build did not once the solver has run')
+@pytest.mark.parametrize(
+    'archived',
+    [
+        pytest.param(lambda out: sps.solve(UNREAD_SPEC, UNREAD_SOURCES, archive=out), id='solve'),
+        pytest.param(lambda out: sps.build(UNREAD_SPEC, UNREAD_SOURCES).solve(archive=out), id='a-built-model'),
+        pytest.param(
+            lambda out: sps.solve_over(
+                UNREAD_SPEC, UNREAD_SOURCES | BY_SCENARIO, sps.EachLabel('scenario'), archive=out
+            ),
+            id='a-sweep-over-labels',
+        ),
+        pytest.param(
+            lambda out: sps.solve_over(
+                WINDOWED_SPEC, UNREAD_SOURCES, sps.EachWindow('t', steps=2, lookahead=0), archive=out
+            ),
+            id='a-sweep-over-windows',
+        ),
+    ],
+)
+def test_an_archive_refuses_a_fault_in_a_parameter_the_build_did_not_read_before_the_solver_runs(
+    monkeypatch, tmp_path: Path, archived
+):
+    from specsolve._engine import engine as engine_module
+
+    solved, real = [], engine_module.Engine.solve
+
+    def spied(self, *args, **kwargs):
+        solved.append(args)
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(engine_module.Engine, 'solve', spied)
+    with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+        archived(tmp_path / 'out')
+    assert not solved, f'the solver ran {len(solved)} time(s) before the archive refused `cost`'
+
+
+@pytest.mark.xfail(raises=KeyError, reason='a read that raises takes its source with it')
+def test_a_parameter_whose_read_was_refused_is_refused_again_at_the_next_ask():
+    with sps.build(UNREAD_SPEC, UNREAD_SOURCES) as model:
+        result = model.solve()
+        with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+            result.evaluate('sum(cost)')
+        with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+            result.evaluate('sum(cost)')
