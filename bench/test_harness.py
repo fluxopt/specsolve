@@ -29,7 +29,7 @@ import yaml
 from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
+from bench.ab.compare import Row, Worker, _ask, checkouts, compare, same_model, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -2248,6 +2248,47 @@ def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
     assert row.error is None, row.error
     assert row.metric == 'peak_mb', 'a memory run judges the peak, not the clock'
     assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
+
+
+@pytest.mark.parametrize(
+    ('memory', 'builds'),
+    [
+        pytest.param(True, 1, id='a memory run builds once'),
+        pytest.param(False, 2, id='a timed run builds once off the clock first'),
+    ],
+)
+def test_a_memory_peak_is_of_a_process_that_built_once(
+    memory: bool, builds: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The peak is the highest the process ever stood, so a build off the clock is inside it.
+
+    A memory run used to build twice, as a timed run does. Its peak then turned
+    on whether the first model's garbage was collected before the second build
+    reached its own peak. The stand-in `specsolve` under the tree counts the
+    builds of a real worker process.
+    """
+    package = tmp_path / 'src/specsolve'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text(
+        'import os\n'
+        'from types import SimpleNamespace\n'
+        '\n'
+        '\n'
+        'def build(spec, sources):\n'
+        "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
+        "        log.write('built\\n')\n"
+        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(columns=1, rows=1))\n'
+    )
+    log = tmp_path / 'builds'
+    monkeypatch.setenv('AB_BUILDS', str(log))
+    workers = {} if memory else {'base': Worker(tmp_path, op='build', focus=None)}
+    try:
+        _ask(workers, {'base': tmp_path}, 'base', 'grid-baseline-tiny', 'build', None, None)
+    finally:
+        for worker in workers.values():
+            worker.close()
+    built = len(log.read_text().splitlines())
+    assert built == builds, f'the worker built {built} times: a peak is of one build, a timing of the second of two'
 
 
 def test_two_different_models_fail_however_fast() -> None:
