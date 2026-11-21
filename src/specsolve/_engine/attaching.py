@@ -87,19 +87,19 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
         if casts:
             relations[name] = relations[name].with_columns(casts)
-    cast_to = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
-    cast: dict[str, pl.LazyFrame] = {}
+    to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
+    uncollected: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
         frame = _plain_strings(parameters[name], p.dims)
-        casts = [cast_to[d] for d in p.dims if d in cast_to]
+        casts = [to_enum[d] for d in p.dims if d in to_enum]
         if p.dtype == 'float':
             casts.append(_AS_FLOAT)
         if casts:
-            cast[name] = frame.lazy().with_columns(casts)
+            uncollected[name] = frame.lazy().with_columns(casts)
         else:
             parameters[name] = frame
     with in_memory():
-        parameters |= dict(zip(cast, collected_all(cast.values()), strict=True))
+        parameters |= dict(zip(uncollected, collected_all(uncollected.values()), strict=True))
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
