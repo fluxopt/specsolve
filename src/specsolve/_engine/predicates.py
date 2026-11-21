@@ -79,6 +79,19 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     return carrier.filter(falsy_if_null(condition))
 
 
+def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
+    """How many rows of *atom*'s parameter pass its test, as a one-cell frame; a missing row reads as false."""
+    keys = tuple(atom.dims)
+    base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
+    carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys)
+    return carrier.filter(falsy_if_null(condition)).select(pl.len())
+
+
+def counted_over_nothing(atom: program.CountComparison) -> bool:
+    """Whether *atom* holds where the dimension it counts along has no label: its count is zero."""
+    return pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
+
+
 def compile_predicate(
     scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:

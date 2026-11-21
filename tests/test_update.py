@@ -1083,3 +1083,35 @@ def test_a_refill_reads_nothing_for_a_declaration_without_a_label(monkeypatch):
         model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
     assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no label'
+
+
+#: `on` is 1 at every generator, so the data settles every test of it true and the build folds it away.
+FLAGGED = {
+    'a constraint where': {
+        'constraints.floor': {'dims': ['generator'], 'where': 'on > 0', 'expression': 'p >= 1'},
+    },
+    'a cases condition in the objective': {
+        'expressions.charge': {
+            'dims': ['generator'],
+            'cases': {'cheap': {'when': 'on > 0', 'expression': 'price'}},
+            'otherwise': '3 * price',
+        },
+        'objective.expression': 'sum(p * charge)',
+    },
+}
+
+
+@pytest.mark.xfail(strict=True, reason='the refill reads the program as the old flags folded it')
+@pytest.mark.parametrize('overrides', [pytest.param(v, id=k) for k, v in FLAGGED.items()])
+def test_a_flag_the_build_folded_away_builds_again_when_it_moves(overrides):
+    """`on` drops from 1 to 0 at every generator, so the flag the build folded true now folds false.
+
+    The update moves only numbers at the coordinates `on` had, so it took the
+    refill, which reads the program the build kept: the one the old `on`
+    folded, which no longer names `on` at all.
+    """
+    spec = override(ROLES, **overrides)
+    off = {'on': ROLE_DATA['on'].with_columns(pl.Series('value', [0.0, 0.0]))}
+    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | off) as reference:
+        model.update(off)
+        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'on switched off')
