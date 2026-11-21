@@ -13,7 +13,7 @@ from mathspec.program import assumption_message
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import attach
-from specsolve._engine.predicates import folded, holds_nowhere, masked, settled
+from specsolve._engine.predicates import folded, holds_nowhere, masked
 from specsolve._engine.scope import Scope
 from specsolve._messages import coordinate_text
 from specsolve.errors import DataError
@@ -51,10 +51,8 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
         return None
     attached = attach(program, sources)
     scope = Scope(program, attached, {})
-    wheres = [a.where for a in program.assumptions.values() if a.where is not None]
-    tests = settled(scope, wheres)
     for name, assumption in program.assumptions.items():
-        if assumption.where is not None and holds_nowhere(folded(assumption.where, tests)):
+        if assumption.where is not None and holds_nowhere(folded(assumption.where, attached.settled)):
             continue
         failing = _a_coordinate_it_fails_at(scope, assumption)
         if failing is not None:
