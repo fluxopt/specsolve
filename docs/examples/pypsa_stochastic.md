@@ -99,7 +99,7 @@ p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \m
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -232,7 +232,7 @@ feasible dispatch in the severe future, which asks for 210.
 **One capacity, three scenarios of rows.** `within_capacity` is `p <= p_nom`
 with a `dims:` of `[scenario, snapshot, generator]` against a variable declared
 over `[generator]`: nine rows reading one column. That is how a first-stage
-decision couples to a second-stage one. The dim algebra broadcasts the capacity
+decision couples to a second-stage one. The dimension algebra broadcasts the capacity
 because the constraint's frame says to.
 
 **Prices carry the probability, and they add up to the capital cost.** The nodal

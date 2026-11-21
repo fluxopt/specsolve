@@ -124,7 +124,7 @@ e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

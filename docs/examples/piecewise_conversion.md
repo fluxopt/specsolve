@@ -105,7 +105,7 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

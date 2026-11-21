@@ -190,7 +190,7 @@ objective:
 **The tour position sits at both ends of one row.** MTZ needs `u`, the tour
 position, at *both ends of the same row*: `u_i − u_j`. A variable indexed by one
 dimension appears twice under two different roles, a self-join that looks like
-it should need a primitive.
+it should need an operator.
 
 It does not. Declare the identity map from `city` onto each end of the pair:
 

@@ -134,7 +134,7 @@ x_{g,k \boxminus_{0} 1} < x_{g,k} \qquad \forall\, g \in \mathcal{G},\ k \in \ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

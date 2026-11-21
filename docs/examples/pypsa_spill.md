@@ -118,7 +118,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -319,25 +319,25 @@ rather than wrong.
 only for units whose inflow is positive somewhere. The port matches that with
 `where: "inflow != 0"`, so `spill` has six coordinates rather than twelve.
 
-The mask is safe only because of the line beside it. A constraint mentioning a
-masked variable loses its **row**, not only the term. On its own the mask would
-delete the battery's whole energy balance. Its stored energy would come from
+The condition is safe only because of the line beside it. A constraint mentioning
+an absent variable loses its **row**, not only the term. On its own the condition
+would delete the battery's whole energy balance. Its stored energy would come from
 nowhere, and the model would report **0.0** instead of 3200. `missing: neutral`
 says the missing coordinates hold a spill of zero rather than a quantity with no
 value, so the row stands without the term.
 
-**The mask compares a value rather than naming the parameter.** `where: inflow`
-would be a **no-op** here: a `where:` on a bare parameter reads *defined and
-finite*, and the padded `0.0` is both. Nor can the zeros be dropped from the
-table. `inflow` is a term on the energy balance's constant side, and a sparse
-parameter there is refused at load. A missing row read as zero would be a bound
-rather than an absence. The sparsity that matters is in the *value*, and
+**The condition compares a value rather than naming the parameter.**
+`where: inflow` would be a **no-op** here: a `where:` on a bare parameter reads
+*defined and finite*, and the padded `0.0` is both. Nor can the zeros be dropped
+from the table. `inflow` is a term on the energy balance's constant side, and a
+sparse parameter there is refused at load. A missing row read as zero would be a
+bound rather than an absence. The sparsity that matters is in the *value*, and
 `!= 0` is how the model asks for it.
 
 ## What it exercises
 
-`missing: neutral` on a masked variable, the declaration that keeps a row whose
-term has gone, against an energy balance carrying two independent sinks. Also
-the asymmetry underneath it: a masked **variable** takes its row, while a sparse
-**parameter** on a constant side is refused. The two halves of this model's
-sparsity are spelled in two different ways.
+`missing: neutral` on a variable with a condition, the declaration that keeps a
+row whose term has gone, against an energy balance carrying two independent
+sinks. Also the asymmetry underneath it: an absent **variable** takes its row,
+while a sparse **parameter** on a constant side is refused. The two halves of
+this model's sparsity are spelled in two different ways.

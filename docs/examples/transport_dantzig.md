@@ -72,7 +72,7 @@ x_{i,j} \ge 0 \qquad \forall\, i \in \mathcal{I},\ j \in \mathcal{J}
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

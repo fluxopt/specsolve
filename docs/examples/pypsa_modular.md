@@ -94,7 +94,7 @@ p^{\mathrm{nom}}_{g} = n^{\mathrm{mod}}_{g} \cdot \mathrm{p}^{\mathrm{nom,mod}}_
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

@@ -99,7 +99,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

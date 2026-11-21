@@ -147,7 +147,7 @@ r_{o} \le \mathrm{tranche\_frac}_{\mathrm{tranche\_of}(o)} \cdot \mathrm{p}^{\ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

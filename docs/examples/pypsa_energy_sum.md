@@ -82,7 +82,7 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -237,6 +237,6 @@ division. The recorded reference is the dual, the object both models hold.
 ## What it exercises
 
 A reduction over a dimension the constraint does not span: `sum(p * weighting,
-over=snapshot)` with `dims: [generator]`. The `where:` masking a row to where
+over=snapshot)` with `dims: [generator]`. The `where:` keeping a row only where
 its bound exists, on both a `<=` and a `>=`. And a parameter that multiplies
 inside a reduction and again in the objective.

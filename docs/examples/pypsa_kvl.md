@@ -90,7 +90,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

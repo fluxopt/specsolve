@@ -101,7 +101,7 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

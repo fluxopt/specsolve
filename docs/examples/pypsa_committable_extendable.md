@@ -113,7 +113,7 @@ p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} - \mathrm{
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -293,7 +293,7 @@ is why the relaxation above is taken on the port's own model instead.
 
 ## What it exercises
 
-A variable masked by the presence of a parameter (`where: big_m` on `status`), a
+A variable whose condition is the presence of a parameter (`where: big_m` on `status`), a
 constant on the right of a `>=` row that only exists where that parameter does,
 and the one product in PyPSA's committable set that needs a linearisation
 constant rather than a rewrite.

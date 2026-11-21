@@ -121,7 +121,7 @@ f_{t,l} - \mathit{loss}_{t,l} \ge \mathrm{neg\_s\_nom}_{l} \qquad \forall\, t \i
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -342,9 +342,9 @@ climb `10.00 → 85.78 → 90.00`: power is worth more the further it travels,
 which no objective figure shows. Across the lossless line the price does not
 move. `b3` differs from `b2` only because the local generator sets it.
 
-**The mask needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
+**The condition needs `missing: neutral`.** `loss` is declared `where: loss_max`, so
 the resistanceless line has no loss variable. `loss` also appears as a bare
-term in the rating rows, `f + loss <= s_nom`, and a constraint naming a masked
+term in the rating rows, `f + loss <= s_nom`, and a constraint naming an absent
 variable loses its row. Without `missing: neutral` those two rows vanish for that
 line, it becomes uncapacitated, and the model reports a cheaper answer:
 

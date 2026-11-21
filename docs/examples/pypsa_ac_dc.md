@@ -161,7 +161,7 @@ g_{t,i} \ge \mathit{link\_p\_nom}_{i} \cdot \mathrm{link\_p\_min\_pu}_{i} \qquad
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

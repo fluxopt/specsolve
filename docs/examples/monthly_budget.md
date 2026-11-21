@@ -79,7 +79,7 @@ A cap on what each technology may generate per calendar month — an aggregate o
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -222,7 +222,7 @@ month     generator   dual
 2030-03   wind        -0.0
 ```
 
-Per-month *results* need no language support: a primal is a tidy frame, so a
+Per-month *results* need no language support: a primal is a tidy table, so a
 join and a `group_by` do it:
 
 ```python

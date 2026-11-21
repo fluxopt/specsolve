@@ -116,7 +116,7 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
