@@ -43,7 +43,7 @@ from specsolve._engine.engine import Engine
 from specsolve._inputs import as_program
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, SpecsolveError
-from tests.differential import RTOL, _frame, _hold, by_coordinate
+from tests.differential import RTOL, _hold, _table, by_coordinate
 from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.oracle import specsolve_linopy
 
@@ -220,7 +220,7 @@ def _reads(spec: Spec, case: Case, model: Any, relational: Any) -> list[Finding]
     for expression in case.reads:
         ours, mine = _attempt(lambda e=expression: by_coordinate(read(e)))
         theirs, oracle = _attempt(
-            lambda e=expression: by_coordinate(_frame(specsolve_linopy.evaluate(model, spec, e, dict(case.sources))))
+            lambda e=expression: by_coordinate(_table(specsolve_linopy.evaluate(model, spec, e, dict(case.sources))))
         )
         if _is_gap(oracle) or _is_gap(mine):
             continue

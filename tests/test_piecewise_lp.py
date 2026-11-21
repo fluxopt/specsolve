@@ -255,7 +255,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     assert 'unit=b' in str(refusal.value), 'the refusal names the curve that is short, not the block'
 
 
-def test_values_past_the_mask_are_not_part_of_the_curve():
+def test_values_past_the_condition_are_not_part_of_the_curve():
     """`points:` says which breakpoints the curve runs over, and the guard reads it.
 
     A table may be dense where the condition is not — the row exists, it is simply

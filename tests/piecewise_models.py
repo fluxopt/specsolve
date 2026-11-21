@@ -213,7 +213,7 @@ objective:
 """
 
 
-def curve_frame(points: dict) -> pl.DataFrame:
+def curve_table(points: dict) -> pl.DataFrame:
     """A per-generator curve ``{(generator, bp): value}`` as the tidy table it is supplied as."""
     return pl.DataFrame(
         {

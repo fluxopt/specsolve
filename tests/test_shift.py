@@ -18,7 +18,7 @@ from tests.conftest import (
     DISPATCH_SPEC,
     EXAMPLES_DIR,
     by_coord,
-    masked_operand_spec,
+    narrowed_operand_spec,
     override,
     relation,
     schema_of,
@@ -142,7 +142,7 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
 
 #: A condition that removes one interior coordinate, so the operand's own absence
 #: sits where no edge is. `edge: 0` may fill the boundary and nothing else (#987).
-MASKED_INTERIOR = masked_operand_spec('link', 'take <= shift(level, along=t, offset=1, edge=0)')
+NARROWED_INTERIOR = narrowed_operand_spec('link', 'take <= shift(level, along=t, offset=1, edge=0)')
 
 
 def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_there():
@@ -159,7 +159,7 @@ def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_ther
         't': pd.Index([0, 1, 2], name='t'),
         'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
     }
-    with differential(MASKED_INTERIOR, sources, lp=True) as run:
+    with differential(NARROWED_INTERIOR, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 2, 'the boundary row and the one that reads a live slot, and no other'
         assert run.oracle == pytest.approx(10.0), (
             'take[2] reaches its bound because no row caps it — 0.0 would mean the absent slot was read as a zero'
@@ -183,14 +183,14 @@ BY_PARAMETER = {
     },
 }
 
-IN_GROUPS = masked_operand_spec(
+IN_GROUPS = narrowed_operand_spec(
     'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True
 )
 
 #: The same, with nothing absent at all: `level` carries no `where`, so the
 #: operand reaches the shift with no presence table of its own (#1061).
-IN_GROUPS_UNMASKED = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, masked=False
+IN_GROUPS_WITHOUT_WHERE = narrowed_operand_spec(
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, narrowed=False
 )
 
 #: A fourth snapshot the relation sends nowhere, for both models above.
@@ -201,7 +201,7 @@ GROUPLESS_SOURCES = {
 }
 
 
-def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
+def test_a_per_entity_offset_fills_its_own_edge_and_not_the_condition_under_it():
     """The gather's edge, asked the same way as the scalar shift's.
 
     One technology, a lead of one month, and `level` absent at the middle
@@ -220,7 +220,7 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
         assert run.oracle == pytest.approx(10.0), 'take at the last month is capped by nothing'
 
 
-def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
+def test_a_grouped_shift_fills_each_groups_edge_and_not_the_condition_under_it():
     """And the third path: the edge is per group, the condition is not.
 
     Two seasons of two snapshots, `level` absent at the first. Each
@@ -247,7 +247,7 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
     is the null a partial relation gets everywhere else (#969, `sum(by=)`,
     `at()`).
     """
-    partial = override(IN_GROUPS_UNMASKED, **{'relations.season_of.missing': 'absent'})
+    partial = override(IN_GROUPS_WITHOUT_WHERE, **{'relations.season_of.missing': 'absent'})
     with differential(partial, GROUPLESS_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, (
             "each season's opening row and the one reading a live slot — not the group-less snapshot"
@@ -255,7 +255,7 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
 
-def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing():
+def test_a_group_less_coordinate_stays_absent_under_a_condition_that_removes_nothing():
     """The same question with a `where` on the operand that removes no row.
 
     With a presence table the edge is rebuilt from the vacated set, without one

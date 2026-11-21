@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 #: Where-comparison operators, evaluated element-wise on a DataArray.
-_PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
+_CONDITION_OPS: dict[str, Callable[[Any, Any], Any]] = {
     '==': operator.eq,
     '!=': operator.ne,
     '<': operator.lt,
@@ -123,17 +123,17 @@ def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
                 dims=[node.name],
             )
 
-        result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value)) & arr.notnull()
+        result = _CONDITION_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value)) & arr.notnull()
         return result.fillna(False).astype(bool)
 
     if isinstance(node, program.ExpressionComparison):
         left, right = (_value(side, ctx) for side in (node.left, node.right))
         defined = left.notnull() & right.notnull()
-        return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, program.CountComparison):
         admitted = _along(evaluate(node.condition.root), node.over, master_coords)
-        return _PREDICATE_OPS[node.op](admitted.sum(node.over), node.value).astype(bool)
+        return _CONDITION_OPS[node.op](admitted.sum(node.over), node.value).astype(bool)
 
     if isinstance(node, program.TranslatedCondition):
         operand = _along(evaluate(node.operand.root), node.along, master_coords)
@@ -148,22 +148,22 @@ def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
             by = node.partition.name
             (column,) = node.partition.grouped
             arr = _group_offsets(node, by, bound_relation(by, column, ctx.relations), np.asarray(labels))
-            return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
+            return (_CONDITION_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             raise DataError(position_out_of_range_message(node.name, node.op, node.position, at, len(labels)))
         arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
-        return _PREDICATE_OPS[node.op](arr, at).astype(bool)
+        return _CONDITION_OPS[node.op](arr, at).astype(bool)
 
     if isinstance(node, program.RelationComparison):
         arr = bound_relation(node.name, node.column, ctx.relations)
-        return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
     if isinstance(node, program.RelationPairComparison):
         left = bound_relation(node.name, node.column, ctx.relations)
         right = bound_relation(node.other, node.other_column, ctx.relations)
         defined = left.notnull() & right.notnull()
-        return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)

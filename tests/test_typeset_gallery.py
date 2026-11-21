@@ -208,7 +208,7 @@ def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str)
     )
 
 
-def test_the_dispatch_summary_still_carries_the_mask():
+def test_the_dispatch_summary_still_carries_the_condition():
     """Pinned by value: `> 0` is a condition, not a subscripted quantity, so the symbol check would not see it go."""
     assert r'\bar p_g > 0' in _summary('dispatch')
     assert r'\bar p_{g} > 0' in _generated('dispatch')

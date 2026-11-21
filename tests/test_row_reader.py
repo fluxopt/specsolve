@@ -143,7 +143,7 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     assert str(row) == 'balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5'
 
 
-def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
+def test_an_entry_whose_coefficients_are_all_one_says_so_once() -> None:
     """A single magnitude prints as itself, not as a range against itself."""
     generators = [f'g{i}' for i in range(30)]
     data = {
@@ -164,7 +164,7 @@ def test_it_answers_on_a_model_that_was_never_solved() -> None:
         assert model.row('balance', snapshot=0).rhs == 80.0
 
 
-def test_a_row_spanning_two_declarations_names_both() -> None:
+def test_a_row_spanning_two_entries_names_both() -> None:
     """``p <= p_max * u`` puts a term from each of two variables in one row.
 
     The coefficient on ``u`` is the one the *data* supplied.
@@ -283,7 +283,7 @@ def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
     )
 
 
-def test_a_row_echoed_at_a_prompt_is_the_line_not_the_frame() -> None:
+def test_a_row_echoed_at_a_prompt_is_the_line_not_the_table() -> None:
     """``repr`` is how a row is read in a REPL and in a notebook cell, so it is the line too."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
@@ -301,7 +301,7 @@ def test_a_row_has_one_spelling_whatever_order_its_coordinate_was_given_in() -> 
     assert list(reversed_kwargs.coordinate) == ['t', 'g'], "the entry's dimension order, not the call's"
 
 
-def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
+def test_an_entry_over_no_dims_carries_no_bracket() -> None:
     """``z``, not ``z[]`` — linopy's spelling, and an empty bracket states a
     coordinate that does not exist."""
     spec = {

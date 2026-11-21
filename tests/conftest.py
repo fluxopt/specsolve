@@ -253,7 +253,7 @@ def dispatch_inputs():
 
 
 @pytest.fixture
-def dispatch_frame_inputs():
+def dispatch_table_inputs():
     """The same data as tidy tables — the shape the engine documents."""
     generators = list(DISPATCH_GENERATORS)
     return {
@@ -335,11 +335,11 @@ def law_spec(
     }
 
 
-def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
+def narrowed_operand_spec(constraint: str, expression: str, *, grouped: bool = False, narrowed: bool = True) -> dict:
     """The probe behind the shift and window edge cases, over one partly absent operand.
 
     ``level`` is absent where ``usable`` says so (present everywhere under
-    ``masked=False``), and ``take`` is capped only by *expression*'s row. The
+    ``narrowed=False``), and ``take`` is capped only by *expression*'s row. The
     1000x penalty on ``level`` makes "row dropped" and "row built and binding"
     separable from the objective alone. ``grouped`` adds ``season_of``.
     """
@@ -356,7 +356,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     if grouped:
         spec['dimensions']['season'] = {'dtype': 'str'}
         spec['relations'] = {'season_of': {'key': 't', 'values': 'season'}}
-    if not masked:
+    if not narrowed:
         del spec['parameters']
         del spec['variables']['level']['where']
     return spec

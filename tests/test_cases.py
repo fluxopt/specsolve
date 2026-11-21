@@ -53,7 +53,7 @@ CAPPED_SOURCES = {
 }
 
 
-def _frames(sources):
+def _tables(sources):
     """A dimension's labels as a Series and every parameter as a table, the shape both lanes take."""
     import polars as pl
 
@@ -68,7 +68,7 @@ def _frames(sources):
 
 
 def test_each_region_carries_the_coordinates_it_claims():
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 40 and 60, the rest at 5'
         caps = run.result.activity('under_cap').sort('t')
         assert list(caps.get_column('value')) == [40.0, 5.0, 60.0, 5.0], (
@@ -87,7 +87,7 @@ def test_each_region_carries_the_coordinates_it_claims():
 )
 def test_a_constant_side_is_asked_for_data_only_where_its_region_applies(hi, objective):
     """`hi` is the flagged region's cap, so it answers for that region and is never asked about the rest."""
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES | {'hi': hi})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES | {'hi': hi})) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), 'rows outside the region change nothing'
 
 
@@ -98,7 +98,7 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
     Asserted lane by lane: one lane refusing satisfies a ``pytest.raises``
     around both.
     """
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
+    sources = _tables(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / 'capped.yaml'
         path.write_text(yaml.safe_dump(CAPPED_BY_REGION))
@@ -122,7 +122,7 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
         ),
     ],
 )
-def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
+def test_a_region_whose_condition_reads_no_dimension(flagged, objective, reads):
     """A scalar `when` names no coordinate set to cut the region down by, so it cuts by its own constant."""
     spec = CAPPED_BY_REGION | {
         'parameters': CAPPED_BY_REGION['parameters'] | {'flag_all': {'dims': [], 'dtype': 'bool'}},
@@ -130,7 +130,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
             'cap': {'dims': ['t'], 'cases': {'flagged': {'when': 'flag_all', 'expression': 'hi'}}, 'otherwise': 5}
         },
     }
-    sources = _frames(
+    sources = _tables(
         CAPPED_SOURCES
         | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}, 'flag_all': {'value': [flagged]}}
     )
@@ -177,7 +177,7 @@ CARRIED_IN = {
 
 
 def _carried_sources(switchable, before):
-    return _frames(
+    return _tables(
         {
             't': [0, 1, 2, 3],
             'g': ['base', 'peak'],
@@ -268,8 +268,8 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row():
             }
         },
     }
-    sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
-    sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
+    sources = _carried_sources([False, True], [1.0, 0.0]) | _tables({'everywhere': {'value': [True]}})
+    sources['load'] = _tables({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
     with differential(spec, sources, outputs=frozenset({'activity'})) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
@@ -295,7 +295,7 @@ def test_one_parameter_answering_for_two_regions():
             }
         },
     }
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
+    sources = _tables(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
 
@@ -312,7 +312,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
         },
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
+    sources = _tables(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
 
@@ -329,7 +329,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
         },
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
+    sources = _tables(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
 
 
@@ -356,7 +356,7 @@ SUMMED_SOURCES = CAPPED_SOURCES | {
 
 def test_a_region_narrows_what_a_summed_constant_side_owes():
     """Data for the steps a region claims, at every coordinate the sum reads — and no more."""
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES)) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES)) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 30+10 and 30+30, the rest at 5'
 
 
@@ -388,17 +388,17 @@ def test_a_cased_quantity_summed_onto_a_constant_side_builds():
     After the sum over `t` the `a` term has no row at `k = b` and the
     `otherwise` term none at `k = a`; neither is a hole.
     """
-    with differential(SUMMED_CASES, _frames(SUMMED_CASES_SOURCES)) as run:
+    with differential(SUMMED_CASES, _tables(SUMMED_CASES_SOURCES)) as run:
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
 
 
-def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
+def test_a_hole_the_summed_region_reads_is_one_term_fewer():
     """A neutral hole under the sum inside the region contributes nothing (#1465).
 
     Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
     """
     holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed})) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES | {'hi': holed})) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the flagged steps cap at 40 and 30, the rest at 5'
 
 
@@ -442,7 +442,7 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
         'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
         'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
     }
-    with differential(OUTAGE_FLOW, _frames(sources)) as run:
+    with differential(OUTAGE_FLOW, _tables(sources)) as run:
         assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'
 
 
@@ -462,7 +462,7 @@ def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_h
         },
         'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
     }
-    sources = _frames(
+    sources = _tables(
         {'h': [1, 2, 3], 'a': {'h': [1, 2, 3], 'value': [2.0, -1.0, -1.0]}, 'b': {'h': [2], 'value': [4.0]}}
     )
     result = sps.solve(spec, sources)

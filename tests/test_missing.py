@@ -123,7 +123,7 @@ def test_a_missing_row_reads_as_the_declared_value_wherever_a_value_is_read(patc
         assert run.oracle == pytest.approx(objective, rel=RTOL), f'b reads the value, so {objective}'
 
 
-def test_a_bool_that_declares_true_masks_in_where_the_data_has_no_row():
+def test_a_bool_that_declares_true_admits_where_the_data_has_no_row():
     """A bare `bool` name reads its value, so `missing: true` keeps `b` and the data's `false` drops `a`."""
     spec = override(
         BASE,
@@ -149,7 +149,7 @@ SCALAR: dict[str, Any] = {
 }
 
 
-def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_masks():
+def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_narrows():
     """A parameter over no dimensions has one coordinate, so under `missing: neutral` an empty table is its missing row.
 
     `z` exists only where `omega` has a row, so it is not built.

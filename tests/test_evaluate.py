@@ -89,7 +89,7 @@ def test_a_grouped_sum_relabels_through_a_relation():
         pytest.param('total_cost', set(), id='everything-summed-away'),
     ],
 )
-def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(name, dims):
+def test_the_table_carries_exactly_the_dims_the_expression_survives_over(name, dims):
     frame = evaluate(name)
     assert set(frame.columns) - {'value'} == dims, (
         'the returned table answers over the dimensions the expression still ranges over after its sums'

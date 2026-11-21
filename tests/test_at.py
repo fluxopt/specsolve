@@ -329,19 +329,19 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
 
 
 #: The same shape with a total relation; `level` is absent at `c2`.
-MASKED = DANGLING | {
+NARROWED = DANGLING | {
     'parameters': {'usable': {'dims': ['component']}},
     'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
 }
 
 
-def test_at_over_a_masked_variable_takes_the_row_with_it():
+def test_at_over_a_narrowed_variable_takes_the_row_with_it():
     """A pullback carries the condition under it, not only the relation's own gaps (#968)."""
     from tests.differential import differential
     from tests.oracle import pd
 
     usable = pd.Series([1.0, 0.0], index=pd.Index(COMPONENTS, name='component'))
-    with differential(MASKED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
+    with differential(NARROWED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound — 0.0 would mean a row bound it'
         assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
 

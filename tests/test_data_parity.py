@@ -235,7 +235,7 @@ def _position_sources(lead: Any) -> dict[str, Any]:
     return {'t': [0, 1, 2], 'g': ['a'], 'lead': _tidy(g=['a'], value=[lead]), 'demand': _DEMAND}
 
 
-def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tmp_path: Path):
+def test_a_parameter_declared_int_takes_no_float_column_so_a_fraction_cannot_arrive(tmp_path: Path):
     """A parameter declared `int` takes an integer column, which has no fraction to hold."""
     path = _written(tmp_path, POSITION_SPEC)
 
@@ -244,7 +244,7 @@ def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tm
         assert run.is_ok, 'and an integer column is the ordinary case'
 
 
-def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
+def test_whole_numbers_serve_a_parameter_declared_float(tmp_path: Path):
     """An integer column serves a parameter declared `float`: the one widening."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
@@ -279,7 +279,7 @@ FLAG_SPEC = {
         pytest.param('1.0/0.0 floats', _tidy(g=['a', 'b'], value=[1.0, 0.0]), id='a-1-0-float-column'),
     ],
 )
-def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Path, spelling: str, column: Any):
+def test_a_flag_narrows_by_its_declared_dtype_rather_than_by_its_storage(tmp_path: Path, spelling: str, column: Any):
     """A column that is not what it declares does not attach, so a 1/0 flag cannot leave every row standing."""
     path = _written(tmp_path, FLAG_SPEC)
     sources = {'g': ['a', 'b'], 'active': column}

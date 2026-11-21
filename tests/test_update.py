@@ -369,7 +369,7 @@ DECLARED = [
 
 
 @pytest.mark.parametrize('edited', DECLARED)
-def test_the_digest_moves_where_a_declaration_moved(edited):
+def test_the_digest_moves_where_an_entry_moved(edited):
     """What a re-solve may not change, checked directly for want of a rung."""
     assert _tables(REACH).structure != _tables(override(REACH, **edited)).structure, (
         'a model a re-solve may not be pushed onto has to hash differently'
@@ -660,7 +660,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     assert model.diagnostics().nonzeros == seen.nonzeros, 'a released model still says how big it was'
 
 
-def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
+def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
     """Read off the built model, so a condition that moved moves the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with sps.build(dispatch_yaml, zeroed | COORDS) as model:

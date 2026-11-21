@@ -2401,7 +2401,7 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
         pytest.param(lambda runs: runs.evaluate('spend'), id='expression'),
     ],
 )
-def test_the_frame_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
+def test_the_table_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
     """A spilled sweep's tables lie on disk, and a table reader reads the one
     name it is asked for, so it answers what the sweep held in memory answers."""
     assert read(_spilled(tmp_path)).equals(read(priced))

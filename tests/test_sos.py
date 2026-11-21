@@ -260,7 +260,7 @@ def test_a_member_that_may_go_negative_is_held_at_zero_from_below():
 # ---------------------------------------------------------------------------
 
 
-def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
+def test_an_absent_member_leaves_the_set_and_its_neighbours_adjacent():
     """Membership is the variable's own, so a condition closes the gap it leaves.
 
     With size 1 absent at every site the members that exist are 0, 2 and
@@ -371,7 +371,7 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
 
 
 @pytest.mark.parametrize('dims', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])
-def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
+def test_a_condition_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
     """A label is a position where nothing was dropped, and both paths say so.
 
     A variable with no `where` has sets and weights that are arithmetic on the label, which
@@ -399,7 +399,7 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dim
         )
 
 
-def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
+def test_a_condition_that_empties_a_set_leaves_the_numbering_dense():
     """A set number is a dense index, the way a column's and a row's are.
 
     A coordinate's *position* is not: it counts the product the condition never

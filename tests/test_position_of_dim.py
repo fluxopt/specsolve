@@ -215,7 +215,7 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
 GROUPED_SNAPSHOTS = [10, 11, 20, 21, 22, 99]
 GROUPED_PERIODS = [0, 0, 1, 1, 1, None]
 
-MASK = """
+NARROWED_SPEC = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
   period: {dtype: int, ordered: true}
@@ -256,24 +256,24 @@ def _grouped_sources():
     }
 
 
-def _masked(where: str) -> list[int]:
+def _selected(where: str) -> list[int]:
     """The snapshots *where* selects, agreed by both lanes.
 
     Read off the primal rather than the program: minimising a positive price holds
     `soc` at zero everywhere the row was not built, so what comes back non-zero
     is exactly where the condition holds.
     """
-    with differential(MASK.replace('WHERE', where), _grouped_sources()) as run:
+    with differential(NARROWED_SPEC.replace('WHERE', where), _grouped_sources()) as run:
         rows = run.result.primal('soc').filter(pl.col('value') > 1e-9)
         return sorted(int(s) for s in rows.select('snapshot').to_series())
 
 
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
-    assert _masked('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
+    assert _selected('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
         "each period's first snapshot, not just the horizon's"
     )
-    assert _masked('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
+    assert _selected('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
 
 
 def test_a_negative_position_is_each_group_s_last():
@@ -282,7 +282,7 @@ def test_a_negative_position_is_each_group_s_last():
     With periods of different lengths there is no single position that is the
     last of both.
     """
-    assert _masked('position(snapshot, within=period_of[period]) == -1') == [11, 22]
+    assert _selected('position(snapshot, within=period_of[period]) == -1') == [11, 22]
 
 
 def test_a_comparator_reads_the_same_grouped_as_ungrouped():
@@ -293,10 +293,10 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     wraps to a huge positive number instead — which `==` cannot see and every
     other comparator reads backwards.
     """
-    assert _masked('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
+    assert _selected('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
         "everything from each period's second snapshot on"
     )
-    assert _masked('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
+    assert _selected('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
 
 
 @pytest.mark.parametrize(
@@ -313,7 +313,7 @@ def test_a_coordinate_in_no_group_has_no_boundary(where):
     The same reading a null relation value gets everywhere else — it belongs to
     no group, so `sum(by=)` places its terms nowhere and this places no row.
     """
-    assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
+    assert 99 not in _selected(where), f'{where} claimed a coordinate that is in no group'
 
 
 def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
@@ -323,7 +323,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    spec = MASK.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
+    spec = NARROWED_SPEC.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
     path = tmp_path / 'spec.yaml'
     path.write_text(spec)
     sources = _grouped_sources()
@@ -347,7 +347,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 )
 def test_by_takes_a_relation(by, match):
     """`within=` names a relation and its columns, as `by=` does in `sum(by=)` and `at(by=)`, or it is nothing."""
-    spec = MASK.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
+    spec = NARROWED_SPEC.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
     with pytest.raises(LanguageError, match=match):
         schema_of(spec)
 
@@ -359,7 +359,7 @@ def test_a_relation_over_another_dimension_carries_no_position():
     so there is no position within a group for the clause to be about.
     """
     spec = (
-        MASK.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
+        NARROWED_SPEC.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
         .replace(
             '  period: {dtype: int, ordered: true}', '  period: {dtype: int, ordered: true}\n  plant: {dtype: str}'
         )

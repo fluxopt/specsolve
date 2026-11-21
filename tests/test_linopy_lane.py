@@ -21,7 +21,7 @@ from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, pd, specsolve_linopy, where, xr
-from tests.piecewise_models import curve_frame
+from tests.piecewise_models import curve_table
 
 if TYPE_CHECKING:
     from mathspec.spec import Spec
@@ -271,7 +271,7 @@ def gens():
     return ds, {'g': pd.Index(['wind', 'solar', 'gas'], name='g')}
 
 
-def _lowered(text, parameters=('p_max',), dimensions=('g',)):
+def _compiled(text, parameters=('p_max',), dimensions=('g',)):
     """The program a model with condition *text* compiles to, and that condition.
 
     Through a whole model, because the resolver is the language's.
@@ -293,25 +293,25 @@ def _context(program, dataset, master_coords):
 
 
 def test_no_where_is_a_scalar_true(gens):
-    program, _ = _lowered('p_max')
+    program, _ = _compiled('p_max')
     mask = where.evaluate_where(None, _context(program, *gens))
     assert mask.ndim == 0
     assert bool(mask) is True
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    program, node = _lowered('p_max')
+    program, node = _compiled('p_max')
     assert where.evaluate_where(node, _context(program, *gens)).all()
 
 
-def test_a_comparison_masks_per_coordinate(gens):
-    program, node = _lowered('p_max > 0')
+def test_a_comparison_is_decided_per_coordinate(gens):
+    program, node = _compiled('p_max > 0')
     mask = where.evaluate_where(node, _context(program, *gens))
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
-def test_a_dimension_comparison_masks_on_the_coordinate_itself():
-    program, node = _lowered('t > 0', parameters=(), dimensions=('t',))
+def test_a_dimension_comparison_is_decided_on_the_coordinate_itself():
+    program, node = _compiled('t > 0', parameters=(), dimensions=('t',))
     mask = where.evaluate_where(node, _context(program, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')}))
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
 
@@ -319,7 +319,7 @@ def test_a_dimension_comparison_masks_on_the_coordinate_itself():
 def test_a_missing_parameter_is_a_load_error():
     """An undeclared name is a load error in both lanes, not a silently empty model."""
     with pytest.raises(LanguageError, match="'nonexistent' not found"):
-        _lowered('nonexistent')
+        _compiled('nonexistent')
 
 
 # ---------------------------------------------------------------------------
@@ -394,7 +394,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
         ),
     ],
 )
-def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, data, error, match, context):
+def test_a_failure_names_the_entry_and_the_file(yaml_file, tail, data, error, match, context):
     bad = yaml_file(textwrap.dedent(_MINIMAL).lstrip() + tail, 'bad.yaml')
 
     with pytest.raises(error, match=match) as ei:
@@ -420,7 +420,7 @@ def test_importing_the_lane_selects_the_v1_convention():
     assert out.stdout.strip() == 'v1', f'the lane must select v1 on import, got {out.stdout.strip()!r}'
 
 
-def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_path):
+def test_the_two_lanes_agree_about_a_narrowed_variable_without_the_harness(tmp_path):
     """Both lanes, driven from a subprocess with nothing but the package imported.
 
     Not a ``differential()`` case: that helper runs inside the suite, where the
@@ -643,7 +643,7 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
 #: A curve narrowed by ``points:``, so the expansion declares a parameter the file
 #: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
 #: purpose: hydro states two breakpoints where the axis has four.
-MASKED_CURVE_YAML = """
+NARROWED_CURVE_YAML = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
@@ -680,16 +680,16 @@ objective:
 """
 
 
-MASKED_CURVE_DATA = {
+NARROWED_CURVE_DATA = {
     'snapshot': [0],
     'generator': ['hydro', 'gas'],
     'bp': [0, 1, 2, 3],
     'p_max': pd.Series({'hydro': 40.0, 'gas': 80.0}),
     'load': pd.Series([50.0], index=pd.RangeIndex(1, name='snapshot')),
-    'bp_x': curve_frame(
+    'bp_x': curve_table(
         {('hydro', 0): 0.0, ('hydro', 1): 40.0, ('gas', 0): 0.0, ('gas', 1): 20.0, ('gas', 2): 50.0, ('gas', 3): 80.0}
     ),
-    'bp_y': curve_frame(
+    'bp_y': curve_table(
         {
             ('hydro', 0): 0.0,
             ('hydro', 1): 200.0,
@@ -702,7 +702,7 @@ MASKED_CURVE_DATA = {
 }
 
 
-def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
+def test_a_named_expression_reads_off_a_narrowed_curve(yaml_file):
     """Both lanes value one named expression the same where a curve is narrowed.
 
     `points:` names a values parameter, and the condition is that parameter read as
@@ -710,10 +710,10 @@ def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
     expression sums over exist at some breakpoints and not others, and a lane
     that read the full product would answer a longer curve.
     """
-    path = yaml_file(MASKED_CURVE_YAML, 'masked_curve.yaml')
-    with differential(path, MASKED_CURVE_DATA) as run:
+    path = yaml_file(NARROWED_CURVE_YAML, 'masked_curve.yaml')
+    with differential(path, NARROWED_CURVE_DATA) as run:
         tidy = run.result.evaluate('spend')
-        linopy_lane = specsolve_linopy.evaluate(run.model, expanded(path), 'spend', dict(MASKED_CURVE_DATA))
+        linopy_lane = specsolve_linopy.evaluate(run.model, expanded(path), 'spend', dict(NARROWED_CURVE_DATA))
         got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
         want = {int(k): float(v) for k, v in linopy_lane.to_series().items()}
         assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a narrowed curve'
@@ -734,7 +734,7 @@ def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
     )
 
 
-def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
+def test_the_lane_refuses_an_expression_against_a_compiled_program(yaml_file):
     """A Program is what a model compiles to, and compiling does not run backwards."""
     from mathspec import to_spec
 
@@ -745,9 +745,9 @@ def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
         specsolve_linopy.evaluate(m, to_spec(path).program, 'total_gen', dict(EXPRESSION_DATA))
 
 
-def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """One `sources` mapping of polars tables and a parquet path reaches either lane unchanged (#60)."""
-    frames = dispatch_frame_inputs
+    frames = dispatch_table_inputs
     path = tmp_path / 'load.parquet'
     frames['load'].write_parquet(path)
     sources = {**frames, 'load': path}

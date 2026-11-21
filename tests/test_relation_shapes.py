@@ -150,7 +150,7 @@ def test_a_combination_no_member_lands_on_is_an_empty_sum_on_a_constant_side(tmp
     )
 
 
-def _masked_sum_spec(expression: str) -> dict:
+def _narrowed_sum_spec(expression: str) -> dict:
     return {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
         'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
@@ -161,7 +161,7 @@ def _masked_sum_spec(expression: str) -> dict:
     }
 
 
-MASKED_SUM_SOURCES = {
+NARROWED_SUM_SOURCES = {
     'generator': ['g1', 'g2'],
     'bus': ['a', 'b'],
     'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['a', 'b']}),
@@ -178,7 +178,7 @@ def test_a_walk_onto_a_dimension_the_operand_carries_is_refused_and_names_the_re
     agrees with — which is the same answer as multiplying outside, reached by a
     spelling that hides what the call adds.
     """
-    spec = _masked_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
+    spec = _narrowed_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
     with pytest.raises(
         DimensionError, match=r"sum\(by=gen_bus\[bus\]\) groups by \['bus'\], which the expression already carries"
     ):
@@ -191,8 +191,8 @@ def test_the_factor_over_the_landed_dimension_multiplies_outside(tmp_path):
     Bus a holds `load_a * p1` and bus b holds `load_b * p2`, under caps of 4 —
     so 4 and 2.
     """
-    spec = _masked_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
-    objective, primals = _solved(spec, MASKED_SUM_SOURCES, tmp_path)
+    spec = _narrowed_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
+    objective, primals = _solved(spec, NARROWED_SUM_SOURCES, tmp_path)
     assert primals['p'] == pytest.approx({'g1': 4.0, 'g2': 2.0}), "each generator weighed by its own bus's load"
     assert objective == pytest.approx(6.0, rel=RTOL), '4 under a load of 1, and 2 under a load of 2'
 

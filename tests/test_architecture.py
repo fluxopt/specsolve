@@ -609,7 +609,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
         assert not unhandled, f'{qualifier} nodes unknown to {module.name}: {unhandled}'
 
 
-def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
+def test_the_spec_argument_is_what_the_language_takes_minus_the_compiled_form():
     """Every verb here opens a spec the way ``to_spec`` does, and a compiled ``Program`` is not one of them.
 
     Textual, since neither annotation evaluates. Splitting on ``|`` holds
@@ -695,7 +695,7 @@ def test_every_parquet_file_goes_through_one_module():
     )
 
 
-def test_every_frame_is_collected_through_one_function():
+def test_every_table_is_collected_through_one_function():
     """``_collect.py`` picks the engine and keeps every join in the order it was written."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'

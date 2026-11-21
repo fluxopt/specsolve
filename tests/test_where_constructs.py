@@ -118,14 +118,14 @@ def test_a_null_spreads_through_the_arithmetic_of_a_side():
 # ---------------------------------------------------------------------------
 
 
-def test_a_where_counting_a_predicate_reduces_the_dimension_it_counts_along():
+def test_a_where_counting_a_condition_reduces_the_dimension_it_counts_along():
     """``count(live, over=step)`` is one number per unit, so the condition is over ``unit`` alone."""
     admitted = both(spec(['unit'], 'count(live, over=step) >= 2'), sources())
 
     assert admitted == pytest.approx(2.0, rel=RTOL), "'a' runs three steps and 'b' two; 'c' runs one"
 
 
-def test_a_count_of_a_predicate_nothing_admits_is_zero_rather_than_absent():
+def test_a_count_of_a_condition_nothing_admits_is_zero_rather_than_absent():
     """A unit the table has no row for is counted, not dropped.
 
     Counted as absent it would be missing from the answer, and the condition would
@@ -143,7 +143,7 @@ def test_a_count_of_a_predicate_nothing_admits_is_zero_rather_than_absent():
 # ---------------------------------------------------------------------------
 
 
-def test_a_where_shifting_a_predicate_reads_it_one_coordinate_back():
+def test_a_where_shifting_a_condition_reads_it_one_coordinate_back():
     """``shift(live, along=step, offset=1)`` is ``live`` at the step before.
 
     ``a`` runs 0, 1, 2, so steps 1 and 2 have a live predecessor; ``b`` runs 0

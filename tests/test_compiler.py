@@ -212,7 +212,7 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     assert terms['coeff'].unique().to_list() == [24.0], 'every term carries the whole total'
 
 
-def masked_compiler() -> Compiler:
+def narrowed_compiler() -> Compiler:
     """A compiler over two variables with a condition, since a restriction only crosses between terms."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
@@ -236,19 +236,19 @@ def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_
     Restricting a term by its own coordinates returns the rows it was
     given, so a lone term with a condition costs no join.
     """
-    both = masked_compiler().expression(
+    both = narrowed_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
     assert [joins(t.frame) for t in both.linear] == [1, 1]
     assert all('SEMI JOIN' in query(t.frame) for t in both.linear)
 
-    alone = masked_compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
+    alone = narrowed_compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
     assert joins(alone.linear[0].frame) == 0
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
-    compiled = masked_compiler().expression(
+    compiled = narrowed_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
     assert 'UNIQUE' not in query(compiled.linear[0].frame)
@@ -305,7 +305,7 @@ def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     assert 'JOIN' not in text
 
 
-def test_a_parameter_predicate_needs_a_join():
+def test_a_parameter_condition_needs_a_join():
     frame = narrowed(
         compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',)))
     )
@@ -314,7 +314,7 @@ def test_a_parameter_predicate_needs_a_join():
     assert 'FILTER' in text
 
 
-def test_a_name_the_mask_is_certain_of_is_inner_joined():
+def test_a_name_the_condition_is_certain_of_is_inner_joined():
     """The rows a left join would keep here are rows the filter then drops."""
     text = query(
         narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
@@ -323,7 +323,7 @@ def test_a_name_the_mask_is_certain_of_is_inner_joined():
     assert 'LEFT JOIN' not in text
 
 
-def test_the_same_predicate_under_an_or_is_left_joined_again():
+def test_the_same_condition_under_an_or_is_left_joined_again():
     """Under an ``Or`` a missing value can make the condition true, so no row is dropped early."""
     where = program.Mask(
         program.Or(
@@ -336,7 +336,7 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
     assert 'INNER JOIN' not in text
 
 
-def test_what_a_bare_name_asks_is_decided_by_its_declaration():
+def test_what_a_bare_name_asks_is_decided_by_its_entry():
     """Three readings, and the declared dtype picks — not the column that turned up."""
     numeric = query(
         narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
@@ -373,11 +373,11 @@ def test_a_frame_cross_joins_its_dim_tables_and_carries_their_ordinals():
     assert 'CROSS' in query(frame)
 
 
-def test_an_unmasked_frame_has_nothing_to_filter():
+def test_a_frame_with_no_condition_has_nothing_to_filter():
     assert 'FILTER' not in query(narrowed(compiler().scope, ('snapshot', 'generator'), None))
 
 
-def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
+def test_a_condition_reading_part_of_the_frame_restricts_by_semi_join():
     """The condition is evaluated over the product of the dimensions it reads, and the full product semi-joined."""
     frame = narrowed(
         compiler().scope,
@@ -387,7 +387,7 @@ def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
     assert 'SEMI JOIN' in query(frame)
 
 
-def test_a_mask_reading_every_dim_filters_instead():
+def test_a_condition_reading_every_dim_filters_instead():
     """A full-width truth set is as wide as the product itself, so a filter replaces the semi-join."""
     where = program.Mask(
         program.And(

@@ -110,7 +110,7 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
         pytest.param('total_cost', set(), id='summed-over-both'),
     ],
 )
-def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
+def test_the_table_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
     frame = result.evaluate(name)
     assert set(frame.columns) - {'value'} == dims, (
         'the returned table answers over the dimensions the expression still ranges over after its sums'
@@ -122,7 +122,7 @@ def test_an_unknown_name_is_refused_as_a_name_the_model_does_not_declare(result)
         result.evaluate('nope')
 
 
-def test_a_masked_coordinate_has_no_row():
+def test_an_absent_coordinate_has_no_row():
     masked = {
         **SPEC,
         'variables': {
@@ -276,7 +276,7 @@ def test_a_quotient_is_absent_where_its_divisor_is_absent_or_zero(data, expressi
     assert got == pytest.approx(expected), 'the coordinate whose divisor is absent or zero has no row, not inf'
 
 
-def test_a_zero_summand_does_not_make_a_divisor_that_is_a_sum_zero():
+def test_a_zero_term_does_not_make_a_divisor_that_is_a_sum_zero():
     """`sum(fixed, over=g)` is 4 + 0: the zero rule reads the total, so every coordinate divides by 4 and none is absent."""
     spec = override(SIZED, **{'expressions.q': 'out / sum(fixed, over=g)'})
     frame = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
@@ -468,7 +468,7 @@ def test_a_name_the_model_does_not_declare_is_refused_rather_than_read_as_a_gap(
         result.evaluate('sum(p * co2_rate, over=generator)')
 
 
-def test_the_splice_steps_over_a_declaration_of_its_own_name():
+def test_the_splice_steps_over_an_entry_of_its_own_name():
     """Names share one flat namespace, so the spliced entry must not land on a declared one and shadow what the expression reads.
 
     Read through an expression that *references* the collision rather than
@@ -525,7 +525,7 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
     assert read_back.sort(keys).equals(live.sort(keys)), 'a scanned archive evaluates against the tables left on disk'
 
 
-def test_a_declared_name_off_an_archive_is_served_from_disk_not_lowered(archived, monkeypatch):
+def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
     monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
     frame = sps.load_archive(archived).result.evaluate('total_gen')

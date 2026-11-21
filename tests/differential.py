@@ -145,7 +145,7 @@ def at_a_point(
 
         def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
             ours = relational(expression)
-            theirs = _frame(specsolve_linopy.evaluate(m, model, expression, dict(sources)))
+            theirs = _table(specsolve_linopy.evaluate(m, model, expression, dict(sources)))
             assert by_coordinate(ours) == pytest.approx(by_coordinate(theirs), rel=RTOL), (
                 f'the lanes read `{expression}` differently at {_pointby_coordinate(point)} — '
                 f'relational {by_coordinate(ours)}, linopy {by_coordinate(theirs)}'
@@ -171,13 +171,13 @@ def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
         values = rng.integers(1, 9, labels.shape) * rng.choice([-1, 1], labels.shape) / 4
         held = labels.copy(data=values).where(labels != -1)
         variable.solution = held
-        point[name] = _frame(held)
+        point[name] = _table(held)
     m.status = 'ok'
     m.termination_condition = 'optimal'
     return point
 
 
-def _frame(values: xr.DataArray) -> pl.DataFrame:
+def _table(values: xr.DataArray) -> pl.DataFrame:
     """A linopy-lane value as the relational lane's ``(dims…, value)`` table, with no row where it is absent."""
     if not values.dims:
         return pl.DataFrame({'value': [float(values)]}).filter(pl.col('value').is_not_nan())

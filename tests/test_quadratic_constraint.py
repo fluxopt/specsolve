@@ -136,7 +136,7 @@ def test_the_optimum_is_the_one_done_by_hand():
 # ---------------------------------------------------------------------------
 
 
-def test_quadratic_declarations_take_the_tail_of_the_label_space():
+def test_quadratic_entries_take_the_tail_of_the_label_space():
     """Quadratic is a property of an *entry*, so its rows are contiguous —
     which is what keeps every read-back a slice. Declared first in the file
     here, deliberately: the ordering is the engine's, not the author's."""

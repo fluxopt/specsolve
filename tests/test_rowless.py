@@ -91,18 +91,18 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
 )
-def test_a_declaration_that_holds_no_row_is_not_compiled(monkeypatch, kind, name):
+def test_an_entry_that_holds_no_row_is_not_compiled(monkeypatch, kind, name):
     seen = _read(monkeypatch)
     assert name not in seen[kind], f'{name} holds no row, yet the build compiled it'
 
 
-def test_a_declaration_that_holds_a_row_is_still_compiled(monkeypatch):
+def test_an_entry_that_holds_a_row_is_still_compiled(monkeypatch):
     seen = _read(monkeypatch)
     assert seen['constraint'] == {'live'}, 'only `live` holds a row, and it has to be compiled'
     assert seen['variable'] == {'x'}, 'only `x` holds a column, and its bounds have to be compiled'
 
 
-def test_a_model_with_declarations_that_hold_no_row_is_the_model_without_them(tmp_path: Path):
+def test_a_model_with_entries_that_hold_no_row_is_the_model_without_them(tmp_path: Path):
     without = {
         **SPEC,
         'constraints': {'live': SPEC['constraints']['live']},

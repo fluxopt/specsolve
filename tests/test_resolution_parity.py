@@ -125,7 +125,7 @@ def _both_lanes_agree(path, data, where):
     assert linopy_status == relational_status, f'{where}: {linopy_status} vs {relational_status}'
 
 
-def test_every_resolved_predicate_is_parity_tested():
+def test_every_resolved_condition_is_parity_tested():
     """Every resolved condition is exercised by ACCEPTED or COVERED_ELSEWHERE, so a new node cannot arrive untested."""
     import dataclasses
     from typing import get_args
@@ -262,7 +262,7 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
         assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an absent block constrains nothing'
 
 
-BOOL_MASK_SPEC = {
+BOOL_CONDITION_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'active': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'}, 'cap': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -271,7 +271,7 @@ BOOL_MASK_SPEC = {
 }
 
 
-def test_a_bool_parameter_is_a_mask_on_both_lanes():
+def test_a_bool_parameter_is_a_condition_on_both_lanes():
     """A bool parameter reads as its own value: true keeps the row, false leaves it absent,
     and an absent row leaves it absent.
     """
@@ -281,7 +281,7 @@ def test_a_bool_parameter_is_a_mask_on_both_lanes():
         'cap': pd.Series({0: 1.0, 1: 1.0, 2: 1.0}),
     }
 
-    with differential(BOOL_MASK_SPEC, data) as run:
+    with differential(BOOL_CONDITION_SPEC, data) as run:
         assert run.oracle == 1.0, 'true keeps the floor at t=0 only, so exactly one x sits at its cap'
 
 
@@ -321,7 +321,7 @@ def test_the_empty_coordinate_builds_on_both_lanes():
         pytest.param(10.0, 1, 360.0, id='kept'),
     ],
 )
-def test_a_masked_scalar_variable_takes_its_row_with_it(threshold, rows, objective):
+def test_a_narrowed_scalar_variable_takes_its_row_with_it(threshold, rows, objective):
     """Absence spreads through arithmetic at no dimension either (#340).
 
     The condition is data, so the *same file* drops the row or keeps it depending

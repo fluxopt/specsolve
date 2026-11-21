@@ -73,7 +73,7 @@ def test_a_coordinate_product_arrives_in_label_order():
     assert ordinals == sorted(ordinals), 'row-major: `a` varies slowest'
 
 
-def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_frame_inputs):
+def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_table_inputs):
     """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857).
 
     The limit is 0, so the rest of the build is left to polars: a small one is in memory throughout.
@@ -87,7 +87,7 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
-    sps.solve(dispatch_yaml, dispatch_frame_inputs)
+    sps.solve(dispatch_yaml, dispatch_table_inputs)
     assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
         f'every bounds collect names the in-memory engine: {engines}'
     )
@@ -112,18 +112,18 @@ def engines(monkeypatch) -> list[str]:
     return named
 
 
-def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_frame_inputs):
+def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_table_inputs):
     """polars 2.0's streaming engine costs a fixed time per query, which is most of a small model's build."""
-    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    sps.build(dispatch_yaml, dispatch_table_inputs)
     assert engines, 'the build collected something'
     assert set(engines) == {'in-memory'}, (
         f'{engines.count("auto")} of {len(engines)} collects left the engine to polars'
     )
 
 
-def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_frame_inputs):
+def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_table_inputs):
     """A block hands the engine back on exit, so the caller's own query after a small build is polars' choice."""
-    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    sps.build(dispatch_yaml, dispatch_table_inputs)
     collected(pl.LazyFrame({'probe': [0]}))
     assert engines[-1] == 'auto', 'the query after the build still named the in-memory engine'
 
@@ -156,7 +156,7 @@ def _build_wide() -> None:
     ],
 )
 def test_the_reach_against_the_limit_decides_the_build_engine(
-    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_frame_inputs
+    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_table_inputs
 ):
     """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses; at it, memory.
 
@@ -165,7 +165,7 @@ def test_the_reach_against_the_limit_decides_the_build_engine(
     """
     monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
     if spec == 'dispatch':
-        sps.build(dispatch_yaml, dispatch_frame_inputs)
+        sps.build(dispatch_yaml, dispatch_table_inputs)
     else:
         _build_wide()
     if left_to_polars:

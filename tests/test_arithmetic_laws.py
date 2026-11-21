@@ -132,7 +132,7 @@ def test_a_reduction_does_not_distribute_over_addition_when_an_operand_is_absent
     assert together != pytest.approx(apart, rel=RTOL), 'the two questions must stay distinguishable'
 
 
-def test_a_sum_skips_a_parameter_where_a_masked_operand_beside_it_is_absent():
+def test_a_sum_skips_a_parameter_where_a_narrowed_operand_beside_it_is_absent():
     """The same rule when the present operand is a parameter over fewer dimensions.
 
     ``w`` is over ``f`` alone and ``y`` over ``f`` and ``t``, absent at ``f=b``.
@@ -169,7 +169,7 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     )
 
 
-def test_absence_zero_says_at_the_declaration_what_two_blocks_said_at_the_rows():
+def test_absence_zero_says_at_the_entry_what_two_blocks_said_at_the_rows():
     """``missing: neutral`` builds the model the two complementary ``where`` blocks build."""
     minimise_x = 'sum((-1) * x)'
     two_blocks = _objective_of(
@@ -276,7 +276,7 @@ def test_sum_does_not_distribute_over_addition_either():
     assert together != pytest.approx(apart, rel=RTOL)
 
 
-def test_two_masks_intersect_rather_than_applying_one_at_a_time():
+def test_two_conditions_intersect_rather_than_applying_one_at_a_time():
     """Three operands, two different conditions — the term needs *all* of them.
 
     `y` is absent at `d`, `v` at `b` and `d`, so the term exists only at
@@ -289,7 +289,7 @@ def test_two_masks_intersect_rather_than_applying_one_at_a_time():
     assert apart == pytest.approx(240.0, rel=RTOL)
 
 
-def test_a_broadcast_coefficient_does_not_move_where_the_summand_exists():
+def test_a_broadcast_coefficient_does_not_move_where_the_term_exists():
     """A coefficient is not absence, so the separation comes from `y` alone."""
     together = _wide_objective_of('sum(w * x + y, over=f) <= 120', dims=['t'])
     apart = _wide_objective_of('sum(w * x, over=f) + sum(y, over=f) <= 120', dims=['t'])
@@ -298,7 +298,7 @@ def test_a_broadcast_coefficient_does_not_move_where_the_summand_exists():
     assert apart == pytest.approx(120.0, rel=RTOL)
 
 
-def test_a_mask_on_a_dim_the_reduction_does_not_touch_still_propagates():
+def test_a_condition_on_a_dim_the_reduction_does_not_touch_still_propagates():
     """Absence does not have to live on the summed dimension to reach the term of the sum.
 
     The condition is on `t` and the reduction is over `f`: at `t=1` the whole
@@ -439,7 +439,7 @@ def test_a_sparse_divisor_on_a_constant_side_has_the_same_escape():
         )
 
 
-def test_a_divisor_may_be_sparse_where_the_row_is_masked_out():
+def test_a_divisor_may_be_sparse_where_the_row_is_absent():
     """The check is keyed to the rows built, not the coordinate product."""
     spec = override(
         DIVISOR_SPEC,

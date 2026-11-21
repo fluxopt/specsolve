@@ -102,7 +102,7 @@ def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
     assert warm == 0, 'the tables on disk are the tables the live answer held'
 
 
-def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
+def test_an_entry_whose_dims_changed_starts_as_new() -> None:
     """Its coordinates are not the earlier ones, so none of its statuses carry, and the rest still do."""
     scalar = {
         'variables': {'x': {'dims': [], 'bounds': {'lower': 0, 'upper': 5}}},

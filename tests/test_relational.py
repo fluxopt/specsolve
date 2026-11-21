@@ -523,7 +523,7 @@ class TestTheLabelSpace:
     every objective assertion in this file and fail here.
     """
 
-    def test_a_masked_variable_is_labelled_in_declaration_order(self):
+    def test_a_narrowed_variable_is_labelled_in_dimension_order(self):
         """A label is the solver's own column index, so its order is the contract.
 
         Labels are dense ``0..n-1`` over the coordinates the condition leaves, assigned
@@ -635,7 +635,7 @@ class TestTheLabelSpace:
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 
-    def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
+    def test_a_where_naming_an_undeclared_label_admits_nothing(self):
         """A quoted label the dimension does not carry leaves everything absent (the
         where-string rules); the comparison is in String space, since the Enum
         would refuse the stranger."""
@@ -648,7 +648,7 @@ class TestTheLabelSpace:
             )
             assert model.solve().objective == pytest.approx(0.0)
 
-    def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(self, dispatch_data):
+    def test_a_condition_that_removes_nothing_labels_exactly_like_no_condition(self, dispatch_data):
         """A vacuous `where` must not shift a single solver index.
 
         Labels are the solver's own column numbers, so "the condition removed nothing"
@@ -667,7 +667,7 @@ class TestTheLabelSpace:
                 labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
         assert labels[0].equals(labels[1])
 
-    def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
+    def test_a_condition_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
         """`not` and `or` select rows the condition's own join must not have dropped.
 
         A condition's parameters are joined for, and under a plain conjunction that join
@@ -705,7 +705,7 @@ class TestTheLabelSpace:
             'mixed': [0, 1],  # `a` is certain, `b` is not
         }
 
-    def test_every_declaration_owns_a_contiguous_run_of_labels(self):
+    def test_every_entry_owns_a_contiguous_run_of_labels(self):
         """What reading a solve back by position rests on.
 
         A solver vector is positional in the same index the labels are, so a
@@ -1503,7 +1503,7 @@ class TestThePositionalHandoff:
             got = result.primal('p').sort('t', 'n')['value'].to_list()
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
-    def test_a_mask_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
+    def test_a_condition_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
         """Both ways position stops meaning the coordinate, refused by the gate.
 
         A `where` makes the label table a subset of the product, and a parameter

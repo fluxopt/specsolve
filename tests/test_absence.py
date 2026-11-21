@@ -18,7 +18,7 @@ from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
 #: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
-BROADCAST_MASK_SPEC = {
+BROADCAST_CONDITION_SPEC = {
     'dimensions': {
         'node': {'dtype': 'str'},
         'tech': {'dtype': 'str'},
@@ -100,7 +100,7 @@ def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint)
         pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
     ],
 )
-def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
+def test_a_neutral_hole_under_a_sum_is_one_term_fewer(constraint, objective):
     """Inside a sum a missing `neutral` row contributes nothing, so the row is built from the rows the data has.
 
     `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
@@ -257,7 +257,7 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
+def test_a_neutral_member_with_no_value_is_one_term_fewer_through_a_group():
     """A group short of a label's value sums the labels it has, when the parameter is `neutral`.
 
     Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
@@ -369,7 +369,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'the row survived the missing coefficient and pins x'
 
 
-SCALAR_MASKED_SPEC = {
+SCALAR_NARROWED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
@@ -381,16 +381,16 @@ SCALAR_MASKED_SPEC = {
 }
 
 
-def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
+def test_an_absent_scalar_variable_drops_the_row_that_uses_it():
     """Law 7 holds at no dimension either (#340), and on the bare install."""
     data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
-    with sps.solve(SCALAR_MASKED_SPEC, data) as sol:
+    with sps.solve(SCALAR_NARROWED_SPEC, data) as sol:
         assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
         assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
 
-def test_a_mask_survives_a_broadcast_into_a_reduction():
+def test_a_condition_survives_a_broadcast_into_a_reduction():
     """A condition keeps its own dimensions through a product that widens them (#345)."""
     data = {
         'node': ['n1', 'n2'],
@@ -403,5 +403,5 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
         'installed': _grid(['node', 'tech'], [['n1', 'n2'], ['t1', 't2']], [100.0] * 4),
     }
 
-    with differential(BROADCAST_MASK_SPEC, data) as run:
+    with differential(BROADCAST_CONDITION_SPEC, data) as run:
         assert run.result.objective == pytest.approx(100.0, rel=RTOL)
