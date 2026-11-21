@@ -1,12 +1,12 @@
 description: >-
-  Storage dispatch over a horizon, written once and solved whole or a window
+  Storage dispatch over a run of hours, written once and solved whole or a window
   at a time. A window is the same model over its own snapshots, and
   position(snapshot) == 0 is the first snapshot of whichever window is being
-  solved, so the handover needs no literal.
+  solved, so the initial condition needs no literal.
 version: 0
 
 dimensions:
-  snapshot: {dtype: int, description: "the hours of the horizon, in order", ordered: true}
+  snapshot: {dtype: int, description: "the hours modelled, in order", ordered: true}
   generator: {dtype: str, description: "generating units"}
 
 parameters:
@@ -41,7 +41,7 @@ constraints:
 
   soc_open:
     description: >-
-      the handover — at the window's first row the level comes from what the
+      the initial condition — at the window's first row the level comes from what the
       previous window carried across
     dims: [snapshot]
     where: 'position(snapshot) == 0'

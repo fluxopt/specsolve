@@ -160,7 +160,7 @@ _HELD_UNDER = MappingProxyType(
 
 
 #: What ``answer/horizon.parquet`` holds, as its catalog row describes it.
-_HORIZON = 'the labels of the windowed dimension in each window\'s horizon, by window'
+_HORIZON = "the labels of the windowed dimension in each window's horizon, by window"
 
 
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:

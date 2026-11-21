@@ -7,7 +7,7 @@ rolling  steps=8   lookahead=8   windows  6   cost  62400.00   peak soc  120.0  
 
 The store cycles in every schedule — this is not a model where storage
 stops being worth having. What myopia costs is the end of each window:
-charge a window cannot spend before its horizon runs out is worth
+charge a window cannot spend before its last snapshot is worth
 nothing to it, so it arrives empty and the next window starts from zero.
 Lookahead gives it somewhere to spend that charge, and the gap closes.
 

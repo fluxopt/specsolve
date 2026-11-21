@@ -334,7 +334,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: [`close`][] releases it, not the caller.
+        This holder keeps it: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod

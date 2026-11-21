@@ -27,7 +27,7 @@ same model as math.
 | | |
 |---|---|
 | [dispatch](dispatch.md) | Least-cost generation against a load profile — the smallest model that is still a model. |
-| [storage](storage.md) | Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon. |
+| [storage](storage.md) | Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle, so it ends where it started. |
 | [transport](transport.md) | A network: generators sit on buses, lines connect buses, and power balances at every bus. |
 | [piecewise](piecewise.md) | Dispatch where each generator's cost follows its own convex curve. |
 | [piecewise curves of differing length](piecewise_ragged.md) | Dispatch where each generator's cost curve has as many breakpoints as its own data. |
@@ -44,7 +44,7 @@ same model as math.
 | [transport model](pypsa_transport.md) | PyPSA linear optimal power flow at its smallest: transport model, linear marginal cost, no KVL. |
 | [ramp limits](pypsa_ramp.md) | [The transport model](pypsa_transport.md) plus a limit on how fast each generator may change output between snapshots. |
 | [storage units](pypsa_storage.md) | [Ramp limits](pypsa_ramp.md) plus a `StorageUnit` carrying energy between snapshots. |
-| [cyclic storage](pypsa_cyclic_storage.md) | [Storage units](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*. |
+| [cyclic storage](pypsa_cyclic_storage.md) | [Storage units](pypsa_storage.md) with the snapshots closed into a cycle: the first snapshot's state of charge carries over from the *last*. |
 | [Kirchhoff's voltage law](pypsa_kvl.md) | Passive AC lines: flow is decided by physics, not chosen. |
 | [transmission losses](pypsa_losses.md) | The loss on a line is `r · s²`. PyPSA approximates it from below with a fan of tangents. |
 | [AC-DC, two coordinates](pypsa_ac_dc.md) | A meshed AC–DC network under a CO₂ budget. **PyPSA's own `ac-dc-meshed` example.** |

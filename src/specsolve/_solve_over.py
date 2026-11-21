@@ -380,7 +380,11 @@ def _check_the_carry(
             continue
         if isinstance(axis, EachWindow) and rule.dropped == axis.dim:
             continue
-        advance = f'this axis advances along {axis.dim!r}' if isinstance(axis, EachWindow) else 'this axis advances along none'
+        advance = (
+            f'this axis advances along {axis.dim!r}'
+            if isinstance(axis, EachWindow)
+            else 'this axis advances along none'
+        )
         raise SpecsolveError(
             f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {advance}: a carry hands '
             f"on the row at a slice's horizon end, so it can only collapse the dimension the sweep advances "

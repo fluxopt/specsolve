@@ -336,7 +336,7 @@ def maintenance(n: pypsa.Network, component: str) -> dict[str, object]:
     A start covers itself and the snapshots after it until their generator
     weightings reach the duration — PyPSA's first window end whose cumulative
     weighting meets ``maintenance_duration`` less a relative ``1e-6``. A start
-    is blocked where its window runs past the horizon or into a snapshot the
+    is blocked where its window runs past the last snapshot or into a snapshot the
     unit does not stand in, and never for a unit that is not maintainable.
     """
     dim = DIM[component]

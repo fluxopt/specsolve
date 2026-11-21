@@ -16,7 +16,7 @@ own objects. Nothing here imports specsolve.
 **Four limits, one shape.** Each bounds a sum over a set PyPSA selects by an
 attribute:
 
-- ``operational_limit`` — energy a carrier delivers over the horizon (``gas``)
+- ``operational_limit`` — energy a carrier delivers over every snapshot (``gas``)
 - the per-(bus, carrier) capacity cap — wind capacity at ``east``
 - ``transmission_volume_expansion_limit`` — ``p_nom * length`` over the links
 - ``transmission_expansion_cost_limit`` — ``capital_cost * p_nom`` over the links

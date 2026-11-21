@@ -186,11 +186,12 @@ class EachWindow:
     and the sources are the ones a single solve takes, and every table comes
     back over *dim*'s own labels.
 
-    Each window keeps ``steps`` labels and sees ``lookahead`` beyond them, so
-    a ``lookahead`` above zero is overlap. An ``int`` keeps the same number
-    every window; a sequence keeps those numbers in order, for horizons that
-    grow window by window or a month at a time. Both count labels in label order, not
-    values, so datetimes, strings and gapped integers all work.
+    Each window keeps ``steps`` labels, its horizon, and sees ``lookahead``
+    labels beyond them, so a ``lookahead`` above zero is overlap. An ``int``
+    keeps the same number every window; a sequence keeps those numbers in
+    order, for horizons that grow window by window or a month at a time. Both
+    count labels in label order, not values, so datetimes, strings and gapped
+    integers all work.
 
     A rule for a window's first row is written ``position(dim) == 0``: a
     position counts within the window, which is what a rolling horizon seeding
@@ -307,7 +308,9 @@ class EachWindow:
             }
             horizon_end = window[length - 1]
             out.append(
-                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), horizon_end)
+                Slice(
+                    window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), horizon_end
+                )
             )
             horizons.extend({key_name: window[0], self.dim: label} for label in window[:length])
             start += length

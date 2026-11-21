@@ -16,7 +16,7 @@ own objects. Nothing here imports specsolve.
 Ramp limits plus a ``StorageUnit``. Its state of charge carries energy
 between snapshots, charged at ``efficiency_store`` and discharged at
 ``efficiency_dispatch``, decaying by ``standing_loss`` each step. Left
-**non-cyclic**: the horizon starts at ``state_of_charge_initial`` and the end
+**non-cyclic**: the level starts at ``state_of_charge_initial`` and the end
 is free.
 """
 
