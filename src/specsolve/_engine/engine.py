@@ -30,6 +30,7 @@ from specsolve._engine.assembly import (
 from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
+from specsolve._engine.specialize import specialized
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
@@ -152,7 +153,7 @@ class Engine:
             attached = attach(program, sources)
         self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(program, attached, self._measured)
+        assembly = Assembly(specialized(program, attached), attached, self._measured)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
 
