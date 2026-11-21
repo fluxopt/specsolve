@@ -1,6 +1,6 @@
 """What every sink reads, and nothing more.
 
-The frames, the scalars a writer needs to size its batching, and the
+The tables, the scalars a writer needs to size its batching, and the
 projections more than one sink needs — the dense column and row vectors, the
 matrix a block at a time — so two sinks cannot disagree about the model they
 loaded.
@@ -73,7 +73,7 @@ SENSE_CODES: Mapping[program.ConstraintSense, int] = {
     sense: code for code, sense in enumerate(get_args(program.ConstraintSense))
 }
 
-#: The dtype the ``rows`` frame holds a comparison in. Built from
+#: The dtype the ``rows`` table holds a comparison in. Built from
 #: [`SENSE_CODES`][] so a category's index *is* its code.
 SENSE = pl.Enum(list(SENSE_CODES))
 
@@ -85,7 +85,7 @@ class Handoff:
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
     and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
     ``row_starts[r] : row_starts[r + 1]`` the half-open span row ``r`` owns.
-    The objective constant lives outside the frames, having no column to
+    The objective constant lives outside the tables, having no column to
     attach to.
 
     ``quad`` is the objective's quadratic part, in ``(col_l, col_r)`` order,
@@ -98,11 +98,11 @@ class Handoff:
     ``qmatrix`` is the same form for the *rows* that carry one:
     ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
     label space, beginning at [`linear_row_count`][] — the engine builds
-    quadratic declarations last — so a sink holding linear and quadratic rows
+    quadratic entries last — so a sink holding linear and quadratic rows
     in different objects reads its answer back as two runs, not a scatter.
 
     ``sos`` is ``(set, type, col, weight)`` in ``(set, weight)`` order, one row
-    per member. It is the only frame a sink may be unable to ingest — SOS is a
+    per member. It is the only table a sink may be unable to ingest — SOS is a
     *sink capability* — so a solver without the concept refuses a model
     carrying one.
 
@@ -260,7 +260,7 @@ class Handoff:
         """Each chunk of rows with the matrix entries it owns — every sink's reader.
 
         A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
-        searched. A consumer that needs the ``row`` labels asks
+        searched. A sink that needs the ``row`` labels asks
         [`matrix_block`][] with the chunk's own range, so its spans and entries
         cannot disagree.
         """

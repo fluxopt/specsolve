@@ -3,7 +3,7 @@
 An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
-into windows of its labels, and also says how each window's frames are
+into windows of its labels, and also says how each window's tables are
 stitched back over that dimension. An axis's ``carry=`` is threaded here too:
 [`as_built`][] gives each slice as it is built.
 """
@@ -56,7 +56,7 @@ class Slice(NamedTuple):
 
 @dataclass(frozen=True)
 class Stitch:
-    """The way from a windowed sweep's frames to its answer over the dimension it cut.
+    """The way from a windowed sweep's tables to its answer over the dimension it cut.
 
     ``owned`` is ``(key, dim)`` for the labels each window owns; the lookahead
     rows are not in it.
@@ -68,7 +68,7 @@ class Stitch:
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
 
-        A frame with no [`dim`][] column is over no label a window owns.
+        A table with no [`dim`][] column is over no label a window owns.
         """
         if self.dim in frame.collect_schema().names():
             return None
@@ -183,7 +183,7 @@ class EachWindow:
     Each window keeps *dim* and is the model over its own labels: the index
     of *dim* is narrowed to them, and every parameter and relation over *dim*
     is cut to the rows they hold. Nothing is squeezed or renamed, so the spec
-    and the sources are the ones a single solve takes, and every frame comes
+    and the sources are the ones a single solve takes, and every table comes
     back over *dim*'s own labels.
 
     Each window keeps ``steps`` labels and sees ``lookahead`` beyond them, so
@@ -199,7 +199,7 @@ class EachWindow:
 
     Whether the model *can* be cut this way is asked before a slice is taken
     ([separability](https://mathspec.readthedocs.io/en/latest/reference/reading/#asking-whether-an-axis-can-be-cut)):
-    a coupling along *dim* is refused, naming the declaration and the change
+    a coupling along *dim* is refused, naming the entry and the change
     that would lift it, and ``lookahead`` has to cover what the rows read
     ahead. What the rows read *behind* is the rolling-horizon seed, met by the
     edge policy, and is not refused.
@@ -248,7 +248,7 @@ class EachWindow:
         return {'each': 'window', 'dim': self.dim, 'steps': steps, 'lookahead': self.lookahead, **_where_set(self)}
 
     def _key_name(self) -> str:
-        """Where the window started, never ``dim``, which every frame of the window already carries."""
+        """Where the window started, never ``dim``, which every table of the window already carries."""
         return f'{self.dim}_start' if self.key_name is None else self.key_name
 
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
@@ -348,7 +348,7 @@ class CarryRule:
     """One resolved carry: which variable moves into a parameter, and how.
 
     ``dropped`` is the one dimension the carry collapses, and ``None`` where the
-    whole frame moves forward.
+    whole table moves forward.
     """
 
     variable: str
@@ -356,7 +356,7 @@ class CarryRule:
 
     @classmethod
     def resolved(cls, program: Program, parameter: str, variable: str) -> CarryRule:
-        """One carry checked against the plan, without reading data."""
+        """One carry checked against the program, without reading data."""
         if parameter not in program.parameters:
             raise SpecsolveError(f'carry writes parameter {parameter!r}, which the spec does not declare')
         if variable not in program.variables:

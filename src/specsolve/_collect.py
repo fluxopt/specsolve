@@ -1,4 +1,4 @@
-"""The one place that decides how polars materialises a frame.
+"""The one place that decides how polars materialises a table.
 
 A collect names polars' ``auto`` engine, so polars chooses it, except inside
 [`in_memory`][], where it names the in-memory engine. A polars

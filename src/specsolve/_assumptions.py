@@ -1,7 +1,7 @@
 """The data-time check of a model's ``assumptions:``.
 
-A predicate is read by the relational engine's mask walk, so it agrees with
-the rows that are built. Called from
+A condition is read as the relational engine reads a ``where:``, so it
+agrees with the rows that are built. Called from
 [`tidy_sources`][specsolve._sources.tidy_sources], so both lanes pass through it.
 """
 
@@ -33,7 +33,7 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
     Nothing is checked while a parameter is unfilled; attaching refuses that.
 
     Args:
-        program: The lowered spec.
+        program: The compiled spec.
         sources: What [`tidy_sources`][specsolve._sources.tidy_sources] holds once every
             parameter, relation and index is read.
 
@@ -59,8 +59,8 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
 def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | None:
     """One coordinate the assumption does not hold at, or ``None`` where it holds everywhere.
 
-    A predicate with no value at a coordinate does not hold there. The empty
-    string answers a failing assumption over no dims. One over a dimension
+    A condition with no value at a coordinate does not hold there. The empty
+    string answers a failing assumption over no dimensions. One over a dimension
     without a label has no coordinate to fail at, so it is not read.
     """
     failing = ~assumption.holds

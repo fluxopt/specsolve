@@ -12,7 +12,7 @@ Example::
         {'p_max': 'p_max.parquet', 'load': 'load.parquet', 'snapshot': range(8760)},
     )
     result.objective
-    result.primal('p')  # tidy polars.DataFrame (coords..., value)
+    result.primal('p')  # tidy polars.DataFrame (coordinates..., value)
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ __all__ = ['build', 'check', 'evaluate', 'solve', 'tidy', 'write']
 
 
 def check(spec: SpecLike) -> Program:
-    """Parse, validate and lower a spec; attach no data.
+    """Parse, validate and compile a spec; attach no data.
 
     Every other verb reads the spec through this, so what this refuses they
     refuse too. Whether a sink takes the model is a fact about the build, and
@@ -65,22 +65,22 @@ def check(spec: SpecLike) -> Program:
 
     Args:
         spec: A YAML path, a mapping, or a ``Spec`` — what ``mathspec.to_spec``
-            takes. A lowered ``Program`` is not taken. A ``piecewise:`` block
+            takes. A compiled ``Program`` is not taken. A ``piecewise:`` block
             is written out first: ``to_spec(spec).expand('piecewise')`` keeps
             every ``sos:`` set for a sink that takes one, and
             ``to_spec(spec).expand()`` writes the sets out as binaries every
             sink takes.
 
     Returns:
-        The lowered program, for reading the plan; typeset it or read its
-        declarations through `mathspec`. No verb takes it back; keep the
+        The compiled program; typeset it or read its entries through
+        `mathspec`. No verb takes it back; keep the
         ``Spec`` for that.
 
     Raises:
-        LanguageError: A construct outside the streaming language, a
+        LanguageError: A construct outside the language, a
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:`` — ``mathspec.merge`` composes it.
-        SpecsolveError: Two declarations whose names differ only by case, or a
+        SpecsolveError: Two entries whose names differ only by case, or a
             name that starts with ``specsolve_`` in any letter case, which is reserved.
         ValueError: A schema or expression that does not parse.
 
@@ -113,7 +113,7 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         declares.
 
     Raises:
-        LanguageError: A construct outside the streaming language.
+        LanguageError: A construct outside the language.
         DataError: As [`build`][] refuses the sources.
     """
     program = as_program(spec)
@@ -159,11 +159,11 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
             with ``dims:`` and ``otherwise:``.
 
     Returns:
-        The value, ``(dims…, value)`` over the expression's own dims. Only
+        The value, ``(dims…, value)`` over the expression's own dimensions. Only
         this expression is compiled.
 
     Raises:
-        LanguageError: A construct outside the streaming language, or a name
+        LanguageError: A construct outside the language, or a name
             the spec does not declare.
         SpecsolveError: A spec that declares variables, constraints or an
             objective.
@@ -199,7 +199,7 @@ class Model:
         self._fill()
 
     def _lower(self, written: str | Mapping[str, object]) -> Expression:
-        """One unnamed expression as a plan node, for a result reading a quantity the file never named.
+        """One unnamed expression as a program node, for a result reading a quantity the file never named.
 
         Held here because the engine may not see the model as written
         (docs/development/architecture.md, hard rule 2).
@@ -227,12 +227,12 @@ class Model:
             model.update({'cap_hat': capacity}).solve()
 
         ``model.update(x)`` answers what ``build(spec, sources | x)`` answers,
-        whatever changed. Data that moves a mask renumbers labels, so the model
+        whatever changed. Data that moves a condition renumbers labels, so the model
         is rebuilt and solved cold rather than pushed onto a loaded solver;
         [`loads`][specsolve._result.Diagnostics.loads] says which ran.
 
-        Results taken before the update keep reading their own frames, and
-        keep their build's label frames alive until dropped or until
+        Results taken before the update keep reading their own tables, and
+        keep their build's label tables alive until dropped or until
         [`close`][specsolve._result.Result.close] is called. A sweep, a
         rolling horizon or a myopic pathway is
         [`solve_over`][specsolve._solve_over.solve_over], which runs this loop.
@@ -331,8 +331,8 @@ class Model:
                 cannot run, a bare string as *also_record* or *outputs*, a
                 name in *outputs* that is not an output, a *start* word other
                 than ``'previous'``, or a *start* this
-                model or solver cannot start from: a key that names no reader, a table naming no declaration or
-                lacking its dims, a basis status outside the five words, a
+                model or solver cannot start from: a key that names no reader, a table naming no entry or
+                lacking its dimensions, a basis status outside the five words, a
                 basis alone for a mixed-integer model, a start that lands on
                 no coordinate, or values for an LP that the solver cannot
                 take.
@@ -447,14 +447,14 @@ class Model:
 
         The verb for *this row is wrong and I do not know why*. It reads the
         **built** model and needs no solve: a term whose variable was absent
-        is missing, and a row a ``where`` masked out is not there at all. A
+        is missing, and a row a ``where`` leaves absent is not there at all. A
         column has no reader: a variable's bounds are in the spec, and its
         coefficients are this read transposed.
 
         Args:
             name: A declared constraint. Positional, so a dimension may be
                 called ``name``.
-            coordinate: One label per dim of that constraint, all of them.
+            coordinate: One label per dimension of that constraint, all of them.
 
         Returns:
             The terms as ``(variable, coordinate, coefficient)``, beside the
@@ -462,7 +462,7 @@ class Model:
 
         Raises:
             KeyError: No constraint is called *name*.
-            SpecsolveError: The coordinate names the wrong dims, holds a label
+            SpecsolveError: The coordinate names the wrong dimensions, holds a label
                 its dimension cannot hold, matches no row the build produced,
                 or the model has been closed.
 
@@ -473,7 +473,7 @@ class Model:
         return self._engine.row(name, coordinate)
 
     def infeasible_subsystem(self) -> InfeasibleSubsystem:
-        """The rows and bounds that make the last solve infeasible, by declaration and coordinate.
+        """The rows and bounds that make the last solve infeasible, by entry and coordinate.
 
         The verb for *this model has no solution and I do not know why*. It
         asks the solver that ran the last solve for an IIS (irreducible
@@ -512,17 +512,17 @@ class Model:
         """An ad-hoc expression reader over a *saved* solution, put back against this build.
 
         What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]
-        for a quantity the file never named: the saved frames are laid back in
+        for a quantity the file never named: the saved tables are laid back in
         this build's label order, and the reader is the one a live solve gives.
         A build, never a solve.
 
         Args:
-            primals: The saved ``(dims…, value)`` frame per variable.
+            primals: The saved ``(dims…, value)`` table per variable.
             duals: The same per constraint, or ``None`` where the solve left none.
             no_duals: Why there are no duals, raised at a dual read.
         """
         evaluate = self._engine.reconstruct(primals, duals, no_duals, self._lower)
-        assert evaluate is not None, 'a model built from a spec as written lowers an ad-hoc expression'
+        assert evaluate is not None, 'a model built from a spec as written compiles an ad-hoc expression'
         return evaluate
 
     def diagnostics(self) -> Diagnostics:
@@ -564,7 +564,7 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> Model:
         The built model.
 
     Raises:
-        LanguageError: A construct outside the streaming language.
+        LanguageError: A construct outside the language.
         DataError: A source that is missing, unreadable, or the wrong shape.
     """
     return Model(spec, sources)
@@ -597,7 +597,7 @@ def solve(
         start: As [`Model.solve`][] takes it.
 
     Returns:
-        The solution. It owns its frames; the model and the solver are
+        The solution. It owns its tables; the model and the solver are
         released before this returns.
 
     Raises:

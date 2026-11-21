@@ -1,7 +1,7 @@
-"""What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
+"""What a spec and its sources may arrive as, and the one door every verb compiles a spec through.
 
 An expression the file never named passes the same door: [`expression_node`][] splices
-it into the spec as a named one and lowers the whole spec again. This sits
+it into the spec as a named one and compiles the whole spec again. This sits
 above both lanes because nothing
 in the engine or a sink may see the spec as written
 (docs/development/architecture.md, hard rule 2).
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
 #: Anything a verb takes as the spec: a YAML path, a mapping, or a ``Spec``
-#: with its ``piecewise:`` blocks written out. Not a ``Program``: lowering has
+#: with its ``piecewise:`` blocks written out. Not a ``Program``: compiling has
 #: no inverse.
 type SpecLike = str | Path | Mapping[str, object] | Spec
 
@@ -37,16 +37,16 @@ def as_spec(spec: SpecLike) -> Spec:
     """*spec* as the document it is, whatever shape it arrived in.
 
     Raises:
-        SpecsolveError: A lowered ``Program``.
+        SpecsolveError: A compiled ``Program``.
         LanguageError: Anything the language does not accept.
     """
     if isinstance(spec, Program):
         raise SpecsolveError(
-            'a lowered Program is not a spec this takes. Lowering has no inverse, so an answer from one '
+            'a compiled Program is not a spec this takes. Compiling has no inverse, so an answer from one '
             'could not say which document it came back from, and nothing built from one could be archived. '
-            'Pass what it was lowered from — a path, a mapping, or mathspec.to_spec() of either, which is '
+            'Pass what it was compiled from — a path, a mapping, or mathspec.to_spec() of either, which is '
             'the form worth keeping, since it carries its program. '
-            'sps.check() still hands back the Program, for reading the plan.'
+            'sps.check() still hands back the Program, for reading.'
         )
     return to_spec(spec)
 
@@ -88,7 +88,7 @@ type Source = (
 
 
 def _case_collision(program: Program) -> str | None:
-    """Two declarations of one namespace whose names differ only by case, as the sentence refusing them."""
+    """Two entries of one namespace whose names differ only by case, as the sentence refusing them."""
     flat = (
         *(('dimension', name) for name in program.dimensions),
         *(('relation', name) for name in program.relations),
@@ -102,7 +102,7 @@ def _case_collision(program: Program) -> str | None:
             if (earlier := seen.get(name.casefold())) is not None:
                 return (
                     f"{kind} '{name}' and {earlier[0]} '{earlier[1]}' differ only by case, and one answer "
-                    f'on disk cannot hold both: a declaration is written as a file named after it, and a '
+                    f'on disk cannot hold both: an entry is written as a file named after it, and a '
                     f'case-insensitive filesystem — a stock macOS volume, a stock Windows one — folds the '
                     f'two into one, so the second overwrites the first and one name comes back carrying '
                     f"the other's values. Tell them apart by a suffix rather than a capital: 'p_rated' "
@@ -113,7 +113,7 @@ def _case_collision(program: Program) -> str | None:
 
 
 def _refuse_reserved_names(program: Program) -> None:
-    """Refuse a declaration whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
+    """Refuse an entry whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -138,13 +138,13 @@ def _refuse_reserved_names(program: Program) -> None:
 def as_program(spec: SpecLike) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
-    Every verb lowers through here.
+    Every verb compiles through here.
 
     Raises:
-        LanguageError: A construct outside the streaming language, a
+        LanguageError: A construct outside the language, a
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
-        SpecsolveError: Two declarations of one namespace whose names differ only
+        SpecsolveError: Two entries of one namespace whose names differ only
             by case, a name that starts with ``specsolve_``, or a dimension
             called ``value``, in any letter case.
     """
@@ -176,7 +176,7 @@ _EVALUATED = '_evaluated'
 
 
 def expression_node(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
-    """One unnamed expression as a plan node, read in *spec*'s namespace.
+    """One unnamed expression as a program node, read in *spec*'s namespace.
 
     The expression is spliced under ``expressions:`` with a name no section
     of *spec* declares, so a section added later is covered too.
@@ -187,7 +187,7 @@ def expression_node(spec: Spec, expression: str | Mapping[str, object]) -> Expre
             mapping carrying ``cases:`` with ``dims:`` and ``otherwise:``.
 
     Returns:
-        The node a declared named expression of *spec* lowers to.
+        The node a declared named expression of *spec* compiles to.
 
     Raises:
         LanguageError: A construct outside the language, or a name *spec* does

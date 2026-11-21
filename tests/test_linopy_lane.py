@@ -739,7 +739,7 @@ def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     m = specsolve_linopy.build(path, dict(EXPRESSION_DATA))
     m.solve(solver_name='highs')
-    with pytest.raises(SpecsolveError, match='lowered Program'):
+    with pytest.raises(SpecsolveError, match='compiled Program'):
         specsolve_linopy.evaluate(m, to_spec(path).program, 'total_gen', dict(EXPRESSION_DATA))
 
 

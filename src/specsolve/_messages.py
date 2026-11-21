@@ -2,7 +2,7 @@
 
 A message raised from one place stays beside its ``raise``. One raised from two
 lives here, so the two cannot drift. The engine may import this module: it is a
-leaf that knows no YAML, schema or AST.
+leaf that knows no YAML, schema or program.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ _DATETIME = '%Y-%m-%d %H:%M:%S%.f'
 
 
 def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
-    """``t=1, g=gas`` per row of a frame holding the columns *schema* names, in its order.
+    """``t=1, g=gas`` per row of a table holding the columns *schema* names, in its order.
 
     The one way specsolve writes a coordinate, in a printed row and in a
     refusal alike. A missing label writes ``null``, and an empty *schema*
@@ -37,7 +37,7 @@ def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
 
 
 def coordinate_text(coordinate: Mapping[str, object]) -> str:
-    """One coordinate, ``dim: label`` in dim order, as [`coordinate_expr`][] writes it."""
+    """One coordinate, ``dim: label`` in dimension order, as [`coordinate_expr`][] writes it."""
     if not coordinate:
         return ''
     frame = pl.DataFrame([dict(coordinate)])
@@ -75,7 +75,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
         f'bound rather than an absence — the row still exists, and it binds.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
-        f'  Drop the declaration, if the spec has no such quantity at all.'
+        f'  Drop the entry, if the spec has no such quantity at all.'
     )
 
 
@@ -107,7 +107,7 @@ def non_finite_message(divisors: str, count: int) -> str:
     return (
         f'{count} value(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
         f'and the model needs a finite number.\n'
-        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
+        f'  Supply finite, non-zero values, or leave the coordinates absent with a where.'
     )
 
 
@@ -163,7 +163,7 @@ def negative_window_message(name: str, widths: Sequence[int]) -> str:
 
 
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
-    """``unknown <kind> '<name>'``, plus the near miss, or every declaration the name prefixes.
+    """``unknown <kind> '<name>'``, plus the near miss, or every entry the name prefixes.
 
     Single-line: it is raised as ``KeyError``, whose ``str`` reprs a newline.
     """
@@ -172,8 +172,7 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     family = [c for c in candidates if c.startswith(f'{name}_')]
     if family:
         return (
-            f"unknown {kind} '{name}': no declaration has that name, but "
-            f'{len(family)} begin with it — {", ".join(family)}.'
+            f"unknown {kind} '{name}': no entry has that name, but {len(family)} begin with it — {', '.join(family)}."
         )
 
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"

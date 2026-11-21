@@ -1,6 +1,6 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
-[`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
+[`load_archive`][] reads it whole; [`scan_archive`][] leaves the tables on
 disk; [`load_inputs`][] reads the spec and the data without the answer.
 ``archive=`` on the verbs that solve writes one, through
 [`specsolve._archive_layout`][].
@@ -145,7 +145,7 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
 
 
 def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back whole: the sources as tables, the answer's frames in memory.
+    """Read an archive back whole: the sources as tables, the answer's tables in memory.
 
     Args:
         path: The archive, a ``.zip`` or the directory one was written to.
@@ -184,7 +184,7 @@ def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[
 
 
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
+    """Read an archive back off disk: the sources as paths, each table read at the call that asks for it.
 
     As [`load_archive`][], except that *into* is required for a zip, and kept,
     since the members have to outlive the value; a zip with no *into* raises
