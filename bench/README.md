@@ -124,9 +124,12 @@ numbers.
 **Set the box up once, snapshot it, and let the workflow do the rest.** After
 that a run is one dispatch: `provision` creates the server from the snapshot,
 `benchmark` lands on the runner that snapshot already carries, and `teardown`
-deletes it — `if: always()`, on a hosted runner, because deleting is the only
-thing that stops the bill and a teardown running on the machine it is deleting
-dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
+shuts it down and deletes it — `if: always()`, on a hosted runner, because
+deleting is the only thing that stops the bill and a teardown running on the
+machine it is deleting dies half way. The shutdown comes first because a
+runner deleted while running keeps its session on GitHub, and the next box's
+runner stops for good after four minutes of "a session for this runner
+already exists". `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
