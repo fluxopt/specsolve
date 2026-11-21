@@ -204,7 +204,7 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if self._holds_nothing(v.dims, v.where):
+        if self._rowless(v.dims, v.where):
             labelled = self._nothing(v.dims, 'var_label')
         else:
             labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
@@ -280,7 +280,7 @@ class Assembly:
         never meets the full product of its dims.
         """
         start = self.n_rows
-        if self._holds_nothing(c.dims, c.where):
+        if self._rowless(c.dims, c.where):
             return self._without_a_row(name, self._nothing(c.dims, 'row'), start)
         admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
@@ -359,7 +359,7 @@ class Assembly:
             self._empty[key] = labels.nothing(self.scope, dims, label)
         return self._empty[key]
 
-    def _holds_nothing(self, dims: tuple[str, ...], where: program.Mask | None) -> bool:
+    def _rowless(self, dims: tuple[str, ...], where: program.Mask | None) -> bool:
         """Whether a declaration over *dims* holds no row, known without labelling it: [`_over_nothing`][], or a *where* the data settled false."""
         return self._over_nothing(dims) or (where is not None and holds_nowhere(where))
 
