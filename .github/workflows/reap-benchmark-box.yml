@@ -25,6 +25,7 @@ jobs:
           echo "$BOX up for ${age}h, limit ${MAX_HOURS}h"
           if [ "$age" -ge "$MAX_HOURS" ]; then
             echo "::warning::deleting $BOX after ${age}h — a teardown did not run"
+            hcloud server shutdown --wait --wait-timeout 2m "$BOX" || true
             hcloud server delete "$BOX"
             hcloud primary-ip delete "$BOX" 2>/dev/null || true
           fi

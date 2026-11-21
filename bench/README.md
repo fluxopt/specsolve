@@ -124,9 +124,12 @@ numbers.
 **Set the box up once, snapshot it, and let the workflow do the rest.** After
 that a run is one dispatch: `provision` creates the server from the snapshot,
 `benchmark` lands on the runner that snapshot already carries, and `teardown`
-deletes it — `if: always()`, on a hosted runner, because deleting is the only
-thing that stops the bill and a teardown running on the machine it is deleting
-dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
+shuts it down and deletes it — `if: always()`, on a hosted runner, because
+deleting is the only thing that stops the bill and a teardown running on the
+machine it is deleting dies half way. The shutdown comes first because a
+runner deleted while running keeps its session on GitHub, and the next box's
+runner stops for good after four minutes of "a session for this runner
+already exists". `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
@@ -858,7 +861,8 @@ installed, and the worker refuses to run if it imported `specsolve` from
 anywhere else. The base is the PR's own base branch, so a stacked PR proves its
 own change. A claim about memory takes `--memory`: the verdict is on the
 peak resident memory of a fresh process per measurement, at the cost of a second
-of imports each time.
+of imports each time. That process runs the cell once: its peak is the highest
+it ever stood, so a warm run would be counted in it.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
 may assume: the dimension count, terms per row, a term over fewer dimensions,
