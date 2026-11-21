@@ -156,7 +156,7 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_in
 @pytest.mark.parametrize(
     ('sources', 'match'),
     [
-        pytest.param({'p_max': [100.0, 60.0]}, 'one entry per label', id='a-sequence-of-the-wrong-length'),
+        pytest.param({'p_max': [100.0, 60.0]}, 'one value per label', id='a-sequence-of-the-wrong-length'),
         pytest.param({'p_max': object()}, 'cannot adapt', id='nothing-table-shaped-at-all'),
         pytest.param({'snapshot': 3.0}, 'cannot read labels out of float', id='an-index-that-is-one-number'),
     ],

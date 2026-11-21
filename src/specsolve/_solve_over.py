@@ -1,6 +1,6 @@
 """``solve_over``: one spec solved once per slice of an axis, and the answers folded into a sweep.
 
-A plan cannot contain a loop; a process may loop over plans. This is the
+A program cannot contain a loop; a process may loop over programs. This is the
 driver above [`specsolve._api`][], built from the public verbs.
 
     scenario / sweep    ``EachLabel('scenario')``            independent
@@ -102,7 +102,7 @@ def solve_over(
         also_record: As [`solve`][specsolve._api.Model.solve] takes them,
             reaching every slice.
         solver_name: As [`solve`][specsolve._api.Model.solve] takes it.
-        spill_to: A directory each slice's frames are written to as the fold
+        spill_to: A directory each slice's tables are written to as the fold
             goes, so the sweep holds one slice in memory however many there
             are; [`Sweep.scan`][] reads a name off it lazily. A directory
             holds one sweep: the same sweep run at it again does not solve the
@@ -145,9 +145,9 @@ def solve_over(
             or a mapping whose keys name none; a carry that cannot line up,
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
-            with a column the frames carry; an axis the program does not
+            with a column the tables carry; an axis the program does not
             allow; a *spill_to* directory holding another sweep; *outputs* that [`solve`][specsolve._api.Model.solve]
-            refuses; a *start* word other than ``'previous'`` — each answerable from the declarations alone; keys of more than one
+            refuses; a *start* word other than ``'previous'`` — each answerable from the entries alone; keys of more than one
             type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
         DataError: No source carries an EachLabel axis, an index
@@ -283,7 +283,7 @@ def _left_in(
 
     A carried sweep stops at the first slice that leaves nothing to carry, so
     the slice after one that did not solve was never built, and neither was
-    any slice after that one. Both are refused, since the frames read here
+    any slice after that one. Both are refused, since the tables read here
     would be empty and the model built from them one no sweep solved.
     """
     column = sweep.key_name
@@ -528,18 +528,18 @@ def _run_slice(
 
 
 def _key_column(axis: Axis, program: Program) -> str:
-    """What *axis* calls the column holding the slice key; never a column the frames already carry."""
+    """What *axis* calls the column holding the slice key; never a column the tables already carry."""
     key_name = axis._key_name()
     refuse_reserved(key_name, f'key_name={key_name!r}')
     if key_name in program.dimensions:
         raise SpecsolveError(
             f'key_name={key_name!r} is a dimension the spec declares, so the slice key would collide '
-            f'with a column the frames already carry. Name it something the spec does not use.'
+            f'with a column the tables already carry. Name it something the spec does not use.'
         )
     fixed = tuple(dict.fromkeys((VALUE, *Record._fields, *Metrics._fields)))
     if key_name in fixed:
         raise SpecsolveError(
-            f'key_name={key_name!r} is a column a sweep frame carries ({", ".join(fixed)}), so the slice '
+            f'key_name={key_name!r} is a column a sweep table carries ({", ".join(fixed)}), so the slice '
             f'key would replace it rather than sit beside it. Name it something else.'
         )
     return key_name
@@ -567,14 +567,14 @@ def _encode(
     memo: dict[str, tuple[Any, Any]],  # pyrefly: ignore[explicit-any] — a source beside its encoding
     *,
     shared_filesystem: bool = False,
-) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
+) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     """Sources in the shape a worker can be handed.
 
     A path the workers reach stays a path; one they cannot travels as its own
     bytes. A table becomes parquet ``bytes``; anything else crosses as itself.
     *memo* encodes a source no slice rewrote once.
     """
-    out: dict[str, Any] = {}  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
+    out: dict[str, Any] = {}  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     for name, obj in sources.items():
         if isinstance(obj, (str, Path)) and shared_filesystem:
             out[name] = obj
@@ -595,6 +595,6 @@ def _encode(
     return out
 
 
-def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a frame crosses as parquet bytes
+def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     """The inverse of [`_encode`][]; anything not ``bytes`` passes through."""
     return {name: parquet.read(io.BytesIO(v)) if isinstance(v, bytes) else v for name, v in encoded.items()}

@@ -321,7 +321,7 @@ def test_a_directory_that_already_holds_something_is_refused(
 )
 def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """Lowering has no inverse, so a Program is refused at the door, before anything is built."""
-    with pytest.raises(sps.errors.SpecsolveError, match='lowered Program is not a spec this takes'):
+    with pytest.raises(sps.errors.SpecsolveError, match='compiled Program is not a spec this takes'):
         verb(sps.check(dispatch_yaml), dispatch_frame_inputs)
 
 
@@ -1152,7 +1152,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_says_so_off_its_archive(
         runs.primal('soc', per_window=True)
     archived = read(out, tmp_path / 'opened' if suffix else None).sweep
 
-    assert 'holds no variable frames at all' in str(live.value), 'no window solved, and the live sweep says so'
+    assert 'holds no variable tables at all' in str(live.value), 'no window solved, and the live sweep says so'
     with pytest.raises(sps.errors.SpecsolveError) as raised:
         per_window(archived)
     assert str(raised.value) == str(live.value), 'the archive says what the live sweep says'
@@ -1696,7 +1696,7 @@ def _by_scenario(names: list[str]) -> pl.DataFrame:
 def test_a_sweep_refuses_a_lowered_program_before_it_solves_a_slice(dispatch_yaml: Path, dispatch_frame_inputs) -> None:
     """A sweep refuses it at the same door, and before the first slice is taken."""
     sources = {**dispatch_frame_inputs, 'load': _by_scenario(['low', 'high'])}
-    with pytest.raises(sps.errors.SpecsolveError, match='was lowered from'):
+    with pytest.raises(sps.errors.SpecsolveError, match='was compiled from'):
         sps.solve_over(sps.check(dispatch_yaml), sources, sps.EachLabel('scenario'), archive='never.zip')
 
 

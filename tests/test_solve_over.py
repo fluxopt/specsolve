@@ -426,7 +426,7 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
 
     assert len(runs) == 3, 'an unsolvable slice is still a row of the record'
     assert runs.records['objective'].null_count() == 3, 'no slice reached one, and none is written as nan'
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable frames at all') as raised:
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable tables at all') as raised:
         runs.primal('p')
     assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
 
@@ -439,7 +439,7 @@ def test_a_sweep_that_solved_and_holds_no_expression_does_not_blame_the_solve(sw
     that the models did not solve, in one breath.
     """
     assert sweep.records['has_primal'].all()
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no named expression frames') as raised:
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no named expression tables') as raised:
         sweep.evaluate('2 * p')
     assert 'did not solve' not in str(raised.value), 'every slice solved, and the refusal does not say otherwise'
     assert '3 of its 3 slices left values' in str(raised.value), 'the refusal says what is true of them'
@@ -570,7 +570,7 @@ def _spilled_by_label(tmp_path):
 def test_per_window_is_refused_on_a_sweep_that_was_not_cut_into_windows(read, sweep, tmp_path):
     """`per_window=True` on a sweep whose answer already is one frame per slice is refused rather than ignored."""
     with pytest.raises(
-        sps.errors.SpecsolveError, match='not cut into windows: its answer already is one frame per slice'
+        sps.errors.SpecsolveError, match='not cut into windows: its answer already is one table per slice'
     ):
         read(sweep, tmp_path)
 
@@ -1776,7 +1776,7 @@ def test_a_bulk_export_of_a_sweep_that_solved_nothing_is_refused():
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
     runs = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'))
 
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable frames at all'):
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable tables at all'):
         runs.to_dataset()
 
 
