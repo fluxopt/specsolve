@@ -495,3 +495,109 @@ def test_a_constraint_times_a_parameter_zero_everywhere_keeps_its_rows():
     }
     with sps.build(spec, sources) as model:
         assert model.diagnostics().rows == 2, 'both rows of `scaled` are built, their coefficient zero'
+
+
+#: `cost` has a null value, which the door refuses where it is read; only `gated`,
+#: which `flag` switches off, reads it.
+UNREAD_SPEC = {
+    **TABLED_SPEC,
+    'parameters': {**TABLED_SPEC['parameters'], 'cost': {'dims': ['g', 't']}},
+    'constraints': {'gated': {'dims': ['g', 't'], 'where': 'flag', 'expression': 'x <= cost'}},
+}
+BAD_COST = pl.DataFrame({'g': ['a', 'b'], 't': [1, 1], 'value': [1.0, None]})
+
+
+def test_a_parameter_no_live_row_reads_is_not_read_and_its_faults_are_not_refused(monkeypatch):
+    """As linopy refuses only what a live row reads: PyPSA hands over hundreds of tables, most of them feeding nothing."""
+    from specsolve import _sources as reading
+
+    checked, real = [], reading._checked_parameter
+
+    def spied(name, *args, **kwargs):
+        checked.append(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(reading, '_checked_parameter', spied)
+    with sps.build(UNREAD_SPEC, TABLED_SOURCES | {'cost': BAD_COST}) as model:
+        assert model.diagnostics().rows == 0, '`flag` has no row, so `gated` holds none'
+    assert 'cost' not in checked, 'only `gated` reads `cost`, and it holds no row, yet `cost` was read'
+
+
+@pytest.mark.parametrize(
+    'read',
+    [
+        pytest.param(
+            lambda: sps.build(
+                {**UNREAD_SPEC, 'constraints': {'live': {'dims': ['g', 't'], 'expression': 'x <= cost'}}},
+                TABLED_SOURCES | {'cost': BAD_COST},
+            ),
+            id='a-live-row-reads-it',
+        ),
+        pytest.param(lambda: sps.tidy(UNREAD_SPEC, TABLED_SOURCES | {'cost': BAD_COST}), id='tidy-reads-every-source'),
+    ],
+)
+def test_a_fault_in_a_parameter_that_is_read_is_still_refused(read):
+    with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+        read()
+
+
+UNREAD_SOURCES = TABLED_SOURCES | {'cost': BAD_COST}
+
+#: `UNREAD_SPEC` with `t` ordered, which a window needs.
+WINDOWED_SPEC = {**UNREAD_SPEC, 'dimensions': {**UNREAD_SPEC['dimensions'], 't': {'dtype': 'int', 'ordered': True}}}
+
+#: `cap` once per scenario, which cuts a sweep into two slices.
+BY_SCENARIO = {
+    'cap': pl.DataFrame({'scenario': ['lo', 'lo', 'hi', 'hi'], 'g': ['a', 'b'] * 2, 'value': [2.0, 3.0, 4.0, 5.0]})
+}
+
+
+@pytest.mark.parametrize(
+    'archived',
+    [
+        pytest.param(lambda out: sps.solve(UNREAD_SPEC, UNREAD_SOURCES, archive=out), id='solve'),
+        pytest.param(lambda out: sps.build(UNREAD_SPEC, UNREAD_SOURCES).solve(archive=out), id='a-built-model'),
+        pytest.param(
+            lambda out: sps.solve_over(
+                UNREAD_SPEC, UNREAD_SOURCES | BY_SCENARIO, sps.EachLabel('scenario'), archive=out
+            ),
+            id='a-sweep-over-labels',
+        ),
+        pytest.param(
+            lambda out: sps.solve_over(
+                WINDOWED_SPEC, UNREAD_SOURCES, sps.EachWindow('t', steps=2, lookahead=0), archive=out
+            ),
+            id='a-sweep-over-windows',
+        ),
+    ],
+)
+def test_an_archive_refuses_a_fault_in_a_parameter_the_build_did_not_read_before_the_solver_runs(
+    monkeypatch, tmp_path: Path, archived
+):
+    """An archive holds every source, so it reads the parameters the build skipped.
+
+    It read them once the solver had run, so the refusal lost the answer: one
+    solve, or every slice of a sweep.
+    """
+    from specsolve._engine import engine as engine_module
+
+    solved, real = [], engine_module.Engine.solve
+
+    def spied(self, *args, **kwargs):
+        solved.append(args)
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(engine_module.Engine, 'solve', spied)
+    with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+        archived(tmp_path / 'out')
+    assert not solved, f'the solver ran {len(solved)} time(s) before the archive refused `cost`'
+
+
+def test_a_parameter_whose_read_was_refused_is_refused_again_at_the_next_ask():
+    """A read that raised was dropped with its source, so the second ask raised a bare `KeyError` for a parameter the spec declares."""
+    with sps.build(UNREAD_SPEC, UNREAD_SOURCES) as model:
+        result = model.solve()
+        with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+            result.evaluate('sum(cost)')
+        with pytest.raises(sps.errors.DataError, match="parameter 'cost' carries 1 row"):
+            result.evaluate('sum(cost)')

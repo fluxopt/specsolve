@@ -152,7 +152,9 @@ def solve_over(
             [`solve`][specsolve._api.Model.solve] refuses.
         DataError: No source carries an EachLabel axis, an index
             carries it, an EachWindow axis's dimension has no index, or the
-            axis produced no slices.
+            axis produced no slices. With *archive*, a fault in a source
+            the archive holds, as [`tidy`][specsolve._api.tidy] refuses it,
+            before a slice is solved.
 
     Warns:
         SpecsolveWarning: A source carrying an EachLabel axis that is
@@ -193,6 +195,7 @@ def solve_over(
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
     starts = slice_starts(start, axis, slices, program)
+    tables = {} if out is None else _archived_sources(program, axis, sources, slices[0].sources)
     spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
     if executor is None:
         answered = _serially(document, slices, solving, plan, spill, starts)
@@ -200,7 +203,7 @@ def solve_over(
         answered = _pooled(executor, shared_filesystem, document, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
     if out is not None:
-        _archive_the_sweep(out, document, program, axis, sources, folded, slices[0].sources)
+        write_archive(out, document, tables, axis=axis.to_dict(), answer=folded._save)
     return folded
 
 
@@ -321,29 +324,25 @@ def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
     return {name: list(obj) if isinstance(obj, Iterator) else obj for name, obj in sources.items()}
 
 
-def _archive_the_sweep(
-    out: Path,
-    spec: Spec,
-    program: Program,
-    axis: Axis,
-    sources: Mapping[str, Source],
-    folded: Sweep,
-    one_slice: Mapping[str, Source],
-) -> None:
-    """Write the sweep's question and its answer to *out*.
+def _archived_sources(
+    program: Program, axis: Axis, sources: Mapping[str, Source], one_slice: Mapping[str, Source]
+) -> dict[str, pl.LazyFrame]:
+    """The table a sweep's archive holds for each source.
 
     A windowed sweep's sources are the ones a single solve attaches, so they
     are tidied whole. An [`EachLabel`][] sweep's are tidied from *one_slice*, except
     the ones the axis cut, which [`_uncut`][] gives.
+
+    Read before a slice is solved: a slice reads a parameter only where
+    something asks for it, so a fault in one no slice reads is first refused
+    here, and a refusal after the sweep would lose every answer.
     """
     if isinstance(axis, EachWindow):
-        tables = with_positions(program, tidy_sources(program, sources))
-    else:
-        tidied = with_positions(program, tidy_sources(program, one_slice))
-        cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
-        held = {**tidied, **cut}
-        tables = {name: held[name] for name in sources}
-    write_archive(out, spec, tables, axis=axis.to_dict(), answer=folded._save)
+        return with_positions(program, tidy_sources(program, sources))
+    tidied = with_positions(program, tidy_sources(program, one_slice))
+    cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
+    held = {**tidied, **cut}
+    return {name: held[name] for name in sources}
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
