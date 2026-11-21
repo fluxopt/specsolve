@@ -116,10 +116,10 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.53 s</td><td class="own">0.45 s</td><td class="own">0.57 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="0.981">0.45 s · 1.0x</td><td data-ratio="0.984">0.52 s · 1.0x</td><td data-ratio="1.017">0.46 s · 1.0x</td><td data-ratio="1.036">0.59 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.029">0.93 s · 2.0x</td><td data-ratio="2.514">1.32 s · 2.5x</td><td data-ratio="2.097">0.94 s · 2.1x</td><td data-ratio="2.121">1.21 s · 2.1x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.409">0.65 s · 1.4x</td><td data-ratio="1.988">1.05 s · 2.0x</td><td data-ratio="1.403">0.63 s · 1.4x</td><td data-ratio="1.600">0.91 s · 1.6x</td></tr>
+<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.52 s</td><td class="own">0.45 s</td><td class="own">0.47 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="1.017">0.47 s · 1.0x</td><td data-ratio="0.958">0.50 s · 1.0x</td><td data-ratio="1.017">0.46 s · 1.0x</td><td data-ratio="0.973">0.45 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.044">0.94 s · 2.0x</td><td data-ratio="2.074">1.08 s · 2.1x</td><td data-ratio="2.004">0.91 s · 2.0x</td><td data-ratio="1.930">0.90 s · 1.9x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.440">0.66 s · 1.4x</td><td data-ratio="1.656">0.86 s · 1.7x</td><td data-ratio="1.422">0.64 s · 1.4x</td><td data-ratio="1.548">0.72 s · 1.5x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
