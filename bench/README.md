@@ -116,6 +116,13 @@ each other on one machine, which is the page's actual claim. What it costs is
 that the whole ladder has to be re-taken in one run rather than a rung at a
 time, or the page mixes two machines.
 
+**One server type is not one machine.** Each run draws a fresh `ccx33`, and two
+of them measured the same code with specsolve 1.24x to 1.75x apart while linopy
+stayed within 9% (#2168). The other libraries do not stand in for specsolve
+here. Every result file records the host, its processor's `/proc/cpuinfo`
+fields, its memory and polars' thread count, and the pull request comment warns
+when the two runs it compares report different clocks or microcode.
+
 The workflow reads the repository variable `BENCH_RUNNER` for its label, so
 pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take

@@ -1144,6 +1144,48 @@ def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> N
     assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
 
 
+def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request: pytest.FixtureRequest) -> None:
+    """Two runs of one server type differed by host alone, and nothing in the file said so (#2168)."""
+    machine_info: dict[str, object] = {}
+    harness.pytest_benchmark_update_machine_info(request.config, machine_info)
+    host = machine_info['host']
+    assert isinstance(host, dict) and isinstance(host.get('polars_threads'), int), 'polars sizes its pool per machine'
+    assert {'mathspec', 'polars-runtime-32'} <= set(machine_info['versions']), (  # type: ignore[arg-type]
+        'the two dependencies the result files could not vouch for are fingerprinted'
+    )
+    if Path('/proc/cpuinfo').exists():
+        assert {'model name', 'microcode', 'cpu MHz'} <= set(host), 'the fields that tell two hosts apart are kept'
+
+
+@pytest.mark.parametrize(
+    ('ours', 'theirs', 'warned'),
+    [
+        pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_400_000_000}, False, id='one-host-read-twice'),
+        pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_200_000_000}, True, id='another-clock'),
+        pytest.param({'host': {'microcode': '0xa0011d5'}}, {'host': {'microcode': '0xa0011d1'}}, True, id='microcode'),
+        pytest.param({}, {}, False, id='a-file-from-before-the-host-was-recorded'),
+    ],
+)
+def test_the_comment_warns_when_the_two_runs_were_taken_on_different_machines(
+    ours: dict[str, object], theirs: dict[str, object], warned: bool
+) -> None:
+    """#2139's comment compared a 2.4 GHz host with the 2.2 GHz host of the committed run, and blamed the code (#2168)."""
+    pr = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **ours}], [], [])
+    base = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **theirs}], [], [])
+    lines = comment.hosts(pr, base)
+    assert bool(lines) is warned, f'a warning exactly where the machines differ, got {lines}'
+
+
+def test_the_clock_reads_back_from_a_pytest_benchmark_file(tmp_path: Path) -> None:
+    """The committed files already carry py-cpuinfo's clock, so an old run is compared by it too."""
+    path = tmp_path / 'latest.json'
+    path.write_text(
+        json.dumps({'machine_info': {'cpu': {'brand_raw': 'x', 'count': 8, 'hz_actual': [2_200_000_000, 0]}}})
+    )
+    run = next(r for r in bench_results.records(path) if r['record'] == 'run')
+    assert report.machine(run) == 'x, 8 cores at 2.2 GHz (?)'
+
+
 #: Renders the marginal table for three cases of identical width. Run twice
 #: under different hash seeds, it is the whole of the determinism check below.
 _RENDER_TIED = """

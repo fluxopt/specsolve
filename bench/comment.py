@@ -171,6 +171,23 @@ def servers(pr: Side, base: Side) -> str:
     )
 
 
+def hosts(pr: Side, base: Side) -> list[str]:
+    """A warning where the two runs were taken on different machines, and nothing where they share one.
+
+    The other libraries do not stand in for specsolve here: on two servers of
+    one type they moved within 9% while specsolve moved 1.24x to 1.75x
+    (#2168), so a different machine makes every specsolve factor below suspect.
+    """
+    ours, theirs = {report.machine(r) for r in pr.runs}, {report.machine(r) for r in base.runs}
+    if not ours or not theirs or ours == theirs:
+        return []
+    return [
+        f'⚠️ **The two runs were taken on different machines** — this run on {"; ".join(sorted(ours))}, '
+        f'the committed one on {"; ".join(sorted(theirs))}. specsolve can move by the machine alone, '
+        'far more than the other libraries do, so measure the base again before reading a factor here.'
+    ]
+
+
 def _variables(pr: Side, base: Side, key: report.Key) -> str:
     """The columns the model built at this cell, from whichever side has a count."""
     for side in (pr, base):
@@ -268,7 +285,7 @@ def render(pr_dir: Path | None, base_dir: Path | None, run_url: str = '') -> str
         ['<details><summary>specsolve at every model and rung</summary>', legend, *tables, '</details>']
     )
 
-    top = [heading, _summary(pr, base, moves(pr, base)), servers(pr, base), *missing]
+    top = [heading, _summary(pr, base, moves(pr, base)), servers(pr, base), *hosts(pr, base), *missing]
     text = '\n\n'.join([*top, details, machines, *problems])
     if len(text) <= LIMIT:
         return text
