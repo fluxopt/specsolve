@@ -13,7 +13,7 @@ import specsolve as sps
 sps.solve(spec, sources, archive='runs/base')
 sps.solve(spec, peak, archive='runs/peak')
 sps.solve_over(spec, by_scenario, sps.EachLabel('scenario'), archive='runs/scenarios')
-sps.solve_over(spec, longer, sps.EachWindow('t', steps=4, lookahead=0), archive='runs/rolling')
+sps.solve_over(spec, longer, sps.EachWindow('t', horizon=4, lookahead=0), archive='runs/rolling')
 ```
 
 **A sweep writes one file per slice, and each carries the sweep's key**:

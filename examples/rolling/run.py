@@ -49,7 +49,7 @@ LOAD = [25.0 if night else 85.0 for night in NIGHT]
 WIND = [70.0 if night else 0.0 for night in NIGHT]
 
 #: Windows advance eight hours against a twelve-hour cycle.
-STEP = 8
+HORIZON = 8
 
 SOURCES = {
     'generator': pl.DataFrame({'generator': GENERATORS}),
@@ -72,8 +72,8 @@ def full_foresight() -> sps.types.Result:
     return sps.solve(MODEL, SOURCES)
 
 
-def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
-    """Windows whose horizon is *steps* coordinates, each seeing *lookahead* beyond it.
+def rolling(horizon: int, lookahead: int) -> sps.types.Sweep:
+    """Windows whose horizon is *horizon* coordinates, each seeing *lookahead* beyond it.
 
     The carry names no coordinate: `soc` is over `(snapshot)` and `soc_initial`
     over `()`, so `snapshot` is what it collapses, and the row handed on is the
@@ -84,7 +84,7 @@ def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
     return sps.solve_over(
         MODEL,
         SOURCES,
-        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, carry={'soc_initial': 'soc'}),
+        sps.EachWindow('snapshot', horizon=horizon, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
 
 
@@ -107,7 +107,7 @@ def main() -> None:
     print()
 
     for lookahead in (0, 4, 8):
-        sweep = rolling(STEP, lookahead)
+        sweep = rolling(HORIZON, lookahead)
         schedule = sweep.primal('soc')
         assert schedule['snapshot'].to_list() == list(range(PERIODS)), 'the answer must cover every snapshot'
 
@@ -115,7 +115,7 @@ def main() -> None:
         assert cost >= best - 1e-6, 'rolling cannot beat full foresight'
         assert schedule['value'].max() > 0, 'the store must be used in every schedule'
         print(
-            f'rolling  steps={STEP:<3} lookahead={lookahead:<3} '
+            f'rolling  horizon={HORIZON:<3} lookahead={lookahead:<3} '
             f'windows {len(sweep):>2}   cost {cost:>9.2f}   peak soc {schedule["value"].max():>6.1f}'
             f'   +{100 * (cost - best) / best:>5.1f}%'
         )

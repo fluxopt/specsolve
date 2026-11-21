@@ -81,7 +81,7 @@ of the next:
 windows = sps.solve_over(
     'tutorial/storage.yaml',
     three_days,
-    sps.EachWindow('snapshot', steps=3, lookahead=0, carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', horizon=3, lookahead=0, carry={'soc_initial': 'soc'}),
 )
 print(windows.metrics.select('snapshot_start', 'columns', 'rows'))
 ```
@@ -126,7 +126,7 @@ for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
         'tutorial/storage.yaml',
         three_days,
-        sps.EachWindow('snapshot', steps=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
+        sps.EachWindow('snapshot', horizon=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     rows.append(
         {

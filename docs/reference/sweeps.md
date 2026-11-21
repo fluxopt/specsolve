@@ -19,8 +19,8 @@ returns. [A model too large for one solve](../sweep.md) and
 **`EachWindow` keeps one it does.** A label's slice holds that label's rows
 without the column, and the answer lifts the label back as the key. A window
 is the model over its own labels, so the spec and the sources are the ones a
-single solve takes. A window's first `steps` labels are its horizon, which the
-answer keeps. The `lookahead` labels after them are solved, then left out of
+single solve takes. A window's first `horizon=` labels are its horizon, which
+the answer keeps. The `lookahead` labels after them are solved, then left out of
 the answer. A rule for a window's first row is written
 `where: "position(snapshot) == 0"`, since a position counts within the window.
 
@@ -31,18 +31,18 @@ since its windows would follow the row order of the data.
 [a label is](data.md#where-coordinates-come-from). A key finer than a
 microsecond is refused.
 
-**`steps` as a sequence is one horizon per window**, laid end to end.
+**`horizon=` as a sequence is one horizon per window**, laid end to end.
 `lookahead` is one number, whatever the horizons.
 
 ```python
-sps.EachWindow('snapshot', steps=[24, 24, 168, 168, 720], lookahead=12)
-sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48)
+sps.EachWindow('snapshot', horizon=[24, 24, 168, 168, 720], lookahead=12)
+sps.EachWindow('snapshot', horizon=days_in_each_month, lookahead=48)
 ```
 
 **A sequence that stops short of the axis is refused:**
 
 ```text
-DataError: steps keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
+DataError: horizon keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
 the last 5 would be solved by no window. List a block for them, or pass an int to
 repeat one size to the end.
 ```
@@ -53,7 +53,7 @@ holds the same mapping. A mapping with a key the axis does not take, or without
 one it needs, is refused, and the message names the keys the axis takes.
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis.to_dict())
 ```
 
@@ -115,7 +115,7 @@ replaces what an earlier save left in the directory, as a result's `save` does.
 |---|---|
 | **duals are keyed, never combined** | A slice with an integer variable contributes no duals, and `sweep.records` says which. |
 | **no aggregate objective** | `sweep.records` is keyed by slice, with the objective as one column. |
-| **a window's horizon is its first `steps` labels** | The rows after them are lookahead. The answer keeps the rows of each window's horizon, and `per_window=True` reads them all. |
+| **a window's horizon is its first `horizon=` labels** | The rows after them are lookahead. The answer keeps the rows of each window's horizon, and `per_window=True` reads them all. |
 | **a slice that did not solve contributes no rows** | `sweep.records` still holds one row per slice, with a null objective where a slice reached none. |
 | **a window keys as `<dim>_start`** | Per window, the key column `snapshot_start` holds the label each window began at, beside the window's own `snapshot`. |
 | **an axis's `key_name=` names the key** | On either axis. A name that collides with a table column, or starts with `specsolve_`, is refused. An archive holds it with the axis, so the sweep runs again under the same key. |
@@ -130,7 +130,7 @@ replaces what an earlier save left in the directory, as a result's `save` does.
 one slice:
 
 ```python
-sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', steps=24, lookahead=24), spill_to='runs/')
+sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', horizon=24, lookahead=24), spill_to='runs/')
 sweep.scan('soc')  # a LazyFrame: (snapshot, value), the answer
 sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, the same keywords
 ```
@@ -152,7 +152,7 @@ sweep runs again from the file alone ([archiving](../howto/archiving.md)):
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24),
+    sps.EachWindow('snapshot', horizon=24, lookahead=24),
     archive='roll.zip',
 )
 ```
@@ -171,7 +171,7 @@ next slice's data.** `EachLabel` and `EachWindow` take it.
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'}),
 )
 ```
 
@@ -198,7 +198,7 @@ as `solve_over` builds it. It takes what the sweep took, and the key of the
 slice:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 model = sps.build_slice('window.yaml', sources, axis, 888)
 model.write('window-888.lp')
 ```

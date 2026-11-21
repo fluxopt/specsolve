@@ -69,7 +69,7 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 runs again from the archive alone:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
 archived = sps.load_archive('roll/')

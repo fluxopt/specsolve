@@ -159,10 +159,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Window** · **horizon** · **lookahead**
 : `EachWindow` cuts the windowed dimension into windows. A window's horizon is
-  the labels it keeps in the answer, its first `steps`. Its lookahead is the
-  `lookahead` labels it solves beyond them and drops, which the next window
-  solves again. PyPSA's `horizon=` counts its overlap too, and `steps=` does
-  not.
+  the labels it keeps in the answer, its first `horizon=`. Its lookahead is
+  the `lookahead=` labels it solves beyond them and drops, which the next
+  window solves again. PyPSA's `horizon=` is `horizon + lookahead` here, and
+  its `overlap=` is `lookahead`.
 
 **horizon end**
 : The last label of a window's horizon. A carry reads the window's solution

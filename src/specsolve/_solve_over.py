@@ -5,7 +5,7 @@ driver above [`specsolve._api`][], built from the public verbs.
 
     scenario / sweep    ``EachLabel('scenario')``            independent
     myopic pathway      ``EachLabel('period', carry=...)``
-    rolling horizon     ``EachWindow('snapshot', steps=24, lookahead=24, carry=...)``
+    rolling horizon     ``EachWindow('snapshot', horizon=24, lookahead=24, carry=...)``
 
 The axes are [`specsolve._axes`][] and what a fold returns is
 [`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,

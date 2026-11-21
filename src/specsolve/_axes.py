@@ -186,8 +186,8 @@ class EachWindow:
     and the sources are the ones a single solve takes, and every table comes
     back over *dim*'s own labels.
 
-    Each window keeps ``steps`` labels, its horizon, and sees ``lookahead``
-    labels beyond them, so a ``lookahead`` above zero is overlap. An ``int``
+    Each window keeps ``horizon`` labels and sees ``lookahead`` labels
+    beyond them, so a ``lookahead`` above zero is overlap. An ``int``
     keeps the same number every window; a sequence keeps those numbers in
     order, for horizons that grow window by window or a month at a time. Both
     count labels in label order, not values, so datetimes, strings and gapped
@@ -216,7 +216,7 @@ class EachWindow:
     """
 
     dim: str
-    steps: int | Sequence[int] = field(kw_only=True)
+    horizon: int | Sequence[int] = field(kw_only=True)
     lookahead: int = field(kw_only=True)
     #: ``{parameter: variable}`` handed from each window to the next; empty for
     #: windows that do not depend on one another.
@@ -226,17 +226,17 @@ class EachWindow:
     key_name: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
-        blocks = [self.steps] if isinstance(self.steps, int) else list(self.steps)
+        blocks = [self.horizon] if isinstance(self.horizon, int) else list(self.horizon)
         if not blocks:
-            raise ValueError('steps is empty, so no window would keep anything — pass an int, or one size per window')
+            raise ValueError('horizon is empty, so no window would keep anything — pass an int, or one size per window')
         if short := [block for block in blocks if block < 1]:
-            raise ValueError(f'every window must keep at least one label (got steps with {short})')
+            raise ValueError(f'every window must keep at least one label (got horizon with {short})')
         if self.lookahead < 0:
             raise ValueError(
                 f'lookahead={self.lookahead} is negative; zero is contiguous windows, and above it overlaps'
             )
-        if not isinstance(self.steps, int):
-            object.__setattr__(self, 'steps', tuple(blocks))
+        if not isinstance(self.horizon, int):
+            object.__setattr__(self, 'horizon', tuple(blocks))
         object.__setattr__(self, 'carry', dict(self.carry))
 
     def to_dict(self) -> dict[str, object]:
@@ -245,8 +245,8 @@ class EachWindow:
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds ``carry`` and ``key_name`` only where the axis sets them.
         """
-        steps = self.steps if isinstance(self.steps, int) else list(self.steps)
-        return {'each': 'window', 'dim': self.dim, 'steps': steps, 'lookahead': self.lookahead, **_where_set(self)}
+        horizon = self.horizon if isinstance(self.horizon, int) else list(self.horizon)
+        return {'each': 'window', 'dim': self.dim, 'horizon': horizon, 'lookahead': self.lookahead, **_where_set(self)}
 
     def _key_name(self) -> str:
         """Where the window started, never ``dim``, which every table of the window already carries."""
@@ -322,13 +322,13 @@ class EachWindow:
         An ``int`` repeats, the last window's horizon taking what is left. A sequence that
         stops short of the axis is refused.
         """
-        if isinstance(self.steps, int):
-            blocks = [self.steps] * -(-total // self.steps)
+        if isinstance(self.horizon, int):
+            blocks = [self.horizon] * -(-total // self.horizon)
         else:
-            blocks = list(self.steps)
+            blocks = list(self.horizon)
             if sum(blocks) < total:
                 raise DataError(
-                    f'steps keeps {sum(blocks)} label(s) across {len(blocks)} window(s), and '
+                    f'horizon keeps {sum(blocks)} label(s) across {len(blocks)} window(s), and '
                     f"'{self.dim}' has {total} — the last {total - sum(blocks)} would be solved by no window. "
                     f'List a block for them, or pass an int to repeat one size to the end.'
                 )

@@ -115,7 +115,7 @@ same size, however many snapshots there are:
 sweep = sps.solve_over(
     'storage.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=12, carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', horizon=24, lookahead=12, carry={'soc_initial': 'soc'}),
 )
 ```
 

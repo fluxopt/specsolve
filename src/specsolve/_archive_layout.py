@@ -48,7 +48,7 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve._answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 3
+INPUTS_LAYOUT = 4
 
 
 def check_the_target(out: Path) -> None:

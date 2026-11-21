@@ -1004,7 +1004,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 
 
 #: The overlapping rolling horizon every archive test below solves.
-ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2)
+ROLLING = sps.EachWindow('snapshot', horizon=4, lookahead=2)
 #: The same rolling horizon, each window handing the state of charge at its horizon end to the next.
 CARRIED = replace(ROLLING, carry={'soc_initial': 'soc'})
 
@@ -1016,7 +1016,7 @@ def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: obj
 
 
 @pytest.mark.parametrize(
-    'steps', [pytest.param(4, id='the-last-window-shorter'), pytest.param((2, 4, 4), id='the-first-window-shorter')]
+    'horizon', [pytest.param(4, id='the-last-window-shorter'), pytest.param((2, 4, 4), id='the-first-window-shorter')]
 )
 @pytest.mark.parametrize(
     'price',
@@ -1028,7 +1028,7 @@ def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: obj
     ],
 )
 def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_over_the_window_took(
-    price: object, steps: int | tuple[int, ...], tmp_path: Path
+    price: object, horizon: int | tuple[int, ...], tmp_path: Path
 ) -> None:
     """Each window attaches from the archive what it attached from the sources.
 
@@ -1041,7 +1041,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
 
     spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['snapshot'], 'missing': 'neutral'}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
-    axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, carry={'soc_initial': 'soc'})
+    axis = sps.EachWindow('snapshot', horizon=horizon, lookahead=0, carry={'soc_initial': 'soc'})
     sources = {**span_sources(10), 'price': price, 'soc_initial': 0.0}
     runs = sps.solve_over(spec, sources, axis, archive=tmp_path / 'roll.zip')
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
