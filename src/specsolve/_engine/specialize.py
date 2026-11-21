@@ -11,32 +11,60 @@ one.
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from specsolve._collect import in_memory
-from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere, settled
+from mathspec import program
+
+from specsolve._collect import collected_all, in_memory
+from specsolve._engine.predicates import counted_over_nothing, passing
 from specsolve._engine.scope import Scope
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from mathspec import program
-
     from specsolve._engine.attaching import AttachedSources
 
 
 def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """The tests the ``where`` of every variable, constraint and assumption makes, settled over *attached*.
+    """Each test the ``where`` of a variable, constraint or assumption makes that *attached* decides at every coordinate.
 
-    One batch for the whole program: a model gates hundreds of declarations
-    on the same few flags. In memory, since each test reads one parameter's
-    table whole. *attached* need not hold the answer yet; this is what
-    computes it.
+    A test is a parameter's bare name or comparison, anywhere in a mask, a
+    named condition read through: ``True`` where it holds everywhere,
+    ``False`` where nowhere. A test the data leaves partial is not in the
+    answer. *attached* need not hold the answer yet; this is what computes it.
+
+    Each test is read once over its parameter's own table, all in one batch
+    and in memory: a model gates hundreds of declarations on the same few
+    flags, and reading a flag per declaration over the product of its dims
+    was most of the cost of the declarations that build nothing. A parameter
+    with no row, and a count along a dimension without a label, settle
+    without a query.
     """
     declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
+    masks = [d.where for d in declared if d.where is not None]
+    scope = Scope(lowered, attached, {})
+    atoms = {atom for mask in masks for atom in mask.atoms}
+    out: dict[program.Condition, bool] = {}
+    queried: list[program.ParameterDefined | program.ParameterComparison] = []
+    for atom in atoms:
+        if isinstance(atom, program.CountComparison) and not scope.data.cardinality[atom.over]:
+            out[atom] = counted_over_nothing(atom)
+        elif isinstance(atom, program.ParameterDefined | program.ParameterComparison):
+            if scope.data.parameter_rows[atom.name]:
+                queried.append(atom)
+            else:
+                out[atom] = False
     with in_memory():
-        return settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+        counts = collected_all(passing(scope, atom) for atom in queried)
+    for atom, passed in zip(queried, counts, strict=True):
+        count = passed.item()
+        if not count:
+            out[atom] = False
+        elif count == math.prod(scope.data.cardinality[d] for d in atom.dims):
+            out[atom] = True
+    return out
 
 
 def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
@@ -58,8 +86,8 @@ def specialized(lowered: program.Program, attached: AttachedSources) -> program.
             if where is None:
                 out[name] = declaration
                 continue
-            kept = folded(where, tests)
-            out[name] = replace(declaration, where=None if holds_everywhere(kept) else kept)
+            kept = _folded(where, tests)
+            out[name] = replace(declaration, where=None if _holds(kept, value=True) else kept)
         return out
 
     if not tests:
@@ -69,9 +97,34 @@ def specialized(lowered: program.Program, attached: AttachedSources) -> program.
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     """Whether the data settled *where* false at every coordinate, so nothing it gates is read."""
-    return where is not None and holds_nowhere(folded(where, attached.settled))
+    return where is not None and _holds(_folded(where, attached.settled), value=False)
 
 
 def rowless(declaration: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
     """Whether *declaration* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
     return any(not attached.cardinality[d] for d in declaration.dims) or rules_out(declaration.where, attached)
+
+
+def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:
+    """*mask* with each settled test written as the literal it is; constructing the mask folds what is left."""
+    return program.Mask(_substituted(mask.root, tests))
+
+
+def _holds(mask: program.Mask, *, value: bool) -> bool:
+    """Whether *mask* folded to the literal *value*."""
+    return isinstance(mask.root, program.BooleanLiteral) and mask.root.value == value
+
+
+def _substituted(node: program.Condition, tests: Mapping[program.Condition, bool]) -> program.Condition:
+    """*node* rebuilt with each settled test as a literal, a named condition read as its body."""
+    if node in tests:
+        return program.BooleanLiteral(tests[node])
+    if isinstance(node, program.And):
+        return program.And(_substituted(node.left, tests), _substituted(node.right, tests))
+    if isinstance(node, program.Or):
+        return program.Or(_substituted(node.left, tests), _substituted(node.right, tests))
+    if isinstance(node, program.Not):
+        return program.Not(_substituted(node.operand, tests))
+    if isinstance(node, program.ConditionReference):
+        return _substituted(node.body, tests)
+    return node
