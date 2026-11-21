@@ -100,6 +100,7 @@ class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.attached = attached
         self.measured = measured

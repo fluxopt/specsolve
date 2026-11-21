@@ -7,7 +7,7 @@ every source; this shapes each and encodes the string dimensions.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from time import perf_counter
 from typing import TYPE_CHECKING
 
@@ -15,6 +15,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, in_memory
+from specsolve._engine.specialize import settle
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -38,7 +39,10 @@ class AttachedSources:
     cached frame heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its ordinal. ``seconds`` is how long attaching took, for the
+    ``first`` is its ordinal. ``settled`` is each test of a ``where`` that the
+    data decides at every coordinate: ``True`` where it holds everywhere,
+    ``False`` where nowhere ([`settle`][]).
+    ``seconds`` is how long attaching took, for the
     build these are handed to, which did not run the attach itself.
     """
 
@@ -49,6 +53,7 @@ class AttachedSources:
     parameter_rows: Mapping[str, int]
     consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
+    settled: Mapping[program.Condition, bool] = field(default_factory=dict)
     seconds: float = 0.0
 
     def is_enum_encoded(self, dim: str) -> bool:
@@ -61,7 +66,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
-    [`in_memory`][], since every read holds one table whole.
+    [`in_memory`][], since every read holds one table whole. Every test a
+    ``where`` makes is then read once ([`settle`][]), for the assumptions
+    and the build both.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -105,7 +112,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             given[name] = frame.select(*p.dims).lazy()
             parameters[name] = _filled(frame, p.dims, p.missing, dimensions)
 
-    return AttachedSources(
+    attached = AttachedSources(
         parameters={name: f.lazy() for name, f in parameters.items()},
         dimensions={d: f.lazy() for d, f in dimensions.items()},
         relations={name: f.lazy() for name, f in relations.items()},
@@ -113,8 +120,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         parameter_rows={name: f.height for name, f in parameters.items()},
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
-        seconds=perf_counter() - started,
     )
+    return replace(attached, settled=settle(program, attached), seconds=perf_counter() - started)
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:

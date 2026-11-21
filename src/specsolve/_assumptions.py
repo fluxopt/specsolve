@@ -15,6 +15,7 @@ from specsolve._collect import collected
 from specsolve._engine.attaching import attach
 from specsolve._engine.predicates import masked
 from specsolve._engine.scope import Scope
+from specsolve._engine.specialize import rules_out
 from specsolve._messages import coordinate_text
 from specsolve.errors import DataError
 
@@ -31,6 +32,8 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
     """Refuse data that does not hold what the model assumes of it.
 
     Nothing is checked while a parameter is unfilled; attaching refuses that.
+    An assumption whose ``where`` the data settles false has no coordinate to
+    fail at, and is not read.
 
     Args:
         program: The lowered spec.
@@ -50,6 +53,8 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
     attached = attach(program, sources)
     scope = Scope(program, attached, {})
     for name, assumption in program.assumptions.items():
+        if rules_out(assumption.where, attached):
+            continue
         failing = _a_coordinate_it_fails_at(scope, assumption)
         if failing is not None:
             raise DataError(f'{assumption_message(name, assumption)}{failing}')
