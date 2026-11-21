@@ -1,7 +1,7 @@
-"""A declaration that holds no row is not compiled, and the model is the one without it.
+"""An entry that holds no row is not compiled, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
-most declarations span a dimension without a label or a `where` that admits
+most entries span a dimension without a label or a `where` that admits
 nothing. Compiling one costs every query its plan needs and builds nothing.
 """
 
@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
-from specsolve._engine import labels, predicates
+from specsolve._engine import conditions, indices
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -47,13 +47,13 @@ SOURCES = {
 
 
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
-    """Which constraints were compiled, which variables had their bounds compiled, which dims were labelled by a query, and which an assumption was read over."""
-    seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'labelled': set(), 'assumption': set()}
-    expression, bounds, frame, masked = (
+    """Which constraints were compiled, which variables had their bounds compiled, which dimensions were indexed by a query, and which an assumption was read over."""
+    seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'indexed': set(), 'assumption': set()}
+    expression, bounds, frame, narrowed = (
         compiler_module.Compiler.expression,
         compiler_module.Compiler.bounds,
-        labels.frame,
-        _assumptions.masked,
+        indices.frame,
+        _assumptions.narrowed,
     )
 
     def spied_expression(self, e, what, **kwargs):
@@ -66,17 +66,17 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         return bounds(self, frame, name, v)
 
     def spied_frame(scope, dims, *args, **kwargs):
-        seen['labelled'].add(tuple(dims))
+        seen['indexed'].add(tuple(dims))
         return frame(scope, dims, *args, **kwargs)
 
-    def spied_masked(scope, dims, where):
+    def spied_narrowed(scope, dims, where):
         seen['assumption'].update(dims)
-        return masked(scope, dims, where)
+        return narrowed(scope, dims, where)
 
     monkeypatch.setattr(compiler_module.Compiler, 'expression', spied_expression)
     monkeypatch.setattr(compiler_module.Compiler, 'bounds', spied_bounds)
-    monkeypatch.setattr(labels, 'frame', spied_frame)
-    monkeypatch.setattr(_assumptions, 'masked', spied_masked)
+    monkeypatch.setattr(indices, 'frame', spied_frame)
+    monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
     return seen
 
@@ -87,24 +87,22 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('constraint', 'over_nothing', id='a-constraint-over-a-dimension-without-a-label'),
         pytest.param('constraint', 'admits_nothing', id='a-constraint-whose-where-admits-no-row'),
         pytest.param('variable', 'y', id='a-variable-over-a-dimension-without-a-label'),
-        pytest.param(
-            'labelled', ('e',), id='a-declaration-over-a-dimension-without-a-label-is-labelled-without-a-query'
-        ),
+        pytest.param('indexed', ('e',), id='an-entry-over-a-dimension-without-a-label-is-indexed-without-a-query'),
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
 )
-def test_a_declaration_that_holds_no_row_is_not_compiled(monkeypatch, kind, name):
+def test_an_entry_that_holds_no_row_is_not_compiled(monkeypatch, kind, name):
     seen = _read(monkeypatch)
     assert name not in seen[kind], f'{name} holds no row, yet the build compiled it'
 
 
-def test_a_declaration_that_holds_a_row_is_still_compiled(monkeypatch):
+def test_an_entry_that_holds_a_row_is_still_compiled(monkeypatch):
     seen = _read(monkeypatch)
     assert seen['constraint'] == {'live'}, 'only `live` holds a row, and it has to be compiled'
     assert seen['variable'] == {'x'}, 'only `x` holds a column, and its bounds have to be compiled'
 
 
-def test_a_model_with_declarations_that_hold_no_row_is_the_model_without_them(tmp_path: Path):
+def test_a_model_with_entries_that_hold_no_row_is_the_model_without_them(tmp_path: Path):
     without = {
         **SPEC,
         'constraints': {'live': SPEC['constraints']['live']},
@@ -113,7 +111,7 @@ def test_a_model_with_declarations_that_hold_no_row_is_the_model_without_them(tm
     sps.write(SPEC, SOURCES, tmp_path / 'with.lp')
     sps.write(without, SOURCES, tmp_path / 'without.lp')
     assert (tmp_path / 'with.lp').read_text() == (tmp_path / 'without.lp').read_text(), (
-        'a declaration without a row changed the written model'
+        'an entry without a row changed the written model'
     )
     assert sps.solve(SPEC, SOURCES).objective == pytest.approx(2.0), 'each x is capped at 1 by `live` alone'
 
@@ -135,19 +133,19 @@ SPARSE_SOURCES = {
 }
 
 
-def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(monkeypatch):
-    """A sparse absence narrows such a constraint, and labelling it unrestricted first would hold the full product of its dims."""
-    frame, unrestricted = labels.frame, []
+def test_a_constraint_without_a_where_is_indexed_only_inside_its_restrictions(monkeypatch):
+    """A sparse absence narrows such a constraint, and indexing it unrestricted first would hold the full product of its dimensions."""
+    frame, unrestricted = indices.frame, []
 
-    def spied_frame(scope, dims, where, label, start, restrictions=()):
-        if label == 'row' and where is None and not restrictions:
+    def spied_frame(scope, dims, where, index, start, restrictions=()):
+        if index == 'row' and where is None and not restrictions:
             unrestricted.append(tuple(dims))
-        return frame(scope, dims, where, label, start, restrictions)
+        return frame(scope, dims, where, index, start, restrictions)
 
-    monkeypatch.setattr(labels, 'frame', spied_frame)
+    monkeypatch.setattr(indices, 'frame', spied_frame)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
-    assert not unrestricted, f'`capped` was labelled over its full product {unrestricted} before its restriction'
+    assert not unrestricted, f'`capped` was indexed over its full product {unrestricted} before its restriction'
 
 
 #: `e` has no label, so `count(on, over=e)` is 0 at every `g`.
@@ -176,13 +174,13 @@ COUNTED_SOURCES = {
 def test_a_count_over_a_dimension_without_a_label_is_zero_without_a_query(monkeypatch, where, columns):
     """`breakpoint` is empty for most of PyPSA's components, and each curve's assumptions count along it."""
     counted = []
-    real = predicates._counted
+    real = conditions._counted
 
     def spied(scope, p, alias):
         counted.append(p.over)
         return real(scope, p, alias)
 
-    monkeypatch.setattr(predicates, '_counted', spied)
+    monkeypatch.setattr(conditions, '_counted', spied)
     spec = {**COUNTED_SPEC, 'variables': {'x': {**COUNTED_SPEC['variables']['x'], 'where': where}}}
     with sps.build(spec, COUNTED_SOURCES) as model:
         assert model.diagnostics().columns == columns, (
@@ -221,7 +219,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
 
 
 #: `flag` has no row and `cap` none above 3, so a `where` that needs either admits
-#: nothing; each is over `g` alone, a sixth of the product a declaration over
+#: nothing; each is over `g` alone, a sixth of the product an entry over
 #: `g` and `t` spans. `e` has no label, so a count along it is 0.
 TABLED_SPEC = {
     'dimensions': {'g': {}, 't': {}, 'e': {}},

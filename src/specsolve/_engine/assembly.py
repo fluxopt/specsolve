@@ -1,7 +1,7 @@
-"""One build: every declaration into rows of the model frames a sink drains.
+"""One build: every entry into rows of the model tables a sink drains.
 
-The variable and constraint label frames fill during a build, because a
-declaration built later reads what earlier ones produced.
+The variable and constraint index tables fill during a build, because an
+entry built later reads what earlier ones produced.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
-from specsolve._engine import coverage, labels
+from specsolve._engine import coverage, indices
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 #: The most columns or rows a model may reach for its build to collect in memory.
 IN_MEMORY_REACH = 250_000
 
-#: The frames a sink reads, as schemas.
+#: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
 _QUAD = ('col_l', 'col_r', 'coeff')
@@ -45,7 +45,7 @@ _QMATRIX = ('row', 'col_l', 'col_r', 'coeff')
 _SOS = ('set', 'type', 'col', 'weight')
 
 #: The dtype of each of those columns. ``col``, ``set`` and ``weight`` are the
-#: solver's ``Int32``; a label stays ``Int64``, a position in the pre-mask
+#: solver's ``Int32``; a row index stays ``Int64``, a position in the full
 #: coordinate product, which can pass 2^31.
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
@@ -60,13 +60,13 @@ _DTYPES = {
 class Measured:
     """What one build measured about itself, and a rebuild replaces wholesale.
 
-    It outlives ``close()``, so it holds counts and small frames, never a read
+    It outlives ``close()``, so it holds counts and small tables, never a read
     of the model. Most of it is written as measured, so a build that raises
     still reports what it got to.
     """
 
     #: ``name -> (coordinates, rows)`` for each parameter attached short of the
-    #: coordinates its dims reach.
+    #: coordinates its dimensions reach.
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
@@ -89,10 +89,10 @@ class BuiltModel:
 
     program: program.Program
     attached: AttachedSources
-    #: One [`Labelled`][specsolve._engine.labels.Labelled] per
-    #: declaration, one map per label space: a variable and a constraint may share a name.
-    variables: dict[str, labels.Labelled]
-    constraints: dict[str, labels.Labelled]
+    #: One [`Indexed`][specsolve._engine.indices.Indexed] per
+    #: entry, one map per index space: a variable and a constraint may share a name.
+    variables: dict[str, indices.Indexed]
+    constraints: dict[str, indices.Indexed]
     handoff: sinks.Handoff
 
 
@@ -103,8 +103,8 @@ class Assembly:
         self.program = program
         self.attached = attached
         self.measured = measured
-        self.variables: dict[str, labels.Labelled] = {}
-        self.constraints: dict[str, labels.Labelled] = {}
+        self.variables: dict[str, indices.Indexed] = {}
+        self.constraints: dict[str, indices.Indexed] = {}
         self.scope = Scope(program, attached, self.variables)
         self.compiler = Compiler(self.scope)
         self.n_cols = 0
@@ -116,7 +116,7 @@ class Assembly:
         self.obj_sense: ObjectiveSense | None = None
 
     def run(self) -> BuiltModel:
-        """Build every declaration, then freeze what they produced.
+        """Build every entry, then freeze what they produced.
 
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
@@ -131,7 +131,7 @@ class Assembly:
             built = [self._build_constraint(name, c) for name, c in ordered]
             objective = self._build_objective(self.program.objective)
 
-        stacked = labels.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
         matrix_starts = _row_starts(stacked, self.n_rows)
         matrix = stacked.select('col', 'coeff').rechunk()
 
@@ -142,8 +142,8 @@ class Assembly:
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
-            qmatrix=labels.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), 'row'),
-            rows=labels.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
+            qmatrix=indices.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), 'row'),
+            rows=indices.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
             matrix=matrix,
             sos=_stack(sets, _SOS),
             row_starts=matrix_starts,
@@ -157,13 +157,13 @@ class Assembly:
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
 
-        A constraint over dims no variable spans has more rows than there are
+        A constraint over dimensions no variable spans has more rows than there are
         columns, so the rows count too.
         """
         cardinality = self.attached.cardinality
         return max(
-            sum(math.prod(cardinality[d] for d in declared.dims) for declared in declarations.values())
-            for declarations in (self.program.variables, self.program.constraints)
+            sum(math.prod(cardinality[d] for d in declared.dims) for declared in entries.values())
+            for entries in (self.program.variables, self.program.constraints)
         )
 
     def _matrix_share(
@@ -181,34 +181,34 @@ class Assembly:
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
 
     # ------------------------------------------------------------------
-    # declarations
+    # entries
     # ------------------------------------------------------------------
 
     def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
-        """One variable's labelled frame, and its share of ``cols``.
+        """One variable's indexed table, and its share of ``cols``.
 
-        The share leaves in label order: ``cols`` carries no ``col``, so a row's
+        The share leaves in index order: ``cols`` carries no ``col``, so a row's
         position is its solver column index. The bounds are collected in memory:
-        they are parameters looked up onto labels already in memory, and polars
+        they are parameters looked up onto column indices already in memory, and polars
         2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
         if rowless(v, self.attached):
-            labelled = labels.nothing(self.scope, v.dims, 'var_label')
+            indexed = indices.nothing(self.scope, v.dims, 'col_index')
         else:
-            labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
-        self.n_cols = start + labelled.height
-        self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
-        if not labelled.height:
+            indexed = indices.frame(self.scope, v.dims, v.where, 'col_index', start)
+        self.n_cols = start + indexed.height
+        self.variables[name] = indices.Indexed(indexed.lazy(), start, indexed.height)
+        if not indexed.height:
             return _stack([], _COLS)
 
         lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
         if v.domain != 'continuous':
             lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.compiler.bounds(labelled.lazy(), name, v).select('var_label', lb.alias('lb'), ub.alias('ub'))
-            bounded = labels.in_position_order(bounds.pipe(collected), 'var_label')
+            bounds = self.compiler.bounds(indexed.lazy(), name, v).select('col_index', lb.alias('lb'), ub.alias('ub'))
+            bounded = indices.in_position_order(bounds.pipe(collected), 'col_index')
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
@@ -220,12 +220,13 @@ class Assembly:
         return cols
 
     def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
-        """One declaration's sets as ``(set, type, col, weight)``, over *v*.
+        """One entry's sets as ``(set, type, col, weight)``, over *v*.
 
         A set and a weight are the two halves of a coordinate's row-major
-        position, split at the ``along`` dim; a masked variable renumbers the
-        sets densely. The stream leaves grouped by set and ascending in weight,
-        so a sink reads a set's edges off the neighbouring row.
+        position, split at the ``along`` dimension; a variable with a condition
+        renumbers the sets densely. The stream leaves grouped by set and
+        ascending in weight, so a sink reads a set's edges off the neighbouring
+        row.
         """
         held = self.variables[s.variable]
         cardinality = self.scope.data.cardinality
@@ -237,7 +238,7 @@ class Assembly:
             place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
             frame = held.frame
-            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col('var_label')
+            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col('col_index')
         placed = frame.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
@@ -264,15 +265,15 @@ class Assembly:
 
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
-        labelled block narrows to the rows that survived. A constraint whose
+        indexed block narrows to the rows that survived. A constraint whose
         ``where`` admits no row is not compiled. One without a ``where`` is
-        labelled only once its restrictions are known, so a sparse absence
-        never meets the full product of its dims.
+        indexed only once its restrictions are known, so a sparse absence
+        never meets the full product of its dimensions.
         """
         start = self.n_rows
         if rowless(c, self.attached):
-            return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
-        admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
+            return self._without_a_row(name, indices.nothing(self.scope, c.dims, 'row'), start)
+        admitted = None if c.where is None else indices.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
@@ -283,16 +284,16 @@ class Assembly:
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
         if admitted is None or restrictions:
-            labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+            indexed = indices.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
         else:
-            labelled = admitted
+            indexed = admitted
         if restrictions:
             declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
-            if declared > labelled.height:
-                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
-        self.n_rows = start + labelled.height
-        frame = labelled.lazy()
-        self.constraints[name] = labels.Labelled(frame, start, labelled.height)
+            if declared > indexed.height:
+                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
+        self.n_rows = start + indexed.height
+        frame = indexed.lazy()
+        self.constraints[name] = indices.Indexed(frame, start, indexed.height)
 
         subject = f"constraint '{name}'"
         coverage.refuse_null_constants(
@@ -318,7 +319,7 @@ class Assembly:
             frames.append(
                 placed.select(
                     'row',
-                    pl.col('var_label').cast(_DTYPES['col']).alias('col'),
+                    pl.col('col_index').cast(_DTYPES['col']).alias('col'),
                     (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
                 )
             )
@@ -339,22 +340,22 @@ class Assembly:
         return rows, matrix, qmatrix
 
     def _without_a_row(
-        self, name: str, labelled: pl.DataFrame, start: int
+        self, name: str, indexed: pl.DataFrame, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
         """A constraint that holds no row, left uncompiled.
 
         Its terms could only narrow its rows further, so compiling them would
         change nothing but the cost: each query a compile plans costs a fixed
-        time that a declaration without a row never earns back.
+        time that an entry without a row never earns back.
         """
-        self.constraints[name] = labels.Labelled(labelled.lazy(), start, 0)
+        self.constraints[name] = indices.Indexed(indexed.lazy(), start, 0)
         return _stack([], _ROWS), None, None
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
 
         Such a block numbers its rows row-major over the declared ordinals
-        ([`labels.frame`][specsolve._engine.labels.frame]), so a term
+        ([`indices.frame`][specsolve._engine.indices.frame]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
@@ -416,7 +417,7 @@ class Assembly:
             .frame.filter(pl.col('row').is_in(kept))
             .with_columns(pl.col('row').replace_strict(remap))
         )
-        self.constraints[name] = labels.Labelled(kept_frame, start, surviving.height)
+        self.constraints[name] = indices.Indexed(kept_frame, start, surviving.height)
         return rows, matrix, qmatrix, start + surviving.height
 
     def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
@@ -434,7 +435,7 @@ class Assembly:
         )
         for p in comp.constant:
             assert not p.dims, (
-                f'objective constant term has dims {list(p.dims)} — the language refuses a '
+                f'objective constant term has dimensions {list(p.dims)} — the language refuses a '
                 f'variable-free term of an objective that carries any'
             )
             self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
@@ -443,7 +444,7 @@ class Assembly:
         if not comp.linear:
             return None
         frames = [
-            p.frame.select(pl.col('var_label').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.linear
+            p.frame.select(pl.col('col_index').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.linear
         ]
         stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
@@ -492,8 +493,8 @@ def declares_quadratic(c: program.Constraint) -> bool:
 def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
     """A quadratic pair canonicalised by column index, so ``x·y`` and ``y·x`` land in one row."""
     return (
-        pl.min_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_l']).alias('col_l'),
-        pl.max_horizontal('var_label', 'var_label_2').cast(_DTYPES['col_r']).alias('col_r'),
+        pl.min_horizontal('col_index', 'col_index_2').cast(_DTYPES['col_l']).alias('col_l'),
+        pl.max_horizontal('col_index', 'col_index_2').cast(_DTYPES['col_r']).alias('col_r'),
     )
 
 
@@ -539,7 +540,7 @@ def _collapsed(
     change something. The stack is rechunked first, because ``shift(1)``
     crosses chunk boundaries that ``is_sorted`` does not. A cancelling pair
     becomes a zero only at the aggregate, so the prune runs again there.
-    Unordered, a repeat is probed over *space*, the dense label count.
+    Unordered, a repeat is probed over *space*, the dense index count.
     """
     pruned = _pruned(stacked.rechunk())
     dropped = pruned.height != stacked.height
@@ -553,7 +554,7 @@ def _collapsed(
             repeated = stacked.select(tied.any()).item()
     else:
         assert space is not None and len(keys) == 1, 'an unordered probe counts one dense integer key'
-        repeated = _repeats_a_label(stacked.get_column(keys[0]), space)
+        repeated = _repeats_an_index(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
     aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
@@ -567,7 +568,7 @@ def _collapsed(
 def _sorted(stacked: pl.DataFrame, keys: tuple[str, ...]) -> pl.DataFrame:
     """*stacked* sorted by *keys*, on one integer that orders as they do where one can hold them all.
 
-    The keys are labels, never negative, so each is a digit in a base one past
+    The keys are solver indices, never negative, so each is a digit in a base one past
     its largest value.
     """
     largest = stacked.select(pl.col(k).max() for k in keys).row(0)
@@ -589,7 +590,7 @@ def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
 
 
 def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
-    """The distinct ``row`` labels of a matrix already ordered by ``row``.
+    """The distinct ``row`` indices of a matrix already ordered by ``row``.
 
     ``set_sorted`` is an assertion, not a check: an unordered column silently
     loses rows, so call it only on what [`_collapsed`][] returned ordered.
@@ -597,15 +598,15 @@ def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
     return matrix.get_column('row').set_sorted().unique()
 
 
-def _repeats_a_label(labels: pl.Series, count: int) -> bool:
-    """Whether any of *labels* occurs twice, over a dense ``0..count-1`` space.
+def _repeats_an_index(keys: pl.Series, count: int) -> bool:
+    """Whether any of *keys* occurs twice, over a dense ``0..count-1`` space.
 
-    *count* must exceed every label; a stale one raises out of bounds rather
+    *count* must exceed every index; a stale one raises out of bounds rather
     than answering wrong.
     """
     seen = np.zeros(count, dtype=bool)
-    seen[labels.to_numpy()] = True
-    return int(np.count_nonzero(seen)) != labels.len()
+    seen[keys.to_numpy()] = True
+    return int(np.count_nonzero(seen)) != keys.len()
 
 
 def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
@@ -631,7 +632,7 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
-    """Concatenate *frames*, or an empty frame of *columns* when there are none."""
+    """Concatenate *frames*, or an empty table of *columns* when there are none."""
     if frames:
         return pl.concat(frames)
     return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})

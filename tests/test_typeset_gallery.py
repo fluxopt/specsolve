@@ -42,7 +42,7 @@ TYPESET_PATHS = SPEC_PATHS
 
 @EVERY_FORMAT
 def test_every_example_renders(fmt):
-    """The walk consumes the same AST as lowering, so anything ``check``
+    """The walk reads the same program that compiling produces, so anything ``check``
     accepts it must print — a node it forgot is an exception, not a blank."""
     for path in TYPESET_PATHS:
         assert typeset(path, fmt).strip()
@@ -101,13 +101,13 @@ REPRODUCIBLE = ('dispatch', 'monthly_budget', 'transport')
 DIVERGENT = {
     'piecewise_conversion': (
         'names the weights at the converter a flow belongs to — the c(f) the tie reads through '
-        'at(). The generator writes each row against the dims it carries, so the pullback is a '
+        'at(). The generator writes each row against the dimensions it carries, so the pullback is a '
         'coordinate there and a subscript here.'
     ),
     'piecewise_ragged': (
         "names each curve's own breakpoint set as K_g, which is what the page is about and "
         'what the generator has no notation for: the weights it writes run over the whole '
-        'axis, and points: is a mask on their declaration rather than a smaller index set.'
+        'axis, and points: is a condition on their entry rather than a smaller index set.'
     ),
     'seasons': (
         'states one boundary row rather than the model: the page is about where a '
@@ -122,7 +122,7 @@ DIVERGENT = {
     ),
     'multi_period': (
         'writes the pullback in reader notation: a hatted p for the capacity variable '
-        'and period() for the relation, where the generator spells the declarations — '
+        'and period() for the relation, where the generator spells the entries — '
         'p^nom and period_of(). Matching would take a symbol table, not a renderer '
         'change.'
     ),
@@ -132,7 +132,7 @@ DIVERGENT = {
         'either dropping the wrap or opening with a symbol nobody has met yet.'
     ),
     'piecewise': (
-        "shows one generator's curve. The model carries the snapshot dim through λ "
+        "shows one generator's curve. The model carries the snapshot dimension through λ "
         'as well, so the generated subscripts are (t, g, k) where the summary has (g, k).'
     ),
     'transport_dantzig': (
@@ -208,7 +208,7 @@ def test_a_reproducible_summary_uses_only_symbols_the_generator_emits(stem: str)
     )
 
 
-def test_the_dispatch_summary_still_carries_the_mask():
+def test_the_dispatch_summary_still_carries_the_condition():
     """Pinned by value: `> 0` is a condition, not a subscripted quantity, so the symbol check would not see it go."""
     assert r'\bar p_g > 0' in _summary('dispatch')
     assert r'\bar p_{g} > 0' in _generated('dispatch')

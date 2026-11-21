@@ -91,7 +91,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_multilink.yaml', sources) as solution:
         solution.objective  # 1100.0
         solution.dual('nodal_balance')

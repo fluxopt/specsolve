@@ -9,7 +9,7 @@ handed a level it may simply spend.
 [Storage units](pypsa_storage.md) seeds every storage from
 `state_of_charge_initial`; [cyclic storage](pypsa_cyclic_storage.md) closes
 every storage on itself. A real PyPSA model has both in the same
-`StorageUnit` frame, because the flag is a column:
+`StorageUnit` table, because the flag is a column:
 
 ```python
 n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
@@ -17,8 +17,8 @@ n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
 
 The two regimes are **one rule and a different predecessor**. A cyclic unit's
 first snapshot carries from its last. A seeded unit's first snapshot carries
-from a level in the data. Here that is three blocks under complementary masks,
-and the masks are the flag itself:
+from a level in the data. Here that is three blocks under complementary conditions,
+and the conditions are the flag itself:
 
 | Block | Where | What carries into the first snapshot |
 |---|---|---|
@@ -138,7 +138,7 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -270,7 +270,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_mixed_cycling.yaml', sources) as solution:
         solution.objective  # 4800.0
         solution.dual('nodal_balance')
@@ -354,5 +354,5 @@ energy worth anything.
 
 *A data column choosing between two boundary regimes.* Neither storage model
 has that shape: the two differ by one deleted `where`, and each is uniform. It
-needs no language feature: three blocks, complementary masks, and the dropped
+needs no language feature: three blocks, complementary conditions, and the dropped
 row visible in `omissions`.

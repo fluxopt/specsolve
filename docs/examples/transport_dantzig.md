@@ -72,7 +72,7 @@ x_{i,j} \ge 0 \qquad \forall\, i \in \mathcal{I},\ j \in \mathcal{J}
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -126,7 +126,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/transport_dantzig.yaml', sources) as solution:
         solution.objective  # 153.675
         solution.dual('within_capacity')

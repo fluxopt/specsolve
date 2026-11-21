@@ -3,7 +3,7 @@
 A seeding clause that names a label (``snapshot == 0``) is correct only while
 the instance starts at zero: relabel the horizon and the clause matches
 nothing, so the row it was to seed is never written. Both lanes read the
-position off the coordinate order they hold — the dim table's ``ord``
+position off the coordinate order they hold — the dimension table's ``ord``
 relationally, the master index on the linopy side — so every case below checks
 differentially that the two orders agree.
 """
@@ -102,7 +102,7 @@ def test_a_boundary_survives_the_horizon_being_relabelled():
 def test_the_label_that_happens_to_be_first_is_not_the_rule():
     """The same model with the horizon at 0..2 gives the same answer.
 
-    Which is the claim: the clause names the position, so relabelling the index
+    Which is the claim: the clause names the position, so relabelling the dimension
     moves the boundary with it rather than silently seeding nothing.
     """
     sources = _inputs(snapshots=[0, 1, 2])
@@ -163,7 +163,7 @@ def _relational(sources):
 
 @pytest.mark.parametrize('position', [3, -4], ids=['past-the-end', 'past-the-start'])
 def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, position):
-    """Not an empty mask: seeding no row is exactly what the construct prevents.
+    """Not a condition that holds nowhere: seeding no row is exactly what the construct prevents.
 
     Three snapshots, so positions 0..2 and -1..-3 exist and nothing else. Both
     lanes have to say so — a lane that quietly matched nothing would put the
@@ -186,7 +186,7 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
 def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     """Counting along an axis the constraint does not range over is a frame error.
 
-    `position(dim)` yields an integer, so the ordinary dim-algebra rule every
+    `position(dim)` yields an integer, so the ordinary dimension-algebra rule every
     where-comparison meets is the one that speaks.
     """
     spec = SPEC.replace(
@@ -215,7 +215,7 @@ def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
 GROUPED_SNAPSHOTS = [10, 11, 20, 21, 22, 99]
 GROUPED_PERIODS = [0, 0, 1, 1, 1, None]
 
-MASK = """
+NARROWED_SPEC = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
   period: {dtype: int, ordered: true}
@@ -242,9 +242,9 @@ objective:
 
 
 def _grouped_sources():
-    """One mapping both lanes take, the relation arriving as a column of the index.
+    """One mapping both lanes take, the relation arriving as its own two-column table.
 
-    Arrow tables rather than pandas: a partial relation read out of a pandas frame
+    Arrow tables rather than pandas: a partial relation read out of a pandas table
     arrives as ``float64`` beside an ``i64`` target, which is an attaching question
     of its own and not the one under test here.
     """
@@ -256,24 +256,24 @@ def _grouped_sources():
     }
 
 
-def _masked(where: str) -> list[int]:
+def _selected(where: str) -> list[int]:
     """The snapshots *where* selects, agreed by both lanes.
 
-    Read off the primal rather than the plan: minimising a positive price holds
+    Read off the primal rather than the program: minimising a positive price holds
     `soc` at zero everywhere the row was not built, so what comes back non-zero
-    is exactly the mask.
+    is exactly where the condition holds.
     """
-    with differential(MASK.replace('WHERE', where), _grouped_sources()) as run:
+    with differential(NARROWED_SPEC.replace('WHERE', where), _grouped_sources()) as run:
         rows = run.result.primal('soc').filter(pl.col('value') > 1e-9)
         return sorted(int(s) for s in rows.select('snapshot').to_series())
 
 
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
-    assert _masked('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
+    assert _selected('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
         "each period's first snapshot, not just the horizon's"
     )
-    assert _masked('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
+    assert _selected('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
 
 
 def test_a_negative_position_is_each_group_s_last():
@@ -282,7 +282,7 @@ def test_a_negative_position_is_each_group_s_last():
     With periods of different lengths there is no single position that is the
     last of both.
     """
-    assert _masked('position(snapshot, within=period_of[period]) == -1') == [11, 22]
+    assert _selected('position(snapshot, within=period_of[period]) == -1') == [11, 22]
 
 
 def test_a_comparator_reads_the_same_grouped_as_ungrouped():
@@ -293,10 +293,10 @@ def test_a_comparator_reads_the_same_grouped_as_ungrouped():
     wraps to a huge positive number instead — which `==` cannot see and every
     other comparator reads backwards.
     """
-    assert _masked('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
+    assert _selected('position(snapshot, within=period_of[period]) >= 1') == [11, 21, 22], (
         "everything from each period's second snapshot on"
     )
-    assert _masked('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
+    assert _selected('position(snapshot, within=period_of[period]) < 1') == [10, 20], 'and its complement'
 
 
 @pytest.mark.parametrize(
@@ -313,17 +313,17 @@ def test_a_coordinate_in_no_group_has_no_boundary(where):
     The same reading a null relation value gets everywhere else — it belongs to
     no group, so `sum(by=)` places its terms nowhere and this places no row.
     """
-    assert 99 not in _masked(where), f'{where} claimed a coordinate that is in no group'
+    assert 99 not in _selected(where), f'{where} claimed a coordinate that is in no group'
 
 
 def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
-    """Not a mask that is false there: one short period would go unseeded.
+    """Not a condition that is false there: one short period would go unseeded.
 
     Position 2 exists in the three-snapshot period and not in the two-snapshot
     one, which is precisely the failure grouping makes easy to write and
     impossible to see in the answer.
     """
-    spec = MASK.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
+    spec = NARROWED_SPEC.replace('WHERE', 'position(snapshot, within=period_of[period]) == 2')
     path = tmp_path / 'spec.yaml'
     path.write_text(spec)
     sources = _grouped_sources()
@@ -347,7 +347,7 @@ def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
 )
 def test_by_takes_a_relation(by, match):
     """`within=` names a relation and its columns, as `by=` does in `sum(by=)` and `at(by=)`, or it is nothing."""
-    spec = MASK.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
+    spec = NARROWED_SPEC.replace('WHERE', f'position(snapshot, within={by}[period]) == 0')
     with pytest.raises(LanguageError, match=match):
         schema_of(spec)
 
@@ -359,7 +359,7 @@ def test_a_relation_over_another_dimension_carries_no_position():
     so there is no position within a group for the clause to be about.
     """
     spec = (
-        MASK.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
+        NARROWED_SPEC.replace('WHERE', 'position(snapshot, within=plant_period[period]) == 0')
         .replace(
             '  period: {dtype: int, ordered: true}', '  period: {dtype: int, ordered: true}\n  plant: {dtype: str}'
         )

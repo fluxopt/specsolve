@@ -162,7 +162,7 @@ def model_frames(engine: Engine, schema: Spec, program: Any) -> None:
     n_full = 6 * 4
     print('\n    where "p_max > 0" is not a mask array — it is row absence:')
     print(f'    p has {variables.height} rows, not {n_full}: retired oil never becomes a column.')
-    print(_indent(variables.sort('var_label').head(4)))
+    print(_indent(variables.sort('col_index').head(4)))
 
 
 def lp_file(engine: Engine) -> None:
@@ -181,9 +181,9 @@ def lp_file(engine: Engine) -> None:
 
 
 def solution(engine: Engine) -> None:
-    """Stage 6 — batches to highspy, and the solution read back by label join.
+    """Stage 6 — batches to highspy, and the solution read back by solver index.
 
-    Never densified. ``primal()`` hands back a frame, printed unsorted: label
+    Never densified. ``primal()`` hands back a frame, printed unsorted: index
     order, row-major over the coordinate product, as ``Result.primal``
     documents.
 

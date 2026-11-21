@@ -115,7 +115,7 @@ p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 
 | roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
 | a partition | `shift`, `sum_back` or `position` with `within=` | none |
 
-**A sum through a bare relation counts a member once per row it is related
+**A sum through a bare relation counts a label once per row it is related
 to.** `wind` is connected to both buses, so it counts twice:
 
 ```python

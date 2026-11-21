@@ -95,7 +95,7 @@ A store that cycles inside each season rather than across the horizon, with seas
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -158,7 +158,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/seasons.yaml', sources) as solution:
         solution.objective  # 74.0
         solution.primal('soc')
@@ -188,7 +188,7 @@ the boundary.
 
 ## The grouping is data
 
-`season_of` is a table passed beside the snapshot index, so the same file
+`season_of` is a table passed beside the snapshot labels, so the same file
 expresses maintenance campaigns, representative days, market quarters or
 contract windows. Move two snapshots between seasons by editing that table and
 no clause changes:

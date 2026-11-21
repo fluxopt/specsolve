@@ -88,7 +88,7 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -186,7 +186,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_multi_period.yaml', sources) as solution:
         solution.objective  # 85300.0
         solution.dual('power_balance')
@@ -255,7 +255,7 @@ nothing, because `capital_cost` is given directly rather than annuitised from an
 
 **A retired asset is pinned, not absent**, the one place the port and PyPSA
 differ in shape. PyPSA gives `coal` no dispatch variable in 2040 at all
-(`Generator-p` is masked to the active pairs). The port keeps the variable and
+(`Generator-p` is absent outside the active pairs). The port keeps the variable and
 multiplies its capacity bound by the activity read down through the period
 relation, so `p <= p_nom * 0` holds it at zero. Same optimum and same duals, since
 a variable pinned to `[0, 0]` contributes nothing, but not the same model on
@@ -265,7 +265,7 @@ Writing the absence exactly would need `where: at(activity, by=period_of[period]
 the variable, and a `where:` cannot call `at()`: its grammar compares a name
 against a literal. A second table keyed by `(snapshot, generator)` would state
 one fact twice. [#982](https://github.com/fluxopt/specsolve/issues/982) asks
-whether a mask may read a parameter one declared relation away.
+whether a condition may read a parameter one declared relation away.
 
 ## What it exercises
 

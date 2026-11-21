@@ -1,6 +1,6 @@
 """Shrink a failing case to the smallest one that still fails the same way.
 
-Greedy and one step at a time: drop an entry, a mask, a ``missing:``, a label
+Greedy and one step at a time: drop an entry, a condition, a ``missing:``, a label
 or a row, and keep the step if the case still produces a finding with the same
 signature. The order runs from the steps that remove the most to those that
 remove the least, and the passes repeat until none applies.
@@ -121,7 +121,7 @@ def _drop(spec: dict[str, Any], sources: dict[str, Any], section: str, name: str
 
 
 def _drop_label(sources: dict[str, Any], dim: str, label: Any) -> None:
-    """*label* gone from *dim*'s index and from every table and dict keyed by it."""
+    """*label* gone from *dim*'s labels and from every table and dict keyed by it."""
     for name, source in sources.items():
         if isinstance(source, pl.DataFrame) and dim in source.columns:
             sources[name] = source.filter(pl.col(dim) != label)
@@ -177,7 +177,7 @@ def _replace(tree: ast.AST, target: ast.AST, new: ast.AST) -> None:
 
 
 def _rewrite_constraint(spec: dict[str, Any], name: str, expression: str) -> None:
-    """Set *expression* and the dims it carries, read off the language, or leave a spec it refuses."""
+    """Set *expression* and the dimensions it carries, read off the language, or leave a spec it refuses."""
     spec['constraints'][name]['expression'] = expression
     probe = copy.deepcopy(spec)
     del probe['constraints'][name]

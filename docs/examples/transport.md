@@ -99,7 +99,7 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -190,7 +190,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/transport.yaml', sources) as solution:
         solution.objective  # 4400.0
         solution.dual('balance')

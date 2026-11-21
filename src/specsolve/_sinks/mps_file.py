@@ -2,7 +2,7 @@
 
 MPS is column-major and the engine's matrix is row-major, so this writer sorts
 the matrix by column. The names are the LP writer's — ``x0`` a column, ``c0`` a
-row, ``s0`` a set — and every section is written in label order.
+row, ``s0`` a set — and every section is written in index order.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """The scope a query is compiled in: what each name stands for, and what a dimension means as a coordinate.
 
 ``variables`` is the build's own dict, not a copy: a constraint compiled after
-a variable is built has to see its frame.
+a variable is built has to see its table.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._engine.labels import Labelled
+    from specsolve._engine.indices import Indexed
     from specsolve._engine.terms import Term
 
 
@@ -40,39 +40,39 @@ def join_on(
 
 
 #: Carries the single row of the empty coordinate product, since polars cannot
-#: hold a frame with one row and no columns.
+#: hold a table with one row and no columns.
 UNIT = '__unit__'
 
 
 def ordinal(dim: str) -> str:
-    """The frame column carrying *dim*'s position in its declared order."""
+    """The column carrying *dim*'s position in its declared order."""
     return f'__ord {dim}__'
 
 
 @dataclass(frozen=True)
 class Scope:
-    """What a name resolves to here: the program for its declaration, the data and the variable frames for its frame."""
+    """What a name resolves to here: the program for its entry, the data and the variable tables for its rows."""
 
     program: program.Program
     data: AttachedSources
-    variables: Mapping[str, Labelled]
+    variables: Mapping[str, Indexed]
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
-        declaration = self.program.parameters[param]
-        if declaration.missing != 'absent':
+        entry = self.program.parameters[param]
+        if entry.missing != 'absent':
             return False
-        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in declaration.dims)
+        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in entry.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
-        """Cross join of the dim tables: labels and ordinals, nothing else.
+        """Cross join of the dimension tables: labels and ordinals, nothing else.
 
         Each cross join keeps its left side's order, then its right's, so the
-        product arrives row-major, which is label order, on either engine; the
+        product arrives row-major, which is index order, on either engine; the
         streaming engine otherwise picks which side it buffers from the
-        tables' sizes, and the order with it. [`labels.frame`][] verifies it.
+        tables' sizes, and the order with it. [`indices.frame`][] verifies it.
         The empty product is one real row carrying only [`UNIT`][], so a
-        ``where`` on a scalar declaration has a row to filter.
+        ``where`` on a scalar entry has a row to filter.
         """
         out: pl.LazyFrame | None = None
         for d in dims:
@@ -94,27 +94,25 @@ class Scope:
     ) -> pl.LazyFrame:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
-        A parameter over a dim the frame lacks would be reduced over it, so that is
-        refused, naming *subject*. A left join of a parameter over no dims keeps
-        every row of *frame*, reading null where the parameter has no row, which a
-        cross join with its empty table would not.
+        A parameter over a dimension the frame lacks would be reduced over it, so
+        that is refused, naming *subject*. A left join of a parameter over no
+        dimensions keeps every row of *frame*, reading null where the parameter
+        has no row, which a cross join with its empty table would not.
         """
-        declaration = self.program.parameters[param]
-        assert not set(declaration.dims) - set(frame_dims), (
-            f'{subject} has dims outside the frame dims {list(frame_dims)}'
-        )
+        entry = self.program.parameters[param]
+        assert not set(entry.dims) - set(frame_dims), f'{subject} has dimensions outside {list(frame_dims)}'
         table = self.data.parameters[param].rename({VALUE: alias})
-        if not declaration.dims and how == 'left':
+        if not entry.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
-        return join_on(frame, table, declaration.dims, how, maintain_order)
+        return join_on(frame, table, entry.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
 
-        A label, a bound's slot and a set's position all read this one rule, so two
-        builds of one model agree on every index. *ordinals* reads a dim's ordinal
-        off the frame in hand.
+        A solver index, a bound's slot and a set's position all read this one rule, so two
+        builds of one model agree on every index. *ordinals* reads a dimension's
+        ordinal off the table in hand.
         """
         position: pl.Expr = pl.lit(0, dtype=pl.Int64)
         for d in dims:
@@ -136,10 +134,10 @@ class Scope:
         return column.replace_strict(ordinals.get_column('val'), ordinals.get_column('ord'), return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
-        """*presence* over every dim in *want*, saying the same thing.
+        """*presence* over every dimension in *want*, saying the same thing.
 
-        A presence frame is silent about the dims it omits, which reads as present
-        at all of them.
+        A presence table is silent about the dimensions it omits, which reads as
+        present at all of them.
         """
         return self.spread(presence, [d for d in want if d not in have]).select(*want)
 
@@ -150,14 +148,14 @@ class Scope:
         return frame
 
     def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:
-        """The dims *terms* carry between them, in declaration order."""
-        return self.in_declaration_order(d for p in terms for d in p.dims)
+        """The dimensions *terms* carry between them, in the order the file declares them."""
+        return self.in_dimension_order(d for p in terms for d in p.dims)
 
-    def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
+    def in_dimension_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.
 
-        Two frames keyed by the same dims in two orders would join on a key written
-        twice.
+        Two tables keyed by the same dimensions in two orders would join on a key
+        written twice.
         """
         wanted = set(dims)
         return tuple(d for d in self.program.dimensions if d in wanted)

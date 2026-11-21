@@ -1,11 +1,11 @@
 """A random model and random data for it, from one seed.
 
-The generator knows the declarations it made, so every expression it writes
+The generator knows the entries it made, so every expression it writes
 reads names that exist, carries the dimensions it says it carries, and stays
 inside degree two. It does not try to know every rule the loader holds a file
 to: a spec the language refuses is counted as *rejected*, not as a finding, and
 :mod:`tests.fuzz.run` reports the rate so a generator that drifts out of the
-language shows. The data is written against the same declarations, dense where
+language shows. The data is written against the same entries, dense where
 a parameter refuses a missing row and sparse where its ``missing:`` allows one.
 
 Everything is drawn from one ``random.Random(seed)``, so a seed is the whole
@@ -114,7 +114,7 @@ class Generator:
         self.masks: dict[str, tuple[str, frozenset[str]]] = {}
 
     # ------------------------------------------------------------------
-    # declarations
+    # entries
     # ------------------------------------------------------------------
 
     def case(self) -> Case:
@@ -271,7 +271,7 @@ class Generator:
         return coords
 
     # ------------------------------------------------------------------
-    # masks
+    # conditions
     # ------------------------------------------------------------------
 
     def _named_mask(self, name: str) -> None:
@@ -281,7 +281,7 @@ class Generator:
             self.masks[name] = (text, frame)
 
     def _atoms(self, frame: frozenset[str]) -> list[str]:
-        """Every predicate the generator writes whose dimensions fit inside *frame*."""
+        """Every condition the generator writes whose dimensions fit inside *frame*."""
         r = self.rng
         atoms = []
         for name, p in self.params.items():

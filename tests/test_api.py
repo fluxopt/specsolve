@@ -37,23 +37,23 @@ from tests.conftest import (
 
 
 @pytest.fixture
-def dispatch_solution(dispatch_yaml, dispatch_frame_inputs):
+def dispatch_solution(dispatch_yaml, dispatch_table_inputs):
     """The dispatch model solved on the native lane, closed after the test."""
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     with sps.solve(dispatch_yaml, sources) as result:
         yield result
 
 
-def test_solve(dispatch_solution, dispatch_frame_inputs):
-    sources = dispatch_frame_inputs
+def test_solve(dispatch_solution, dispatch_table_inputs):
+    sources = dispatch_table_inputs
     assert dispatch_solution.is_ok
     assert np.isfinite(dispatch_solution.objective)
     balance = dispatch_solution.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
     assert np.allclose(balance['value'], sources['load']['value'])
 
 
-def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources = dispatch_frame_inputs
+def test_build_context_manager_and_write(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    sources = dispatch_table_inputs
     with sps.build(dispatch_yaml, sources) as model:
         result = model.solve()
         assert result.is_ok
@@ -64,7 +64,7 @@ def test_build_context_manager_and_write(dispatch_yaml, dispatch_frame_inputs, t
 
 
 def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_length(tmp_path):
-    """A ``points:`` curve supplied as a file keeps its own length, as a frame does."""
+    """A ``points:`` curve supplied as a file keeps its own length, as a table does."""
     from tests.conftest import expanded, port_sources, port_spec
 
     frames = port_sources('piecewise_ragged')
@@ -78,7 +78,7 @@ def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_lengt
         sps.solve(expanded(port_spec('piecewise_ragged')), frames) as from_frames,
     ):
         assert from_paths.objective == pytest.approx(from_frames.objective, rel=1e-9), (
-            'a curve read from a file is the curve read from a frame'
+            'a curve read from a file is the curve read from a table'
         )
 
 
@@ -94,8 +94,8 @@ def test_a_string_is_a_parquet_path_at_every_door(tmp_path):
     assert as_frame(2.0) is None, 'a number is not a table, and the caller says what it is'
 
 
-def test_parquet_path_sources(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources = dispatch_frame_inputs
+def test_parquet_path_sources(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    sources = dispatch_table_inputs
     paths = {}
     for name, frame in sources.items():
         p = tmp_path / f'{name}.parquet'
@@ -126,23 +126,23 @@ _PLAIN = {
 
 
 @pytest.mark.parametrize('shape', sorted(_PLAIN), ids=sorted(_PLAIN))
-def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dispatch_frame_inputs, shape):
+def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dispatch_table_inputs, shape):
     """A dict and a sequence are sources, and mean what the tables mean.
 
-    A dict carries its own labels; a sequence is positional against the index.
+    A dict carries its own labels; a sequence is positional against the dimension's labels.
     """
-    frames = dispatch_frame_inputs
+    frames = dispatch_table_inputs
     with sps.solve(dispatch_yaml, frames) as tables:
         expected = tables.objective
 
-    index = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
-    with sps.solve(dispatch_yaml, _PLAIN[shape] | index) as plain:
+    labels = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
+    with sps.solve(dispatch_yaml, _PLAIN[shape] | labels) as plain:
         assert plain.objective == pytest.approx(expected, rel=1e-9)
 
 
-def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_inputs):
-    """A scalar covers the dims the parameter declares, not just a 0-D one."""
-    frames = dispatch_frame_inputs
+def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_table_inputs):
+    """A scalar covers the dimensions the parameter declares, not just a 0-D one."""
+    frames = dispatch_table_inputs
     flat = {**frames, 'cost': 7.0}
     spelled = {**frames, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
 
@@ -156,18 +156,18 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_frame_in
 @pytest.mark.parametrize(
     ('sources', 'match'),
     [
-        pytest.param({'p_max': [100.0, 60.0]}, 'one entry per label', id='a-sequence-of-the-wrong-length'),
+        pytest.param({'p_max': [100.0, 60.0]}, 'one value per label', id='a-sequence-of-the-wrong-length'),
         pytest.param({'p_max': object()}, 'cannot adapt', id='nothing-table-shaped-at-all'),
-        pytest.param({'snapshot': 3.0}, 'cannot read labels out of float', id='an-index-that-is-one-number'),
+        pytest.param({'snapshot': 3.0}, 'cannot read labels out of float', id='labels-that-are-one-number'),
     ],
 )
-def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_frame_inputs, sources, match):
-    frames = dispatch_frame_inputs
+def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_table_inputs, sources, match):
+    frames = dispatch_table_inputs
     with pytest.raises(sps.errors.DataError, match=match):
         sps.build(dispatch_yaml, {**frames, **sources}).close()
 
 
-#: One parameter over two dims — what a dict and a sequence cannot cover.
+#: One parameter over two dimensions — what a dict and a sequence cannot cover.
 _TWO_DIMS = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['g', 't']}},
@@ -206,7 +206,7 @@ def test_a_positional_source_needs_the_labels_it_is_written_against():
         'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
-    with pytest.raises(sps.errors.DataError, match='nothing else supplies an index'):
+    with pytest.raises(sps.errors.DataError, match='nothing else supplies the labels'):
         sps.build(spec, {'cap': [1.0, 2.0]}).close()
 
 
@@ -256,7 +256,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
     'form',
     ['path', 'str', 'dict', 'spec'],
 )
-def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispatch_frame_inputs, tmp_path, form):
+def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispatch_table_inputs, tmp_path, form):
     """One first argument across the five verbs, and it is `to_spec`'s own.
 
     Asserted per verb: each has its own door.
@@ -267,19 +267,19 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
         'dict': to_spec(dispatch_yaml).to_dict(),
         'spec': to_spec(dispatch_yaml),
     }[form]
-    with sps.solve(dispatch_yaml, dispatch_frame_inputs) as reference:
+    with sps.solve(dispatch_yaml, dispatch_table_inputs) as reference:
         expected = reference.objective
 
     assert sps.check(spec).variables['p'].dims == ('snapshot', 'generator'), (
-        'check lowers it, and the plan is the same one whichever form the model arrived as'
+        'check compiles it, and the program is the same one whichever form the model arrived as'
     )
-    with sps.build(spec, dispatch_frame_inputs) as model:
+    with sps.build(spec, dispatch_table_inputs) as model:
         assert model.solve('highs').objective == pytest.approx(expected, rel=1e-9), 'build takes it'
-    with sps.solve(spec, dispatch_frame_inputs) as result:
+    with sps.solve(spec, dispatch_table_inputs) as result:
         assert result.objective == pytest.approx(expected, rel=1e-9), 'and so does solve'
-    assert sps.write(spec, dispatch_frame_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
+    assert sps.write(spec, dispatch_table_inputs, tmp_path / f'{form}.lp').exists(), 'and write'
 
-    one_draw = {**dispatch_frame_inputs, 'load': dispatch_frame_inputs['load'].with_columns(draw=pl.lit(0))}
+    one_draw = {**dispatch_table_inputs, 'load': dispatch_table_inputs['load'].with_columns(draw=pl.lit(0))}
     runs = sps.solve_over(spec, one_draw, sps.EachLabel('draw'))
     assert runs.keys == [0], 'a sweep of one slice still runs, whatever the model arrived as'
     assert runs.records['objective'].to_list() == pytest.approx([expected], rel=1e-9), (
@@ -288,7 +288,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
 
 
 def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
-    """The plan is read from the model alone, with no data."""
+    """The program is read from the model alone, with no data."""
     for program in (sps.check(dispatch_yaml), to_spec(dispatch_yaml).program):
         assert program.variables['p'].dims == ('snapshot', 'generator')
         assert program.parameters['load'].dims == ('snapshot',)
@@ -306,7 +306,7 @@ def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
     ],
 )
 def test_check_reports_language_errors_before_any_data_is_bound(
-    dispatch_yaml, dispatch_frame_inputs, expression, match
+    dispatch_yaml, dispatch_table_inputs, expression, match
 ):
     """The CI verb enforces the ceiling with no data attached (mathspec's docs/about/limits.md).
 
@@ -316,7 +316,7 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 
     with pytest.raises(sps.errors.LanguageError, match=match):
         sps.check(raw)
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     with pytest.raises(sps.errors.LanguageError, match=match):
         sps.build(raw, sources)
 
@@ -331,18 +331,18 @@ def test_error_hierarchy_is_one_catchable_tree():
     assert issubclass(sps.errors.SpecsolveError, ValueError)
 
 
-def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_frame_inputs):
+def test_an_unknown_solver_is_refused_with_the_alternatives(dispatch_yaml, dispatch_table_inputs):
     """The set of solvers is closed, and a name outside it never falls back to the default."""
     from specsolve._sinks import SOLVERS
 
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     with pytest.raises(sps.errors.SpecsolveError, match='unknown solver'):
         sps.solve(dispatch_yaml, sources, solver_name='cplex')
     assert set(SOLVERS) == {'highs', 'gurobi', 'xpress'}
 
 
 def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
-    dispatch_yaml, dispatch_frame_inputs, monkeypatch
+    dispatch_yaml, dispatch_table_inputs, monkeypatch
 ):
     """A name in the closed set is not a promise the package is installed.
 
@@ -352,7 +352,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
     from specsolve import _api as api
     from specsolve._sinks import SOLVERS
 
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
     monkeypatch.setattr(api.Engine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal'))
 
@@ -361,7 +361,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
 
 def test_a_list_of_models_is_refused(dispatch_yaml):
-    """Composition is merging declarations, not passing several models."""
+    """Composition is merging entries, not passing several models."""
     with pytest.raises(sps.errors.LanguageError, match='Merge the entries'):
         sps.check([dispatch_yaml, dispatch_yaml])
 
@@ -488,7 +488,7 @@ def test_the_reserved_prefix_is_refused_in_any_letter_case(name):
 
 @pytest.mark.parametrize('name', ['value', 'Value', 'VALUE'], ids=str)
 def test_a_dimension_named_value_is_refused_at_load(name):
-    """A parameter's table and every answer frame hold a dimension's labels beside a column named `value`.
+    """A parameter's table and every answer table hold a dimension's labels beside a column named `value`.
 
     So a dimension of that name cannot be told apart from the numbers. Query
     engines read column names without case, so `Value` collides as well.
@@ -520,8 +520,8 @@ def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp
     assert not (tmp_path / 'case.zip').exists(), 'and a refused archive leaves no file behind'
 
 
-def test_write_suffix_dispatch(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    sources = dispatch_frame_inputs
+def test_write_suffix_dispatch(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    sources = dispatch_table_inputs
     out = sps.write(dispatch_yaml, sources, tmp_path / 'm.lp')
     assert out.stat().st_size > 0
     with pytest.raises(ValueError, match='unknown output format'):
@@ -542,7 +542,7 @@ def test_a_solution_saves_every_kind_it_answered_with(dispatch_solution, dispatc
 
 
 def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
-    """The record beside the frames, as the row a sweep writes per slice."""
+    """The record beside the tables, as the row a sweep writes per slice."""
     out = dispatch_solution.save(tmp_path / 'solution')
     record = pl.read_parquet(out / 'record.parquet')
     assert record.columns == [
@@ -607,9 +607,9 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     )
 
 
-def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """An answer asked for its activities saves each row's left-hand side, and loads it back."""
-    with sps.solve(dispatch_yaml, dispatch_frame_inputs, outputs={'activity'}) as solution:
+    with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}) as solution:
         out = solution.save(tmp_path / 'solution')
         constraints = set(sps.check(dispatch_yaml).constraints)
         assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
@@ -731,7 +731,7 @@ def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
 
 
 def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispatch_solution, tmp_path):
-    """`load_result` holds the values when it returns; `scan_result` reads each frame when asked."""
+    """`load_result` holds the values when it returns; `scan_result` reads each table when asked."""
     saved = dispatch_solution.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
     scanned = sps.scan_result(saved)
@@ -744,7 +744,7 @@ def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispa
         scanned.primal('p')
 
 
-def test_a_scanned_answer_reads_its_frames_at_the_call_that_asks(dispatch_solution, tmp_path):
+def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_solution, tmp_path):
     """A scan returns what the file holds at the read; a load, what it held at the load."""
     saved = dispatch_solution.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
@@ -756,13 +756,13 @@ def test_a_scanned_answer_reads_its_frames_at_the_call_that_asks(dispatch_soluti
     assert loaded.primal('p').equals(was), 'and the loaded answer is the one the load read'
 
 
-def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+def test_read_back_is_in_index_order_and_stays_there(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """A read is a join, and a join settles no order — so the read states one.
 
-    Label order is row-major over the coordinate product: `snapshot` varies
+    Index order is row-major over the coordinate product: `snapshot` varies
     slowest, and within it `generator` follows the declared order.
     """
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     generators = list(sources['p_max']['generator'])
     with sps.solve(dispatch_yaml, sources) as result:
         first = result.primal('p')
@@ -799,11 +799,11 @@ SCALAR_SPEC = {
         pytest.param(lambda r: r.evaluate('price'), 2.0, id='an-expression-reading-the-dual'),
     ],
 )
-def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expected):
+def test_an_entry_with_no_dimensions_reads_back_its_one_value(read, expected):
     """A product over no dimensions has one coordinate, so every reader returns one row.
 
     On polars 2.0 each came back empty and the expression read 0.0: the reader
-    selected the declaration's dims first, which with none is a frame with no
+    selected the entry's dimensions first, which with none is a table with no
     columns, and polars gives that no rows.
     """
     sources = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
@@ -814,8 +814,8 @@ def test_a_declaration_with_no_dimensions_reads_back_its_one_value(read, expecte
 SCALAR_SOURCES = {'f': ['a', 'b', 'c'], 'cost': {'a': 1.0, 'b': 2.0, 'c': 3.0}, 'budget': 120.0}
 
 
-def _masked_out(missing: str) -> dict:
-    """[`SCALAR_SPEC`][] with ``slack`` masked out under *missing*."""
+def _left_absent(missing: str) -> dict:
+    """[`SCALAR_SPEC`][] with ``slack`` left absent under *missing*."""
     slack = {**SCALAR_SPEC['variables']['slack'], 'where': 'budget > 999', 'missing': missing}
     return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
 
@@ -858,17 +858,17 @@ def _evaluated(expression):
         pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
         pytest.param(
-            _masked_out('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='masked-out-missing-neutral'
+            _left_absent('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='absent-under-missing-neutral'
         ),
-        pytest.param(_masked_out('absent'), _evaluated('2 * slack'), [], id='masked-out-missing-absent'),
+        pytest.param(_left_absent('absent'), _evaluated('2 * slack'), [], id='absent-under-missing-absent'),
     ],
 )
 def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate(spec, read, expected, tmp_path):
     """A scalar variable reads through an expression as a dimensioned one does at one coordinate.
 
     Each raised ``ColumnNotFoundError: "__unit__"`` (#1858): the reader keys a
-    variable with no dims on the empty product's marker column, and the
-    labelled frame dropped that column, keeping only ``var_label``.
+    variable with no dimensions on the empty product's marker column, and the
+    indexed table dropped that column, keeping only ``col_index``.
     """
     spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
     assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (
@@ -876,9 +876,9 @@ def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate
     )
 
 
-def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_frame_inputs):
+def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_table_inputs):
     """Reading is valid until `close()`, and nothing after it."""
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     result = sps.solve(dispatch_yaml, sources)
     height = result.primal('p').height
     assert height > 0
@@ -889,10 +889,10 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_fram
         result.primal('p')
 
 
-def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_frame_inputs):
+def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_table_inputs):
     """A result reports its own solve, not the engine's latest."""
     key = ['snapshot', 'generator']
-    sources = dispatch_frame_inputs
+    sources = dispatch_table_inputs
     with sps.build(dispatch_yaml, sources) as model:
         first = model.solve()
         before = first.primal('p').sort(key)
@@ -908,8 +908,8 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         assert first.objective != pytest.approx(second.objective)
 
 
-def test_primal_is_a_frame_and_to_pandas_is_the_bridge(dispatch_solution):
-    """A frame is the shape results come in; `to_pandas` converts the same table."""
+def test_primal_is_a_table_and_to_pandas_is_the_bridge(dispatch_solution):
+    """A polars DataFrame is the shape results come in; `to_pandas` converts the same table."""
     frame = dispatch_solution.primal('p')
     assert isinstance(frame, pl.DataFrame)
     assert frame.columns == ['snapshot', 'generator', 'value']
@@ -968,7 +968,7 @@ def test_solution_to_dataarray(dispatch_solution):
 
 
 def test_solution_to_dataset(dispatch_solution):
-    """Several variables at once, each keeping its own dims."""
+    """Several variables at once, each keeping its own dimensions."""
     pytest.importorskip('xarray')
     ds = dispatch_solution.to_dataset('p')
     tidy = dispatch_solution.to_pandas('p')
@@ -996,7 +996,7 @@ def test_every_bridge_takes_a_kind(dispatch_solution, dispatch_yaml):
 
 def test_a_dataset_of_expressions_holds_every_one_this_data_evaluates():
     """`to_dataset(kind='expression')` is every declared expression, each over
-    its own dims, and one that fails on this data fails the call the way
+    its own dimensions, and one that fails on this data fails the call the way
     `evaluate` does rather than being left out silently."""
     pytest.importorskip('xarray')
     spec = {**TWO_VARIABLE_SPEC, 'expressions': {'shed_twice': '2 * shed', 'total': 'sum(p, over=generator)'}}
@@ -1010,7 +1010,7 @@ def test_a_dataset_of_expressions_holds_every_one_this_data_evaluates():
     with sps.solve(spec, sources) as result:
         ds = result.to_dataset(kind='expression')
         assert set(ds.data_vars) == {'shed_twice', 'total'}, 'every declared expression, none named'
-        assert list(ds['total'].dims) == ['snapshot'], 'each over its own dims'
+        assert list(ds['total'].dims) == ['snapshot'], 'each over its own dimensions'
         assert set(result.to_dataset('total', kind='expression').data_vars) == {'total'}, 'named ones only'
 
 
@@ -1046,7 +1046,7 @@ def test_to_dataset_defaults_to_every_variable():
 
     assert set(ds.data_vars) == {'p', 'shed'}
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
-    assert list(ds['shed'].dims) == ['snapshot'], 'each variable keeps its own dims'
+    assert list(ds['shed'].dims) == ['snapshot'], 'each variable keeps its own dimensions'
     assert set(subset.data_vars) == {'shed'}
 
 
@@ -1084,15 +1084,15 @@ def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
         assert 'errors.pydantic.dev' not in str(ei.value), f"{door} leaks pydantic's envelope"
 
 
-def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs):
-    """After `close` the readers say so; frames read before it stay valid."""
-    sources = dispatch_frame_inputs
+def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_table_inputs):
+    """After `close` the readers say so; tables read before it stay valid."""
+    sources = dispatch_table_inputs
     sol = sps.solve(dispatch_yaml, sources)
     frame = sol.primal('p')
     objective = sol.objective
     sol.close()
 
-    assert frame.height > 0, 'a frame read before the close is its own data'
+    assert frame.height > 0, 'a table read before the close is its own data'
     assert sol.objective == objective, 'and the outcome needs no model to report'
     for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
         with pytest.raises(sps.errors.SpecsolveError, match='this result was closed'):
@@ -1100,7 +1100,7 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_frame_inputs
 
 
 def test_check_catches_a_dim_error_with_no_sources_bound():
-    """`check` reaches a dim rule without a byte of data."""
+    """`check` reaches a dimension rule without a byte of data."""
     raw = override(
         raw_of(EXAMPLES_DIR / 'dispatch.yaml'),
         **{'constraints.stray': {'dims': ['snapshot'], 'expression': 'p <= p_max'}},
@@ -1114,11 +1114,11 @@ def test_check_catches_a_dim_error_with_no_sources_bound():
 # ---------------------------------------------------------------------------
 
 
-def test_tidy_returns_one_table_per_declared_name_in_its_canonical_columns(dispatch_yaml, dispatch_frame_inputs):
-    """A dimension is its labels and their positions, a parameter its dims and `value`."""
+def test_tidy_returns_one_table_per_declared_name_in_its_canonical_columns(dispatch_yaml, dispatch_table_inputs):
+    """A dimension is its labels and their positions, a parameter its dimensions and `value`."""
     generators = ['gas', 'wind', 'solar']
     sources = {
-        **dispatch_frame_inputs,
+        **dispatch_table_inputs,
         'generator': pl.DataFrame({'generator': generators, 'colour': ['a', 'b', 'c']}),
         'p_max': dict(zip(generators, DISPATCH_P_MAX, strict=True)),
         'cost': pl.DataFrame({'generator': generators, 'value': DISPATCH_COST, 'note': ['x', 'y', 'z']}),
@@ -1130,27 +1130,27 @@ def test_tidy_returns_one_table_per_declared_name_in_its_canonical_columns(dispa
     assert tables['generator']['generator'].to_list() == generators, 'the labels keep the order they arrived in'
     assert tables['generator']['specsolve_position'].to_list() == [0, 1, 2], 'positions count from 0 in that order'
     assert tables['generator'].schema['specsolve_position'] == pl.Int64, 'the position is an Int64'
-    assert tables['cost'].columns == ['generator', 'value'], 'a parameter is its dims and value, nothing else'
+    assert tables['cost'].columns == ['generator', 'value'], 'a parameter is its dimensions and value, nothing else'
     assert tables['p_max'].columns == ['generator', 'value'], 'a plain-Python shape comes back as the same table'
 
 
-def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_frame_inputs):
+def test_what_tidy_returns_solves_as_the_sources_did(dispatch_yaml, dispatch_table_inputs):
     """The tidy tables are sources too, so an archive of them asks the same question."""
     with (
-        sps.solve(dispatch_yaml, dispatch_frame_inputs) as direct,
-        sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_frame_inputs)) as tidied,
+        sps.solve(dispatch_yaml, dispatch_table_inputs) as direct,
+        sps.solve(dispatch_yaml, sps.tidy(dispatch_yaml, dispatch_table_inputs)) as tidied,
     ):
         assert tidied.objective == pytest.approx(direct.objective, rel=1e-9), 'the tidy tables build the same model'
 
 
 def test_a_parquet_source_is_read_at_the_build_so_a_file_rewritten_afterwards_does_not_reach_the_model(
-    dispatch_yaml, dispatch_frame_inputs, tmp_path
+    dispatch_yaml, dispatch_table_inputs, tmp_path
 ) -> None:
     path = tmp_path / 'cost.parquet'
-    dispatch_frame_inputs['cost'].write_parquet(path)
-    with sps.build(dispatch_yaml, dispatch_frame_inputs | {'cost': str(path)}) as model:
-        dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(path)
-        with model.solve() as after, sps.solve(dispatch_yaml, dispatch_frame_inputs) as before:
+    dispatch_table_inputs['cost'].write_parquet(path)
+    with sps.build(dispatch_yaml, dispatch_table_inputs | {'cost': str(path)}) as model:
+        dispatch_table_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(path)
+        with model.solve() as after, sps.solve(dispatch_yaml, dispatch_table_inputs) as before:
             assert after.objective == pytest.approx(before.objective, rel=1e-9), (
                 'the solve read the file as it was at the build'
             )

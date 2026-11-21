@@ -90,7 +90,7 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -199,7 +199,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_kvl.yaml', sources) as solution:
         solution.objective  # 17000.0
         solution.dual('nodal_balance')

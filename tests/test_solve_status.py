@@ -154,7 +154,7 @@ def test_reading_results_without_a_solution_raises():
             solution.dual('meet')
 
 
-def test_a_solve_that_left_no_values_writes_the_record_and_no_frames(tmp_path):
+def test_a_solve_that_left_no_values_writes_the_record_and_no_tables(tmp_path):
     """An export of a run that did not solve is the record alone."""
     with sps.solve(*CASES['INFEASIBLE']) as solution:
         out = solution.save(tmp_path / 'infeasible')

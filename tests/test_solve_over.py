@@ -28,7 +28,7 @@ import specsolve as sps
 from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
 from specsolve._axes import CarryRule, Slice, as_built, axis_from
-from specsolve._inputs import lowered
+from specsolve._inputs import as_program
 from specsolve._records import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -39,13 +39,13 @@ from tests.conftest import DISPATCH_SPEC, override
 GENERATORS = ['wind', 'gas']
 STORES = ['battery', 'pumped']
 
-#: Dispatch, with a scenario-free declaration: the slice column never appears
+#: Dispatch, declaring no scenario: the slice column never appears
 #: in the model.
 DISPATCH = DISPATCH_SPEC
 
-#: Storage over a *local* index, with the seam split out by a `where` on a dim
+#: Storage over a window's *own* labels, with the seam split out by a `where` on a dimension
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
-#: masked `soc_open` supplies it from a carried parameter.
+#: narrowed `soc_open` supplies it from a carried parameter.
 WINDOW = {
     'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {
@@ -356,7 +356,7 @@ def test_every_slice_of_every_kind_of_sweep_names_what_produced_it(swept, tmp_pa
 
 
 def test_a_serial_fold_builds_once_and_updates(builds):
-    """The fold is an update loop: nothing after the first slice pays for the YAML, the plan or a fresh solver.
+    """The fold is an update loop: nothing after the first slice pays for the YAML, the program or a fresh solver.
 
     The difference is invisible in the answer, so it is counted at `build`.
     """
@@ -416,7 +416,7 @@ def test_a_name_the_sweep_does_not_hold_says_what_it_does_hold(sweep):
 
 
 def test_a_sweep_that_solved_nothing_blames_the_solve():
-    """An absent frame has one cause, and the message says which.
+    """An absent table has one cause, and the message says which.
 
     The load is pushed past total capacity, so every slice is infeasible.
     """
@@ -426,20 +426,20 @@ def test_a_sweep_that_solved_nothing_blames_the_solve():
 
     assert len(runs) == 3, 'an unsolvable slice is still a row of the record'
     assert runs.records['objective'].null_count() == 3, 'no slice reached one, and none is written as nan'
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable frames at all') as raised:
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable tables at all') as raised:
         runs.primal('p')
     assert 'infeasible' in str(raised.value), 'the message names what the slices actually did'
 
 
 def test_a_sweep_that_solved_and_holds_no_expression_does_not_blame_the_solve(sweep):
-    """A kind the sweep holds no frame of was read as a sweep that solved nothing.
+    """A kind the sweep holds no table of was read as a sweep that solved nothing.
 
     The dispatch spec declares no expression, so every slice is optimal and
     the sweep holds none. The refusal said the slices terminated optimal and
     that the models did not solve, in one breath.
     """
     assert sweep.records['has_primal'].all()
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no named expression frames') as raised:
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no named expression tables') as raised:
         sweep.evaluate('2 * p')
     assert 'did not solve' not in str(raised.value), 'every slice solved, and the refusal does not say otherwise'
     assert '3 of its 3 slices left values' in str(raised.value), 'the refusal says what is true of them'
@@ -568,9 +568,9 @@ def _spilled_by_label(tmp_path):
     ],
 )
 def test_per_window_is_refused_on_a_sweep_that_was_not_cut_into_windows(read, sweep, tmp_path):
-    """`per_window=True` on a sweep whose answer already is one frame per slice is refused rather than ignored."""
+    """`per_window=True` on a sweep whose answer already is one table per slice is refused rather than ignored."""
     with pytest.raises(
-        sps.errors.SpecsolveError, match='not cut into windows: its answer already is one frame per slice'
+        sps.errors.SpecsolveError, match='not cut into windows: its answer already is one table per slice'
     ):
         read(sweep, tmp_path)
 
@@ -603,8 +603,8 @@ def test_per_window_keeps_every_row_the_answer_drops(overlapping):
 # named expressions across a sweep
 # ---------------------------------------------------------------------------
 
-#: The window model with its cost named twice: `spend` keeps the local index
-#: (pointwise in `t`, so it can be stitched) and `window_spend` reduces over it
+#: The window model with its cost named twice: `spend` keeps the window's labels
+#: (pointwise in `t`, so it can be stitched) and `window_spend` reduces over them
 #: (one number per window, so it cannot).
 SPENDING = override(
     WINDOW,
@@ -629,7 +629,7 @@ def test_a_stitched_expression_prices_only_the_rows_a_window_owns(priced):
     """The answer of an expression drops the lookahead double-count.
 
     The oracle is the answer's dispatch priced by hand. The per-window sum
-    exceeds it, since the per-window frames carry the overlap.
+    exceeds it, since the per-window tables carry the overlap.
     """
     stitched = priced.evaluate('spend')
     assert stitched.columns == ['snapshot', 'value']
@@ -644,7 +644,7 @@ def test_a_stitched_expression_prices_only_the_rows_a_window_owns(priced):
     )
     assert stitched['value'].to_list() == pytest.approx(by_hand['value'].to_list())
     assert priced.evaluate('spend', per_window=True)['value'].sum() > stitched['value'].sum(), (
-        'the per-window frames still carry the lookahead rows, so their sum double-counts'
+        'the per-window tables still carry the lookahead rows, so their sum double-counts'
     )
 
 
@@ -683,7 +683,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
 
     `ratio` divides by a parameter with one row, so every slice's evaluation
     fails on the sparse divisor — and the sweep must still complete, hold every
-    other frame, and hand the caller the divisor's own sentence on read.
+    other table, and hand the caller the divisor's own sentence on read.
     """
     spec = override(
         SPENDING,
@@ -802,7 +802,7 @@ def test_a_window_key_column_never_shadows_the_dimension_it_cut(sweep):
     runs = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
     soc = runs.primal('soc', per_window=True)
     assert soc.columns == ['snapshot_start', 'snapshot', 'value'], 'the key, then the window in its own labels'
-    assert runs.records.columns[0] == 'snapshot_start', 'both frames key the same way'
+    assert runs.records.columns[0] == 'snapshot_start', 'both tables key the same way'
     assert sorted(soc['snapshot_start'].unique().to_list()) == [0, 4, 8]
 
     assert sweep.records.columns[0] == 'scenario', (
@@ -891,7 +891,7 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert axis._blocks(periods) == expected, 'each block is trimmed to what the axis has left'
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
-    slices, stitch = axis._slice(lowered(WINDOW), horizon_sources(periods), 'snapshot_start')
+    slices, stitch = axis._slice(as_program(WINDOW), horizon_sources(periods), 'snapshot_start')
     owned = stitch.owned.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
     assert owned == expected, 'which is what each slice records owning'
     for current in slices:
@@ -955,7 +955,7 @@ def test_a_short_tail_window_carries_off_its_own_last_row():
 def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
     """`soc` is over `(snapshot, storage)` and `soc_initial` over `(storage)`.
 
-    The two declarations say what is copied: `snapshot` is what the parameter
+    The two entries say what is copied: `snapshot` is what the parameter
     lacks, so it is the one the carry collapses, and `storage` passes through —
     both stores are handed forward, each its own level.
     """
@@ -1028,10 +1028,10 @@ def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
 
 
 def test_a_myopic_pathway_carries_a_whole_vector():
-    """Capacity per generator, handed forward as a frame rather than a number.
+    """Capacity per generator, handed forward as a table rather than a number.
 
     `total` and `existing` are both over `(generator)`, so nothing is dropped
-    and the frame *is* the carry.
+    and the table *is* the carry.
     """
     runs = sps.solve_over(
         MYOPIC,
@@ -1078,7 +1078,7 @@ UNSOUND_CARRIES = [
     pytest.param(
         WINDOW, horizon_sources, WINDOW_AXIS, {'load': 'soc'},
         r"carry 'load' <- 'soc' keeps 'snapshot'", 'no two windows hold the same labels',
-        id='a-window-carrying-a-whole-frame-over-the-dimension-it-windows',
+        id='a-window-carrying-a-whole-table-over-the-dimension-it-windows',
     ),
     pytest.param(
         WINDOW, horizon_sources, sps.EachLabel('scenario'), {'soc_initial': 'soc'},
@@ -1096,7 +1096,7 @@ UNSOUND_CARRIES = [
 
 @pytest.mark.parametrize(('spec', 'sources', 'axis', 'carry', 'expected', 'names'), UNSOUND_CARRIES)
 def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, sources, axis, carry, expected, names):
-    """Every one of these is answerable from the two declarations and the axis alone.
+    """Every one of these is answerable from the two entries and the axis alone.
 
     The axis decides the last two: the coordinate handed on is the last one a
     slice owns, so only the dimension the axis advances along can be the one a
@@ -1113,12 +1113,12 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, source
 BY_THE_HOUR = override(WINDOW, **{'dimensions.snapshot': {'dtype': 'datetime', 'ordered': True}})
 
 
-def _dated_sources(index: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
-    """The horizon over *index*, its load keyed by *load_labels*."""
-    sources = horizon_sources(len(index))
+def _dated_sources(labels: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
+    """The horizon over *labels*, its load keyed by *load_labels*."""
+    sources = horizon_sources(len(labels))
     return {
         **sources,
-        'snapshot': pl.DataFrame({'snapshot': index}),
+        'snapshot': pl.DataFrame({'snapshot': labels}),
         'load': sources['load'].with_columns(load_labels.alias('snapshot')),
     }
 
@@ -1167,8 +1167,8 @@ def test_a_window_cuts_a_start_keyed_by_date_as_a_single_solve_reads_it():
     assert swept.records['has_primal'].all(), 'every window solved from the rows of the start it covers'
 
 
-def test_a_window_refuses_an_index_that_carries_a_relation_as_a_single_solve_does():
-    """A window replaced the index with its own labels, so a column the door refuses on an index went unseen."""
+def test_a_window_refuses_labels_that_carry_a_relation_as_a_single_solve_does():
+    """A window replaced the labels table with its own labels, so a column the door refuses there went unseen."""
     spec = override(
         WINDOW,
         **{'dimensions.season': {'dtype': 'str'}, 'relations.season_of': {'key': 'snapshot', 'values': 'season'}},
@@ -1180,7 +1180,7 @@ def test_a_window_refuses_an_index_that_carries_a_relation_as_a_single_solve_doe
         'season_of': pl.DataFrame({'snapshot': range(8), 'season': seasons}),
         'snapshot': pl.DataFrame({'snapshot': range(8), 'season_of': seasons}),
     }
-    carried = "index for dimension 'snapshot' carries a 'season_of' column"
+    carried = "the labels table of dimension 'snapshot' carries a 'season_of' column"
     with pytest.raises(sps.errors.DataError, match=carried):
         sps.solve(spec, sources)
     with pytest.raises(sps.errors.DataError, match=carried):
@@ -1413,10 +1413,10 @@ def test_every_executor_gives_the_same_answers_in_the_same_order(make_executor):
 
 @pytest.mark.parametrize('make_executor', EXECUTORS)
 def test_every_executor_carries_expressions_the_same(make_executor):
-    """Expression frames cross the wire the way primals do — encoded and back.
+    """Expression tables cross the wire the way primals do — encoded and back.
 
     The process pools are the point: a thread pool never encodes, so only they
-    exercise `_encode`/`_decode` on the expression frames a worker returns.
+    exercise `_encode`/`_decode` on the expression tables a worker returns.
     """
     spec = override(DISPATCH, **{'expressions.spend': 'sum(p * cost, over=generator)'})
     sources = scenario_sources()
@@ -1453,7 +1453,7 @@ def test_a_thread_pool_does_not_encode_for_a_boundary_it_never_crosses(monkeypat
 
 
 def test_the_model_and_its_plan_both_cross_a_process():
-    """A worker is handed the document and the lowered plan, under every executor.
+    """A worker is handed the document and the compiled program, under every executor.
 
     A slice reads no file: it is handed the `Spec`.
     """
@@ -1469,7 +1469,7 @@ def test_a_failing_slice_reports_the_real_error_across_a_process_boundary():
     """An exception has to survive pickling or the cause is lost.
 
     A custom ``__init__`` signature is the classic way this breaks, and it
-    surfaces as an unrelated ``TypeError`` raised while *unpickling* — so the
+    shows up as an unrelated ``TypeError`` raised while *unpickling* — so the
     worker's real complaint never arrives.
     """
     broken = {**scenario_sources()}
@@ -1769,21 +1769,21 @@ def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
 
 def test_a_bulk_export_of_a_sweep_that_solved_nothing_is_refused():
     """`to_dataset` writes no empty answer: a sweep every slice of which was
-    infeasible holds no variable frames, and it refuses with the sentence
+    infeasible holds no variable tables, and it refuses with the sentence
     `primal` gives. The names are resolved before xarray is reached, so a bare
     install gets the sentence rather than an ImportError."""
     sources = scenario_sources()
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
     runs = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'))
 
-    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable frames at all'):
+    with pytest.raises(sps.errors.SpecsolveError, match='holds no variable tables at all'):
         runs.to_dataset()
 
 
 def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
     """`save` is not an export, and an infeasible study is an answer.
 
-    A single solve that left no values writes its record and no frames, and a
+    A single solve that left no values writes its record and no tables, and a
     sweep of them does the same.
     """
     sources = scenario_sources()
@@ -1795,7 +1795,7 @@ def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
     assert records['termination_condition'].unique().to_list() == ['infeasible'], (
         'every slice terminated infeasible, and the record says so'
     )
-    assert not (out / 'primal').exists(), 'and no frames are written, there being none'
+    assert not (out / 'primal').exists(), 'and no tables are written, there being none'
     assert sps.load_sweep(out).records.height == records.height, 'the saved study reads back'
 
 
@@ -1815,9 +1815,9 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
 
 
 def test_a_loaded_sweep_is_held_and_a_scanned_one_is_spilled(tmp_path):
-    """The two verbs give the same study and differ in where its frames are.
+    """The two verbs give the same study and differ in where its tables are.
 
-    `scan_sweep` leaves the frames on disk, so it owes the directory every
+    `scan_sweep` leaves the tables on disk, so it owes the directory every
     read. `load_sweep` reads them in, so the directory is free afterwards.
     """
     spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
@@ -1844,7 +1844,7 @@ def test_a_reader_for_a_name_the_sweep_lacks_fails_the_way_primal_does(sweep):
 def test_an_axis_key_name_overrides_what_it_derived_and_refuses_a_collision():
     """The derived name is right by default and the caller's word wins.
 
-    A key that is a declared dimension would collide with a column the frames
+    A key that is a declared dimension would collide with a column the tables
     carry.
     """
     runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name='case'))
@@ -2055,7 +2055,7 @@ def test_a_window_over_a_dimension_the_spec_does_not_declare_is_refused_by_name(
     ) as refused:
         sps.solve_over(WINDOW, horizon_sources(8), sps.EachWindow('snapshots', steps=4, lookahead=0))
     assert 'is sliced with EachLabel' in str(refused.value), (
-        'the refusal names the axis for a dim the spec does not declare'
+        'the refusal names the axis for a dimension the spec does not declare'
     )
 
 
@@ -2063,7 +2063,7 @@ def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
     """A window is a run of consecutive labels, and only an ordered dimension says which labels are consecutive.
 
     Nothing in the dispatch model steps along `snapshot`, so the coupling
-    check passes it, and the windows would follow the row order of the index.
+    check passes it, and the windows would follow the row order of its labels.
     """
     unordered = override(DISPATCH, **{'dimensions.snapshot': {'dtype': 'int'}})
     sources = {
@@ -2080,7 +2080,7 @@ def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
 
 
 def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
-    """`EachLabel` squeezes its dim out of every source, so a declared dimension would be left with no data."""
+    """`EachLabel` squeezes its dimension out of every source, so a declared dimension would be left with no data."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"EachLabel\('generator'\) squeezes 'generator'"):
         sps.solve_over(WINDOW, horizon_sources(8), sps.EachLabel('generator', key_name='g'))
 
@@ -2091,12 +2091,12 @@ def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
 
 
 #: Every shape `build` takes for a source that does not carry the axis: a
-#: number for a scalar parameter, a bare sequence for an index, a
+#: number for a scalar parameter, a bare sequence for a dimension's labels, a
 #: `{label: value}` map. None of them is a table: the axis has nothing to filter
 #: in them.
 NOT_A_TABLE = [
     pytest.param(WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 0.0}, id='a-number'),
-    pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'snapshot': range(4)}, id='a-bare-index'),
+    pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'snapshot': range(4)}, id='bare-labels'),
     pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'cost': {'wind': 1.0, 'gas': 50.0}}, id='a-map'),
 ]  # fmt: skip
 
@@ -2190,7 +2190,7 @@ def test_a_failing_slice_is_named(make_executor):
 
 @pytest.mark.parametrize('key_name', ['value', 'status', 'termination_condition', 'objective'])
 def test_a_key_that_collides_with_a_fixed_column_is_refused(key_name):
-    """`value` collides in every frame a reader returns, and the other three
+    """`value` collides in every table a reader returns, and the other three
     in `objective` — where the key would silently replace the column rather
     than join it."""
     with pytest.raises(sps.errors.SpecsolveError, match=f'key_name={key_name!r} .* column'):
@@ -2202,7 +2202,7 @@ def test_a_key_named_like_a_metrics_column_is_refused_before_a_slice_is_solved(k
     """`Sweep.metrics` carries the key beside every `Metrics` column.
 
     The guard named only the `Record` columns, so a key named like a metric
-    passed it: every slice solved, then polars refused the frame with a
+    passed it: every slice solved, then polars refused the table with a
     `DuplicateError`, and again on every read of a spilled sweep.
     """
     with pytest.raises(sps.errors.SpecsolveError, match=f'key_name={key_name!r} .* column'):
@@ -2375,9 +2375,9 @@ def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
 
 
 def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_path):
-    """`spill_to=` writes each slice's frames as the fold goes and keeps none of them.
+    """`spill_to=` writes each slice's tables as the fold goes and keeps none of them.
 
-    What comes back through `scan` is the frame the in-memory reader would
+    What comes back through `scan` is the table the in-memory reader would
     have returned — primal, dual and expression, the answer or per window —
     so the two ways of running a sweep cannot answer differently.
     """
@@ -2401,14 +2401,14 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
         pytest.param(lambda runs: runs.evaluate('spend'), id='expression'),
     ],
 )
-def test_the_frame_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
-    """A spilled sweep's frames lie on disk, and a frame reader reads the one
+def test_the_table_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
+    """A spilled sweep's tables lie on disk, and a table reader reads the one
     name it is asked for, so it answers what the sweep held in memory answers."""
     assert read(_spilled(tmp_path)).equals(read(priced))
 
 
 def test_an_export_reads_a_spilled_sweep_as_a_held_one(priced, tmp_path):
-    """`to_dataset` reads each name off the files, as the frame readers do."""
+    """`to_dataset` reads each name off the files, as the table readers do."""
     pytest.importorskip('xarray')
     assert _spilled(tmp_path).to_dataset().equals(priced.to_dataset())
 
@@ -2530,7 +2530,7 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
 
 def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     """The objective file is written last and is what marks a slice done, so
-    a slice whose frames landed but whose record did not is solved again."""
+    a slice whose tables landed but whose record did not is solved again."""
     _spilled(tmp_path)
     (tmp_path / 'record' / '000001.parquet').unlink()
     built = builds(driver)
@@ -2611,7 +2611,7 @@ def test_scan_on_a_spilled_sweep_says_what_it_does_hold(tmp_path):
 def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep):
     """A name is held per slice that produced it, not per slice, so an export
     cannot count positions: it reads the key off the rows, and a slice with no
-    rows of a name — a variable every row of which the slice masked — has no
+    rows of a name — a variable every row of which the slice left absent — has no
     entry, which is what the spill writes for it."""
     index = sweep._by_slice('primal')['p']
     assert list(index) == ['high', 'low', 'mid'], 'one entry per slice, keyed by its own key'
@@ -2623,7 +2623,7 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
 
 
 def test_a_sweep_archive_carries_its_carry(tmp_path):
-    """The carry is config the frames do not hold, so the archive stores it beside the axis."""
+    """The carry is config the tables do not hold, so the archive stores it beside the axis."""
     sps.solve_over(
         WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
@@ -2666,12 +2666,12 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
 
 
 def test_a_scanned_sweep_archive_evaluates_the_same(tmp_path):
-    """A sweep left on disk (`scan_archive`) evaluates against those frames, the same values held reads."""
+    """A sweep left on disk (`scan_archive`) evaluates against those tables, the same values held reads."""
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
     expr = 'sum(p * cost, over=generator)'
     whole = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'whole').sweep.evaluate(expr)
     scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').sweep.evaluate(expr)
-    assert scanned.equals(whole), 'a scanned sweep evaluates against the frames on disk, the same answer'
+    assert scanned.equals(whole), 'a scanned sweep evaluates against the tables on disk, the same answer'
 
 
 def test_a_live_sweep_has_no_model_to_evaluate_against():
@@ -2784,7 +2784,7 @@ def test_the_window_a_carried_sweep_stopped_at_builds_alone(tmp_path):
 def test_a_slice_the_sweep_never_reached_is_refused(key, refusal, tmp_path):
     """Past where a carried sweep stopped, no slice was built, so there is nothing to build one from.
 
-    Read anyway, the frames would be empty and the slice built from a carried
+    Read anyway, the tables would be empty and the slice built from a carried
     parameter with no rows.
     """
     axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
@@ -2834,7 +2834,7 @@ def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with
     """A slice was rebuilt from the seed in the sources, whatever the slice before it had handed on.
 
     Here the first draw leaves `seed` at 0, so the second builds no `p`. The
-    rebuild read `seed` as 1, expected a `p` frame the archive does not hold,
+    rebuild read `seed` as 1, expected a `p` table the archive does not hold,
     and refused its own answer.
     """
     sources = {
@@ -2867,11 +2867,11 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
 
 
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
-    """`evaluate` stitches as `primal` does — the sliced dim back, the slice key gone."""
+    """`evaluate` stitches as `primal` does — the sliced dimension back, the slice key gone."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     reindexed = answer.evaluate('sum(p, over=generator)')
-    assert reindexed.columns == ['snapshot', 'value'], 'the sliced dim is restored and the slice key dropped'
+    assert reindexed.columns == ['snapshot', 'value'], 'the sliced dimension is restored and the slice key dropped'
     by_hand = answer.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
     assert reindexed.sort('snapshot').equals(by_hand.select('snapshot', 'value')), (
         'the evaluated expression equals the answer of the primal summed by hand'
@@ -2880,15 +2880,15 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 
 
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
-    """A scalar-per-window quantity has no local index to restore, so its answer is refused — as `expression` is."""
+    """A scalar-per-window quantity has no labels of the sliced dimension to restore, so its answer is refused — as `expression` is."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     with pytest.raises(sps.errors.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
 
 
-#: An index of another dimension that carries the axis column, under each axis.
-CUT_INDEXES = [
+#: The labels table of another dimension, carrying the axis column, under each axis.
+CUT_LABELS = [
     pytest.param(
         MYOPIC,
         lambda: {
@@ -2896,17 +2896,17 @@ CUT_INDEXES = [
             'generator': pl.DataFrame({'generator': ['wind', 'gas', 'wind', 'gas'], 'period': [1, 1, 2, 2]}),
         },
         sps.EachLabel('period'),
-        "index for dimension 'generator' carries a 'period' column, and EachLabel('period')",
+        "the labels table of dimension 'generator' carries a 'period' column, and EachLabel('period')",
         id='each-label',
     ),
 ]
 
 
-@pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_INDEXES)
-def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a_slice(spec, sources, axis, match):
-    """An index lists the labels every slice has; which of them a slice has is a parameter or a relation.
+@pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_LABELS)
+def test_the_labels_of_another_dimension_carrying_the_axis_are_refused_before_a_slice(spec, sources, axis, match):
+    """A labels table lists the labels every slice has; which of them a slice has is a parameter or a relation.
 
-    Cut by the axis, the index would make each slice a model over other labels.
+    Cut by the axis, the labels table would make each slice a model over other labels.
     """
     with (
         mock.patch.object(type(axis), '_slice', side_effect=AssertionError('the axis cut the sources')),
@@ -2917,8 +2917,8 @@ def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a
 
 
 def test_a_window_cuts_what_the_spec_declares_over_the_dimension_and_nothing_else():
-    """A window cuts by declaration, so an index of another dimension that happens to carry a column of the
-    windowed name is read as the index it is."""
+    """A window cuts what the spec declares, so the labels table of another dimension that happens to carry a column
+    of the windowed name is read as the labels table it is."""
     sources = {**horizon_sources(8), 'generator': pl.DataFrame({'generator': GENERATORS, 'snapshot': [0, 1]})}
     runs = sps.solve_over(WINDOW, sources, WINDOW_AXIS)
     assert runs.primal('p')['generator'].unique().sort().to_list() == sorted(GENERATORS), 'every window has both'
@@ -2930,25 +2930,25 @@ def test_one_window_over_the_whole_horizon_is_the_single_solve():
     whole = sps.solve(WINDOW, sources)
     windowed = sps.solve_over(WINDOW, sources, sps.EachWindow('snapshot', steps=12, lookahead=0))
     assert windowed.records['objective'].to_list() == pytest.approx([whole.objective]), 'one window, one objective'
-    assert windowed.primal('soc').equals(whole.primal('soc')), "the answer is the single solve's frame"
+    assert windowed.primal('soc').equals(whole.primal('soc')), "the answer is the single solve's table"
     assert windowed.primal('p').columns == whole.primal('p').columns, 'with its dimensions in the same order'
 
 
-def test_a_label_the_index_lacks_is_refused_under_windows_as_for_a_single_solve():
-    """A row whose label the index lacks falls in no window, so cutting alone would drop it without a word.
+def test_a_label_the_dimension_does_not_have_is_refused_under_windows_as_for_a_single_solve():
+    """A row whose label the dimension does not have falls in no window, so cutting alone would drop it without a word.
 
     Every window keeps such rows, and the door refuses them as it does for a
     single solve.
     """
     sources = horizon_sources(8)
     sources['load'] = pl.concat([sources['load'], pl.DataFrame({'snapshot': [99], 'value': [1.0]})])
-    with pytest.raises(sps.errors.DataError, match=r"label\(s\) in dimension 'snapshot' that are not coordinates"):
+    with pytest.raises(sps.errors.DataError, match=r"label\(s\) in dimension 'snapshot' that are not labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)
 
 
-def test_a_window_needs_the_index_a_single_solve_needs():
-    """The labels a window cuts are the dimension's own, in index order, so the index has to be there."""
+def test_a_window_needs_the_labels_a_single_solve_needs():
+    """The labels a window cuts are the dimension's own, in label order, so they have to be there."""
     sources = horizon_sources(8)
     del sources['snapshot']
-    with pytest.raises(sps.errors.DataError, match="dimension 'snapshot' has no index"):
+    with pytest.raises(sps.errors.DataError, match="dimension 'snapshot' has no labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)

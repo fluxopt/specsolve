@@ -1,9 +1,9 @@
-"""Polars engine: build the model frames, hand them to a sink, read the answer back.
+"""Polars engine: build the model tables, hand them to a sink, read the answer back.
 
 The engine owns the lifecycle — a build, its solver, the counters and clocks
 [`Engine.diagnostics`][] reports — and none of the three questions it
 asks on the way: what the data is ([`attaching`][specsolve._engine.attaching]),
-what each declaration contributes ([`assembly`][specsolve._engine.assembly]),
+what each entry contributes ([`assembly`][specsolve._engine.assembly]),
 how a row or a solve reads back ([`readback`][specsolve._engine.readback]).
 The lane is described in docs/development/architecture.md.
 """
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 
 def _statuses(codes: np.ndarray) -> pl.Series:
-    """Basis status codes as the series a frame is laid out from."""
+    """Basis status codes as the series a table is laid out from."""
     return pl.Series(VALUE, BASIS_STATUSES, dtype=BASIS).gather(codes)
 
 
@@ -101,7 +101,7 @@ def _no_built_model(doing: str) -> str:
 
 
 class Engine:
-    """Build a ``Program`` into polars frames, then sink it."""
+    """Build a ``Program`` into polars tables, then sink it."""
 
     def __init__(self) -> None:
         #: The build, or ``None`` where there is not one — closed, released by
@@ -134,14 +134,14 @@ class Engine:
     def build(
         self, program: program.Program, sources: Mapping[str, pl.LazyFrame], attached: AttachedSources | None = None
     ) -> None:
-        """Attach *sources*, then build every declaration into the model frames.
+        """Attach *sources*, then build every entry into the model tables.
 
         *attached* is *sources* already attached, as reading the assumptions
         left them, and is not attached again; the time that attach took is
         recorded either way. A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
-        frames. A build that raises leaves no model rather than half of one.
+        tables. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
             self._solver.structure()
@@ -157,7 +157,7 @@ class Engine:
             self._built = assembly.run()
 
     # ------------------------------------------------------------------
-    # sinks — see _sinks/; the engine only supplies the frames
+    # sinks — see _sinks/; the engine only supplies the tables
     # ------------------------------------------------------------------
 
     def row(self, name: str, coordinate: Mapping[str, object]) -> ConstraintRow:
@@ -235,9 +235,9 @@ class Engine:
             solver_name: One of [`SOLVERS`][specsolve._sinks.SOLVERS].
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
-            lower: How an expression the caller writes becomes a plan node,
+            lower: How an expression the caller writes becomes a program node,
                 for [`evaluate`][specsolve._result.Result.evaluate], or
-                ``None`` for a build from an already-lowered ``Program``.
+                ``None`` for a build from an already-compiled ``Program``.
             outputs: Which of
                 [`OUTPUTS`][specsolve._outputs.OUTPUTS] the
                 result carries, already checked.
@@ -342,7 +342,7 @@ class Engine:
         )
 
     def infeasible_subsystem(self) -> InfeasibleSubsystem:
-        """The infeasible subsystem of the last solve, by declaration and coordinate. See [`infeasible_subsystem`][specsolve._api.Model.infeasible_subsystem].
+        """The infeasible subsystem of the last solve, by entry and coordinate. See [`infeasible_subsystem`][specsolve._api.Model.infeasible_subsystem].
 
         Raises:
             SpecsolveError: No solve since the last build, update or close; a
@@ -394,10 +394,10 @@ class Engine:
         dual: pl.Series | None,
         dual_ray: pl.Series | None,
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
-        """One solve's answer as one frame per declaration — a [`Result`][]'s own.
+        """One solve's answer as one table per entry — a [`Result`][]'s own.
 
-        The frames reference this build's label frames, which [`build`][]
-        replaces rather than mutates. A ``None`` vector yields no frames rather
+        The tables reference this build's index tables, which [`build`][]
+        replaces rather than mutates. A ``None`` vector yields no tables rather
         than empty ones.
         """
         return (
@@ -407,7 +407,7 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
@@ -429,7 +429,7 @@ class Engine:
                 raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
-        """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
+        """A vector over the rows as one table per constraint, as [`_read_back`][] lays out a dual."""
         model = self._model
         return {
             name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
@@ -437,7 +437,7 @@ class Engine:
         }
 
     def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
-        """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
+        """A vector over the columns as one table per variable, as [`_read_back`][] lays out a primal."""
         model = self._model
         return {
             name: readback.laid_out(model.attached, model.variables[name], v.dims, values)
@@ -473,14 +473,14 @@ class Engine:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame] | None:
         """The ad-hoc evaluator for a saved solution, over this rebuilt model.
 
-        This build supplies the labels that put the saved values back in vector
+        This build supplies the solver indices that put the saved values back in vector
         order. It comes back where *lower* is given.
 
         Args:
-            primals: The saved ``(dims…, value)`` frame per variable.
+            primals: The saved ``(dims…, value)`` table per variable.
             duals: The same per constraint, or ``None`` where the solve left no duals.
             no_duals: Why there are no duals, or ``None`` when *duals* holds them.
-            lower: How an expression the caller writes becomes a plan node.
+            lower: How an expression the caller writes becomes a program node.
         """
         model = self._model
         primal = readback.reordered(model.attached, model.variables, model.program.variables, primals)
@@ -504,7 +504,7 @@ class Engine:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model and close a loaded solver. A [`Result`][] keeps its own frames."""
+        """Drop the built model and close a loaded solver. A [`Result`][] keeps its own tables."""
         if self._solver is not None:
             self._solver.close()
             self._solver = None
@@ -520,7 +520,7 @@ class Engine:
 
 
 def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
-    """One [`Diagnostics`][specsolve._result.Diagnostics] frame: a row per name in *measured*, in build order.
+    """One [`Diagnostics`][specsolve._result.Diagnostics] table: a row per name in *measured*, in build order.
 
     *kind* names the first column, and the remaining *columns* carry each
     value in order — a scalar for one column, a tuple for several.
@@ -541,11 +541,11 @@ def expressions_of(
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
     Args:
-        program: A lowered program with no variables — a calculation, so every
+        program: A compiled program with no variables — a calculation, so every
             expression has a value with no solver.
         sources: Tidied sources, as
             [`tidy_sources`][specsolve._sources.tidy_sources] produces.
-        lower: How an ad-hoc expression becomes a plan node in the model's
+        lower: How an ad-hoc expression becomes a program node in the model's
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:

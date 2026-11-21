@@ -305,7 +305,7 @@ def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -
     steps = pl.concat([pl.read_parquet(file) for file in held])
     assert p.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
     assert sorted(file.parent.parent.name for file in held) == RUNS, (
-        'every run holds the index of t, a rolling horizon the whole of it'
+        'every run holds the labels of t, a rolling horizon the whole of it'
     )
 
 

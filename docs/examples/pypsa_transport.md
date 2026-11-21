@@ -69,7 +69,7 @@ PyPSA linear optimal power flow at its smallest: a transport model — linear ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -157,7 +157,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_transport.yaml', sources) as solution:
         solution.objective  # 22000.0
         solution.dual('nodal_balance')
@@ -225,7 +225,7 @@ PyPSA and reproduced in its own model: **a transport model** (this one) ·
 **This model hit the ceiling once.** PyPSA's `p_min_pu = -1` is a bound of
 `-rating`, an expression `bounds:` cannot take. It ships as a `neg_rating`
 column instead. The gap is
-[issue #31](https://github.com/fluxopt/specsolve/issues/31), verdict *primitive*,
+[issue #31](https://github.com/fluxopt/specsolve/issues/31), verdict *operator*,
 and [the ledger](../development/verification.md#what-a-port-could-not-say) records it.
 
 ---

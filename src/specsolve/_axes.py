@@ -3,7 +3,7 @@
 An [`EachLabel`][] axis squeezes a dimension the model does not declare: each
 slice is the sources at one label, without its column, and a whole answer. An
 [`EachWindow`][] axis keeps a dimension the model does declare and cuts it
-into windows of its labels, and also says how each window's frames are
+into windows of its labels, and also says how each window's tables are
 stitched back over that dimension. An axis's ``carry=`` is threaded here too:
 [`as_built`][] gives each slice as it is built.
 """
@@ -23,7 +23,7 @@ from mathspec.errors import did_you_mean
 from specsolve._collect import collected
 from specsolve._frames import as_frame
 from specsolve._names import VALUE
-from specsolve._sources import declared_dtype_of, in_microseconds, index_labels, least_value, parameter_frame
+from specsolve._sources import declared_dtype_of, dimension_labels, in_microseconds, least_value, parameter_frame
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -56,7 +56,7 @@ class Slice(NamedTuple):
 
 @dataclass(frozen=True)
 class Stitch:
-    """The way from a windowed sweep's frames to its answer over the dimension it cut.
+    """The way from a windowed sweep's tables to its answer over the dimension it cut.
 
     ``owned`` is ``(key, dim)`` for the labels each window owns; the lookahead
     rows are not in it.
@@ -68,7 +68,7 @@ class Stitch:
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
 
-        A frame with no [`dim`][] column is over no label a window owns.
+        A table with no [`dim`][] column is over no label a window owns.
         """
         if self.dim in frame.collect_schema().names():
             return None
@@ -105,7 +105,7 @@ class EachLabel:
 
     Each slice squeezes *dim*: the parameters and relations carrying it are
     cut to one label and the column dropped, so the model never mentions it.
-    A *dim* the spec declares is refused, and so is an index that carries it.
+    A *dim* the spec declares is refused, and so is a labels table that carries it.
     Every other source passes through untouched. Slices run in sorted label
     order, and the answer lifts each label back as the key column, named
     *dim* unless ``key_name=`` names it.
@@ -138,12 +138,12 @@ class EachLabel:
         return self.dim if self.key_name is None else self.key_name
 
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
-        """Refuse a *dim* the spec declares, and an index that carries it.
+        """Refuse a *dim* the spec declares, and a labels table that carries it.
 
         Every slice squeezes *dim* out of its sources, so nothing would supply
-        a dimension of that name. An index says which labels the model has,
-        and a sweep cuts the tables that carry the axis, so a carried index
-        would make each slice a model over other labels.
+        a dimension of that name. A dimension's labels say which labels the
+        model has, and a sweep cuts the tables that carry the axis, so labels
+        carrying it would make each slice a model over other labels.
         """
         if self.dim in program.dimensions:
             raise SpecsolveError(
@@ -156,9 +156,9 @@ class EachLabel:
             if table is None or self.dim not in table.collect_schema().names():
                 continue
             raise DataError(
-                f"index for dimension '{dim}' carries a '{self.dim}' column, and EachLabel"
-                f"('{self.dim}') cuts every table that carries '{self.dim}'. An index is not cut: it lists "
-                f"the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
+                f"the labels table of dimension '{dim}' carries a '{self.dim}' column, and EachLabel"
+                f"('{self.dim}') cuts every table that carries '{self.dim}'. A dimension's labels are not cut: "
+                f"they are the labels every slice has. Pass the '{dim}' labels alone, and say which of them each "
                 f"slice has in a parameter or a relation over ('{dim}', '{self.dim}'), where a missing row "
                 f'already reads as absent.'
             )
@@ -180,16 +180,16 @@ class EachLabel:
 class EachWindow:
     """One slice per window of consecutive labels of *dim*, an ordered dimension the spec declares.
 
-    Each window keeps *dim* and is the model over its own labels: the index
-    of *dim* is narrowed to them, and every parameter and relation over *dim*
+    Each window keeps *dim* and is the model over its own labels: the labels
+    of *dim* are narrowed to them, and every parameter and relation over *dim*
     is cut to the rows they hold. Nothing is squeezed or renamed, so the spec
-    and the sources are the ones a single solve takes, and every frame comes
+    and the sources are the ones a single solve takes, and every table comes
     back over *dim*'s own labels.
 
     Each window keeps ``steps`` labels and sees ``lookahead`` beyond them, so
     a ``lookahead`` above zero is overlap. An ``int`` keeps the same number
     every window; a sequence keeps those numbers in order, for a telescoping
-    horizon or a month at a time. Both count labels in index order, not
+    horizon or a month at a time. Both count labels in label order, not
     values, so datetimes, strings and gapped integers all work.
 
     A rule for a window's first row is written ``position(dim) == 0``: a
@@ -199,7 +199,7 @@ class EachWindow:
 
     Whether the model *can* be cut this way is asked before a slice is taken
     ([separability](https://mathspec.readthedocs.io/en/latest/reference/reading/#asking-whether-an-axis-can-be-cut)):
-    a coupling along *dim* is refused, naming the declaration and the change
+    a coupling along *dim* is refused, naming the entry and the change
     that would lift it, and ``lookahead`` has to cover what the rows read
     ahead. What the rows read *behind* is the rolling-horizon seed, met by the
     edge policy, and is not refused.
@@ -248,7 +248,7 @@ class EachWindow:
         return {'each': 'window', 'dim': self.dim, 'steps': steps, 'lookahead': self.lookahead, **_where_set(self)}
 
     def _key_name(self) -> str:
-        """Where the window started, never ``dim``, which every frame of the window already carries."""
+        """Where the window started, never ``dim``, which every table of the window already carries."""
         return f'{self.dim}_start' if self.key_name is None else self.key_name
 
     def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
@@ -295,7 +295,7 @@ class EachWindow:
 
     def _slice(self, program: Program, sources: Mapping[str, Source], key_name: str) -> tuple[list[Slice], Stitch]:
         """One slice per window, keyed by its first label; the [`Stitch`][] records what each owns."""
-        labels = index_labels(program, sources, self.dim).to_list()
+        labels = dimension_labels(program, sources, self.dim).to_list()
         tables = _tables_over(program, sources, self.dim, labels)
         out: list[Slice] = []
         owned: list[dict[str, object]] = []
@@ -348,7 +348,7 @@ class CarryRule:
     """One resolved carry: which variable moves into a parameter, and how.
 
     ``dropped`` is the one dimension the carry collapses, and ``None`` where the
-    whole frame moves forward.
+    whole table moves forward.
     """
 
     variable: str
@@ -356,7 +356,7 @@ class CarryRule:
 
     @classmethod
     def resolved(cls, program: Program, parameter: str, variable: str) -> CarryRule:
-        """One carry checked against the plan, without reading data."""
+        """One carry checked against the program, without reading data."""
         if parameter not in program.parameters:
             raise SpecsolveError(f'carry writes parameter {parameter!r}, which the spec does not declare')
         if variable not in program.variables:
@@ -483,7 +483,7 @@ def _one_label(dim: str, key: Label, table: pl.LazyFrame) -> pl.LazyFrame:
 
 def _one_window(dim: str, window: Sequence[Label], table: pl.LazyFrame) -> pl.LazyFrame:
     """*table*'s rows at the labels of *window* along its *dim* column."""
-    return _as_the_index_holds(table, [dim], window).filter(pl.col(dim).is_in(window))
+    return _as_the_labels_hold(table, [dim], window).filter(pl.col(dim).is_in(window))
 
 
 def _tables_over(
@@ -493,22 +493,22 @@ def _tables_over(
 
     A parameter over *dim* is cut on its *dim* column, and a relation on every
     column it declares over *dim*. One number is every window's number and is
-    not cut. A mapping or a sequence is spread over the whole index first, as
+    not cut. A mapping or a sequence is spread over all of *dim*'s labels first, as
     the door reads it, so a window cuts the same table a single solve attaches.
-    The strangers are the rows holding a null or a label the index lacks. They
+    The strangers are the rows holding a null or a label *dim* does not have. They
     are found once, and every window keeps them, so the door refuses them as
     it does for a single solve. A table short of a column it is cut on is left
     for the door to refuse.
 
     Raises:
         DataError: A label finer than a microsecond, which the cast that
-            matches it to the index would round onto another label.
+            matches it to the labels would round onto another label.
     """
-    index = {dim: pl.LazyFrame({dim: labels})}
+    listed = {dim: pl.LazyFrame({dim: labels})}
     found: dict[str, tuple[pl.LazyFrame, tuple[str, ...], str]] = {}
     for name, parameter in program.parameters.items():
         if dim in parameter.dims and name in sources and not isinstance(sources[name], (bool, int, float)):
-            found[name] = (parameter_frame(name, parameter, sources[name], index), (dim,), 'parameter')
+            found[name] = (parameter_frame(name, parameter, sources[name], listed), (dim,), 'parameter')
     for name, relation in program.relations.items():
         columns = tuple(role for role, over in relation.columns if over == dim)
         if columns and name in sources and (table := as_frame(sources[name], relation.roles)) is not None:
@@ -519,7 +519,7 @@ def _tables_over(
         if set(columns) <= set(schema.names()):
             if finer := [column for column in columns if schema[column] == pl.Datetime('ns')]:
                 in_microseconds(table.select(finer).unique().pipe(collected), f"{kind} '{name}'")
-            held = _as_the_index_holds(table, columns, labels)
+            held = _as_the_labels_hold(table, columns, labels)
             strange = pl.any_horizontal(~pl.col(column).is_in(labels).fill_null(False) for column in columns)
             out[name] = (held, columns, held.filter(strange).pipe(collected))
     return out
@@ -533,7 +533,7 @@ def _within(
     return pl.concat([inside, strangers.lazy()]) if strangers.height else inside
 
 
-def _as_the_index_holds(table: pl.LazyFrame, columns: Sequence[str], labels: Sequence[Label]) -> pl.LazyFrame:
+def _as_the_labels_hold(table: pl.LazyFrame, columns: Sequence[str], labels: Sequence[Label]) -> pl.LazyFrame:
     """*table* with *columns* typed as *labels* are, so that a membership test compares like with like.
 
     A datetime is held in microseconds. Where the labels are datetimes, a

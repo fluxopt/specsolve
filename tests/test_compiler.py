@@ -1,20 +1,20 @@
-"""The compiler is lazy: a plan node goes in and a query comes out, no row read.
+"""The compiler is lazy: a program node goes in and a query comes out, no row read.
 
 This is the only place query shape is asserted. Every property here can
 regress while every model still solves to the right answer:
 
 - ``AGGREGATE`` absent from ``Sum``, through a relation or not; duplicates collapse once,
   in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
-- ``OVER`` absent from a translation, which joins the dim table twice instead.
+- ``OVER`` absent from a translation, which joins the dimension table twice instead.
 - the modulo appearing only when a translation wraps.
-- a dimension comparison *filtering* a column the frame already carries rather
+- a dimension comparison *filtering* a column the table already carries rather
   than joining to find it, and a constant bound costing no join at all.
-- ``SEMI JOIN`` present for a mask that reads some of the frame's dims and
+- ``SEMI JOIN`` present for a condition that reads some of the table's dimensions and
   absent for one that reads them all.
-- ``INNER`` rather than ``LEFT`` for a name the mask is certain of, and ``LEFT``
+- ``INNER`` rather than ``LEFT`` for a name the condition is certain of, and ``LEFT``
   again once that name sits under an ``Or``.
 
-The frames are empty frames with the right schemas: a schema is all it takes
+The tables are empty LazyFrames with the right schemas: a schema is all it takes
 to compile. The assertions are about shape, not exact text.
 """
 
@@ -30,8 +30,8 @@ from mathspec import program
 
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.labels import Labelled
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
+from specsolve._engine.indices import Indexed
 from specsolve._engine.scope import Scope
 from specsolve.errors import SpecsolveError
 
@@ -80,7 +80,7 @@ PARAMETERS = {
     'available': pl.LazyFrame(schema={'generator': pl.String, 'value': pl.Float64}),
 }
 VARIABLES = {
-    'p': Labelled(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'var_label': pl.Int64}), 0, 0)
+    'p': Indexed(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'col_index': pl.Int64}), 0, 0)
 }
 
 
@@ -135,7 +135,7 @@ def test_a_variable_compiles_to_one_linear_term_over_its_dims():
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
     assert term.kind == 'linear'
-    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
 
 
 def test_a_parameter_is_a_constant_term_not_a_linear_one():
@@ -156,7 +156,7 @@ def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     compiled = compiler().expression(program.Multiply(P, COST, dims=P.dims), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
     assert 'JOIN' in query(term.frame)
 
 
@@ -171,7 +171,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 
 # ---------------------------------------------------------------------------
-# shape operators — each rewrites exactly one dim column
+# shape operators — each rewrites exactly one dimension column
 # ---------------------------------------------------------------------------
 
 
@@ -180,14 +180,14 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     compiled = compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot',)
-    assert columns(term.frame) == ['snapshot', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'col_index', 'coeff']
     assert 'AGGREGATE' not in query(term.frame)
 
 
 def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     """`p * sum(load, over=snapshot)` holds one row per slot of `p`.
 
-    A sum leaves one row per summand for assembly to add up. Joined to `p` as
+    A sum leaves one row per term for assembly to add up. Joined to `p` as
     it was, each of those rows repeated every term, so the product held one row
     per slot and snapshot, and a year of hourly snapshots ran out of memory.
     """
@@ -200,11 +200,11 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
         {
             'snapshot': [s for s in snapshots for _ in generators],
             'generator': generators * len(snapshots),
-            'var_label': range(len(snapshots) * len(generators)),
+            'col_index': range(len(snapshots) * len(generators)),
         }
     )
     total = program.Sum(LOAD, (program.Axis('snapshot'),), dims=())
-    compiled = Compiler(Scope(declared(), data, {'p': Labelled(slots, 0, 72)})).expression(
+    compiled = Compiler(Scope(declared(), data, {'p': Indexed(slots, 0, 72)})).expression(
         program.Multiply(P, total, dims=P.dims), 'test'
     )
     terms = compiled.linear[0].frame.collect()
@@ -212,8 +212,8 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     assert terms['coeff'].unique().to_list() == [24.0], 'every term carries the whole total'
 
 
-def masked_compiler() -> Compiler:
-    """A compiler over two masked variables, since a restriction only crosses between terms."""
+def narrowed_compiler() -> Compiler:
+    """A compiler over two variables with a condition, since a restriction only crosses between terms."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -234,21 +234,21 @@ def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
     Restricting a term by its own coordinates returns the rows it was
-    given, so a lone masked term costs no join.
+    given, so a lone term with a condition costs no join.
     """
-    both = masked_compiler().expression(
+    both = narrowed_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
     assert [joins(t.frame) for t in both.linear] == [1, 1]
     assert all('SEMI JOIN' in query(t.frame) for t in both.linear)
 
-    alone = masked_compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
+    alone = narrowed_compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
     assert joins(alone.linear[0].frame) == 0
 
 
 def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
     """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
-    compiled = masked_compiler().expression(
+    compiled = narrowed_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
     )
     assert 'UNIQUE' not in query(compiled.linear[0].frame)
@@ -266,7 +266,7 @@ def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = program.Sum(program.Join(P, GEN_BUS_JOIN, dims=onto), GEN_BUS_JOIN.axes, dims=onto)
     term = compiler().expression(node, 'test').linear[0]
     assert term.dims == ('snapshot', 'bus')
-    assert columns(term.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'bus', 'col_index', 'coeff']
     assert 'AGGREGATE' not in query(term.frame)
     assert joins(term.frame) == 1
 
@@ -275,7 +275,7 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
     term = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 'test').linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
+    assert columns(term.frame) == ['generator', 'snapshot', 'col_index', 'coeff']
     assert joins(term.frame) == 2
     assert 'OVER' not in query(term.frame)
 
@@ -293,20 +293,20 @@ def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
 
 
 # ---------------------------------------------------------------------------
-# predicates
+# conditions
 # ---------------------------------------------------------------------------
 
 
 def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     """Pointwise, and free: no table is read to decide it."""
-    frame = masked(compiler().scope, ('snapshot',), program.Mask(program.DimensionComparison('snapshot', '>', 0)))
+    frame = narrowed(compiler().scope, ('snapshot',), program.Mask(program.DimensionComparison('snapshot', '>', 0)))
     text = query(frame)
     assert 'FILTER' in text
     assert 'JOIN' not in text
 
 
-def test_a_parameter_predicate_needs_a_join():
-    frame = masked(
+def test_a_parameter_condition_needs_a_join():
+    frame = narrowed(
         compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',)))
     )
     text = query(frame)
@@ -314,42 +314,42 @@ def test_a_parameter_predicate_needs_a_join():
     assert 'FILTER' in text
 
 
-def test_a_name_the_mask_is_certain_of_is_inner_joined():
+def test_a_name_the_condition_is_certain_of_is_inner_joined():
     """The rows a left join would keep here are rows the filter then drops."""
     text = query(
-        masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
+        narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
     assert 'INNER JOIN' in text
     assert 'LEFT JOIN' not in text
 
 
-def test_the_same_predicate_under_an_or_is_left_joined_again():
-    """Under an ``Or`` a missing value can make the mask true, so no row is dropped early."""
+def test_the_same_condition_under_an_or_is_left_joined_again():
+    """Under an ``Or`` a missing value can make the condition true, so no row is dropped early."""
     where = program.Mask(
         program.Or(
             program.ParameterDefined('available', ('generator',)),
             program.DimensionComparison('generator', '==', 'g'),
         )
     )
-    text = query(masked(compiler().scope, ('generator',), where))
+    text = query(narrowed(compiler().scope, ('generator',), where))
     assert 'LEFT JOIN' in text
     assert 'INNER JOIN' not in text
 
 
-def test_what_a_bare_name_asks_is_decided_by_its_declaration():
+def test_what_a_bare_name_asks_is_decided_by_its_entry():
     """Three readings, and the declared dtype picks — not the column that turned up."""
     numeric = query(
-        masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
+        narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
     boolean = query(
-        masked(
+        narrowed(
             compiler({'available': 'bool'}).scope,
             ('generator',),
             program.Mask(program.ParameterDefined('available', ('generator',))),
         )
     )
     text = query(
-        masked(
+        narrowed(
             compiler({'available': 'str'}).scope,
             ('generator',),
             program.Mask(program.ParameterDefined('available', ('generator',))),
@@ -363,23 +363,23 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
 
 
 # ---------------------------------------------------------------------------
-# frames and bounds
+# tables and bounds
 # ---------------------------------------------------------------------------
 
 
 def test_a_frame_cross_joins_its_dim_tables_and_carries_their_ordinals():
-    frame = masked(compiler().scope, ('snapshot', 'generator'), None)
+    frame = narrowed(compiler().scope, ('snapshot', 'generator'), None)
     assert columns(frame) == ['snapshot', '__ord snapshot__', 'generator', '__ord generator__']
     assert 'CROSS' in query(frame)
 
 
-def test_an_unmasked_frame_has_nothing_to_filter():
-    assert 'FILTER' not in query(masked(compiler().scope, ('snapshot', 'generator'), None))
+def test_a_frame_with_no_condition_has_nothing_to_filter():
+    assert 'FILTER' not in query(narrowed(compiler().scope, ('snapshot', 'generator'), None))
 
 
-def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
-    """The predicate is evaluated over the product of the dims it reads, and the full product semi-joined."""
-    frame = masked(
+def test_a_condition_reading_part_of_the_frame_restricts_by_semi_join():
+    """The condition is evaluated over the product of the dimensions it reads, and the full product semi-joined."""
+    frame = narrowed(
         compiler().scope,
         ('snapshot', 'generator'),
         program.Mask(program.ParameterDefined('available', ('generator',))),
@@ -387,7 +387,7 @@ def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
     assert 'SEMI JOIN' in query(frame)
 
 
-def test_a_mask_reading_every_dim_filters_instead():
+def test_a_condition_reading_every_dim_filters_instead():
     """A full-width truth set is as wide as the product itself, so a filter replaces the semi-join."""
     where = program.Mask(
         program.And(
@@ -395,7 +395,7 @@ def test_a_mask_reading_every_dim_filters_instead():
             program.ParameterDefined('available', ('generator',)),
         )
     )
-    assert 'SEMI JOIN' not in query(masked(compiler().scope, ('snapshot', 'generator'), where))
+    assert 'SEMI JOIN' not in query(narrowed(compiler().scope, ('snapshot', 'generator'), where))
 
 
 def test_a_parameter_bound_joins_on_the_variable_frame():
@@ -414,7 +414,7 @@ def test_a_constant_bound_needs_no_join_at_all():
 def test_a_side_the_program_leaves_open_is_an_infinite_column():
     """A program says an open side is `None`, and a relational sink reads an infinity in `lb` and `ub`."""
     variable = program.Variable(('snapshot', 'generator'), lower=None, upper=None)
-    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'var_label': [0]})
+    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'col_index': [0]})
     bounded = compiler().bounds(frame, 'p', variable).select('lb', 'ub').collect()
     assert bounded.row(0) == (float('-inf'), float('inf')), 'an open side is the infinity on that side'
 
@@ -422,7 +422,7 @@ def test_a_side_the_program_leaves_open_is_an_infinite_column():
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     """`edge=0` over a constant leaves a row, not a gap.
 
-    The presence branch counts a filled slot as present, so the frame has a
+    The presence branch counts a filled slot as present, so the table has a
     row for it. Over a term there is nothing to write: the vacated slot
     contributes no term.
     """

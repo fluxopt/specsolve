@@ -67,7 +67,7 @@ Least-cost dispatch of a generator fleet against an hourly load.
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -114,7 +114,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/dispatch.yaml', sources) as solution:
         solution.objective  # 10500.0
         solution.dual('power_balance')

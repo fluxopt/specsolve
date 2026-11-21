@@ -75,7 +75,7 @@ def walk_join(
 ) -> tuple[pl.LazyFrame, tuple[str, ...]]:
     """*frame* traded through *mapping*: one inner equi-join, and the dimensions the result is over.
 
-    The result keeps *have* less the dropped dims, gains the added ones, and
+    The result keeps *have* less the dropped dimensions, gains the added ones, and
     keeps *carried*. A self-map drops and adds one dimension, so the two are
     traded in a single select.
     """

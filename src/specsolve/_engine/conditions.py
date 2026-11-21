@@ -1,8 +1,8 @@
-"""A ``where:`` mask as a query: which rows of a coordinate product survive.
+"""A ``where:`` condition as a query: which rows of a coordinate product survive.
 
-The plan's predicate nodes in; a boolean expression out, with the frame the
-walk joined the mask's parameters onto. [`masked`][] is the product a
-declaration is instantiated over, cut by its mask.
+The program's condition nodes in; a boolean expression out, with the table
+the walk joined the condition's parameters onto. [`narrowed`][] is the product
+an entry is instantiated over, cut by its condition.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class Carrier:
-    """A frame a walk joins onto, each attachment made at most once."""
+    """A table a walk joins onto, each attachment made at most once."""
 
     def __init__(self, frame: pl.LazyFrame) -> None:
         self.frame = frame
@@ -57,12 +57,12 @@ def _defined(col: pl.Expr, dtype: program.ParameterDtype) -> pl.Expr:
     return col.is_not_null() & col.is_finite()
 
 
-def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
-    """The masked coordinate product over *dims*, with the ordinals a caller sorts by.
+def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
+    """The coordinate product over *dims* where *where* holds, with the ordinals a caller sorts by.
 
-    A joining mask that reads only some of *dims*, and none outside them, is
+    A joining condition that reads only some of *dims*, and none outside them, is
     evaluated over their product and semi-joined; every other shape filters the
-    full product, so an error names all of its dims. Both keep row order.
+    full product, so an error names all of its dimensions. Both keep row order.
     """
     out = scope.product(dims)
     if where is None:
@@ -70,24 +70,24 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     on = tuple(d for d in dims if d in where.dims)
     if on and len(on) < len(dims) and where.dims <= set(dims):
         keyed = scope.product(on)
-        carrier, condition = compile_predicate(scope, keyed, where, on)
+        carrier, condition = compile_condition(scope, keyed, where, on)
         if carrier is keyed:
             return out.filter(falsy_if_null(condition))
         surviving = carrier.filter(falsy_if_null(condition)).select(*on)
         return out.join(surviving, on=list(on), how='semi')
-    carrier, condition = compile_predicate(scope, out, where, dims)
+    carrier, condition = compile_condition(scope, out, where, dims)
     return carrier.filter(falsy_if_null(condition))
 
 
-def compile_predicate(
+def compile_condition(
     scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
 
     Walking joins the parameters, so the condition is built before the frame is
-    read. A name the mask is certain of ([`_certain_names`][]) is inner- or
+    read. A name *mask* is certain of ([`_certain_names`][]) is inner- or
     semi-joined rather than left-joined. No join maintains order: consumers
-    verify it ([`labels.in_position_order`][]).
+    verify it ([`indices.in_position_order`][]).
     """
     certain = _certain_names(mask)
     carrier = Carrier(frame)
@@ -101,8 +101,8 @@ def compile_predicate(
         )
 
     def refuse_outside_frame(reading: str, dimension: str) -> None:
-        """A mask reading a dim the frame does not span — refused at load, asserted here."""
-        assert dimension in dims, f'where-comparison on {reading} is outside the frame dims {list(dims)}'
+        """A condition reading a dimension outside *dims* — refused at load, asserted here."""
+        assert dimension in dims, f'where-comparison on {reading} is outside the dimensions {list(dims)}'
 
     def join_ordinal(dimension: str) -> str:
         refuse_outside_frame(f"dimension '{dimension}'", dimension)
@@ -153,9 +153,9 @@ def compile_predicate(
         )
 
     def join_reduction(label: str, build: Callable[[str], pl.LazyFrame], on: tuple[str, ...]) -> str:
-        """A frame a leaf reduces its own product to, joined onto the walk's by *on*.
+        """A table a leaf reduces its own product to, joined onto the walk's by *on*.
 
-        The alias is numbered: two leaves of one mask can reduce the same frame to different answers.
+        The alias is numbered: two leaves of one condition can reduce the same table to different answers.
         """
         for dimension in on:
             refuse_outside_frame(f'where {label}', dimension)
@@ -174,15 +174,15 @@ def compile_predicate(
         if isinstance(p, program.CountComparison):
             if not scope.data.cardinality[p.over]:
                 return _COLUMN_COMPARISONS[p.op](pl.lit(0), pl.lit(p.value))
-            keys = scope.in_declaration_order(p.dims)
+            keys = scope.in_dimension_order(p.dims)
             alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
             return _COLUMN_COMPARISONS[p.op](pl.col(alias).fill_null(0), pl.lit(p.value))
         if isinstance(p, program.TranslatedCondition):
-            on = scope.in_declaration_order(p.dims)
+            on = scope.in_dimension_order(p.dims)
             alias = join_reduction(f'shift {p.along}', lambda a: _translated(scope, p, on, a), on)
             return falsy_if_null(pl.col(alias))
         if isinstance(p, program.JoinedCondition):
-            on = scope.in_declaration_order(p.dims)
+            on = scope.in_dimension_order(p.dims)
             alias = join_reduction(f'at {p.columns.name}', lambda a: _joined(scope, p, a), on)
             return falsy_if_null(pl.col(alias))
         if isinstance(p, program.DimensionComparison):
@@ -246,7 +246,7 @@ def compile_predicate(
 
 
 def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:
-    """One side of a comparison of expressions as ``(dims…, cval)``, and the dims it is keyed by.
+    """One side of a comparison of expressions as ``(dims…, cval)``, and the dimensions it is keyed by.
 
     Read by the expression compiler, so it cannot drift from the rows. Its terms
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
@@ -260,18 +260,18 @@ def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple
         'a where compares expressions the language keeps every variable out of'
     )
     dims = scope.spanned(compiled.constant)
-    added = compiler.summed_onto(compiled.constant, masked(scope, dims, None), absent='spreads')
+    added = compiler.summed_onto(compiled.constant, narrowed(scope, dims, None), absent='spreads')
     return added.select(*dims, 'cval'), dims
 
 
 def _counted(scope: Scope, p: program.CountComparison, alias: str) -> pl.LazyFrame:
-    """How many coordinates along ``over`` the predicate admits, per coordinate of the rest.
+    """How many coordinates along ``over`` the condition admits, per coordinate of the rest.
 
     A coordinate no row survives at is missing, which the walk reads as zero.
     """
-    dims = scope.in_declaration_order(p.condition.dims)
+    dims = scope.in_dimension_order(p.condition.dims)
     keys = [d for d in dims if d != p.over]
-    surviving = masked(scope, dims, p.condition)
+    surviving = narrowed(scope, dims, p.condition)
     if not keys:
         return surviving.select(pl.len().alias(alias))
     return surviving.group_by(keys).agg(pl.len().alias(alias))
@@ -282,8 +282,8 @@ def _translated(scope: Scope, p: program.TranslatedCondition, dims: tuple[str, .
 
     The end the move vacates is a missing row, which reads as false.
     """
-    assert p.along in dims, f"a shift along '{p.along}' is read at a frame carrying it"
-    admitted = masked(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
+    assert p.along in dims, f"a shift along '{p.along}' is read at a table carrying it"
+    admitted = narrowed(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
     return translate_rows(scope, admitted, dims, [alias], p.along, p.offset)
 
 
@@ -292,16 +292,16 @@ def _joined(scope: Scope, p: program.JoinedCondition, alias: str) -> pl.LazyFram
 
     A fine coordinate the relation has no row for is a missing row, which reads as false.
     """
-    dims = scope.in_declaration_order(p.operand.dims)
-    admitted = masked(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
+    dims = scope.in_dimension_order(p.operand.dims)
+    admitted = narrowed(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
     read, _ = walk_join(admitted, mapping(scope.data.relations, p.columns), p.columns, dims, [alias])
     return read
 
 
 def _certain_names(mask: program.Mask) -> frozenset[str]:
-    """Parameter and variable names whose absence alone makes the whole mask false.
+    """Parameter and variable names whose absence alone makes the whole condition false.
 
-    Only the ``AND`` spine counts: under ``OR`` or ``NOT`` an absent value can still leave the mask true.
+    Only the ``AND`` spine counts: under ``OR`` or ``NOT`` an absent value can still leave the condition true.
     """
     atoms = (program.ParameterComparison, program.ParameterDefined, program.VariableDefined)
     return frozenset(a.name for a in mask.conjuncts if isinstance(a, atoms))

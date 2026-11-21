@@ -84,7 +84,7 @@ and the tool reads each heading as released because its tag exists.
 - **The label `no changelog`.** Create it under Issues → Labels.
 
 **PyPI refuses a direct reference.** A distribution that names a git URL in its
-metadata is rejected at upload, in a dependency and in an extra alike. None
+metadata is refused at upload, in a dependency and in an extra alike. None
 stands in `pyproject.toml`. A git URL in a dependency group is not package
 metadata, so PyPI never sees it.
 

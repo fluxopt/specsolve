@@ -78,7 +78,7 @@ def _imported(
     return names
 
 
-#: The streaming lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
+#: The relational lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
 LANE = frozenset(
     {
         '_answer_layout',
@@ -591,7 +591,7 @@ def test_no_sink_reaches_a_sibling():
 
 
 def test_every_plan_node_is_handled_by_the_compiler():
-    """A primitive is not done until every module that walks its union names it."""
+    """An operator is not done until every module that walks its union names it."""
     from typing import get_args
 
     from mathspec import program
@@ -600,7 +600,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
-        ('program', program.Condition, engine_dir / 'predicates.py'),
+        ('program', program.Condition, engine_dir / 'conditions.py'),
         ('program', program.Condition, ORACLE / 'where.py'),
     ]
     for qualifier, union, module in walkers:
@@ -609,8 +609,8 @@ def test_every_plan_node_is_handled_by_the_compiler():
         assert not unhandled, f'{qualifier} nodes unknown to {module.name}: {unhandled}'
 
 
-def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
-    """Every verb here opens a spec the way ``to_spec`` does, and a lowered ``Program`` is not one of them.
+def test_the_spec_argument_is_what_the_language_takes_minus_the_compiled_form():
+    """Every verb here opens a spec the way ``to_spec`` does, and a compiled ``Program`` is not one of them.
 
     Textual, since neither annotation evaluates. Splitting on ``|`` holds
     while every member is a flat name or a subscript.
@@ -626,7 +626,7 @@ def test_the_spec_argument_is_what_the_language_takes_minus_the_lowered_form():
     ours = members(type_alias_value(PKG / '_inputs.py', 'SpecLike'))
     assert upstream == ours and 'Program' not in ours, (
         f'the language takes {sorted(upstream)} and specsolve._inputs.SpecLike takes {sorted(ours)} — '
-        f'every shape the language reads a spec from, and not the lowered Program'
+        f'every shape the language reads a spec from, and not the compiled Program'
     )
 
 
@@ -664,7 +664,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
 
 
 def test_both_lanes_lower_a_spec_through_one_function():
-    """Neither lane accepts a file the other refuses, which is what ``lowered`` is for."""
+    """Neither lane accepts a file the other refuses, which is what ``as_program`` is for."""
     import ast
 
     reading = {
@@ -674,8 +674,8 @@ def test_both_lanes_lower_a_spec_through_one_function():
         if isinstance(node, ast.Attribute) and node.attr == 'program' and isinstance(node.value, ast.Call)
     }
     assert reading == {'_inputs.py'}, (
-        f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
-        f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
+        f'a program is read off a freshly opened model in {sorted(reading)}; every lane compiles through '
+        f'inputs.as_program, which is what refuses a spec this package cannot build or write down'
     )
 
 
@@ -695,7 +695,7 @@ def test_every_parquet_file_goes_through_one_module():
     )
 
 
-def test_every_frame_is_collected_through_one_function():
+def test_every_table_is_collected_through_one_function():
     """``_collect.py`` picks the engine and keeps every join in the order it was written."""
     calls = {
         f'{path.relative_to(PKG).as_posix()}:{node.lineno}'
@@ -707,7 +707,7 @@ def test_every_frame_is_collected_through_one_function():
         and node.func.attr in {'collect', 'collect_all'}
     }
     assert not calls, (
-        f'{sorted(calls)} collect a frame directly; pipe it through _collect.collected, '
+        f'{sorted(calls)} collect a table directly; pipe it through _collect.collected, '
         f'or polars picks the engine and reorders the joins'
     )
 
@@ -813,7 +813,7 @@ def _functions(tree: ast.Module) -> dict[str, ast.FunctionDef]:
 
 
 def test_both_lanes_dispatch_on_every_plan_node():
-    """Hard rule 3: the same plan, dispatched on by both lanes.
+    """Hard rule 3: the same program, dispatched on by both lanes.
 
     Node kinds, not their fields: ``isinstance(x, program.Foo)`` names the
     class and cannot collide. Read statically, so this runs on a bare install.
@@ -823,7 +823,7 @@ def test_both_lanes_dispatch_on_every_plan_node():
     from mathspec import program
 
     declared = {node.__name__ for union in (program.Expression, program.Condition) for node in get_args(union)}
-    assert declared, 'no plan node classes found — the census has nothing to run over'
+    assert declared, 'no program node classes found — the census has nothing to run over'
 
     def dispatched_on(*paths: Path) -> set[str]:
         """Every ``program.X`` named in an isinstance test, however the tuple is written."""
@@ -874,8 +874,8 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('_engine/predicates.py', 'specsolve._engine.compiler'): (
-        'the same comparison on the streaming lane, and the compiler reads this module for the mask '
+    ('_engine/conditions.py', 'specsolve._engine.compiler'): (
+        'the same comparison on the relational lane, and the compiler reads this module for the condition '
         'walk and the carrier both of its walks join on'
     ),
 }

@@ -46,7 +46,7 @@ objective:
 """
 #: The same restriction said as a set; it reaches the default's optimum on every sink.
 SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
-#: two dims in the frame, so the emitted ``dims`` has an order to get wrong.
+#: two dimensions in the frame, so the emitted ``dims`` has an order to get wrong.
 TWO_DIM_YAML = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
@@ -213,8 +213,8 @@ objective:
 """
 
 
-def curve_frame(points: dict) -> pl.DataFrame:
-    """A per-generator curve ``{(generator, bp): value}`` as the tidy frame it is supplied as."""
+def curve_table(points: dict) -> pl.DataFrame:
+    """A per-generator curve ``{(generator, bp): value}`` as the tidy table it is supplied as."""
     return pl.DataFrame(
         {
             'generator': [g for g, _ in points],

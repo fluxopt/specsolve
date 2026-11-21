@@ -6,7 +6,7 @@ refused by name where it cannot. pyarrow is not a dependency: a page loads it
 when it first needs a file, so it is looked for at every call rather than
 once.
 
-A frame crosses between the two libraries as Arrow IPC bytes, which both write
+A table crosses between the two libraries as Arrow IPC bytes, which both write
 and read in the browser; ``DataFrame.to_arrow`` panics on 32-bit WebAssembly.
 """
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 __all__ = ['columns', 'read', 'require', 'scan', 'write']
 
-#: What a frame is written with, through either library.
+#: What a table is written with, through either library.
 COMPRESSION = 'zstd'
 
 #: One file, several read as one in order, or bytes in memory.
@@ -87,7 +87,7 @@ def columns(path: Path) -> list[str]:
 
 
 def scan(source: str | Path | Sequence[Path]) -> pl.LazyFrame:
-    """*source* as a lazy frame, read when it is collected; *source* has to outlive it.
+    """*source* as a lazy table, read when it is collected; *source* has to outlive it.
 
     Through pyarrow the footer is read now and the rows whole at the collect,
     so nothing is pushed down into the file; a file gone by then raises
@@ -99,7 +99,7 @@ def scan(source: str | Path | Sequence[Path]) -> pl.LazyFrame:
 
 
 def write(frame: pl.DataFrame | pl.LazyFrame, target: Path | BinaryIO) -> None:
-    """*frame* at *target*; a lazy frame is sunk where polars writes parquet, so it streams to disk."""
+    """*frame* at *target*; a lazy table is sunk where polars writes parquet, so it streams to disk."""
     if require('writing parquet') == 'polars':
         if isinstance(frame, pl.LazyFrame):
             frame.sink_parquet(target, compression=COMPRESSION)

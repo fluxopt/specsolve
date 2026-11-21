@@ -101,7 +101,7 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -176,7 +176,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/storage.yaml', sources) as solution:
         solution.objective  # 5650.0
         solution.dual('power_balance')

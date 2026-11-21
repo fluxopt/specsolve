@@ -210,7 +210,7 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
     """An environment started for a load that raises is disposed before the error leaves.
 
     Otherwise a model the sink refuses part way — a bad option value, a
-    matrix Gurobi rejects — would hold a licence until the collector found the
+    matrix Gurobi refuses — would hold a licence until the collector found the
     half-built model. The load fails either before the model exists or while
     the SOS and quadratic rows go onto it.
     """

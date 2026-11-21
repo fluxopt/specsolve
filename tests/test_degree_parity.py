@@ -38,7 +38,7 @@ from tests.oracle import specsolve_linopy  # skips the module without the oracle
 def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_spec_inputs, patch, match):
     """Not just "both raise": both say the same thing.
 
-    The relational lane prefixes the declaration it was lowering, so its
+    The relational lane prefixes the entry it was compiling, so its
     message ends with the linopy one.
     """
     data = dispatch_spec_inputs

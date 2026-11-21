@@ -3,7 +3,7 @@
 examples/storage.yaml is dispatch plus a cyclic battery:
 soc == shift(soc, along=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge.
 The linopy backend implements `edge='wrap'` with linopy's circular .roll(); the
-relational backend lowers it to program.Translate — a pointwise ord-join remap.
+relational backend compiles it to program.Translate — a pointwise ord-join remap.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from tests.conftest import (
     DISPATCH_SPEC,
     EXAMPLES_DIR,
     by_coord,
-    masked_operand_spec,
+    narrowed_operand_spec,
     override,
     relation,
     schema_of,
@@ -140,16 +140,16 @@ def test_a_forward_shift_with_a_zero_edge_keeps_the_far_row_on_both_lanes(storag
         )
 
 
-#: A mask that removes one interior coordinate, so the operand's own absence
+#: A condition that removes one interior coordinate, so the operand's own absence
 #: sits where no edge is. `edge: 0` may fill the boundary and nothing else (#987).
-MASKED_INTERIOR = masked_operand_spec('link', 'take <= shift(level, along=t, offset=1, edge=0)')
+NARROWED_INTERIOR = narrowed_operand_spec('link', 'take <= shift(level, along=t, offset=1, edge=0)')
 
 
 def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_there():
     """`edge:` is the opt-out for the slot the shift vacated, not for the operand.
 
-    Three snapshots and `level` masked away at the middle one. The row at `t=0`
-    is the vacated edge and is filled; the row at `t=2` reads the masked slot,
+    Three snapshots and `level` absent at the middle one. The row at `t=0`
+    is the vacated edge and is filled; the row at `t=2` reads the absent slot,
     which is absent for a reason the shift had nothing to do with, so it drops
     and `take[2]` is held by its own bound alone. Filling either alone is
     indistinguishable from filling both by row count, which is why the
@@ -159,16 +159,16 @@ def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_ther
         't': pd.Index([0, 1, 2], name='t'),
         'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
     }
-    with differential(MASKED_INTERIOR, sources, lp=True) as run:
+    with differential(NARROWED_INTERIOR, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 2, 'the boundary row and the one that reads a live slot, and no other'
         assert run.oracle == pytest.approx(10.0), (
-            'take[2] reaches its bound because no row caps it — 0.0 would mean the masked slot was read as a zero'
+            'take[2] reaches its bound because no row caps it — 0.0 would mean the absent slot was read as a zero'
         )
 
 
 #: The same question asked of the two *gathers*: an offset that differs per
 #: entity, and a shift closed inside a group. Each reaches the edge through its
-#: own out-of-range mask.
+#: own out-of-range condition.
 BY_PARAMETER = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'usable': {'dims': ['t']}},
@@ -183,14 +183,14 @@ BY_PARAMETER = {
     },
 }
 
-IN_GROUPS = masked_operand_spec(
+IN_GROUPS = narrowed_operand_spec(
     'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True
 )
 
-#: The same, with nothing masked at all: `level` carries no `where`, so the
-#: operand reaches the shift with no presence frame of its own (#1061).
-IN_GROUPS_UNMASKED = masked_operand_spec(
-    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, masked=False
+#: The same, with nothing absent at all: `level` carries no `where`, so the
+#: operand reaches the shift with no presence table of its own (#1061).
+IN_GROUPS_WITHOUT_WHERE = narrowed_operand_spec(
+    'link', 'take <= shift(level, along=t, offset=1, edge=0, within=season_of[season])', grouped=True, narrowed=False
 )
 
 #: A fourth snapshot the relation sends nowhere, for both models above.
@@ -201,11 +201,11 @@ GROUPLESS_SOURCES = {
 }
 
 
-def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
+def test_a_per_entity_offset_fills_its_own_edge_and_not_the_condition_under_it():
     """The gather's edge, asked the same way as the scalar shift's.
 
-    One technology, a lead of one month, and `level` masked away at the middle
-    month: `t=0` is the vacated edge and is filled, `t=2` reads the masked slot
+    One technology, a lead of one month, and `level` absent at the middle
+    month: `t=0` is the vacated edge and is filled, `t=2` reads the absent slot
     and drops, so two rows are built and `take` at the last month is capped by
     nothing. Which coordinates are vacated is per entity (#1049).
     """
@@ -220,12 +220,12 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_mask_under_it():
         assert run.oracle == pytest.approx(10.0), 'take at the last month is capped by nothing'
 
 
-def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
-    """And the third path: the edge is per group, the mask is not.
+def test_a_grouped_shift_fills_each_groups_edge_and_not_the_condition_under_it():
+    """And the third path: the edge is per group, the condition is not.
 
-    Two seasons of two snapshots, `level` masked away at the first. Each
+    Two seasons of two snapshots, `level` absent at the first. Each
     season's opening snapshot is vacated and filled; the snapshot that reads
-    the masked one drops.
+    the absent one drops.
     """
     sources = {
         't': pd.DataFrame({'t': [0, 1, 2, 3]}),
@@ -235,7 +235,7 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_mask_under_it():
     }
     with differential(IN_GROUPS, sources, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, "both seasons' opening rows, and the one reading a live slot"
-        assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is masked is capped by nothing'
+        assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is absent is capped by nothing'
 
 
 def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated():
@@ -247,7 +247,7 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
     is the null a partial relation gets everywhere else (#969, `sum(by=)`,
     `at()`).
     """
-    partial = override(IN_GROUPS_UNMASKED, **{'relations.season_of.missing': 'absent'})
+    partial = override(IN_GROUPS_WITHOUT_WHERE, **{'relations.season_of.missing': 'absent'})
     with differential(partial, GROUPLESS_SOURCES, lp=True) as run:
         assert run.engine.diagnostics().rows == 3, (
             "each season's opening row and the one reading a live slot — not the group-less snapshot"
@@ -255,21 +255,21 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
 
-def test_a_group_less_coordinate_stays_absent_under_a_mask_that_removes_nothing():
-    """The same question with a `where` on the operand that masks no row.
+def test_a_group_less_coordinate_stays_absent_under_a_condition_that_removes_nothing():
+    """The same question with a `where` on the operand that removes no row.
 
-    With a presence frame the edge is rebuilt from the vacated set, without one
-    from the grouped labels; a mask removing nothing decides no row.
+    With a presence table the edge is rebuilt from the vacated set, without one
+    from the grouped labels; a condition removing nothing decides no row.
     """
     sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
     partial = override(IN_GROUPS, **{'relations.season_of.missing': 'absent'})
     with differential(partial, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'a mask that removes nothing changes no row'
+        assert run.engine.diagnostics().rows == 3, 'a condition that removes nothing changes no row'
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
 
 #: A nonzero edge over a variable-free operand, reached with a per-entity
-#: offset: the other reader of the edge frame, and the other half of #1049.
+#: offset: the other reader of the edge table, and the other half of #1049.
 BY_PARAMETER_CONSTANT = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}, 'eff': {'dims': ['g', 't']}},
@@ -315,7 +315,7 @@ PER_GROUP_OFFSET = {
 }
 
 #: The same lag over a *variable*, where the edge is a term that is not there
-#: rather than a number written into a frame — and one snapshot the relation
+#: rather than a number written into a table — and one snapshot the relation
 #: sends nowhere, which no lag reaches and no edge speaks for.
 PER_GROUP_OFFSET_TERMS = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
@@ -334,7 +334,7 @@ PER_GROUP_OFFSET_TERMS = {
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=t)'},
 }
 
-#: Per entity *and* per group at once: one key the frame carries and one it
+#: Per entity *and* per group at once: one key the table carries and one it
 #: reaches through the relation, in the same join.
 PER_ENTITY_AND_PER_GROUP = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}, 'season': {'dtype': 'str'}},
@@ -410,7 +410,7 @@ def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
 
 def test_an_offset_may_differ_per_entity_and_per_group_at_once():
     """Two keys, one join: the entity's own column and the group's, which the
-    frame carries only as the relation's value.
+    table carries only as the relation's value.
 
     The second unit leads by two in the second season and by one everywhere
     else, so it alone vacates both of that season's rows.
@@ -439,7 +439,7 @@ def test_an_offset_may_differ_per_entity_and_per_group_at_once():
 
 
 def test_shift_semantics_are_positional_not_lexicographic(storage_inputs):
-    """Coords whose sorted order differs from declared order (string labels:
+    """Coordinates whose sorted order differs from declared order (string labels:
     lexicographic t0,t1,t10,... vs positional t0..t47). Both backends must
     couple the same neighbours."""
     labels = pd.Index([f't{i}' for i in range(len(storage_inputs['snapshot']))], name='snapshot')
@@ -483,13 +483,13 @@ def test_a_where_on_dimension_coordinates_means_the_same_on_both_lanes():
     with differential(RAMP_SPEC, data) as run:
         active = int((run.model.constraints['ramp_up'].labels != -1).sum())
         assert active == (n_s - 1) * 2, (
-            'the mask must bite: the first snapshot is dropped per generator, and a masked row on '
+            'the condition must bite: the first snapshot is dropped per generator, and an absent row on '
             'the linopy lane carries label -1'
         )
 
 
 # ---------------------------------------------------------------------------
-# lowering
+# compiling
 # ---------------------------------------------------------------------------
 
 
@@ -587,7 +587,7 @@ def test_the_bare_shift_refusal_names_the_pair_that_actually_omits_the_row():
     """`edge=` and `where:` are a companion pair here, not a choice.
 
     Each is wrong alone: a `where` does not lift the refusal, because it is
-    decided on the expression before any mask is read; and `edge=0` alone
+    decided on the expression before any condition is read; and `edge=0` alone
     leaves a row at the vacated coordinate whose bound is that zero. The
     wording is held too, since `edge=0` alone builds, solves and is wrong.
     """
@@ -595,7 +595,7 @@ def test_the_bare_shift_refusal_names_the_pair_that_actually_omits_the_row():
         sps.check(_shift_over_data())
     with pytest.raises(LanguageError, match='vacated positions') as masked:
         sps.check(_shift_over_data(where='t > 0'))
-    assert str(bare.value) == str(masked.value), 'a mask lifts the refusal, so it is an alternative after all'
+    assert str(bare.value) == str(masked.value), 'a condition lifts the refusal, so it is an alternative after all'
 
     message = str(bare.value)
     assert 'where' in message, 'the way to omit the row has to be reachable from the error'
@@ -695,7 +695,7 @@ def test_an_offset_may_differ_per_entity(edge: str):
 
 
 def _absent_offset_spec(edge: str, mask: str | None) -> dict:
-    """``y <= shift(x, …)`` with an offset ``off`` that is ``missing: absent``, and ``x`` masked by *mask*."""
+    """``y <= shift(x, …)`` with an offset ``off`` that is ``missing: absent``, and ``x`` narrowed by *mask*."""
     x: dict = {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}}
     if mask is not None:
         x['where'] = mask
@@ -712,7 +712,7 @@ def _absent_offset_spec(edge: str, mask: str | None) -> dict:
     ('mask', 'rows', 'objective'),
     [
         pytest.param(None, 3, 30.0, id='bare-operand'),
-        pytest.param('t > 0', 2, 40.0, id='masked-operand'),
+        pytest.param('t > 0', 2, 40.0, id='narrowed-operand'),
     ],
 )
 @pytest.mark.parametrize('edge', [pytest.param('0', id='fill'), pytest.param("'wrap'", id='wrap')])
@@ -722,20 +722,20 @@ def test_an_absent_offset_leaves_the_shift_absent(edge: str, mask: str | None, r
     ``off`` is absent at ``u=b``, so every ``y[t, b]`` is free and reaches its
     bound of 10. The relational lane built ``y[t, b] <= 0`` there, an operand
     with no presence of its own having none to lose, and the linopy lane read
-    the missing offset as 0 and built ``y[t, b] <= x[t, b]``. A masked ``x``
+    the missing offset as 0 and built ``y[t, b] <= x[t, b]``. A narrowed ``x``
     takes its presence through the shift, which the relational lane already
     left absent at ``u=b``.
     """
     data = {'t': [0, 1, 2], 'u': ['a', 'b'], 'off': pd.Series({'a': 1}, index=pd.Index(['a'], name='u'))}
     with differential(_absent_offset_spec(edge, mask), data) as run:
-        assert run.engine.diagnostics().rows == rows, 'only u=a builds rows, less any x the mask removes'
+        assert run.engine.diagnostics().rows == rows, 'only u=a builds rows, less any x the condition removes'
         assert run.oracle == pytest.approx(objective), 'each y[t, b] is free, so u=b adds 30'
 
 
 def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     """The absent edge is refused for a named offset.
 
-    Absence is carried by a presence frame keyed by the translated dimension
+    Absence is carried by a presence table keyed by the translated dimension
     alone, and a per-entity offset vacates a *different* slot for each entity.
     The two edges that write their own answer are allowed.
     """

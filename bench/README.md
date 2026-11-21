@@ -602,7 +602,7 @@ effect from the other. Run the full ladder with `--sizes all`.
 
 **The declaration count is the third swept axis.** Every size rung grows
 `snapshot` and holds its case's declaration count fixed, so a cost paid *per
-declaration* — a labelled frame each, a stack at the end — is sampled at
+declaration* — an indexed frame each, a stack at the end — is sampled at
 whatever counts the cases happen to have. The `declarations` case splits a
 fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and

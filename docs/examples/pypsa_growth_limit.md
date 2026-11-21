@@ -123,7 +123,7 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -252,7 +252,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_growth_limit.yaml', sources) as solution:
         solution.objective  # 47110.0
         solution.dual('power_balance')
@@ -321,7 +321,7 @@ and the same instance builds 30, 40 and 50 of wind, 30 of gas, and costs
 −120.
 
 **`edge=0` keeps the first period's row.** Without it the shifted term is absent
-in the first period and the *row* goes with it. A masked variable term deletes
+in the first period and the *row* goes with it. An absent variable term deletes
 the row rather than zeroing it. PyPSA emits the bare allowance there:
 
 ```

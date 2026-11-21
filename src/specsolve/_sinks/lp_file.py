@@ -1,6 +1,6 @@
 """The ``lp_file`` sink: the model as LP text.
 
-Every section is a lazy frame sunk straight into the open file, in label
+Every section is a lazy table sunk straight into the open file, in index
 order, so a model writes the same bytes twice.
 """
 

@@ -5,7 +5,7 @@ this order: the first ones keep the answer, the later ones change it.
 
 | Way | Keeps the optimum | What it costs |
 |---|---|---|
-| [Keep the model loaded](#keep-the-model-loaded) | yes | only data that moves no mask or label |
+| [Keep the model loaded](#keep-the-model-loaded) | yes | only data that leaves every `where:` and label as it was |
 | [Start from an earlier answer](#start-from-an-earlier-answer) | yes | can make a solve slower |
 | [Build many small models faster](#build-many-small-models-faster) | yes | only below 250,000 columns and rows |
 | [Build on one polars thread](#build-on-one-polars-thread) | yes | slows a large model |
@@ -26,7 +26,8 @@ for numbers in steps:
     result = model.update(numbers).solve()
 ```
 
-An `update` that moves a mask or adds a label builds and loads again.
+An `update` that changes which coordinates a `where:` keeps, or adds a label,
+builds and loads again.
 [Change it and solve again](../change.md) shows the loop and how to check
 that it stays loaded.
 

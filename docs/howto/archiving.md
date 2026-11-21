@@ -59,7 +59,7 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 | | `load_archive` | `scan_archive` |
 |---|---|---|
 | a source | the table the member holds | the path to it |
-| the answer | frames in memory | read at the call that asks |
+| the answer | tables in memory | read at the call that asks |
 | a sweep's answer | held: `sweep.primal('p')` | spilled: `sweep.scan('p')` |
 | a zip's `into=` | optional, and scratch without one | required, and kept |
 
