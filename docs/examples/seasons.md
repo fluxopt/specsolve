@@ -158,7 +158,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/seasons.yaml', sources) as solution:
         solution.objective  # 74.0
         solution.primal('soc')

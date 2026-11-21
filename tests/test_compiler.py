@@ -31,7 +31,7 @@ from mathspec import program
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.conditions import narrowed
-from specsolve._engine.labels import Labelled
+from specsolve._engine.indices import Indexed
 from specsolve._engine.scope import Scope
 from specsolve.errors import SpecsolveError
 
@@ -80,7 +80,7 @@ PARAMETERS = {
     'available': pl.LazyFrame(schema={'generator': pl.String, 'value': pl.Float64}),
 }
 VARIABLES = {
-    'p': Labelled(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'var_label': pl.Int64}), 0, 0)
+    'p': Indexed(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'col_index': pl.Int64}), 0, 0)
 }
 
 
@@ -135,7 +135,7 @@ def test_a_variable_compiles_to_one_linear_term_over_its_dims():
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
     assert term.kind == 'linear'
-    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
 
 
 def test_a_parameter_is_a_constant_term_not_a_linear_one():
@@ -156,7 +156,7 @@ def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     compiled = compiler().expression(program.Multiply(P, COST, dims=P.dims), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['snapshot', 'generator', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
     assert 'JOIN' in query(term.frame)
 
 
@@ -180,7 +180,7 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     compiled = compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot',)
-    assert columns(term.frame) == ['snapshot', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'col_index', 'coeff']
     assert 'AGGREGATE' not in query(term.frame)
 
 
@@ -200,11 +200,11 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
         {
             'snapshot': [s for s in snapshots for _ in generators],
             'generator': generators * len(snapshots),
-            'var_label': range(len(snapshots) * len(generators)),
+            'col_index': range(len(snapshots) * len(generators)),
         }
     )
     total = program.Sum(LOAD, (program.Axis('snapshot'),), dims=())
-    compiled = Compiler(Scope(declared(), data, {'p': Labelled(slots, 0, 72)})).expression(
+    compiled = Compiler(Scope(declared(), data, {'p': Indexed(slots, 0, 72)})).expression(
         program.Multiply(P, total, dims=P.dims), 'test'
     )
     terms = compiled.linear[0].frame.collect()
@@ -266,7 +266,7 @@ def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = program.Sum(program.Join(P, GEN_BUS_JOIN, dims=onto), GEN_BUS_JOIN.axes, dims=onto)
     term = compiler().expression(node, 'test').linear[0]
     assert term.dims == ('snapshot', 'bus')
-    assert columns(term.frame) == ['snapshot', 'bus', 'var_label', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'bus', 'col_index', 'coeff']
     assert 'AGGREGATE' not in query(term.frame)
     assert joins(term.frame) == 1
 
@@ -275,7 +275,7 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
     term = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 'test').linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['generator', 'snapshot', 'var_label', 'coeff']
+    assert columns(term.frame) == ['generator', 'snapshot', 'col_index', 'coeff']
     assert joins(term.frame) == 2
     assert 'OVER' not in query(term.frame)
 
@@ -414,7 +414,7 @@ def test_a_constant_bound_needs_no_join_at_all():
 def test_a_side_the_program_leaves_open_is_an_infinite_column():
     """A program says an open side is `None`, and a relational sink reads an infinity in `lb` and `ub`."""
     variable = program.Variable(('snapshot', 'generator'), lower=None, upper=None)
-    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'var_label': [0]})
+    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'col_index': [0]})
     bounded = compiler().bounds(frame, 'p', variable).select('lb', 'ub').collect()
     assert bounded.row(0) == (float('-inf'), float('inf')), 'an open side is the infinity on that side'
 

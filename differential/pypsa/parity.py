@@ -313,18 +313,18 @@ def fed(sources: dict[str, object]) -> list[str]:
 
 
 def _keyed_model(model) -> dict[str, object]:
-    """One build as label-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
+    """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
     built = model._engine._model
     handoff = built.handoff
 
     def keys(held: dict) -> dict[int, tuple]:
         out = {}
-        for name, labelled in held.items():
-            frame = labelled.frame.collect()
-            label = 'var_label' if 'var_label' in frame.columns else 'row'
-            dims = [c for c in frame.columns if c != label]
+        for name, indexed in held.items():
+            frame = indexed.frame.collect()
+            index = 'col_index' if 'col_index' in frame.columns else 'row'
+            dims = [c for c in frame.columns if c != index]
             for row in frame.iter_rows(named=True):
-                out[row[label]] = (name, *(str(row[d]) for d in dims))
+                out[row[index]] = (name, *(str(row[d]) for d in dims))
         return out
 
     columns, rows = keys(built.variables), keys(built.constraints)

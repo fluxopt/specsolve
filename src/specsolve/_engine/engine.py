@@ -396,7 +396,7 @@ class Engine:
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
         """One solve's answer as one table per entry — a [`Result`][]'s own.
 
-        The tables reference this build's label tables, which [`build`][]
+        The tables reference this build's index tables, which [`build`][]
         replaces rather than mutates. A ``None`` vector yields no tables rather
         than empty ones.
         """
@@ -473,7 +473,7 @@ class Engine:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame] | None:
         """The ad-hoc evaluator for a saved solution, over this rebuilt model.
 
-        This build supplies the labels that put the saved values back in vector
+        This build supplies the solver indices that put the saved values back in vector
         order. It comes back where *lower* is given.
 
         Args:

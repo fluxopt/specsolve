@@ -289,7 +289,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
     The digest reads the pattern *and* the coefficients, and every update a
-    model can express moves both — labels are dense, so a condition that changes
+    model can express moves both — solver indices are dense, so a condition that changes
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
@@ -340,5 +340,5 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():
-    """Whether a model is sayable is solver-independent, and this one is."""
+    """Whether a model is in the language does not depend on the solver, and this one is."""
     sps.check(SPEC)

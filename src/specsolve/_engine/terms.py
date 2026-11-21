@@ -5,8 +5,8 @@ Column conventions:
 ===================  ==========================================
 table                columns
 ===================  ==========================================
-linear term          ``dims…``, ``var_label``, ``coeff``
-quadratic term       ``dims…``, ``var_label``, ``var_label_2``, ``coeff``
+linear term          ``dims…``, ``col_index``, ``coeff``
+quadratic term       ``dims…``, ``col_index``, ``col_index_2``, ``coeff``
 constant term        ``dims…``, ``cval``
 ===================  ==========================================
 """
@@ -146,8 +146,12 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
     return replace(p, dims=out, frame=frame, presences=_keyed(p))
 
 
-#: The label columns each kind carries, in the order a projection keeps them.
-_LABELS: dict[Kind, list[str]] = {'linear': ['var_label'], 'quadratic': ['var_label', 'var_label_2'], 'constant': []}
+#: The column-index columns each kind carries, in the order a projection keeps them.
+_INDEX_COLUMNS: dict[Kind, list[str]] = {
+    'linear': ['col_index'],
+    'quadratic': ['col_index', 'col_index_2'],
+    'constant': [],
+}
 
 
 def value_column(kind: Kind) -> str:
@@ -157,7 +161,7 @@ def value_column(kind: Kind) -> str:
 
 def carried_columns(kind: Kind) -> list[str]:
     """The non-dimension columns a projection of this kind of term has to keep."""
-    return [*_LABELS[kind], value_column(kind)]
+    return [*_INDEX_COLUMNS[kind], value_column(kind)]
 
 
 @dataclass(frozen=True)
@@ -179,7 +183,7 @@ def constant_scalar(p: Term) -> pl.LazyFrame:
 def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
     """The presence tables a constraint's rows — or a read's — have to be contained in.
 
-    Each leaves with its key spelled out, since labelling cannot know the term it came from.
+    Each leaves with its key spelled out, since indexing cannot know the term it came from.
     """
     return [Presence(x.frame, x.keys(p.dims)) for p in terms for x in p.presences]
 
@@ -368,12 +372,12 @@ def to_the_power(a: Term, b: Term) -> Term:
 def times_variable(a: Term, b: Term) -> Term:
     """``a * b`` where both carry a variable — one quadratic term.
 
-    The second label is renamed on the way in: a suffix collision would pair a
+    The second column index is renamed on the way in: a suffix collision would pair a
     variable with itself, which ``p * p`` makes a legal term. Pairs are
-    canonicalised later, once column labels exist
+    canonicalised later, once column indices exist
     ([`Assembly._build_objective`][specsolve._engine.assembly.Assembly._build_objective]).
     """
-    joined, out_dims = _paired(a, b, b.frame.rename({'var_label': 'var_label_2', 'coeff': _RHS}), 'inner')
+    joined, out_dims = _paired(a, b, b.frame.rename({'col_index': 'col_index_2', 'coeff': _RHS}), 'inner')
     frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
         *out_dims, *carried_columns('quadratic')
     )

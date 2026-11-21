@@ -132,7 +132,7 @@ def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: 
     if isinstance(bound, program.ParameterReference):
         values = ctx.dataset[bound.name]
         return values.fillna(open_side) if ctx.absent(bound.name) else values
-    msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
+    msg = f'bounds accept a number or a parameter, and compiling admits nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
 
 

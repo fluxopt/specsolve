@@ -206,7 +206,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve(to_spec('examples/piecewise.yaml').expand(), sources) as solution:
         solution.objective  # 3850.0
         solution.dual('balance')

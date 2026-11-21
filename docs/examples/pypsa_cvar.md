@@ -271,7 +271,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_cvar.yaml', sources) as solution:
         solution.objective  # 35410.0
         solution.dual('power_balance')

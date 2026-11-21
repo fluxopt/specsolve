@@ -43,7 +43,7 @@ _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
 
 @dataclass(frozen=True)
 class Basis:
-    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in index order."""
 
     columns: np.ndarray[tuple[int], np.dtype[np.int8]]
     rows: np.ndarray[tuple[int], np.dtype[np.int8]]
@@ -410,7 +410,7 @@ def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tup
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
     """One quantity a solver produced, in its own index — every sink's read-back.
 
-    A series rather than a ``(label, value)`` table: the read-back takes an
+    A series rather than an ``(index, value)`` table: the read-back takes an
     entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)

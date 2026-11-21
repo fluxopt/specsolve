@@ -319,7 +319,7 @@ def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowV
     """Every quadratic constraint, one ``addMQConstr`` call each, over only the columns it holds.
 
     A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
-    and its linear entries from the matrix at the same row label. A matrix or
+    and its linear entries from the matrix at the same row index. A matrix or
     vector as wide as the model would cost each row time in the column count.
     """
     import numpy as np

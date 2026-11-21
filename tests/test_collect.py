@@ -1,4 +1,4 @@
-"""How a table is materialised: joins in the order specsolve wrote them, a coordinate product in label order."""
+"""How a table is materialised: joins in the order specsolve wrote them, a coordinate product in index order."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
     )
     ordinals = pl.DataFrame({'snapshot': range(snapshots), 'ord': range(snapshots)}).lazy()
     moved = (
-        keys.with_row_index('var_label')
+        keys.with_row_index('col_index')
         .lazy()
         .join(ordinals.rename({'ord': 'ord_in'}), on='snapshot')
         .with_columns(((pl.col('ord_in') + 1) % snapshots).alias('ord_out'))
@@ -30,7 +30,7 @@ def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
         .join(ordinals.rename({'ord': 'ord_out'}), on='ord_out')
         .drop('ord_out')
     )
-    return keys.with_row_index('row').lazy().join(moved, on=['snapshot', 'store']).select('row', 'var_label')
+    return keys.with_row_index('row').lazy().join(moved, on=['snapshot', 'store']).select('row', 'col_index')
 
 
 def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
@@ -55,10 +55,10 @@ def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
     )
 
 
-def test_a_coordinate_product_arrives_in_label_order():
+def test_a_coordinate_product_arrives_in_index_order():
     """The streaming engine picks which side of a cross join it buffers, and the product's order with it.
 
-    A label is row-major over the declared ordinals, so a product out of that
+    A solver index is row-major over the declared ordinals, so a product out of that
     order has to be sorted before it is numbered.
     """
     spec = {
@@ -88,7 +88,7 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
     sps.solve(dispatch_yaml, dispatch_table_inputs)
-    assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
+    assert engines[('col_index', 'lb', 'ub')] == {'in-memory'}, (
         f'every bounds collect names the in-memory engine: {engines}'
     )
 

@@ -1,8 +1,8 @@
 """Dense solver indices for a coordinate product narrowed by a condition.
 
-``var_label`` is the solver's column index and ``row`` its row index, so two
-builds of one model must agree on every label (docs/development/architecture.md,
-"The relational lane").
+``col_index`` is the solver's column index and ``row`` its row index, so two
+builds of one model must agree on every solver index
+(docs/development/architecture.md, "The relational lane").
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class Labelled:
-    """One entry's labelled table, and the contiguous run of labels it owns."""
+class Indexed:
+    """One entry's indexed table, and the contiguous run of solver indices it owns."""
 
     frame: pl.LazyFrame
     start: int
@@ -38,7 +38,7 @@ class Labelled:
         return values.slice(self.start, self.height)
 
     def valued(self, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
-        """``(dims…, values.name)``: each coordinate beside its [`share`][] of *values*, in label order.
+        """``(dims…, values.name)``: each coordinate beside its [`share`][] of *values*, in index order.
 
         Projected after the share is attached, never ``select(*dims)`` first:
         with no dimensions that keeps no column, and polars gives a table with
@@ -52,28 +52,28 @@ def frame(
     scope: Scope,
     dims: tuple[str, ...],
     where: program.Mask | None,
-    label: str,
+    index: str,
     start: int,
     restrictions: Sequence[Presence] = (),
 ) -> pl.DataFrame:
-    """The coordinate product of *dims* narrowed by *where*, with a dense *label* from *start*.
+    """The coordinate product of *dims* narrowed by *where*, with a dense *index* from *start*.
 
-    A label is row-major over the dimensions' declared ordinals, so it is the
+    The index is row-major over the dimensions' declared ordinals, so it is the
     solver's own index with no remapping. *restrictions* are the
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
     path.
 
     Returns:
-        ``(dims…, label)`` in that column order and in label order; the next
-        free label is ``start`` plus its height. With no dimensions it is
-        ``([`UNIT`][], label)``, the column a reader keys a scalar on, since selecting
+        ``(dims…, index)`` in that column order and in index order; the next
+        free index is ``start`` plus its height. With no dimensions it is
+        ``([`UNIT`][], index)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
     if where is not None and not restrictions:
         free = _free_prefix(dims, where.dims)
         if free:
-            factored = _factored(scope, dims, free, where, label, start)
+            factored = _factored(scope, dims, free, where, index, start)
             if factored is not None:
                 return factored
 
@@ -85,23 +85,23 @@ def frame(
     numbering = _row_major(scope, dims)
     if not dropped:
         numbering = pl.lit(start, dtype=pl.Int64) + numbering
-    position = '#position' if dropped else label
+    position = '#position' if dropped else index
     materialised = in_position_order(
         surviving.select(*(dims or (UNIT,)), numbering.alias(position)).pipe(collected),
         position,
     )
     if not dropped and dims:
-        materialised.replace_column(materialised.get_column_index(label), materialised.get_column(label).set_sorted())
+        materialised.replace_column(materialised.get_column_index(index), materialised.get_column(index).set_sorted())
         return materialised
     if dropped:
-        materialised = materialised.with_row_index(label, offset=start).with_columns(pl.col(label).cast(pl.Int64))
-    return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
+        materialised = materialised.with_row_index(index, offset=start).with_columns(pl.col(index).cast(pl.Int64))
+    return materialised.select(*(dims or (UNIT,)), pl.col(index).set_sorted())
 
 
-def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
+def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
     """[`frame`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
     schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
-    return pl.DataFrame(schema=schema | {label: pl.Int64})
+    return pl.DataFrame(schema=schema | {index: pl.Int64})
 
 
 def _factored(
@@ -109,13 +109,13 @@ def _factored(
     dims: tuple[str, ...],
     free: int,
     where: program.Mask,
-    label: str,
+    index: str,
     start: int,
 ) -> pl.DataFrame | None:
-    """Labels for a condition that reads none of the first *free* dimensions.
+    """Solver indices for a condition that reads none of the first *free* dimensions.
 
     The survivors are the full head product against one surviving suffix set,
-    so only the suffix is ranked, and the label is the number the counted path
+    so only the suffix is ranked, and the index is the number the counted path
     gives. ``None`` when nothing survives, for the counted path to answer.
     Which side of the cross join cycles is polars' choice, so
     [`in_position_order`][] verifies it.
@@ -130,16 +130,16 @@ def _factored(
         return None
 
     position = '#position'
-    labelled = (
+    indexed = (
         survivors.lazy()
         .join(narrowed(scope, head, None).select(*head, _row_major(scope, head).alias(position)), how='cross')
         .select(
             *dims,
-            (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),
+            (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(index),
         )
         .pipe(collected)
     )
-    return in_position_order(labelled, label).with_columns(pl.col(label).set_sorted())
+    return in_position_order(indexed, index).with_columns(pl.col(index).set_sorted())
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:

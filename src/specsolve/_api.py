@@ -227,12 +227,12 @@ class Model:
             model.update({'cap_hat': capacity}).solve()
 
         ``model.update(x)`` answers what ``build(spec, sources | x)`` answers,
-        whatever changed. Data that moves a condition renumbers labels, so the model
+        whatever changed. Data that moves a condition renumbers solver indices, so the model
         is rebuilt and solved cold rather than pushed onto a loaded solver;
         [`loads`][specsolve._result.Diagnostics.loads] says which ran.
 
         Results taken before the update keep reading their own tables, and
-        keep their build's label tables alive until dropped or until
+        keep their build's index tables alive until dropped or until
         [`close`][specsolve._result.Result.close] is called. A sweep, a
         rolling horizon or a myopic pathway is
         [`solve_over`][specsolve._solve_over.solve_over], which runs this loop.
@@ -513,7 +513,7 @@ class Model:
 
         What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]
         for a quantity the file never named: the saved tables are laid back in
-        this build's label order, and the reader is the one a live solve gives.
+        this build's index order, and the reader is the one a live solve gives.
         A build, never a solve.
 
         Args:

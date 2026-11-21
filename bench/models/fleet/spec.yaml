@@ -5,7 +5,7 @@
 # That is the shape a benchmark reaches for because it is easy to scale, and
 # it is *not* the shape a real model has. A unit-commitment or storage model
 # declares a dozen variables and a dozen constraints, each over a moderate
-# product, and the engine's per-declaration costs — a labelled frame each, a
+# product, and the engine's per-declaration costs — an indexed frame each, a
 # stack at the end, a compile per expression — are paid a dozen times.
 #
 # So this case holds the *total* variable count comparable to the others and

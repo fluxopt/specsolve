@@ -323,7 +323,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
 
     `sum(x * w, over=generator, by=gen_bus[bus])` with `x` indexed by snapshot
     alone: `generator` reaches the term by broadcast from `w`, so two
-    generators on one bus put the *same* `var_label` on one row. Nothing after
+    generators on one bus put the *same* `col_index` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
     is entitled to refuse the whole model, and HiGHS does.
     """
@@ -340,7 +340,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
 
 def test_sum_over_a_declared_dim_needs_no_such_collapse():
     """The counterpart: when the variable carries the grouped dimension, each merged
-    row has its own label and there is nothing to add."""
+    row has its own column index and there is nothing to add."""
     spec = override(
         BROADCAST_GROUP_SUM,
         **{

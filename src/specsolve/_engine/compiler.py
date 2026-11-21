@@ -8,7 +8,7 @@ table                columns
 dimension table      ``val``, ``ord``
 relation table       its declared columns, each under its own name
 parameter table      ``dims…``, ``value``
-variable table       ``dims…``, ``var_label``
+variable table       ``dims…``, ``col_index``
 ===================  ==========================================
 
 A term's columns are in ``terms.py``.
@@ -57,7 +57,7 @@ from specsolve.errors import SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve._engine.labels import Labelled
+    from specsolve._engine.indices import Indexed
 
 
 def _totalled(p: Term) -> pl.LazyFrame:
@@ -90,15 +90,15 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
+def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
     """The coordinates an entry's rows exist at.
 
-    A scalar's marker is renamed from the *label* column, never a ``pl.lit()``:
+    A scalar's marker is renamed from the *index* column, never a ``pl.lit()``:
     a select of literals alone is length 1, so an absent scalar would come back present.
     """
     if dims:
         return held.frame.select(*dims)
-    return held.frame.select(pl.col(label).alias(PRESENT))
+    return held.frame.select(pl.col(index).alias(PRESENT))
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ class Solution:
 
     primal: pl.Series
     dual: pl.Series | None
-    constraints: Mapping[str, Labelled]
+    constraints: Mapping[str, Indexed]
     no_duals: str | None
 
 
@@ -422,7 +422,7 @@ class Compiler:
         """A variable as a linear term with unit coefficients."""
         dims = self.scope.program.variables[name].dims
         frame = self.scope.variables[name].frame.select(
-            *dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
+            *dims, 'col_index', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
         )
         return Term(dims, frame, 'linear', presences=self._variable_presences(name, dims))
 
@@ -430,7 +430,7 @@ class Compiler:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
         entry = self.scope.program.variables[name]
         propagates = entry.where is not None and entry.missing == 'absent'
-        return (Presence(_presence(self.scope.variables[name], dims, 'var_label'), dims),) if propagates else ()
+        return (Presence(_presence(self.scope.variables[name], dims, 'col_index'), dims),) if propagates else ()
 
     def _solved_term(self, name: str) -> Term:
         """A variable at its primal — the constant term a read compiles it to, carrying the presence its linear term would.
@@ -623,7 +623,7 @@ class Compiler:
         """Spread the dropped dimensions back out over the added ones — the adjoint of a group.
 
         The join fans out, so a later reduction can bring two copies of one
-        ``var_label`` into a row, where the terminal aggregate adds them. Unlike
+        ``col_index`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
         missing = [d for d in a.dropped_dims if d not in p.dims]

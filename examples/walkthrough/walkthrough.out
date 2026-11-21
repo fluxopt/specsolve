@@ -37,7 +37,7 @@ spec: examples/walkthrough/walkthrough.yaml
     p has 18 rows, not 24: retired oil never becomes a column.
     shape: (4, 3)
     ┌──────────┬───────────┬───────────┐
-    │ snapshot ┆ generator ┆ var_label │
+    │ snapshot ┆ generator ┆ col_index │
     │ ---      ┆ ---       ┆ ---       │
     │ i64      ┆ enum      ┆ i64       │
     ╞══════════╪═══════════╪═══════════╡

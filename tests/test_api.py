@@ -756,10 +756,10 @@ def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_soluti
     assert loaded.primal('p').equals(was), 'and the loaded answer is the one the load read'
 
 
-def test_read_back_is_in_label_order_and_stays_there(dispatch_yaml, dispatch_table_inputs, tmp_path):
+def test_read_back_is_in_index_order_and_stays_there(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """A read is a join, and a join settles no order — so the read states one.
 
-    Label order is row-major over the coordinate product: `snapshot` varies
+    Index order is row-major over the coordinate product: `snapshot` varies
     slowest, and within it `generator` follows the declared order.
     """
     sources = dispatch_table_inputs
@@ -868,7 +868,7 @@ def test_an_expression_reads_a_variable_with_no_dimensions_at_its_one_coordinate
 
     Each raised ``ColumnNotFoundError: "__unit__"`` (#1858): the reader keys a
     variable with no dimensions on the empty product's marker column, and the
-    labelled table dropped that column, keeping only ``var_label``.
+    indexed table dropped that column, keeping only ``col_index``.
     """
     spec = {**spec, 'expressions': {'twice': {'dims': [], 'expression': '2 * slack'}}}
     assert read(spec, SCALAR_SOURCES, tmp_path).to_dicts() == expected, (

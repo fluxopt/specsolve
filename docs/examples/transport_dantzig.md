@@ -126,7 +126,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/transport_dantzig.yaml', sources) as solution:
         solution.objective  # 153.675
         solution.dual('within_capacity')

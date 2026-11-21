@@ -21,7 +21,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     """A row that lost every term is not a constraint, and the build says so.
 
     `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum, and the
-    labels close up around it, so every solver loads the narrower matrix.
+    row indices close up around it, so every solver loads the narrower matrix.
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},

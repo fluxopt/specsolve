@@ -8,7 +8,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
-from specsolve._engine import coverage, labels
+from specsolve._engine import coverage, indices
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import VALUE
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
 _EXPRESSION_ROW = '__expression row__'
-_LABEL_ORDER = '__label order__'
+_INDEX_ORDER = '__index order__'
 
 
 def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> ConstraintRow:
@@ -70,41 +70,41 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     columns = model.handoff.cols
     bounds = pl.concat(
         [
-            pl.DataFrame({'var_label': indices, VALUE: columns[column].gather(indices)}).select(
-                'var_label', pl.lit(side).alias('bound'), VALUE
+            pl.DataFrame({'col_index': at, VALUE: columns[column].gather(at)}).select(
+                'col_index', pl.lit(side).alias('bound'), VALUE
             )
-            for side, column, indices in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
+            for side, column, at in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
         ]
     )
     return InfeasibleSubsystem(
         constraints=_members(model, model.constraints, model.program.constraints, rows, 'row', ('sense', 'rhs')),
-        bounds=_members(model, model.variables, model.program.variables, bounds, 'var_label', ('bound', VALUE)),
+        bounds=_members(model, model.variables, model.program.variables, bounds, 'col_index', ('bound', VALUE)),
     )
 
 
 def _members(
     model: BuiltModel,
-    registry: Mapping[str, labels.Labelled],
+    registry: Mapping[str, indices.Indexed],
     declared: Mapping[str, program.Variable | program.Constraint],
     found: pl.DataFrame,
-    label: str,
+    index: str,
     carried: Sequence[str],
 ) -> dict[str, pl.DataFrame]:
-    """``(dims…, *carried)`` per entry owning a label in *found*, in entry and label order.
+    """``(dims…, *carried)`` per entry owning a solver index in *found*, in entry and index order.
 
-    An entry owns a contiguous run of labels, so its share is a range test.
+    An entry owns a contiguous run of solver indices, so its share is a range test.
     """
-    found = found.with_columns(pl.col(label).cast(pl.Int64))
+    found = found.with_columns(pl.col(index).cast(pl.Int64))
     out = {}
     for name, held in registry.items():
-        mine = found.filter((pl.col(label) >= held.start) & (pl.col(label) < held.start + held.height))
+        mine = found.filter((pl.col(index) >= held.start) & (pl.col(index) < held.start + held.height))
         if not mine.height:
             continue
         dims = declared[name].dims
         frame = (
-            held.frame.with_columns(pl.col(label).cast(pl.Int64))
-            .join(mine.lazy(), on=label)
-            .sort(label, *carried)
+            held.frame.with_columns(pl.col(index).cast(pl.Int64))
+            .join(mine.lazy(), on=index)
+            .sort(index, *carried)
             .select(*dims, *carried)
         )
         out[name] = _as_strings(frame, model.attached, dims).pipe(collected)
@@ -165,32 +165,32 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
             continue
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
-        picked = held.frame.select(pl.col('var_label'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
+        picked = held.frame.select(pl.col('col_index'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
         schema = held.frame.collect_schema()
         rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
-                pl.col('var_label').alias('col'),
+                pl.col('col_index').alias('col'),
                 pl.lit(variable).alias('variable'),
                 rendered.alias('coordinate'),
             ).pipe(collected)
         )
-    labelled = (
+    owners = (
         pl.concat(named)
         if named
         else pl.DataFrame(schema={'col': pl.Int64, 'variable': pl.String, 'coordinate': pl.String})
     )
     return (
         entries.with_columns(pl.col('col').cast(pl.Int64))
-        .join(labelled.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left', maintain_order='left')
+        .join(owners.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left', maintain_order='left')
         .select('variable', 'coordinate', pl.col('coeff').alias('coefficient'))
     )
 
 
 def laid_out(
-    attached: AttachedSources, held: labels.Labelled, dims: tuple[str, ...], values: pl.Series
+    attached: AttachedSources, held: indices.Indexed, dims: tuple[str, ...], values: pl.Series
 ) -> pl.LazyFrame:
-    """One entry's coordinates in label order, beside its share of *values*.
+    """One entry's coordinates in index order, beside its share of *values*.
 
     Dimension columns leave as ``String`` ([`_as_strings`][]).
     """
@@ -259,13 +259,13 @@ def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSou
 
 def reordered(
     attached: AttachedSources,
-    registry: Mapping[str, labels.Labelled],
+    registry: Mapping[str, indices.Indexed],
     declared: Mapping[str, program.Variable | program.Constraint],
     frames: Mapping[str, pl.DataFrame],
 ) -> pl.Series:
     """A saved solution's value tables back as the positional vector — the inverse of [`laid_out`][].
 
-    A rebuild over the same spec and sources numbers the labels identically
+    A rebuild over the same spec and sources numbers the solver indices identically
     (docs/development/architecture.md, "The relational lane").
 
     Raises:
@@ -280,9 +280,9 @@ def reordered(
 
 
 def _aligned(
-    attached: AttachedSources, name: str, held: labels.Labelled, dims: tuple[str, ...], stored: pl.DataFrame | None
+    attached: AttachedSources, name: str, held: indices.Indexed, dims: tuple[str, ...], stored: pl.DataFrame | None
 ) -> pl.Series:
-    """One entry's saved values in its label order — its slice of the vector.
+    """One entry's saved values in its index order — its slice of the vector.
 
     An entry the rebuild leaves wholly absent has an empty slice, so a
     missing *stored* is no error there.
@@ -296,8 +296,8 @@ def _aligned(
         )
     if not dims:
         return stored[VALUE].rename(_SOLUTION)
-    order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_LABEL_ORDER)
-    joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
+    order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_INDEX_ORDER)
+    joined = order.join(stored, on=list(dims), how='left').sort(_INDEX_ORDER)
     if joined[VALUE].null_count():
         raise SpecsolveError(
             f"the saved answer's '{name}' table does not cover every coordinate this model builds, so it "
@@ -338,7 +338,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     parameter does not cover contributes zero, and one where a variable is
     absent has no row, or a zero under ``missing: neutral``. A quotient has no row
     where its divisor is absent or zero. A variable-free expression is one row.
-    Dimensions come in the order the spec declares them, rows in label order.
+    Dimensions come in the order the spec declares them, rows in index order.
 
     Raises:
         DataError: A divisor parameter with no row where the expression
@@ -348,7 +348,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     context = f"named expression '{name}'"
     terms = compiler.expression(expr, context, reported=True).constant
     dims = compiler.scope.spanned(terms)
-    carrier = labels.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    carrier = indices.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
 
     coverage.refuse_null_constants(
         [_holed(carrier, terms), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in terms)],
@@ -359,7 +359,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
 
     added = compiler.summed_onto(terms, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
-    ordered = labels.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
+    ordered = indices.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
 
@@ -442,12 +442,12 @@ def _refuse_nothing_placed(placed: int) -> None:
 def _place(
     into: np.ndarray,
     model: BuiltModel,
-    held: Mapping[str, labels.Labelled],
+    held: Mapping[str, indices.Indexed],
     declared: Mapping[str, program.Variable] | Mapping[str, program.Constraint],
     previous: Mapping[str, pl.LazyFrame],
     value: pl.Expr,
 ) -> int:
-    """*value* off each table of *previous*, written into *into* at the label of the same coordinate in *held*; how many landed.
+    """*value* off each table of *previous*, written into *into* at the solver index of the same coordinate in *held*; how many landed.
 
     The join casts every dimension to a string on both sides, so a table typed
     otherwise than the read-back still matches: ``3`` and ``'3'`` are one
@@ -458,17 +458,17 @@ def _place(
 
     positions = pl.Series(VALUE, np.arange(len(into), dtype=np.int64))
     placed = 0
-    for name, labelled in held.items():
+    for name, indexed in held.items():
         dims = list(declared[name].dims)
         before = previous.get(name)
         if before is None or set(before.collect_schema().names()) != {*dims, VALUE}:
             continue
-        here = laid_out(model.attached, labelled, tuple(dims), positions).select(
-            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col(VALUE).alias(_LABEL_ORDER)
+        here = laid_out(model.attached, indexed, tuple(dims), positions).select(
+            *(pl.col(dim).cast(pl.String) for dim in dims), pl.col(VALUE).alias(_INDEX_ORDER)
         )
         given = before.select(*(pl.col(dim).cast(pl.String) for dim in dims), value)
         found = (here.join(given, on=dims, how='inner') if dims else here.join(given, how='cross')).pipe(collected)
-        into[found[_LABEL_ORDER].to_numpy()] = found[VALUE].to_numpy()
+        into[found[_INDEX_ORDER].to_numpy()] = found[VALUE].to_numpy()
         placed += found.height
     return placed
 

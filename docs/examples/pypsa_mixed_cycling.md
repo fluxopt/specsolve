@@ -270,7 +270,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_mixed_cycling.yaml', sources) as solution:
         solution.objective  # 4800.0
         solution.dual('nodal_balance')

@@ -65,7 +65,7 @@ def data():
     ],
 )
 def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expected):
-    """Two readings, both sayable, and the bracket is what picks.
+    """Two readings, both in the language, and the bracket is what picks.
 
     ``differential`` asserts the two lanes agree; these pairs pin the right
     number. 32 against 66, and 6400 against 13200, differ only in where the

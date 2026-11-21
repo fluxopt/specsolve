@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._engine.labels import Labelled
+    from specsolve._engine.indices import Indexed
     from specsolve._engine.terms import Term
 
 
@@ -55,7 +55,7 @@ class Scope:
 
     program: program.Program
     data: AttachedSources
-    variables: Mapping[str, Labelled]
+    variables: Mapping[str, Indexed]
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -68,9 +68,9 @@ class Scope:
         """Cross join of the dimension tables: labels and ordinals, nothing else.
 
         Each cross join keeps its left side's order, then its right's, so the
-        product arrives row-major, which is label order, on either engine; the
+        product arrives row-major, which is index order, on either engine; the
         streaming engine otherwise picks which side it buffers from the
-        tables' sizes, and the order with it. [`labels.frame`][] verifies it.
+        tables' sizes, and the order with it. [`indices.frame`][] verifies it.
         The empty product is one real row carrying only [`UNIT`][], so a
         ``where`` on a scalar entry has a row to filter.
         """
@@ -110,7 +110,7 @@ class Scope:
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
 
-        A label, a bound's slot and a set's position all read this one rule, so two
+        A solver index, a bound's slot and a set's position all read this one rule, so two
         builds of one model agree on every index. *ordinals* reads a dimension's
         ordinal off the table in hand.
         """

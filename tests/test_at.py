@@ -119,7 +119,7 @@ def test_one_binary_gates_every_flow_of_its_component():
 
 
 def test_at_agrees_with_the_oracle_through_a_reduction():
-    """A pullback summed back over `flow` brings two copies of one label into a row, and they add.
+    """A pullback summed back over `flow` brings two copies of one column index into a row, and they add.
 
     The oracle is imported in the body so the rest of the module runs on the
     bare install.

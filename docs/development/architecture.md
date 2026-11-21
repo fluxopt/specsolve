@@ -47,7 +47,7 @@ flowchart TB
         ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
         TABLES --> DIRECT["_sinks/, a solver<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
-        DIRECT --> SOL["_result.py<br/>label join, never dense"]
+        DIRECT --> SOL["_result.py<br/>joined by label, never dense"]
     end
 
     SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · evaluate<br/>polars tables you can join"]
@@ -226,7 +226,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/specialize.py` | what the data decides before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
-| `_engine/readback.py` | a row, a solve and a named expression, read back by label |
+| `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
 | `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |

@@ -76,10 +76,10 @@ def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
 
 
 def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitment_run):
-    """Every column's variable type crosses, in label order, in the one load.
+    """Every column's variable type crosses, in index order, in the one load.
 
     Integrality is applied by column index, so a vector that is short, shifted
-    or in another order relabels which variables are integral and the
+    or in another order reassigns which variables are integral and the
     objective moves. A binary model is the sharp case.
     """
     tables = commitment_run.engine._model.handoff

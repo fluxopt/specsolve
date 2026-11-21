@@ -87,7 +87,7 @@ def compile_condition(
     Walking joins the parameters, so the condition is built before the frame is
     read. A name *mask* is certain of ([`_certain_names`][]) is inner- or
     semi-joined rather than left-joined. No join maintains order: consumers
-    verify it ([`labels.in_position_order`][]).
+    verify it ([`indices.in_position_order`][]).
     """
     certain = _certain_names(mask)
     carrier = Carrier(frame)

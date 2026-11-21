@@ -227,7 +227,7 @@ def _call_snippet(name: str) -> str:
     written = to_spec(constructs.ROOT / path)
     handed = f"to_spec('{path}').expand()" if written.piecewise or written.sos else f"'{path}'"
     lines = [
-        '# sources: parameter name -> frame or parquet path',
+        '# sources: parameter name -> table or parquet path',
         f'with sps.solve({handed}, sources) as solution:',
         f'    solution.objective  # {entry["objective"]!r}',
     ]

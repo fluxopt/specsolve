@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
-from specsolve._engine import conditions, labels
+from specsolve._engine import conditions, indices
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -47,12 +47,12 @@ SOURCES = {
 
 
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
-    """Which constraints were compiled, which variables had their bounds compiled, which dimensions were labelled by a query, and which an assumption was read over."""
-    seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'labelled': set(), 'assumption': set()}
+    """Which constraints were compiled, which variables had their bounds compiled, which dimensions were indexed by a query, and which an assumption was read over."""
+    seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'indexed': set(), 'assumption': set()}
     expression, bounds, frame, narrowed = (
         compiler_module.Compiler.expression,
         compiler_module.Compiler.bounds,
-        labels.frame,
+        indices.frame,
         _assumptions.narrowed,
     )
 
@@ -66,7 +66,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         return bounds(self, frame, name, v)
 
     def spied_frame(scope, dims, *args, **kwargs):
-        seen['labelled'].add(tuple(dims))
+        seen['indexed'].add(tuple(dims))
         return frame(scope, dims, *args, **kwargs)
 
     def spied_narrowed(scope, dims, where):
@@ -75,7 +75,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
 
     monkeypatch.setattr(compiler_module.Compiler, 'expression', spied_expression)
     monkeypatch.setattr(compiler_module.Compiler, 'bounds', spied_bounds)
-    monkeypatch.setattr(labels, 'frame', spied_frame)
+    monkeypatch.setattr(indices, 'frame', spied_frame)
     monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
     return seen
@@ -87,7 +87,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('constraint', 'over_nothing', id='a-constraint-over-a-dimension-without-a-label'),
         pytest.param('constraint', 'admits_nothing', id='a-constraint-whose-where-admits-no-row'),
         pytest.param('variable', 'y', id='a-variable-over-a-dimension-without-a-label'),
-        pytest.param('labelled', ('e',), id='an-entry-over-a-dimension-without-a-label-is-labelled-without-a-query'),
+        pytest.param('indexed', ('e',), id='an-entry-over-a-dimension-without-a-label-is-indexed-without-a-query'),
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
 )
@@ -133,19 +133,19 @@ SPARSE_SOURCES = {
 }
 
 
-def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(monkeypatch):
-    """A sparse absence narrows such a constraint, and labelling it unrestricted first would hold the full product of its dimensions."""
-    frame, unrestricted = labels.frame, []
+def test_a_constraint_without_a_where_is_indexed_only_inside_its_restrictions(monkeypatch):
+    """A sparse absence narrows such a constraint, and indexing it unrestricted first would hold the full product of its dimensions."""
+    frame, unrestricted = indices.frame, []
 
-    def spied_frame(scope, dims, where, label, start, restrictions=()):
-        if label == 'row' and where is None and not restrictions:
+    def spied_frame(scope, dims, where, index, start, restrictions=()):
+        if index == 'row' and where is None and not restrictions:
             unrestricted.append(tuple(dims))
-        return frame(scope, dims, where, label, start, restrictions)
+        return frame(scope, dims, where, index, start, restrictions)
 
-    monkeypatch.setattr(labels, 'frame', spied_frame)
+    monkeypatch.setattr(indices, 'frame', spied_frame)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
-    assert not unrestricted, f'`capped` was labelled over its full product {unrestricted} before its restriction'
+    assert not unrestricted, f'`capped` was indexed over its full product {unrestricted} before its restriction'
 
 
 #: `e` has no label, so `count(on, over=e)` is 0 at every `g`.

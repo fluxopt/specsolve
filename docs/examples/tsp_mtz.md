@@ -21,7 +21,7 @@ Which parts of it the language can say:
 |---|---|
 | DFJ, subsets **written out** | **sayable** — the subsets go in as data, exactly as [KVL's cycle basis](pypsa_kvl.md) does. Verified on an 8-city instance: 246 subsets, one correct tour |
 | DFJ, subsets **generated lazily** | **outside** — solve, find violations, add rows, re-solve is an *algorithm*, not a model. Nothing declarative describes it |
-| MTZ | sayable, and what this port uses |
+| MTZ | in the language, and what this port uses |
 
 The refusal is only the second row. The first is not a language limit: it is 2ⁿ
 rows, which stops being practical somewhere around twenty cities. A

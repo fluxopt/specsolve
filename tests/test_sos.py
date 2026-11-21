@@ -196,7 +196,7 @@ def test_the_native_sink_reaches_the_same_optimum(sos_type):
 
 @pytest.mark.parametrize('sos_type', [1, 2], ids=['sos1', 'sos2'])
 def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
-    """The section, in label order, and read back by a solver that takes it."""
+    """The section, in index order, and read back by a solver that takes it."""
     path = sps.write(spec(sos_type), DATA, tmp_path / 'model.lp')
     text = path.read_text()
 
@@ -205,7 +205,7 @@ def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
     assert section == [
         f's0: S{sos_type} :: x0:1 x1:2 x2:3 x3:4',
         f's1: S{sos_type} :: x4:1 x5:2 x6:3 x7:4',
-    ], 'the section is not the sets in label order, weighted by declared position'
+    ], 'the section is not the sets in index order, weighted by declared position'
 
     gurobipy = pytest.importorskip('gurobipy', reason='no shipped solver but gurobi reads an SOS section')
     with gurobipy.Env(params={'OutputFlag': 0}) as env:
@@ -357,7 +357,7 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     """The one shape where the stream is not already in ``(set, weight)`` order.
 
     With ``over`` first in the ``dims``, a set's members are ``|site|``
-    apart in label order, so every set interleaves with every other. The sinks
+    apart in index order, so every set interleaves with every other. The sinks
     read a set's edges off neighbouring rows, so an ungrouped stream links
     members to the wrong binaries — and still reaches a plausible optimum.
     """
@@ -372,11 +372,11 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
 
 @pytest.mark.parametrize('dims', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])
 def test_a_condition_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
-    """A label is a position where nothing was dropped, and both paths say so.
+    """A column index is a position where nothing was dropped, and both paths say so.
 
-    A variable with no `where` has sets and weights that are arithmetic on the label, which
+    A variable with no `where` has sets and weights that are arithmetic on the column index, which
     *is* the coordinate's position in the declared product. A narrowed one has
-    to read the coordinates, a dropped row being a label that no longer
+    to read the coordinates, a dropped row being a column index that no longer
     decomposes. A condition that drops nothing sends the same model down both
     paths, so either the two tables are one table or one of them is wrong —
     and a member in the wrong set is linked to another set's binaries.

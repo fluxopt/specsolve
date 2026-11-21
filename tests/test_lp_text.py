@@ -176,7 +176,7 @@ def test_a_solver_reads_back_every_number_the_file_holds(suffix: str, tmp_path: 
     }
     for name, expected in ROUND_TRIP_NUMBERS.items():
         assert [_bits(x) for x in read[name]] == [_bits(x) for x in expected], (
-            f'{name} must read back bit for bit, in label order: {read[name]} != {expected}'
+            f'{name} must read back bit for bit, in index order: {read[name]} != {expected}'
         )
 
 

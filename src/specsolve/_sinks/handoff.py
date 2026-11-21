@@ -97,7 +97,7 @@ class Handoff:
 
     ``qmatrix`` is the same form for the *rows* that carry one:
     ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
-    label space, beginning at [`linear_row_count`][] — the engine builds
+    row indices, beginning at [`linear_row_count`][] — the engine builds
     quadratic entries last — so a sink holding linear and quadratic rows
     in different objects reads its answer back as two runs, not a scatter.
 
@@ -260,7 +260,7 @@ class Handoff:
         """Each chunk of rows with the matrix entries it owns — every sink's reader.
 
         A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
-        searched. A sink that needs the ``row`` labels asks
+        searched. A sink that needs the ``row`` indices asks
         [`matrix_block`][] with the chunk's own range, so its spans and entries
         cannot disagree.
         """
@@ -268,11 +268,11 @@ class Handoff:
             yield MatrixBlock(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
-        """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled back out of ``row_starts``."""
+        """Rows ``[lo, hi)`` of the matrix with their ``row`` indices spelled back out of ``row_starts``."""
         import numpy as np
 
-        labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
-        return self._span(lo, hi).with_columns(pl.Series('row', labels))
+        rows = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
+        return self._span(lo, hi).with_columns(pl.Series('row', rows))
 
 
 def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
@@ -303,7 +303,7 @@ def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
 
 
 def _scattered(count: int, at: Ints, values: Any, absent: Any) -> Any:  # pyrefly: ignore[explicit-any] — the dtype is the model's
-    """*values* written at the label each one belongs to, *absent* elsewhere."""
+    """*values* written at the solver index each one belongs to, *absent* elsewhere."""
     import numpy as np
 
     dense = np.full(count, absent, dtype=values.dtype)

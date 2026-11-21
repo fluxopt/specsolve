@@ -2,7 +2,7 @@
 
 [`read_start`][] reads one start for one build, and [`slice_starts`][] cuts
 one for each slice of a sweep before any slice is built. Laying a start onto
-a build's labels is the engine's
+a build's solver indices is the engine's
 ([`matched_basis`][specsolve._engine.readback.matched_basis],
 [`matched_values`][specsolve._engine.readback.matched_values]).
 """

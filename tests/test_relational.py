@@ -1,7 +1,7 @@
-"""The relational lane as such: matrix assembly, labels, and the solver hand-off.
+"""The relational lane as such: matrix assembly, solver indices, and the solver hand-off.
 
 A repeated cell collapsing, a column being positional, a bound attached by
-position rather than joined, a solution read back in label order: none is a
+position rather than joined, a solution read back in index order: none is a
 construct a modeller writes, and each is a way this lane can be wrong while
 every objective still agrees.
 """
@@ -161,7 +161,7 @@ _CAP = pl.DataFrame({'f': ['a', 'b'], 'value': [5.0, 5.0]})
 
 #: A constant term beside a linear one, under each operator that acts along a dimension the
 #: constant does not carry. `check` accepts every one, compiling passes it,
-#: and the linopy lane builds and solves it — so the file is sayable and only this
+#: and the linopy lane builds and solves it — so the file is in the language and only this
 #: lane is short (#1137).
 CONSTANT_BESIDE_A_TERM = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -513,7 +513,7 @@ TWO_BAD_COORDS_SPEC = {
 }
 
 
-class TestTheLabelSpace:
+class TestTheIndexSpace:
     """Which rows exist, and in what order — decided by the entry, never the data.
 
     The shared claim is that order is a property of the *model*: a condition does not
@@ -523,10 +523,10 @@ class TestTheLabelSpace:
     every objective assertion in this file and fail here.
     """
 
-    def test_a_narrowed_variable_is_labelled_in_dimension_order(self):
-        """A label is the solver's own column index, so its order is the contract.
+    def test_a_narrowed_variable_is_indexed_in_dimension_order(self):
+        """A column index is the solver's own column, so its order is the contract.
 
-        Labels are dense ``0..n-1`` over the coordinates the condition leaves, assigned
+        Column indices are dense ``0..n-1`` over the coordinates the condition leaves, assigned
         row-major on the dimensions' declared ordinals. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
@@ -579,10 +579,12 @@ class TestTheLabelSpace:
         ]
 
         with sps.build(spec, sources) as model:
-            labelled = model._engine._model.variables['p'].frame.collect()
+            indexed = model._engine._model.variables['p'].frame.collect()
 
-        assert labelled['var_label'].to_list() == list(range(len(expected))), 'labels must be dense and ascending'
-        assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
+        assert indexed['col_index'].to_list() == list(range(len(expected))), (
+            'column indices must be dense and ascending'
+        )
+        assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
         """A string dimension is an ``Enum`` over its labels in label order for the
@@ -648,24 +650,24 @@ class TestTheLabelSpace:
             )
             assert model.solve().objective == pytest.approx(0.0)
 
-    def test_a_condition_that_removes_nothing_labels_exactly_like_no_condition(self, dispatch_data):
+    def test_a_condition_that_removes_nothing_indexes_exactly_like_no_condition(self, dispatch_data):
         """A vacuous `where` must not shift a single solver index.
 
-        Labels are the solver's own column numbers, so "the condition removed nothing"
+        Column indices are the solver's own column numbers, so "the condition removed nothing"
         and "there was no condition" have to produce identical tables rather than merely
         the same row count.
         """
         gens, load = dispatch_data
         gens = gens.assign(p_max=gens['p_max'].where(gens['p_max'] > 0, 1.0))  # the condition leaves nothing absent
 
-        labels = []
+        indexed = []
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
-                labels.append(engine._model.variables['p'].frame.collect().sort('var_label'))
-        assert labels[0].equals(labels[1])
+                indexed.append(engine._model.variables['p'].frame.collect().sort('col_index'))
+        assert indexed[0].equals(indexed[1])
 
     def test_a_condition_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
         """`not` and `or` select rows the condition's own join must not have dropped.
@@ -705,12 +707,12 @@ class TestTheLabelSpace:
             'mixed': [0, 1],  # `a` is certain, `b` is not
         }
 
-    def test_every_entry_owns_a_contiguous_run_of_labels(self):
+    def test_every_entry_owns_a_contiguous_run_of_solver_indices(self):
         """What reading a solve back by position rests on.
 
-        A solver vector is positional in the same index the labels are, so a
-        entry's share of it is a slice — but only if its labels are a dense
-        run and the runs tile the whole index. Both are how `labels.frame` numbers
+        A solver vector is positional in the solver indices, so an entry's
+        share of it is a slice — but only if its indices are a dense run and
+        the runs tile the whole index. Both are how `indices.frame` numbers
         an entry, and neither is visible from the tables: a block
         that started one late would report a neighbour's numbers under this
         entry's coordinates, with nothing out of range and nothing null.
@@ -733,16 +735,16 @@ class TestTheLabelSpace:
         with sps.build(spec, listed | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
             engine = model._engine
             tables = engine._model.handoff
-            for names, total, held, label in (
-                (['x', 'y', 'z'], tables.column_count, engine._model.variables, 'var_label'),
+            for names, total, held, index in (
+                (['x', 'y', 'z'], tables.column_count, engine._model.variables, 'col_index'),
                 (['c1', 'c2'], tables.row_count, engine._model.constraints, 'row'),
             ):
                 at = 0
                 for name in names:
                     start, height = held[name].start, held[name].height
                     assert start == at, f'{name} does not start where the previous entry ended'
-                    labels = held[name].frame.select(label).collect().to_series()
-                    assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
+                    numbered = held[name].frame.select(index).collect().to_series()
+                    assert sorted(numbered) == list(range(start, start + height)), f'{name} is not a dense run'
                     at += height
                 assert at == total, 'the runs do not tile the index'
 
@@ -1187,7 +1189,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             assert rate['sized'] == pytest.approx(40.0, rel=RTOL), 'free to 50, so the envelope is 0.8 * 50'
 
 
-#: Two dimensions on purpose (see the test below): a single-dimension label table is a scan
+#: Two dimensions on purpose (see the test below): a single-dimension index table is a scan
 #: and cannot come out of order.
 POSITIONAL_COLS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'str'}},
@@ -1260,20 +1262,20 @@ FLAT_SPEC = {
 
 
 class TestThePositionalHandoff:
-    """The sink is handed positions, not labels, and position is the whole contract.
+    """The sink is handed positions, not an index column, and position is the whole contract.
 
     A column index *is* the solver column, a bound is attached by position
     rather than joined, and a chunk is a range of entries. Every test here
-    would still pass if the labels were wrong and only the arithmetic right,
+    would still pass if the column indices were wrong and only the arithmetic right,
     and every one fails if the order the sink is handed disagrees with the
     order the model believes.
     """
 
-    def test_a_solution_is_read_back_in_label_order_without_sorting_for_it(self):
-        """The order is produced by the labeller, so the read-back only reads it.
+    def test_a_solution_is_read_back_in_index_order_without_sorting_for_it(self):
+        """The order is produced where the solver indices are assigned, so the read-back only reads it.
 
-        Seeding the vector with an ``arange`` makes every value its own label, so a
-        read-back in label order comes out ascending, which is the contract
+        Seeding the vector with an ``arange`` makes every value its own solver index, so a
+        read-back in index order comes out ascending, which is the contract
         `sol.primal` states. The plan holds no sort, which would move a full copy
         of the coordinates while the solver's own model is still resident.
         """
@@ -1294,9 +1296,11 @@ class TestThePositionalHandoff:
             primal = pl.Series('value', np.arange(model._engine._model.handoff.column_count, dtype=np.float64))
             dual = pl.Series('value', np.arange(model._engine._model.handoff.row_count, dtype=np.float64))
             primals, duals, _ = model._engine._read_back(primal, dual, None)
-            assert 'SORT' not in primals['p'].explain(optimized=False), 'the labeller already ordered this'
-            assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in label order'
-            assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in label order'
+            assert 'SORT' not in primals['p'].explain(optimized=False), (
+                'assigning the solver indices already ordered this'
+            )
+            assert primals['p'].collect()['value'].to_list() == list(range(len(primal))), 'primal not in index order'
+            assert duals['meet'].collect()['value'].to_list() == list(range(len(dual))), 'dual not in index order'
 
     @pytest.mark.parametrize('length', [2, 5], ids=['short', 'long'])
     def test_a_solver_vector_that_does_not_span_the_model_is_refused(self, monkeypatch, length):
@@ -1332,8 +1336,8 @@ class TestThePositionalHandoff:
     def test_a_solver_hands_back_a_vector_and_not_an_index(self, solver_name):
         """A solution is positional, so there is nothing to key it by.
 
-        Solver output is indexed by the solver's own index, which *is* our label —
-        so a ``(label, value)`` table carries an ``arange`` beside every value that
+        Solver output is indexed by the solver's own index, which *is* our column index —
+        so an ``(index, value)`` table carries an ``arange`` beside every value that
         the read-back never reads, 8 bytes a column for as long as the result is
         held.
 
@@ -1397,7 +1401,7 @@ class TestThePositionalHandoff:
 
         ``addCols`` and ``addRows`` append: column *k* must be the *k*-th row handed
         over. That holds only if the ranges are ordered, consecutive and gapless —
-        a dropped range silently shortens the model, an overlapping one relabels
+        a dropped range silently shortens the model, an overlapping one renumbers
         it, and neither shows up as an error. The widths here include one below 1
         and one far above the budget, the two ends where a ``//`` can produce a
         zero step or a chunk wider than asked for.
@@ -1414,7 +1418,7 @@ class TestThePositionalHandoff:
     def test_dense_columns_does_not_edit_the_model_it_projects(self):
         """Two solvers, two spellings of infinity, one model — and it survives both.
 
-        `cols` has no `col` column: it is one row per column in label order, so the
+        `cols` has no `col` column: it is one row per column in index order, so the
         vectors a solver sink is handed are *views* of the table rather than the
         scatter's fresh arrays. Replacing an infinity in place through one would
         rewrite the built model to suit whichever solver asked last, and the second
@@ -1434,13 +1438,13 @@ class TestThePositionalHandoff:
 
     @pytest.mark.parametrize('where', [None, 'cap > 0'])
     def test_cols_is_positional_so_a_row_index_is_its_solver_column(self, where):
-        """Every row of `cols` sits at its own label, with a `where` or without.
+        """Every row of `cols` sits at its own column index, with a `where` or without.
 
-        `cols` carries no `col`: it is one row per column in label order, so a
-        row's position *is* the solver's index. Both arithmetic label paths get
+        `cols` carries no `col`: it is one row per column in index order, so a
+        row's position *is* the solver's index. Both arithmetic index paths get
         that order from the emission order of a **cross join**, which is a property
         of polars rather than of this package — so it is checked here against the
-        label table, which knows the answer independently.
+        index table, which knows the answer independently.
 
         Two dimensions on purpose: one dimension is a scan and cannot be out of order, so a
         single-dimension model would pass whatever the product did. Bounds are distinct
@@ -1460,17 +1464,17 @@ class TestThePositionalHandoff:
             assert 'col' not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            labels = model._engine._model.variables['x'].frame.collect().sort('var_label')
-            raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(labels['j'].dtype))
-            expected = labels.join(raw, on=['i', 'j'], how='left')['value'].to_list()
+            indexed = model._engine._model.variables['x'].frame.collect().sort('col_index')
+            raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(indexed['j'].dtype))
+            expected = indexed.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
 
     def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined(self, monkeypatch):
         """The shape xarray gets for free: position *is* the coordinate.
 
         `avail` spans exactly `p`'s dimensions and has a row per coordinate, so the
-        label table and the parameter describe the same product — and the label
-        table is in label order by construction. Sorting the parameter by the
+        index table and the parameter describe the same product — and the index
+        table is in index order by construction. Sorting the parameter by the
         dimension ordinals reproduces that order, so the value column is attached
         rather than joined, which on `profiled/l` is most of a 0.58 s join.
 
@@ -1506,7 +1510,7 @@ class TestThePositionalHandoff:
     def test_a_condition_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
         """Both ways position stops meaning the coordinate, refused by the gate.
 
-        A `where` makes the label table a subset of the product, and a parameter
+        A `where` makes the index table a subset of the product, and a parameter
         with a missing row makes the *parameter* one — either way the two sides no
         longer line up row for row, and attaching would pair a coordinate with
         another coordinate's bound. Neither is a shape the join cannot handle, so
@@ -1631,7 +1635,7 @@ class TestWhereTheLanesDifferByDesign:
         assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
         assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
         assert not isinstance(refusal.value, LanguageError), (
-            'a lane gap is not a language error — the file is sayable and the oracle builds it'
+            'a lane gap is not a language error — the file is in the language and the oracle builds it'
         )
 
     @pytest.mark.parametrize(('expression', 'answer'), REWRITE_CASES)

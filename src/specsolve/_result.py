@@ -199,7 +199,7 @@ class InfeasibleSubsystem:
 
     Attributes:
         constraints: ``(dims…, sense, rhs)`` per constraint with a row in it,
-            in entry order, its rows in label order.
+            in entry order, its rows in index order.
         bounds: ``(dims…, bound, value)`` per variable with a bound in it,
             in entry order. ``bound`` is ``lower`` or ``upper``.
     """
@@ -360,14 +360,14 @@ class Result:
     Returned whatever the solve concluded: test [`has_primal`][] before
     reading values, or catch [`NoSolutionError`][specsolve.errors.NoSolutionError].
     A result owns its values, so it outlives an update, another solve or
-    ``model.close()``. It keeps the label tables of the build it answered
+    ``model.close()``. It keeps the index tables of the build it answered
     alive until [`close`][], which is optional.
     """
 
     _status: SolveStatus
     _objective: float
     #: ``{kind: {name: frame}}``: one ``(dims…, value)`` table per entry,
-    #: lazy and in label order, under ``primal``, ``dual`` and each of the
+    #: lazy and in index order, under ``primal``, ``dual`` and each of the
     #: [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS] the solve asked
     #: for. Its keys are what this answer carries; a kind of which the solve
     #: left nothing maps to nothing. ``None`` after [`close`][], which is what
@@ -495,7 +495,7 @@ class Result:
     def primal(self, name: str) -> pl.DataFrame:
         """The tidy solution of variable *name* — ``(dims…, value)``.
 
-        Rows come back in label order, row-major over the variable's coordinate
+        Rows come back in index order, row-major over the variable's coordinate
         product, so two reads and two runs agree.
 
         Raises:
@@ -852,7 +852,7 @@ class Result:
         return {**held, 'expression': expressions}, no_expressions
 
     def close(self) -> None:
-        """Release this result's tables, and its hold on the build's label tables, early. Optional.
+        """Release this result's tables, and its hold on the build's index tables, early. Optional.
 
         Tables already read stay valid. The model and the solver are the
         [`Model`][specsolve._api.Model]'s to close.

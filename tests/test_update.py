@@ -2,7 +2,7 @@
 
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
-path: an update that moves a condition renumbers labels, so the engine rebuilds and
+path: an update that moves a condition renumbers solver indices, so the engine rebuilds and
 solves cold, and `diagnostics().loads` says which happened.
 """
 
@@ -165,7 +165,7 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
-    every label. Over **every** entry and **every** sink that can stay
+    every solver index. Over **every** entry and **every** sink that can stay
     loaded, since each sink writes its own push.
     """
     spec, given = _case(rung, dispatch_yaml)
@@ -329,7 +329,7 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
 
 
 @pytest.mark.parametrize('rung', RUNGS)
-def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
+def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch_yaml, rung, solver_name):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
@@ -347,8 +347,8 @@ def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
         expected = 1 if rung.keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
         assert seen.loads == expected, (
-            'an update that keeps every label pushes values onto the loaded solver; '
-            'one that moves a label has to load the model again'
+            'an update that keeps every solver index pushes values onto the loaded solver; '
+            'one that moves a solver index has to load the model again'
         )
 
 
@@ -502,16 +502,16 @@ def test_a_update_may_be_repeated_and_each_answer_is_its_own(model):
         served.append(model.update({'load': load}).solve().primal('p')['value'].sum())
 
     assert served == sorted(served), f'{served} — more load must dispatch more power'
-    assert model.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
+    assert model.diagnostics().loads == 1, 'a scaled right-hand side moves no solver index'
 
 
 def test_a_result_from_before_a_update_keeps_reading(model):
     """A result owns its read-back, so nothing done to the model expires it.
 
-    The label tables are immutable and shared: an update builds new ones
+    The index tables are immutable and shared: an update builds new ones
     without touching what earlier results hold, so an old answer stays an
     answer over its own coordinates — a driver keeps any result it still
-    wants, at the price of keeping that build's label tables alive.
+    wants, at the price of keeping that build's index tables alive.
     """
     before = model.solve()
     kept = before.primal('p')
@@ -526,7 +526,7 @@ def test_a_result_from_before_a_update_keeps_reading(model):
 
 def test_closing_a_result_never_touches_the_model(model):
     """`close` releases what the result holds — its values and its hold on the
-    label tables — never the model or the solver, which are the handle's to
+    index tables — never the model or the solver, which are the handle's to
     close. So a result closed on the way out of a `with` block cannot take
     down the model a loop is still solving, and a sibling result, holding its
     own read-back, keeps reading.
@@ -568,7 +568,7 @@ def test_a_update_can_grow_a_dimension():
 
     A cut family is declared once and its labels come from data (the data-attachment rules), so
     an iteration hands over a longer table and the coordinates to match. The
-    labels of the rows that were already there do not move, but the model has
+    indices of the rows that were already there do not move, but the model has
     more rows than the solver holds, so it is loaded again.
     """
     master = {
