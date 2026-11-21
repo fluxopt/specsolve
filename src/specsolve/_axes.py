@@ -41,7 +41,7 @@ CARRY = 'carry'
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and where it ends.
 
-    ``seam`` is the last label of the windowed dimension this slice owns, the
+    ``handover`` is the last label of the windowed dimension this slice owns, the
     ones after it being lookahead, or ``None`` where the axis windows nothing;
     a ``carry`` hands on the row there.
     """
@@ -51,7 +51,7 @@ class Slice(NamedTuple):
     #: How this slice cuts a table that carries the sliced dimension, as it
     #: cut its sources.
     cut: Callable[[pl.LazyFrame], pl.LazyFrame]
-    seam: Label | None = None
+    handover: Label | None = None
 
 
 @dataclass(frozen=True)
@@ -305,9 +305,9 @@ class EachWindow:
             cut = {
                 name: _within(table, columns, window, strangers) for name, (table, columns, strangers) in tables.items()
             }
-            seam = window[owns - 1]
+            handover = window[owns - 1]
             out.append(
-                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), seam)
+                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), handover)
             )
             owned.extend({key_name: window[0], self.dim: label} for label in window[:owns])
             start += owns
@@ -380,22 +380,22 @@ class CarryRule:
         return cls(variable, dropped[0] if dropped else None)
 
     def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, seam: Label | None
+        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, handover: Label | None
     ) -> pl.DataFrame:
         """What this rule hands the next slice, read out of one slice's primals.
 
-        The row handed on is the one at *seam*, the last label the slice owns,
+        The row handed on is the one at *handover*, the last label the slice owns,
         never a lookahead row.
         """
         frame = frames[self.variable]
         if self.dropped is None:
             return frame
-        assert seam is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == seam).drop(self.dropped)
+        assert handover is not None, 'a carry that drops a dimension is refused unless the axis windows it'
+        picked = frame.filter(pl.col(self.dropped) == handover).drop(self.dropped)
         if picked.is_empty():
             raise SpecsolveError(
                 f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {seam!r}, the last label it owns, so there is no '
+                f'{self.variable!r} at {self.dropped} == {handover!r}, the last label it owns, so there is no '
                 f'value there to hand forward.'
             )
         return picked
@@ -429,7 +429,7 @@ def as_built(
         if before is not None and plan:
             primals = primals_of(before)
             handed = {
-                parameter: rule.value_from(primals, parameter, before.key, before.seam)
+                parameter: rule.value_from(primals, parameter, before.key, before.handover)
                 for parameter, rule in plan.items()
             }
         yield current._replace(sources={**current.sources, **handed})

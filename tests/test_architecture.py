@@ -222,7 +222,7 @@ def test_no_contract_module_names_an_engine():
             offenders[rel] = engine
     assert not offenders, (
         f'a contract module names an implementation: {offenders}. Either the fact belongs '
-        f'under _engine/, or what crosses the seam should be a type the contract already owns'
+        f'under _engine/, or what crosses from the contract to the engine should be a type the contract already owns'
     )
 
 
@@ -238,7 +238,7 @@ def test_the_language_is_imported_as_one_package():
     """Hard rule 1: this repository depends on the ``__all__`` mathspec pins.
 
     A submodule that ``__all__`` exports, such as ``mathspec.program``, is
-    inside the surface.
+    inside the public API.
     """
     import mathspec
 
@@ -258,7 +258,7 @@ def test_the_language_is_imported_as_one_package():
         if inside:
             offenders[str(path.relative_to(REPO))] = sorted(inside)
     assert not offenders, (
-        f'modules reach past the language package surface: {offenders} — import the name from '
+        f'modules reach past the public API of the language package: {offenders} — import the name from '
         f'`mathspec` itself, or from a submodule its `__all__` exports'
     )
 
@@ -384,7 +384,7 @@ PUBLIC_MODULES = {
 }
 
 
-def _surface_problems(module: Any, declared: set[str]) -> list[str]:
+def _api_problems(module: Any, declared: set[str]) -> list[str]:
     """How *module*'s ``__all__`` and its public attributes depart from *declared*."""
     import inspect
 
@@ -408,20 +408,20 @@ def _surface_problems(module: Any, declared: set[str]) -> list[str]:
     return problems
 
 
-def test_the_public_surface_is_exactly_what_is_declared():
-    """Hard rule 5, in names: the Python surface is narrow, and stays narrow.
+def test_the_public_api_is_exactly_what_is_declared():
+    """Hard rule 5, in names: the public API is narrow, and stays narrow.
 
     Three modules, each in two directions: ``__all__`` matches its table, and
     no public non-module attribute exists outside it.
     """
     import specsolve
 
-    problems = _surface_problems(specsolve, {name for names in PUBLIC_API.values() for name in names})
+    problems = _api_problems(specsolve, {name for names in PUBLIC_API.values() for name in names})
     for module, names in PUBLIC_MODULES.items():
-        problems += _surface_problems(getattr(specsolve, module), names)
+        problems += _api_problems(getattr(specsolve, module), names)
     assert not problems, (
         f'{problems} — declare a name in PUBLIC_API or PUBLIC_MODULES, with the role it plays, and in '
-        f'docs/development/architecture.md; or import it privately. A surface that grows by accident is not narrow.'
+        f'docs/development/architecture.md; or import it privately. A public API that grows by accident is not narrow.'
     )
 
 

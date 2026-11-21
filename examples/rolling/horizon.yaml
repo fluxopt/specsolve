@@ -2,7 +2,7 @@ description: >-
   Storage dispatch over a horizon, written once and solved whole or a window
   at a time. A window is the same model over its own snapshots, and
   position(snapshot) == 0 is the first snapshot of whichever window is being
-  solved, so the seam needs no literal.
+  solved, so the handover needs no literal.
 version: 0
 
 dimensions:
@@ -41,7 +41,7 @@ constraints:
 
   soc_open:
     description: >-
-      the seam — at the window's first row the level comes from what the
+      the handover — at the window's first row the level comes from what the
       previous window carried across
     dims: [snapshot]
     where: 'position(snapshot) == 0'

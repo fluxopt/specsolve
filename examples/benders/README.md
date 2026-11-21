@@ -278,7 +278,7 @@ Missing is everything that makes a decomposition survive a real model: cut
 management as the master grows, stabilisation, multi-cut, tolerances that hold
 when duals are degenerate, and an answer for when convergence does not happen.
 [#596](https://github.com/fluxopt/specsolve/issues/596) asked whether specsolve
-should own that surface and answered no, so all of it stays the caller's. What a
+should own that loop and answered no, so all of it stays the caller's. What a
 caller still lacks *from specsolve* is collected in
 [#1677](https://github.com/fluxopt/specsolve/issues/1677). This page settles only
 that the *language* is not the obstacle.

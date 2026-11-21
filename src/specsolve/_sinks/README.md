@@ -168,7 +168,7 @@ model to a reader holding both.
 
 Either way it declares what it can ingest, and stream — nothing here may
 materialise the model a second time — and nothing above changes. No method on the engine, no branch in `_api.py`,
-no name on the Python surface.
+no name in the public API.
 
 ## What a sink can ingest
 

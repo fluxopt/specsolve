@@ -161,6 +161,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : An axis's `carry={parameter: variable}` hands one slice's solution to the
   next as data.
 
+**handover**
+: The last label of the windowed dimension that a window owns. A carry reads
+  the window's solution there and hands it to the next window as data.
+
 **held** · **spilled**
 : A held sweep keeps its answers in memory. A spilled one writes them to
   `spill_to=` ([spilling](sweeps.md#spilling-a-sweep-to-disk)).

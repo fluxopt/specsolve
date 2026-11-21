@@ -139,7 +139,7 @@ specsolve, see
 
 ## Prior art
 
-The YAML surface comes from [Calliope](https://github.com/calliope-project/calliope),
+The YAML format comes from [Calliope](https://github.com/calliope-project/calliope),
 and [linopy](https://github.com/PyPSA/linopy) supplies the vocabulary, the
 oracle and every benchmark denominator.
 [Prior art and credit](https://specsolve.readthedocs.io/en/latest/about/prior-art/)
@@ -155,7 +155,7 @@ Alpha, pre-1.0.
 you depend on this, and read the
 [changelog](https://github.com/fluxopt/specsolve/blob/main/CHANGELOG.md) before
 upgrading. A retired spelling fails at load and names its rewrite. Real models
-round-trip through solve and are tested against linopy. The accepted surface
+round-trip through solve and are tested against linopy. The accepted format
 is not yet frozen.
 
 <!-- --8<-- [end:status] -->

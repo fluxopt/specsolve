@@ -54,9 +54,6 @@ CEILING = {
     'lowers': 2,
     'mask': 6,
     'masks': 1,
-    'seam': 16,
-    'seams': 1,
-    'surface': 14,
 }
 
 #: Pages that are generated, or that quote the retired words to retire them.

@@ -61,7 +61,7 @@ _FINGERPRINTS = {
     [('latex', 'typst'), ('typst', 'latex'), ('markdown', 'typst')],
 )
 def test_no_format_leaks_another_formats_syntax(name: str, foreign: str):
-    """The seam's whole job. Typst syntax in the LaTeX output means the walk is
+    """The format interface's whole job. Typst syntax in the LaTeX output means the walk is
     spelling something itself instead of asking the format to.
     """
     text = '\n'.join(typeset(p, name, standalone=True) for p in TYPESET_PATHS)

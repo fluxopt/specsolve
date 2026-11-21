@@ -263,7 +263,7 @@ def test_a_per_entity_window_over_only_absent_slots_keeps_that_entitys_row():
 
 #: Representative days are separate samples rather than consecutive hours, so a
 #: unit started at the last hour of one must not be held on into the next. The
-#: start is forced *inside* a day, which is what the seam is read at.
+#: start is forced *inside* a day, so the window stops at the day's edge.
 DAY_WINDOW = {
     'description': 'A minimum up time that stops at each representative day.',
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'day': {'dtype': 'str'}},
@@ -302,7 +302,7 @@ def _on(result) -> list[float]:
 
 
 def test_a_window_stops_at_the_edge_of_the_group_it_is_partitioned_by():
-    """The seam is where the axis stops being one run of positions.
+    """The edge of a group is where the axis stops being one run of positions.
 
     The start sits at the last hour of the first day, so an unpartitioned
     window of three would hold the unit on there and at the first two hours of

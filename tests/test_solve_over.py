@@ -43,7 +43,7 @@ STORES = ['battery', 'pumped']
 #: in the model.
 DISPATCH = DISPATCH_SPEC
 
-#: Storage over a window's *own* labels, with the seam split out by a `where` on a dimension
+#: Storage over a window's *own* labels, with the handover split out by a `where` on a dimension
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: narrowed `soc_open` supplies it from a carried parameter.
 WINDOW = {
@@ -84,7 +84,7 @@ WINDOW = {
 #: rides along.
 #:
 #: `charge` and `discharge` are capped well below a window's worth so a store
-#: cannot empty itself before the seam; otherwise every window ends at zero and
+#: cannot empty itself before the handover; otherwise every window ends at zero and
 #: carrying the state is indistinguishable from not carrying it.
 MULTI_STORE = {
     'dimensions': {
@@ -166,7 +166,7 @@ def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
 
 
 def multi_store_sources() -> dict[str, object]:
-    """Two stores, each with a real starting level worth handing across a seam."""
+    """Two stores, each with a real starting level worth handing across a handover."""
     return {
         **horizon_sources(12),
         'storage': pl.DataFrame({'storage': STORES}),
@@ -532,7 +532,7 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
         sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     assert runs.primal('soc')['snapshot'].to_list() == list(range(periods)), (
-        'the seam is in range for every geometry, so the sweep completes'
+        'the handover is in range for every geometry, so the sweep completes'
     )
 
 
@@ -713,7 +713,7 @@ COORDINATE_TYPES = [
 def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     """The only requirement on a windowed dimension is that it is orderable.
 
-    The seam's `where: "position(snapshot) == 0"` counts within the window, so
+    The handover's `where: "position(snapshot) == 0"` counts within the window, so
     it matches each window's first label whatever the labels are.
     """
     runs = sps.solve_over(WINDOW, coordinate_sources(coordinates), sps.EachWindow('snapshot', steps=2, lookahead=0))
@@ -884,7 +884,7 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
 
     Only the *last* block can overshoot, and its carry is never read, so
     trimming it changes no answer. It keeps what a window owns true, which the
-    stitch and the seam both read.
+    stitch and the handover both read.
     """
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0)
 
@@ -895,7 +895,7 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     owned = stitch.owned.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
     assert owned == expected, 'which is what each slice records owning'
     for current in slices:
-        assert current.seam in current.sources['snapshot'], 'no window owns a label it does not hold'
+        assert current.handover in current.sources['snapshot'], 'no window owns a label it does not hold'
 
 
 def test_a_block_list_that_stops_short_of_the_axis_is_refused():
@@ -935,7 +935,7 @@ def test_the_lookahead_the_model_needs_is_one_number_whatever_the_blocks():
 
 
 def test_a_short_tail_window_carries_off_its_own_last_row():
-    """A final window owns fewer rows than ``steps``, and its seam is its own last.
+    """A final window owns fewer rows than ``steps``, and its handover is its own last.
 
     12 coordinates kept 5 at a time leaves a final window of two, which
     holds no fifth row. Nothing reads the last slice's carry, so the value is
@@ -990,7 +990,7 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
 
 
 def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
-    """Under overlap the two differ, and only the owned one is the state at the seam.
+    """Under overlap the two differ, and only the owned one is the state at the handover.
 
     At `length=6, step=3` a window solves six rows, 0..5 from its start, and owns 0..2. The lookahead
     rows 3..5 are solved against a horizon that ends at 5, so the store empties
@@ -2021,7 +2021,7 @@ def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
 
 
 def test_a_position_counts_within_each_window_and_nothing_warns():
-    """`position(snapshot) == 0` is each window's first row, which is how a seam is written."""
+    """`position(snapshot) == 0` is each window's first row, which is how a handover is written."""
     spec = _horizon({'dims': ['snapshot'], 'where': 'position(snapshot) == 0', 'expression': 'soc <= 50'})
     with warnings.catch_warnings():
         warnings.simplefilter('error')

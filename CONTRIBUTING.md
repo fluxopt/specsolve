@@ -214,7 +214,7 @@ Spend nothing on the retirement either. The closed schema already fails at load
 naming the valid keys and the near miss, and the operator table already names
 what it accepts — that is the whole migration story a release before 1.0 owes
 anyone. A hand-written message per retired spelling is a second place the old
-surface lives, it needs a test of its own, and it outlives every file it was
+spelling lives, it needs a test of its own, and it outlives every file it was
 written for: `shift(by=)` had one for a day before `by=` became a legal keyword
 again and the message started refusing the new spelling.
 
@@ -222,7 +222,7 @@ This binds **agents working in this repo** too, and it is the habit most often
 imported from elsewhere: asked to change something, change it — do not add
 backwards compatibility nobody requested.
 
-It is the *surface* that is unfrozen, not the behaviour. What exists is tested
+It is the *spelling* that is unfrozen, not the behaviour. What exists is tested
 and differentially verified against linopy; a break is a deliberate rewrite, not
 licence for churn.
 

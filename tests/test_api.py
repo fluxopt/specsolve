@@ -310,7 +310,7 @@ def test_check_reports_language_errors_before_any_data_is_bound(
 ):
     """The CI verb enforces the ceiling with no data attached (mathspec's docs/about/limits.md).
 
-    The refusal is the language's; both ``check`` and ``build`` surface it.
+    The refusal is the language's; both ``check`` and ``build`` report it.
     """
     raw = {**to_spec(dispatch_yaml).model_dump(), 'objective': {'sense': 'minimize', 'expression': expression}}
 

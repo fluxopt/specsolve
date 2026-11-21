@@ -51,7 +51,7 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 ## Simplicity is the design
 
 - **The simplest thing that works.** No new layer, protocol, registry, config
-  object or plugin seam unless something concrete needs it *now* — a second
+  object or plugin interface unless something concrete needs it *now* — a second
   implementation, an extension point a third party builds against, a constraint
   nothing else meets. "It will make the next change easier" is not evidence; the
   next change can add it, and by then it will know what shape it wants.

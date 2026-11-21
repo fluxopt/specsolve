@@ -88,16 +88,16 @@ flowchart TB
   supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
 
-## The Python surface
+## The public API
 
-**Three modules hold the surface.** `specsolve` holds what a caller calls,
+**Three modules hold the public API.** `specsolve` holds what a caller calls,
 `specsolve.types` every type a call returns, and `specsolve.errors` what a call
 raises or warns, the language's errors included. Every other module starts
 with an underscore and is internal. `tests/test_architecture.py` pins each
 `__all__` and refuses a new module named without one, and
 [the Python API](../reference/api.md) renders the docstrings.
 
-**Nothing on the surface constructs math or reaches the program.** The YAML file
+**Nothing in the public API constructs math or reaches the program.** The YAML file
 is the model, and Python runs it.
 
 ## Hard rules
@@ -123,7 +123,7 @@ the dependency claims.*
    file means.
 5. **The public interface is a declared spec, not a Python API.** There is no
    API to construct a spec, hand in a program, or populate a registry
-   ([the Python surface](#the-python-surface)).
+   ([the public API](#the-public-api)).
 
 ## The program, node for node
 

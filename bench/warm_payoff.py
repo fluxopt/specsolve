@@ -137,8 +137,8 @@ def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
     The cold arm runs first after the update that gained a cut, whose new row
     loads the solver fresh. The warm arm then reuses that solver, which
     forgets its work before the carried basis is set, as any start does. The
-    iteration count is read off the private handle; no public surface reports
-    it.
+    iteration count is read off the private handle; nothing in the public API
+    reports it.
     """
     began = time.perf_counter()
     answer = master.solve(**solve)

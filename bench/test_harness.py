@@ -1294,7 +1294,7 @@ def test_an_empty_fragment_never_blanks_the_page() -> None:
 
 def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
     """A build-only number is not comparable across libraries: one that defers
-    its coefficients to its writer pays at the seam instead."""
+    its coefficients to its writer pays at the hand-off instead."""
     table = report.marginal([_loop('dispatch', 'specsolve', 1200), _loop('dispatch', 'linopy', 1200)])
     assert 'specsolve: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
     assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
