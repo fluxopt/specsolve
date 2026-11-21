@@ -460,13 +460,13 @@ def test_one_answer_starts_every_slice() -> None:
 
 def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
     from specsolve._sinks.highs import Highs
-    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
-    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, outputs=BASIS)
+    earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, outputs=BASIS)
     warmed: list[object] = []
     original = Highs.start_from_basis
     monkeypatch.setattr(Highs, 'start_from_basis', lambda self, basis: (warmed.append(basis), original(self, basis))[1])
-    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=earlier)
+    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=earlier)
     assert len(warmed) == len(earlier.keys), 'every window is warmed from a basis'
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'a start moves the route, never the optimum'
@@ -475,15 +475,15 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
 
 def test_a_table_covering_one_window_starts_that_window_and_says_which_start_from_nothing() -> None:
     """A window's own table is over the dimension's labels, so it is cut like any other."""
-    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
-    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS)
     first = earlier.primal('soc', per_window=True).filter(pl.col('snapshot_start') == 0).drop('snapshot_start')
     with (
         pytest.warns(sps.errors.SpecsolveWarning, match='a partial start of values for an LP'),
         pytest.warns(sps.errors.SpecsolveWarning, match=r'start= gives the slices \[4, 8\] no row'),
     ):
-        again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': {'soc': first}})
+        again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start={'primal': {'soc': first}})
     assert again.records['has_primal'].all(), 'a start changes how a slice gets to its optimum, never whether'
 
 
@@ -491,16 +491,16 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from specsolve._sinks.highs import Highs
-    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
-    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS)
     tables = {name: earlier.primal(name) for name in WINDOW['variables']}
     given: list[np.ndarray] = []
     original = Highs.start_from_values
     monkeypatch.setattr(
         Highs, 'start_from_values', lambda self, values: (given.append(values), original(self, values))[1]
     )
-    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start={'primal': tables})
+    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start={'primal': tables})
     assert len(given) == len(earlier.keys), 'every window is started'
     assert all(not np.isnan(values).any() for values in given), 'each window takes a value for every hour it covers'
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
@@ -509,12 +509,12 @@ def test_a_table_over_the_sliced_dimension_starts_each_window_from_the_hours_it_
 
 
 def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path) -> None:
-    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
-    earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
+    earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
     archived = sps.load_archive(tmp_path / 'run.zip')
     assert isinstance(archived, sps.types.SweepArchive)
-    again = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start=archived.sweep)
+    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived.sweep)
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'the answer over the hours is all a window needs, kept windows or not'
     )
@@ -596,10 +596,10 @@ def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
 
 
 def test_each_window_starts_from_the_window_before_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
+    from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
     forgotten = _forgotten(monkeypatch)
-    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, start='previous')
+    sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start='previous')
     assert not forgotten, 'windows of one length keep the solver, so each carries on from the window before it'
 
 

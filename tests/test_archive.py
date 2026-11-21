@@ -45,7 +45,7 @@ from tests.conftest import (
     port_spec,
     raw_of,
 )
-from tests.test_solve_over import SPENDING, WINDOW, horizon_sources
+from tests.test_solve_over import SPENDING, WINDOW, span_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -1011,7 +1011,7 @@ CARRIED = replace(ROLLING, carry={'soc_initial': 'soc'})
 
 def _rolling(tmp_path: Path, spec: Mapping[str, object] = WINDOW, **archive: object) -> sps.types.Sweep:
     """The rolling horizon, archived to ``roll.zip`` with *archive*'s keywords."""
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     return sps.solve_over(spec, sources, CARRIED, archive=tmp_path / 'roll.zip', **archive)
 
 
@@ -1037,12 +1037,12 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     it cut from the sources. `soc_initial`, one number over no dimension, is
     the same in every window.
     """
-    from tests.test_solve_over import WINDOW, horizon_sources
+    from tests.test_solve_over import WINDOW, span_sources
 
     spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['snapshot'], 'missing': 'neutral'}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0, carry={'soc_initial': 'soc'})
-    sources = {**horizon_sources(10), 'price': price, 'soc_initial': 0.0}
+    sources = {**span_sources(10), 'price': price, 'soc_initial': 0.0}
     runs = sps.solve_over(spec, sources, axis, archive=tmp_path / 'roll.zip')
     archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
 
@@ -1144,7 +1144,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_says_so_off_its_archive(
     tmp_path: Path,
 ) -> None:
     """Every window infeasible, so none writes a table, and `per_window=True` says so as the live sweep does."""
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
     out = tmp_path / f'roll{suffix}'
     runs = sps.solve_over(WINDOW, sources, ROLLING, archive=out)
@@ -1161,7 +1161,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_says_so_off_its_archive(
 def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
     """The windows, their keys and what each window owns all carry the run on disk, and no reader returns it."""
     out = tmp_path / 'nightly-2026-09-10.zip'
-    runs = sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=out)
+    runs = sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=out)
     loaded = sps.load_archive(out, tmp_path / 'out').sweep
     scanned = sps.scan_archive(out, tmp_path / 'out').sweep
     tables = sorted((tmp_path / 'out').rglob('*.parquet'))
@@ -1341,7 +1341,7 @@ def test_a_directory_of_solves_and_sweeps_globs_into_one_table(
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=runs / 'single').close()
     sweep_sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sweep_sources, sps.EachLabel('scenario'), archive=runs / 'scenarios')
-    sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=runs / 'rolling')
+    sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=runs / 'rolling')
 
     solves = runs / '*' / ANSWER_DIR / f'{table}.parquet'
     slices = runs / '*' / ANSWER_DIR / table / '*.parquet'
@@ -1670,9 +1670,9 @@ def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_so
 
 
 def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
-    from tests.test_solve_over import WINDOW, horizon_sources
+    from tests.test_solve_over import WINDOW, span_sources
 
-    sps.solve_over(WINDOW, horizon_sources(12), CARRIED, archive=tmp_path / 'roll')
+    sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=tmp_path / 'roll')
     archived = sps.load_archive(tmp_path / 'roll')
     inputs = sps.load_inputs(tmp_path / 'roll')
 

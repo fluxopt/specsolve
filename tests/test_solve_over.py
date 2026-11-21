@@ -168,7 +168,7 @@ def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
 def multi_store_sources() -> dict[str, object]:
     """Two stores, each with a real starting level worth handing across a handover."""
     return {
-        **horizon_sources(12),
+        **span_sources(12),
         'storage': pl.DataFrame({'storage': STORES}),
         'soc_initial': pl.DataFrame({'storage': STORES, 'value': [40.0, 20.0]}),
         'efficiency': pl.DataFrame({'storage': STORES, 'value': [0.9, 0.75]}),
@@ -185,7 +185,7 @@ def myopic_sources() -> dict[str, object]:
     }
 
 
-def horizon_sources(periods: int = 12) -> dict[str, object]:
+def span_sources(periods: int = 12) -> dict[str, object]:
     """A load profile of any length — the pattern repeats past twelve."""
     load = [5.0, 9.0, 30.0, 40.0, 6.0, 8.0, 35.0, 45.0, 7.0, 10.0, 25.0, 50.0]
     return {
@@ -231,7 +231,7 @@ def overlapping() -> sweep_module.Sweep:
     """The overlapping-window sweep, solved once for every test that only reads it."""
     return sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'}),
     )
 
@@ -304,7 +304,7 @@ def _pooled(tmp_path) -> pl.DataFrame:
 
 def _rolling(tmp_path) -> pl.DataFrame:
     carry = {'soc_initial': 'soc'}
-    return sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry=carry), solver_options=_OPTIONS).records
+    return sps.solve_over(WINDOW, span_sources(), replace(WINDOW_AXIS, carry=carry), solver_options=_OPTIONS).records
 
 
 def _scanned(tmp_path) -> pl.DataFrame:
@@ -374,7 +374,7 @@ def test_a_carried_fold_still_builds_once(builds):
     """A carry writes a parameter the first slice already attached, so no slice names new sources."""
     built = builds(driver)
 
-    runs = sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
+    runs = sps.solve_over(WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
     assert runs.keys == [0, 4, 8]
     assert len(built) == 1, f'{len(built)} builds for three windows — the carry cost the fold its fast path'
@@ -475,7 +475,7 @@ def test_a_rolling_horizon_carries_state_across_the_seam():
     `soc_initial` is updated per window from the previous window's last `soc`,
     which is the carry doing its one job — a copy, at a named index.
     """
-    runs = sps.solve_over(WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
+    runs = sps.solve_over(WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
 
     assert runs.keys == [0, 4, 8]
     assert runs.primal('p', per_window=True).height == 3 * 4 * 2
@@ -507,7 +507,7 @@ def test_a_window_geometry_covers_every_coordinate_exactly_once(periods, steps, 
     """A stitched sweep reproduces the coordinate list, whatever the tail."""
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(periods),
+        span_sources(periods),
         sps.EachWindow('snapshot', steps=steps, lookahead=lookahead),
     )
     assert runs.primal('soc')['snapshot'].to_list() == list(range(periods)), (
@@ -528,7 +528,7 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
     """
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(periods),
+        span_sources(periods),
         sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     assert runs.primal('soc')['snapshot'].to_list() == list(range(periods)), (
@@ -543,7 +543,7 @@ def test_stitch_keeps_the_whole_of_the_final_short_window():
     """
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=5, lookahead=1),
     )
     assert runs.keys == [0, 5, 10], 'three windows, the last of two coordinates'
@@ -620,7 +620,7 @@ def priced() -> sweep_module.Sweep:
     """The overlapping-window sweep of the expression-bearing model, solved once."""
     return sps.solve_over(
         SPENDING,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'}),
     )
 
@@ -689,7 +689,7 @@ def test_an_expression_no_slice_could_evaluate_carries_its_reason():
         SPENDING,
         **{'parameters.scale': {'dims': ['snapshot'], 'missing': 'neutral'}, 'expressions.ratio': 'load / scale'},
     )
-    sources = {**horizon_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
+    sources = {**span_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
     runs = sps.solve_over(spec, sources, sps.EachWindow('snapshot', steps=6, lookahead=0))
 
     assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
@@ -799,7 +799,7 @@ def test_a_window_key_column_never_shadows_the_dimension_it_cut(sweep):
 
     A key column called `snapshot` would collide with the dimension itself.
     """
-    runs = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)
+    runs = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS)
     soc = runs.primal('soc', per_window=True)
     assert soc.columns == ['snapshot_start', 'snapshot', 'value'], 'the key, then the window in its own labels'
     assert runs.records.columns[0] == 'snapshot_start', 'both tables key the same way'
@@ -846,7 +846,7 @@ def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(blocks):
     """`steps` as a sequence keeps those numbers in order, one window each."""
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=blocks, lookahead=2, carry={'soc_initial': 'soc'}),
     )
     stitched = runs.primal('soc')
@@ -891,7 +891,7 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert axis._blocks(periods) == expected, 'each block is trimmed to what the axis has left'
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
-    slices, stitch = axis._slice(as_program(WINDOW), horizon_sources(periods), 'snapshot_start')
+    slices, stitch = axis._slice(as_program(WINDOW), span_sources(periods), 'snapshot_start')
     owned = stitch.horizon.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
     assert owned == expected, 'which is what each slice records owning'
     for current in slices:
@@ -907,7 +907,7 @@ def test_a_block_list_that_stops_short_of_the_axis_is_refused():
     with pytest.raises(sps.errors.DataError, match=r'keeps 7 label\(s\) across 2 window\(s\).*has 12'):
         sps.solve_over(
             WINDOW,
-            horizon_sources(12),
+            span_sources(12),
             sps.EachWindow('snapshot', steps=[3, 4], lookahead=0),
         )
 
@@ -926,9 +926,9 @@ def test_the_lookahead_the_model_needs_is_one_number_whatever_the_blocks():
         with pytest.raises(
             sps.errors.SpecsolveError, match=r'lookahead=0\) looks ahead by 0 label\(s\).*reads 1 ahead'
         ):
-            sps.solve_over(reaching, horizon_sources(12), sps.EachWindow('snapshot', steps=steps, lookahead=0))
+            sps.solve_over(reaching, span_sources(12), sps.EachWindow('snapshot', steps=steps, lookahead=0))
 
-        runs = sps.solve_over(reaching, horizon_sources(12), sps.EachWindow('snapshot', steps=steps, lookahead=1))
+        runs = sps.solve_over(reaching, span_sources(12), sps.EachWindow('snapshot', steps=steps, lookahead=1))
         assert runs.records['termination_condition'].to_list() == ['optimal'] * len(runs), (
             'one label of lookahead is what the model reads, so every window is whole'
         )
@@ -944,7 +944,7 @@ def test_a_short_tail_window_carries_off_its_own_last_row():
     """
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=5, lookahead=1, carry={'soc_initial': 'soc'}),
     )
     assert runs.keys == [0, 5, 10]
@@ -1003,7 +1003,7 @@ def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
     """
     runs = sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'}),
     )
 
@@ -1061,27 +1061,27 @@ BUILDING_STORES = override(
 
 UNSOUND_CARRIES = [
     pytest.param(
-        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 'p'},
+        WINDOW, span_sources, WINDOW_AXIS, {'soc_initial': 'p'},
         r'would collapse .*at once', "['snapshot', 'generator']",
         id='collapses-two-dimensions',
     ),
     pytest.param(
-        WINDOW, horizon_sources, WINDOW_AXIS, {'p_max': 'soc'},
+        WINDOW, span_sources, WINDOW_AXIS, {'p_max': 'soc'},
         'cannot line up', None,
         id='parameter-over-more-than-the-variable',
     ),
     pytest.param(
-        WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 'nope'},
+        WINDOW, span_sources, WINDOW_AXIS, {'soc_initial': 'nope'},
         'does not declare', None,
         id='a-name-neither-side-declares',
     ),
     pytest.param(
-        WINDOW, horizon_sources, WINDOW_AXIS, {'load': 'soc'},
+        WINDOW, span_sources, WINDOW_AXIS, {'load': 'soc'},
         r"carry 'load' <- 'soc' keeps 'snapshot'", 'no two windows hold the same labels',
         id='a-window-carrying-a-whole-table-over-the-dimension-it-windows',
     ),
     pytest.param(
-        WINDOW, horizon_sources, sps.EachLabel('scenario'), {'soc_initial': 'soc'},
+        WINDOW, span_sources, sps.EachLabel('scenario'), {'soc_initial': 'soc'},
         r"collapses 'snapshot', and this axis owns none", 'Reduce',
         id='a-label-sweep-collapsing-a-dimension-it-does-not-advance-along',
     ),
@@ -1115,7 +1115,7 @@ BY_THE_HOUR = override(WINDOW, **{'dimensions.snapshot': {'dtype': 'datetime', '
 
 def _dated_sources(labels: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
     """The horizon over *labels*, its load keyed by *load_labels*."""
-    sources = horizon_sources(len(labels))
+    sources = span_sources(len(labels))
     return {
         **sources,
         'snapshot': pl.DataFrame({'snapshot': labels}),
@@ -1175,7 +1175,7 @@ def test_a_window_refuses_labels_that_carry_a_relation_as_a_single_solve_does():
     )
     seasons = ['winter'] * 4 + ['summer'] * 4
     sources = {
-        **horizon_sources(8),
+        **span_sources(8),
         'season': ['winter', 'summer'],
         'season_of': pl.DataFrame({'snapshot': range(8), 'season': seasons}),
         'snapshot': pl.DataFrame({'snapshot': range(8), 'season_of': seasons}),
@@ -1189,7 +1189,7 @@ def test_a_window_refuses_labels_that_carry_a_relation_as_a_single_solve_does():
 
 def test_a_start_with_a_status_that_is_none_is_refused_before_a_slice_is_solved(tmp_path):
     """A basis status was read when its slice was solved, so a bad one in the second window left the first on disk."""
-    sources = horizon_sources(8)
+    sources = span_sources(8)
     basis = (
         sps.solve(WINDOW, sources, outputs={'basis'})
         .variable_basis('soc')
@@ -1244,7 +1244,7 @@ def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
     ran after the data was read.
     """
     missing = tmp_path / 'not-written-yet.parquet'
-    sources = {**horizon_sources(), 'load': str(missing)}
+    sources = {**span_sources(), 'load': str(missing)}
 
     with pytest.raises(sps.errors.SpecsolveError, match='does not declare'):
         sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'nope'}))
@@ -1299,8 +1299,8 @@ def test_an_axis_that_carries_nothing_writes_no_carry_key():
 def test_solve_over_takes_an_axis_as_its_dict():
     """The dict stands where the axis does, carry included."""
     axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
-    given = sps.solve_over(WINDOW, horizon_sources(), json.loads(json.dumps(axis.to_dict())))
-    expected = sps.solve_over(WINDOW, horizon_sources(), axis)
+    given = sps.solve_over(WINDOW, span_sources(), json.loads(json.dumps(axis.to_dict())))
+    expected = sps.solve_over(WINDOW, span_sources(), axis)
     assert given.records['objective'].to_list() == expected.records['objective'].to_list()
     assert given.primal('soc').equals(expected.primal('soc')), 'each window started from the one before it'
 
@@ -1308,7 +1308,7 @@ def test_solve_over_takes_an_axis_as_its_dict():
 def test_an_archive_holds_the_dict_of_its_axis(tmp_path):
     """``axis.json`` is ``to_dict``, so the archive's file and the public form are one."""
     axis = replace(WINDOW_AXIS, carry={'soc_initial': 'soc'})
-    sps.solve_over(WINDOW, horizon_sources(), axis, archive=tmp_path / 'roll')
+    sps.solve_over(WINDOW, span_sources(), axis, archive=tmp_path / 'roll')
     assert json.loads((tmp_path / 'roll' / 'axis.json').read_text()) == axis.to_dict()
 
 
@@ -1331,7 +1331,7 @@ def test_an_archive_holds_the_dict_of_its_axis(tmp_path):
 )
 def test_an_axis_dict_that_names_no_axis_is_refused_with_the_keys_it_takes(given, expected):
     with pytest.raises(sps.errors.SpecsolveError, match=expected):
-        sps.solve_over(WINDOW, horizon_sources(), given)
+        sps.solve_over(WINDOW, span_sources(), given)
 
 
 def test_carry_and_executor_are_refused_together():
@@ -1340,7 +1340,7 @@ def test_carry_and_executor_are_refused_together():
     with pytest.raises(sps.errors.SpecsolveError, match='mutually exclusive'):
         sps.solve_over(
             WINDOW,
-            horizon_sources(),
+            span_sources(),
             replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
             executor=object(),
         )
@@ -1665,9 +1665,9 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
     with monkeypatch.context() as patched:
         patched.setattr(sweep_module, 'write_whole', crashing)
         with pytest.raises(_CrashError):
-            sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+            sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, spill_to=out)
 
-    ran = sps.solve_over(WINDOW, horizon_sources(8), WINDOW_AXIS, spill_to=out)
+    ran = sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, spill_to=out)
     assert sps.scan_sweep(out).records.equals(ran.records)
 
 
@@ -1857,7 +1857,7 @@ def test_an_axis_key_name_overrides_what_it_derived_and_refuses_a_collision():
 
 def test_a_window_key_name_names_the_column_each_window_is_read_under():
     """A window's key is where it started, called `<dim>_start` unless the axis names it."""
-    named = sps.solve_over(WINDOW, horizon_sources(8), replace(WINDOW_AXIS, key_name='window'))
+    named = sps.solve_over(WINDOW, span_sources(8), replace(WINDOW_AXIS, key_name='window'))
     assert named.primal('soc', per_window=True).columns == ['window', 'snapshot', 'value'], (
         'the key column takes the name the axis gives it'
     )
@@ -1938,7 +1938,7 @@ def test_a_bad_name_is_reported_without_the_optional_dependency(sweep):
 # ---------------------------------------------------------------------------
 
 
-def _horizon(constraint: dict, **parameters: dict) -> dict:
+def _window_with(constraint: dict, **parameters: dict) -> dict:
     """`WINDOW` with one more constraint over `snapshot`, and any parameter it reads."""
     return override(
         WINDOW,
@@ -1948,21 +1948,21 @@ def _horizon(constraint: dict, **parameters: dict) -> dict:
 
 
 def test_a_window_over_a_horizon_budget_is_refused_with_the_change_that_would_lift_it():
-    spec = _horizon({'dims': [], 'expression': 'sum(discharge, over=snapshot) <= 100'})
+    spec = _window_with({'dims': [], 'expression': 'sum(discharge, over=snapshot) <= 100'})
     with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': sums over snapshot") as refused:
-        sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+        sps.solve_over(spec, span_sources(8), WINDOW_AXIS)
     assert 'sum_back(window=n)' in str(refused.value), 'the refusal names the rolling form that windows'
 
 
 def test_a_window_must_look_ahead_as_far_as_the_rows_read():
     """`shift(load, along=snapshot, offset=-2)` reads two rows ahead; a contiguous
     window would read past its end, an overlap of two covers it."""
-    spec = _horizon(
+    spec = _window_with(
         {'dims': ['snapshot'], 'expression': 'sum(p, over=generator) >= shift(load, along=snapshot, offset=-2, edge=0)'}
     )
     with pytest.raises(sps.errors.SpecsolveError, match=r'looks ahead by 0 label\(s\), and the model reads 2 ahead'):
-        sps.solve_over(spec, horizon_sources(8), sps.EachWindow('snapshot', steps=4, lookahead=0))
-    runs = sps.solve_over(spec, horizon_sources(8), sps.EachWindow('snapshot', steps=4, lookahead=2))
+        sps.solve_over(spec, span_sources(8), sps.EachWindow('snapshot', steps=4, lookahead=0))
+    runs = sps.solve_over(spec, span_sources(8), sps.EachWindow('snapshot', steps=4, lookahead=2))
     assert runs.keys == [0, 4], 'with the lookahead covered, every window solves'
 
 
@@ -1992,11 +1992,11 @@ def test_a_window_must_look_ahead_as_far_as_the_rows_read():
 def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
     """`shift(..., offset=delay)` names a parameter, so the language cannot say
     how far a row reads; the driver reads the values, whose sign says which way."""
-    spec = _horizon(
+    spec = _window_with(
         {'dims': ['snapshot', 'generator'], 'expression': 'p >= shift(p, along=snapshot, offset=delay, edge=0) - 100'},
         delay={'dims': ['generator'], 'dtype': 'int'},
     )
-    sources = {**horizon_sources(8), 'delay': pl.DataFrame({'generator': GENERATORS, 'value': delays})}
+    sources = {**span_sources(8), 'delay': pl.DataFrame({'generator': GENERATORS, 'value': delays})}
     if refused:
         with pytest.raises(sps.errors.SpecsolveError, match='the model reads 3 ahead'):
             sps.solve_over(spec, sources, axis)
@@ -2007,7 +2007,7 @@ def test_an_offset_the_data_decides_is_read_off_the_data(delays, axis, refused):
 def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
     """`shift(..., within=day_of[day])` reaches within the groups the relation makes, and
     whether a window cuts a group is nothing the driver computes."""
-    spec = _horizon(
+    spec = _window_with(
         {
             'dims': ['snapshot', 'generator'],
             'expression': 'p >= shift(p, along=snapshot, offset=1, within=day_of[day], edge=0) - at(day_cap, by=day_of[day])',
@@ -2017,15 +2017,15 @@ def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
     spec['dimensions'] = {**spec['dimensions'], 'day': {'dtype': 'int', 'ordered': True}}
     spec['relations'] = {'day_of': {'key': 'snapshot', 'values': 'day'}}
     with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': through the relation 'day_of'"):
-        sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+        sps.solve_over(spec, span_sources(8), WINDOW_AXIS)
 
 
 def test_a_position_counts_within_each_window_and_nothing_warns():
     """`position(snapshot) == 0` is each window's first row, which is how a handover is written."""
-    spec = _horizon({'dims': ['snapshot'], 'where': 'position(snapshot) == 0', 'expression': 'soc <= 50'})
+    spec = _window_with({'dims': ['snapshot'], 'where': 'position(snapshot) == 0', 'expression': 'soc <= 50'})
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        runs = sps.solve_over(spec, horizon_sources(8), WINDOW_AXIS)
+        runs = sps.solve_over(spec, span_sources(8), WINDOW_AXIS)
     assert runs.dual('extra', per_window=True)['snapshot'].to_list() == [0, 4], 'one row at the start of each window'
 
 
@@ -2041,19 +2041,19 @@ def test_a_position_counts_within_each_window_and_nothing_warns():
 def test_an_offset_is_read_off_every_shape_a_source_may_arrive_in(delay):
     """The reach is the same whatever the caller wrote, because the least value
     of a source does not depend on the labels it is spread over."""
-    spec = _horizon(
+    spec = _window_with(
         {'dims': ['snapshot', 'generator'], 'expression': 'p >= shift(p, along=snapshot, offset=delay, edge=0) - 100'},
         delay={'dims': ['generator'], 'dtype': 'int'},
     )
     with pytest.raises(sps.errors.SpecsolveError, match='the model reads 3 ahead'):
-        sps.solve_over(spec, {**horizon_sources(8), 'delay': delay}, WINDOW_AXIS)
+        sps.solve_over(spec, {**span_sources(8), 'delay': delay}, WINDOW_AXIS)
 
 
 def test_a_window_over_a_dimension_the_spec_does_not_declare_is_refused_by_name():
     with pytest.raises(
         sps.errors.SpecsolveError, match=r"EachWindow\('snapshots'\).*Did you mean 'snapshot'"
     ) as refused:
-        sps.solve_over(WINDOW, horizon_sources(8), sps.EachWindow('snapshots', steps=4, lookahead=0))
+        sps.solve_over(WINDOW, span_sources(8), sps.EachWindow('snapshots', steps=4, lookahead=0))
     assert 'is sliced with EachLabel' in str(refused.value), (
         'the refusal names the axis for a dimension the spec does not declare'
     )
@@ -2082,7 +2082,7 @@ def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
 def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
     """`EachLabel` squeezes its dimension out of every source, so a declared dimension would be left with no data."""
     with pytest.raises(sps.errors.SpecsolveError, match=r"EachLabel\('generator'\) squeezes 'generator'"):
-        sps.solve_over(WINDOW, horizon_sources(8), sps.EachLabel('generator', key_name='g'))
+        sps.solve_over(WINDOW, span_sources(8), sps.EachLabel('generator', key_name='g'))
 
 
 # ---------------------------------------------------------------------------
@@ -2095,7 +2095,7 @@ def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
 #: `{label: value}` map. None of them is a table: the axis has nothing to filter
 #: in them.
 NOT_A_TABLE = [
-    pytest.param(WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 0.0}, id='a-number'),
+    pytest.param(WINDOW, span_sources, WINDOW_AXIS, {'soc_initial': 0.0}, id='a-number'),
     pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'snapshot': range(4)}, id='bare-labels'),
     pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'cost': {'wind': 1.0, 'gas': 50.0}}, id='a-map'),
 ]  # fmt: skip
@@ -2142,7 +2142,7 @@ def test_a_carry_with_no_seed_says_the_first_slice_needs_one():
     nothing to start from, and the error says so rather than reporting a
     parameter with no data as if the carry did not exist.
     """
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     del sources['soc_initial']
     with pytest.raises(sps.errors.SpecsolveError, match=r"carry writes 'soc_initial' from the second slice on"):
         sps.solve_over(WINDOW, sources, replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}))
@@ -2153,7 +2153,7 @@ def test_a_slice_that_leaves_nothing_to_carry_stops_the_sweep_by_name():
     start from, so the sweep cannot go on — and the error names the slice
     that terminated, how, and the slice left waiting.
     """
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     sources['load'] = sources['load'].with_columns(
         pl.when(pl.col('snapshot') == 5).then(10_000.0).otherwise(pl.col('value')).alias('value')
     )
@@ -2248,7 +2248,7 @@ def test_one_slice_of_a_sweep_builds_alone():
     One slice builds alone, and each solved alone reaches the objective its
     window did.
     """
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3)
     sweep = sps.solve_over(WINDOW, sources, axis)
     assert sweep.keys == [0, 3, 6, 9], 'one slice per window, keyed by where it starts'
@@ -2284,7 +2284,7 @@ def test_one_slice_of_a_sweep_builds_alone():
 )
 def test_build_slice_refuses_the_axis_and_the_carry_solve_over_refuses(over, without, refusal):
     """One slice is built as the sweep builds it, so what the sweep refuses of an axis is refused here too."""
-    sources = {name: source for name, source in horizon_sources().items() if name != without}
+    sources = {name: source for name, source in span_sources().items() if name != without}
     with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
         sps.build_slice(WINDOW, sources, over, 0)
 
@@ -2301,7 +2301,7 @@ def test_a_key_that_is_no_slice_is_refused_naming_the_keys(steps, keyed):
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0)
     refusal = f'key=99 is no slice of this axis, whose {12 // steps} slices are keyed {keyed}.'
     with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
-        sps.build_slice(WINDOW, horizon_sources(), axis, 99)
+        sps.build_slice(WINDOW, span_sources(), axis, 99)
 
 
 @pytest.mark.parametrize('make_executor', [pytest.param(None, id='serial'), *EXECUTORS])
@@ -2342,7 +2342,7 @@ PRICED_CARRY = {'soc_initial': 'soc'}
 
 def _spilled(directory, **kwargs) -> sweep_module.Sweep:
     return sps.solve_over(
-        SPENDING, horizon_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), spill_to=directory, **kwargs
+        SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), spill_to=directory, **kwargs
     )
 
 
@@ -2517,7 +2517,7 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
 
     resumed = _spilled(tmp_path, start=None)
-    cold = sps.solve_over(SPENDING, horizon_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
+    cold = sps.solve_over(SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
     assert answer_of(resumed).equals(answer_of(cold))
     assert resumed.scan('soc').collect().equals(cold.primal('soc'))
     assert resumed.scan('soc', per_window=True).collect().equals(cold.primal('soc', per_window=True))
@@ -2625,7 +2625,7 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
 def test_a_sweep_archive_carries_its_carry(tmp_path):
     """The carry is config the tables do not hold, so the archive stores it beside the axis."""
     sps.solve_over(
-        WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
+        WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
     assert sps.load_archive(tmp_path / 'roll').axis.carry == {'soc_initial': 'soc'}, (
         'the carry reads back as it was given'
@@ -2634,7 +2634,7 @@ def test_a_sweep_archive_carries_its_carry(tmp_path):
 
 def test_a_sweep_archive_with_no_carry_reads_an_empty_carry(tmp_path):
     """A sweep that chained nothing carries nothing — the manifest omits the key and the reader defaults it."""
-    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'plain')
+    sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'plain')
     assert sps.load_archive(tmp_path / 'plain').axis.carry == {}, (
         'no carry given, none stored, an empty mapping read back'
     )
@@ -2643,7 +2643,7 @@ def test_a_sweep_archive_with_no_carry_reads_an_empty_carry(tmp_path):
 def test_a_carried_sweep_reruns_from_its_archive_with_the_stored_carry(tmp_path):
     """The stored carry is what makes a re-run the same sweep: with it the chained answer is reproduced."""
     original = sps.solve_over(
-        WINDOW, horizon_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
+        WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
     packed = sps.load_archive(tmp_path / 'roll')
     rerun = sps.solve_over(packed.spec, packed.sources, packed.axis)
@@ -2704,7 +2704,7 @@ def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_swe
     sweep solved.
     """
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
-    sources = horizon_sources()
+    sources = span_sources()
     sweep = sps.solve_over(WINDOW, sources, axis, spill_to=tmp_path / 'runs')
     solved = sweep.records['objective'].to_list()
 
@@ -2729,7 +2729,7 @@ def test_a_slice_starts_from_the_carried_parameter_its_sources_give():
     solved. Given another level, it is another model.
     """
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
-    sources = horizon_sources()
+    sources = span_sources()
     sweep = sps.solve_over(WINDOW, sources, axis)
     solved = sweep.records['objective'][1]
 
@@ -2746,7 +2746,7 @@ def test_a_slice_starts_from_the_carried_parameter_its_sources_give():
 def _stopped_at_the_second_window(spilled) -> tuple[sps.EachWindow, dict[str, object]]:
     """A carried sweep run to where it stops: its second window cannot meet a load beyond every generator."""
     axis = sps.EachWindow('snapshot', steps=3, lookahead=3, carry={'soc_initial': 'soc'})
-    sources = horizon_sources()
+    sources = span_sources()
     beyond = sources['load'].with_columns(
         pl.when(pl.col('snapshot').is_between(6, 8)).then(pl.col('value') + 1_000).otherwise(pl.col('value'))
     )
@@ -2854,7 +2854,7 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
     """The narrow gap: a carried value is a previous slice's answer, not stored data, so evaluate refuses it."""
     sps.solve_over(
         WINDOW,
-        horizon_sources(),
+        span_sources(),
         replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         archive=tmp_path / 'roll.zip',
     )
@@ -2868,7 +2868,7 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
 
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
     """`evaluate` stitches as `primal` does — the sliced dimension back, the slice key gone."""
-    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
+    sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     reindexed = answer.evaluate('sum(p, over=generator)')
     assert reindexed.columns == ['snapshot', 'value'], 'the sliced dimension is restored and the slice key dropped'
@@ -2881,7 +2881,7 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
     """A scalar-per-window quantity has no labels of the sliced dimension to restore, so its answer is refused — as `expression` is."""
-    sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
+    sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     with pytest.raises(sps.errors.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
@@ -2919,14 +2919,14 @@ def test_the_labels_of_another_dimension_carrying_the_axis_are_refused_before_a_
 def test_a_window_cuts_what_the_spec_declares_over_the_dimension_and_nothing_else():
     """A window cuts what the spec declares, so the labels table of another dimension that happens to carry a column
     of the windowed name is read as the labels table it is."""
-    sources = {**horizon_sources(8), 'generator': pl.DataFrame({'generator': GENERATORS, 'snapshot': [0, 1]})}
+    sources = {**span_sources(8), 'generator': pl.DataFrame({'generator': GENERATORS, 'snapshot': [0, 1]})}
     runs = sps.solve_over(WINDOW, sources, WINDOW_AXIS)
     assert runs.primal('p')['generator'].unique().sort().to_list() == sorted(GENERATORS), 'every window has both'
 
 
 def test_one_window_over_the_whole_horizon_is_the_single_solve():
     """A window takes the spec and the sources a single solve takes, so one window of everything is that solve."""
-    sources = horizon_sources(12)
+    sources = span_sources(12)
     whole = sps.solve(WINDOW, sources)
     windowed = sps.solve_over(WINDOW, sources, sps.EachWindow('snapshot', steps=12, lookahead=0))
     assert windowed.records['objective'].to_list() == pytest.approx([whole.objective]), 'one window, one objective'
@@ -2940,7 +2940,7 @@ def test_a_label_the_dimension_does_not_have_is_refused_under_windows_as_for_a_s
     Every window keeps such rows, and the door refuses them as it does for a
     single solve.
     """
-    sources = horizon_sources(8)
+    sources = span_sources(8)
     sources['load'] = pl.concat([sources['load'], pl.DataFrame({'snapshot': [99], 'value': [1.0]})])
     with pytest.raises(sps.errors.DataError, match=r"label\(s\) in dimension 'snapshot' that are not labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)
@@ -2948,7 +2948,7 @@ def test_a_label_the_dimension_does_not_have_is_refused_under_windows_as_for_a_s
 
 def test_a_window_needs_the_labels_a_single_solve_needs():
     """The labels a window cuts are the dimension's own, in label order, so they have to be there."""
-    sources = horizon_sources(8)
+    sources = span_sources(8)
     del sources['snapshot']
     with pytest.raises(sps.errors.DataError, match="dimension 'snapshot' has no labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)
