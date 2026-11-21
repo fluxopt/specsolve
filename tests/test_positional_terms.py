@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, dense
+from specsolve._engine import assembly, coverage, dense
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope
@@ -179,6 +179,75 @@ def test_a_constraint_placed_by_position_is_the_one_the_joins_build(
     assert text == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch), (
         'reading the terms by position changed the written model'
     )
+
+
+def _sided(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, list[str]]:
+    """The model as written, and how each constraint's right-hand side was read, in file order."""
+    read: list[str] = []
+    by_position, by_join = assembly.Assembly._sides_by_position, coverage.constant_side
+
+    def spied_position(self, *args, **kwargs):
+        read.append(BY_POSITION)
+        return by_position(self, *args, **kwargs)
+
+    def spied_join(*args, **kwargs):
+        read.append(BY_JOIN)
+        return by_join(*args, **kwargs)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(assembly.Assembly, '_sides_by_position', spied_position)
+        patched.setattr(coverage, 'constant_side', spied_join)
+        sps.write(spec, sources, path)
+    return path.read_text(), read
+
+
+@pytest.mark.parametrize(
+    ('constraint', 'how'),
+    [
+        pytest.param({'dims': ['i'], 'expression': 'x <= a'}, BY_POSITION, id='a-parameter'),
+        pytest.param({'dims': ['i'], 'expression': 'x + a >= -3'}, BY_POSITION, id='a-constant-on-each-side'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= a * s + 3'}, BY_POSITION, id='a-product-and-a-number'),
+        pytest.param(
+            {'dims': ['i', 'j'], 'expression': 'y <= b - a'},
+            BY_POSITION,
+            id='a-parameter-declared-in-another-order-and-one-over-fewer-dims',
+        ),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'sum(y, over=j) <= a'}, BY_POSITION, id='under-terms-that-are-joined'
+        ),
+        pytest.param(
+            {'dims': ['i'], 'where': 'a > 5', 'expression': 'sum(y, over=j) <= a'}, BY_POSITION, id='under-a-where'
+        ),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'masked + x <= a'}, BY_POSITION, id='at-the-rows-a-masked-variable-keeps'
+        ),
+        pytest.param({'dims': ['i'], 'expression': 'x - late <= 0 * a'}, BY_POSITION, id='a-side-that-is-zero'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= late'}, BY_POSITION, id='no-constant-term-at-all'),
+        pytest.param({'dims': [], 'expression': 'total <= s'}, BY_POSITION, id='a-constraint-over-no-dims'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= gone'}, BY_JOIN, id='a-parameter-absent-at-a-coordinate'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= 10 / a'}, BY_JOIN, id='a-quotient'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= sum(b, over=j)'}, BY_JOIN, id='a-sum'),
+        pytest.param(
+            {'dims': ['i'], 'expression': 'x <= a + sum(b, over=j)'}, BY_JOIN, id='one-constant-of-two-is-a-frame'
+        ),
+    ],
+)
+def test_a_right_hand_side_read_by_position_is_the_one_the_joins_build(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, constraint: dict, how: str
+) -> None:
+    spec = {**SPEC, 'constraints': {'row': constraint}}
+    text, read = _sided(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
+    assert read == [how], f'the right-hand side was read by {read}, and this shape is read by {how}'
+    assert text == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch), (
+        'reading the right-hand side by position changed the written model'
+    )
+
+
+def test_a_right_hand_side_short_of_a_row_is_refused_as_before(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`short` has a row at every second label, so it is not held by position and the rows pass still asks for the rest."""
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x <= short'}}}
+    with pytest.raises(DataError, match="constraint 'row'"):
+        _sided(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
 
 
 def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(

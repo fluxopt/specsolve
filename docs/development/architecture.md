@@ -180,11 +180,12 @@ constant term. A mask is a missing row, and broadcasting is a join.
 (`dense.py`). A coordinate's row-major position is then the key, and an
 alignment is an index rather than a join. Such a term still carries its tidy
 frame, so an operator with no positional arm reads the frame and the term is a
-frame from there on. Negation, a product with a constant term and a
-constraint's share of the matrix have a positional arm. A constraint takes it
-only when every linear term it holds is held by position. A `where` and a
-bound read such a parameter at each row's position as well, from 100,000
-coordinates up and where the row's labels are their own ordinals
+frame from there on. Negation, a product with a constant term, a constraint's
+share of the matrix and its right-hand side have a positional arm. A
+constraint takes the share's only when every linear term it holds is held by
+position, and the right-hand side's only when every constant term is. A
+`where` and a bound read such a parameter at each row's position as well, from
+100,000 coordinates up and where the row's labels are their own ordinals
 (`Scope.parameter_join`).
 `pixi run test-by-join` builds the whole suite with nothing read by position.
 
