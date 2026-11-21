@@ -273,3 +273,20 @@ def test_a_build_with_assumptions_reports_the_time_its_attach_took():
     with sps.build(spec, TABLED_SOURCES) as model:
         seconds = model.diagnostics().seconds
     assert seconds.get('attach', 0.0) > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
+
+
+def test_declarations_that_hold_no_row_over_the_same_dims_share_one_empty_frame(monkeypatch):
+    """PyPSA's spec has hundreds of declarations without a row, and an empty frame built for each was a fixed cost each."""
+    built, real = [], labels.nothing
+
+    def counted(scope, dims, label):
+        built.append((tuple(dims), label))
+        return real(scope, dims, label)
+
+    monkeypatch.setattr(labels, 'nothing', counted)
+    variables = {**TABLED_SPEC['variables'], 'y': {'dims': ['g', 'e'], 'bounds': {'lower': 0}}}
+    constraints = {f'unlabelled_{i}': {'dims': ['g', 'e'], 'expression': 'y >= 0'} for i in range(3)}
+    sps.build({**TABLED_SPEC, 'variables': variables, 'constraints': constraints}, TABLED_SOURCES).close()
+    assert built == [(('g', 'e'), 'var_label'), (('g', 'e'), 'row')], (
+        f'empty frames were built for {built}, where one per dims and label is enough'
+    )
