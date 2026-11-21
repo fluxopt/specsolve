@@ -156,7 +156,7 @@ class Engine:
             attached = attach(program, sources)
         self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
-        settled_program, tests = _settled_wheres(program, attached)
+        settled_program, tests = _with_wheres_settled(program, attached)
         assembly = Assembly(settled_program, attached, self._measured, tests)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
@@ -631,7 +631,7 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
 
 
-def _settled_wheres(
+def _with_wheres_settled(
     lowered: program.Program, attached: AttachedSources
 ) -> tuple[program.Program, Mapping[program.Condition, bool]]:
     """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles, and those tests.
