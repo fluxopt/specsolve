@@ -211,13 +211,13 @@ class Model:
 
         What the build read is kept for an archive: a one-shot iterator is
         spent by then, and a path may have been rewritten. A parameter that the
-        sources named *changed* leave alone is taken as the last build read it,
-        and a change of numbers alone is not built again. A failure forgets what was read, so the next update reads every source
+        sources named *changed* leave alone is taken as the last build read it.
+        A failure forgets what was read, so the next update reads every source
         again, the refused one included.
         """
         try:
             self._tidied, attached = tidied_and_attached(self._program, self._sources, self._tidied, changed)
-            self._engine.build(self._program, self._tidied, attached, changed)
+            self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._tidied = {}
             self._engine.close()

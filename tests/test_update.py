@@ -16,7 +16,6 @@ from typing import Any, NamedTuple
 import polars as pl
 import pytest
 from mathspec import to_spec
-from polars.testing import assert_frame_equal
 
 import specsolve as sps
 from specsolve._sources import attachable
@@ -331,341 +330,6 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
                 )
 
 
-def _same_handoff(got: Any, want: Any, where: str) -> None:
-    """Two hand-offs hold the same model: every frame alike, a sum in another order alike to its last bits."""
-    for frame in ('cols', 'rows', 'matrix', 'qmatrix', 'quad', 'sos'):
-        assert_frame_equal(getattr(got, frame), getattr(want, frame), rel_tol=1e-12, abs_tol=0.0)
-    assert_frame_equal(got.obj.sort('col'), want.obj.sort('col'), rel_tol=1e-12, abs_tol=0.0)
-    assert (got.row_starts == want.row_starts).all(), f'{where}: the matrix rows start elsewhere'
-    assert (got.column_count, got.row_count) == (want.column_count, want.row_count), f'{where}: another shape'
-    assert got.objective_constant == pytest.approx(want.objective_constant, rel=1e-12), f'{where}: another constant'
-
-
-def _same_diagnostics(got: Any, want: Any, where: str) -> None:
-    """Two models report the same shape and the same ranges, a block at a time in build order."""
-    assert (got.columns, got.rows, got.nonzeros) == (want.columns, want.rows, want.nonzeros), f'{where}: another shape'
-    for frame in ('omissions', 'sparse_parameters', 'coefficient_range', 'bound_range', 'rhs_range'):
-        assert_frame_equal(getattr(got, frame), getattr(want, frame), rel_tol=1e-12, abs_tol=0.0)
-    assert got.objective_range == pytest.approx(want.objective_range, rel=1e-12), f'{where}: another objective range'
-
-
-def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monkeypatch):
-    """Each real-valued parameter of a port, its numbers moved alone, gives the hand-off and diagnostics a fresh build gives.
-
-    Whichever way the update went: a parameter that feeds only bounds,
-    constant sides, linear coefficients and the objective is read again on the old labels
-    ([`refilled`][specsolve._engine.assembly.refilled]), and any other is
-    built in full. A change the fresh build refuses is left out; the model
-    goes back to the port's own numbers after each.
-    """
-    if port['name'] in TOO_SLOW_TO_WALK:
-        pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
-    from specsolve._engine import engine as engine_module
-
-    spec = expanded(port['spec'])
-    given = _declared(port_sources(port['name']), spec.program)
-    refilled = engine_module.refilled
-    took: list[str] = []
-
-    def spy(built: Any, attached: Any, changed: Any, measured: Any) -> Any:
-        took.extend(changed)
-        return refilled(built, attached, changed, measured)
-
-    monkeypatch.setattr(engine_module, 'refilled', spy)
-    with sps.build(spec, given) as model:
-        for name, value in given.items():
-            if not (isinstance(value, pl.DataFrame) and value.schema.get('value') == pl.Float64):
-                continue
-            change = {name: value.with_columns(pl.col('value') * 1.25 + 0.5)}
-            try:
-                reference = sps.build(spec, given | change)
-            except sps.errors.SpecsolveError:
-                continue
-            with reference:
-                model.update(change)
-                where = f'{port["name"]} {name}'
-                _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, where)
-                _same_diagnostics(model.diagnostics(), reference.diagnostics(), where)
-            model.update({name: value})
-
-
-#: One parameter in each role: `cap` a bound, `demand` a constant side, `price`
-#: a cost, and `on` and `eff` unused until a case writes them in.
-ROLES = {
-    'dimensions': {'generator': {'dtype': 'str'}},
-    'parameters': {
-        'cap': {'dims': ['generator']},
-        'on': {'dims': ['generator']},
-        'eff': {'dims': ['generator']},
-        'price': {'dims': ['generator']},
-        'demand': {'dims': []},
-    },
-    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
-    'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=generator) >= demand'}},
-    'objective': {'sense': 'minimize', 'expression': 'sum(p * price)'},
-}
-ROLE_GENERATORS = ['a', 'b']
-ROLE_DATA = {
-    'generator': ROLE_GENERATORS,
-    'cap': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [10.0, 10.0]}),
-    'on': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 1.0]}),
-    'eff': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 1.0]}),
-    'price': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 2.0]}),
-    'demand': pl.DataFrame({'value': [8.0]}),
-}
-
-
-COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
-
-
-@pytest.mark.parametrize(
-    ('declarations', 'change', 'refilled', 'loads'),
-    [
-        pytest.param({}, {'cap': [8.0, 9.0]}, True, 1, id='a bound'),
-        pytest.param({}, {'demand': [5.0]}, True, 1, id='a constant side'),
-        pytest.param({}, {'price': [3.0, 1.0]}, True, 1, id='a cost'),
-        pytest.param({'constraints.meet.expression': COEFFICIENT}, {'eff': [0.5, 2.0]}, True, 1, id='a coefficient'),
-        pytest.param(
-            {
-                'constraints.meet.expression': COEFFICIENT,
-                'constraints.each': {'dims': ['generator'], 'expression': 'p <= cap'},
-            },
-            {'eff': [0.0, 2.0]},
-            True,
-            2,
-            id='a coefficient to zero before another constraint',
-        ),
-        pytest.param(
-            {'constraints.meet.expression': 'sum(p / eff, over=generator) >= demand'},
-            {'eff': [0.5, 2.0]},
-            True,
-            1,
-            id='a divisor',
-        ),
-        pytest.param({'variables.p.where': 'on > 0'}, {'on': [0.0, 1.0]}, False, 2, id='a variable where'),
-        pytest.param({'constraints.meet.where': 'demand > 10'}, {'demand': [15.0]}, False, 2, id='a constraint where'),
-        pytest.param(
-            {'parameters.cap.missing': 'absent'},
-            {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})},
-            False,
-            1,
-            id='fewer coordinates',
-        ),
-        pytest.param({}, {'generator': ROLE_GENERATORS}, False, 1, id='an index'),
-    ],
-)
-def test_new_numbers_are_read_again_on_the_old_labels_only_where_nothing_else_can_move(
-    monkeypatch, declarations, change, refilled, loads
-):
-    """Numbers that feed bounds, constant sides, linear coefficients and costs, at the coordinates they had, skip the build.
-
-    A parameter a `where` reads moves which columns or rows exist; so do new
-    coordinates or a new index. Each of those builds in full. Either way the
-    hand-off is a fresh build's. A coefficient falling to zero takes its
-    matrix entry with it, on the old labels, and the entries after it move up.
-    """
-    from specsolve._engine import engine as engine_module
-
-    spec = override(ROLES, **declarations)
-    new = {
-        name: ROLE_DATA[name].with_columns(pl.Series('value', value))
-        if name in ROLES['parameters'] and isinstance(value, list)
-        else value
-        for name, value in change.items()
-    }
-    real = engine_module.refilled
-    took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
-    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | new) as reference:
-        model.solve()
-        model.update(new)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
-        assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
-        assert bool(took) is refilled, f'the update {"skipped" if took else "ran"} the build'
-        assert model.diagnostics().loads == loads, f'the solver was loaded {model.diagnostics().loads} times'
-
-
-def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
-    """A quadratic row goes to a sink whole, coefficients and all, so its coefficients are not read again."""
-    from specsolve._engine import engine as engine_module
-
-    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p * p, over=generator) <= demand'})
-    change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 2.0]))}
-    real = engine_module.refilled
-    took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
-    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
-        model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'eff on a quadratic row')
-    assert not took, 'a quadratic row was read again on the old labels'
-
-
-#: `eff` scales `p` on each generator's own row, after `meet`'s, so a moved
-#: coefficient sits in a row the matrix does not start with.
-PER_ROW = override(
-    ROLES,
-    **{
-        'constraints.meet.expression': 'sum(p, over=generator) >= demand',
-        'constraints.limit': {'dims': ['generator'], 'expression': 'eff * p <= cap'},
-    },
-)
-
-
-def test_a_moved_coefficient_is_taken_in_place_and_taken_back(solver_name):
-    """A changed coefficient reaches the loaded solver in place, and so does the change undone.
-
-    `eff` of `a` doubles, so `a` reaches half its capacity and `b`, dearer,
-    covers the rest. Each answer is a fresh build's on the same solver.
-    """
-    doubled = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [2.0, 1.0]))}
-    with sps.build(PER_ROW, ROLE_DATA) as model:
-        model.solve(solver_name)
-        for data in (ROLE_DATA | doubled, ROLE_DATA):
-            with sps.build(PER_ROW, data) as reference:
-                got = model.update({'eff': data['eff']}).solve(solver_name).objective
-                assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 1, 'the coefficients moved in place, so the solver stayed loaded'
-
-
-def test_a_quadratic_constraint_whose_linear_part_moved_loads_again():
-    """A quadratic row goes to the solver whole, so a coefficient of its linear part loads the model again."""
-    pytest.importorskip('gurobipy', reason='only the gurobi sink takes a quadratic constraint')
-    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p + p * p, over=generator) >= demand'})
-    changed = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 4.0]))}
-    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | changed) as reference:
-        model.solve('gurobi')
-        got = model.update(changed).solve('gurobi').objective
-        assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 2, 'a quadratic row whose linear part moved was kept'
-
-
-def test_a_divisor_falling_to_zero_is_refused_as_a_fresh_build_refuses_it():
-    """`p / eff` read again on the old labels still refuses a divisor of zero, in a fresh build's words."""
-    spec = override(ROLES, **{'constraints.meet.expression': 'sum(p / eff, over=generator) >= demand'})
-    change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.0, 2.0]))}
-    with pytest.raises(sps.errors.DataError, match='eff') as fresh:
-        sps.build(spec, ROLE_DATA | change)
-    with sps.build(spec, ROLE_DATA) as model, pytest.raises(sps.errors.DataError) as updated:
-        model.update(change)
-    assert str(updated.value) == str(fresh.value), 'the update refuses what a fresh build refuses, in its words'
-
-
-#: A variable whose coefficient a `cases:` condition picks: 2 where `flag`
-#: holds, 1 elsewhere.
-CASES_ON_A_VARIABLE = {
-    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'flag': {'dims': ['t'], 'dtype': 'bool'}},
-    'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
-    'expressions': {
-        'scaled': {'dims': ['t'], 'cases': {'flagged': {'when': 'flag', 'expression': '2 * x'}}, 'otherwise': 'x'}
-    },
-    'constraints': {'under': {'dims': ['t'], 'expression': 'scaled <= 10'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
-}
-
-#: A shift whose offset is a parameter, so `lead` picks which column each row reads.
-SHIFT_BY_A_PARAMETER = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
-    'parameters': {'lead': {'dims': ['g'], 'dtype': 'int'}},
-    'variables': {
-        'level': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
-        'take': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
-    },
-    'constraints': {'link': {'dims': ['g', 't'], 'expression': 'take <= shift(level, along=t, offset=lead, edge=0)'}},
-    'objective': {
-        'sense': 'maximize',
-        'expression': 'sum(sum(take, over=g), over=t) - sum(sum(level, over=g), over=t)',
-    },
-}
-
-
-@pytest.mark.parametrize(
-    ('spec', 'data', 'change'),
-    [
-        pytest.param(
-            CASES_ON_A_VARIABLE,
-            {'t': [0, 1, 2, 3], 'flag': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [True, False, True, False]})},
-            {'flag': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [False, False, True, True]})},
-            id='a cases condition',
-        ),
-        pytest.param(
-            SHIFT_BY_A_PARAMETER,
-            {
-                'g': ['a', 'b'],
-                't': [0, 1, 2],
-                'lead': pl.DataFrame({'g': ['a', 'b'], 'value': [1, 1]}, schema={'g': pl.String, 'value': pl.Int64}),
-            },
-            {'lead': pl.DataFrame({'g': ['a', 'b'], 'value': [0, 1]}, schema={'g': pl.String, 'value': pl.Int64})},
-            id='a shift offset',
-        ),
-    ],
-)
-def test_a_parameter_that_picks_which_entries_exist_is_built_again(monkeypatch, spec, data, change):
-    """A `cases:` condition over variables, or a shift's named offset, decides which matrix entries exist.
-
-    Neither is a scaling of a variable the walk of products can see, so each
-    has its own branch; either one missed reads new numbers onto old labels.
-    """
-    from specsolve._engine import engine as engine_module
-
-    real = engine_module.refilled
-    took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
-    with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
-        model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
-    assert not took, 'a parameter that decides which entries exist was read again on the old labels'
-
-
-def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
-    """A bound moved from one generator to another keeps its height, and still moves which side is open.
-
-    `cap` declares `missing: absent`, so a generator it has no row for has no
-    upper bound; the new table names `b` where the old named `a`.
-    """
-    from specsolve._engine import engine as engine_module
-
-    spec = override(ROLES, **{'parameters.cap.missing': 'absent'})
-    before = ROLE_DATA | {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})}
-    change = {'cap': pl.DataFrame({'generator': ['b'], 'value': [8.0]})}
-    real = engine_module.refilled
-    took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
-    with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
-        model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'cap moved to b')
-    assert not took, 'other coordinates were read again on the old labels'
-
-
-def test_new_numbers_on_a_row_the_build_dropped_are_refused_as_a_fresh_build_refuses_them():
-    """A constraint that dropped a row with no terms builds in full, because its checks read the rows it labelled.
-
-    `a` has no row at t=2, so `a * x` has no term there: the row is labelled,
-    keeps no term and is dropped. A divisor of zero at t=2 is refused by a
-    fresh build; read again on the rows that survived, it would go unseen.
-    """
-    spec = {
-        'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'a': {'dims': ['t'], 'missing': 'neutral'}, 'cap': {'dims': ['t']}, 'eff': {'dims': ['t']}},
-        'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
-        'constraints': {'limit': {'dims': ['t'], 'expression': 'a * x <= cap / eff'}},
-        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
-    }
-    t = [0, 1, 2]
-    data = {
-        't': t,
-        'a': pl.DataFrame({'t': [0, 1], 'value': [1.0, 1.0]}),
-        'cap': pl.DataFrame({'t': t, 'value': [5.0, 5.0, 5.0]}),
-        'eff': pl.DataFrame({'t': t, 'value': [1.0, 1.0, 1.0]}),
-    }
-    change = {'eff': pl.DataFrame({'t': t, 'value': [1.0, 1.0, 0.0]})}
-    with pytest.raises(sps.errors.DataError, match='eff') as fresh:
-        sps.build(spec, data | change)
-    with sps.build(spec, data) as model, pytest.raises(sps.errors.DataError) as updated:
-        model.update(change)
-    assert str(updated.value) == str(fresh.value), 'the update refuses what a fresh build refuses, in its words'
-
-
 @pytest.mark.parametrize('rung', RUNGS)
 def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
     """The fast path is taken exactly when the structure held.
@@ -794,14 +458,12 @@ def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     A solver holding the tables it loaded has to drop them before the next
     build allocates, or a re-solving loop stands at two models' peak. **Asked
     between the rebuild and the next solve**, the only window where it shows.
-    The rows are asked for, being what a new `load` replaces; the matrix is
-    the new model's too, since only numbers changed.
     """
     model.solve()
-    released = weakref.ref(model._engine._model.handoff.rows)
+    released = weakref.ref(model._engine._model.handoff.matrix)
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [12.0, 22.0, 32.0, 42.0]})})
     gc.collect()
-    assert released() is None, "the rebuilt-over model's rows are still reachable, so the solver kept a whole model"
+    assert released() is None, "the rebuilt-over model's matrix is still reachable, so the solver kept a whole model"
 
 
 #: The option name each sink gives a time limit; `solver_options` is forwarded
@@ -1114,48 +776,63 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         )
 
 
-#: `cap` never exceeds 100, so `idle` holds no column and `unmet` no row; `floor`
-#: and `ceiling` feed only them, so moving their numbers refills without a build.
-IDLE = {
-    'dimensions': {'g': {}},
-    'parameters': {'cap': {'dims': ['g']}, 'floor': {'dims': ['g']}, 'ceiling': {'dims': ['g']}},
-    'variables': {
-        'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
-        'idle': {'dims': ['g'], 'where': 'cap > 100', 'bounds': {'lower': 0, 'upper': 'ceiling'}},
+#: One price per generator, a shared demand, and `eff` free to scale `p`.
+ROLES = {
+    'dimensions': {'generator': {'dtype': 'str'}},
+    'parameters': {
+        'cap': {'dims': ['generator']},
+        'eff': {'dims': ['generator']},
+        'price': {'dims': ['generator']},
+        'demand': {'dims': []},
     },
-    'constraints': {'unmet': {'dims': ['g'], 'where': 'cap > 100', 'expression': 'x >= floor'}},
-    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=generator) >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price)'},
+}
+ROLE_GENERATORS = ['a', 'b']
+ROLE_DATA = {
+    'generator': ROLE_GENERATORS,
+    'cap': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [10.0, 10.0]}),
+    'eff': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 1.0]}),
+    'price': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 2.0]}),
+    'demand': pl.DataFrame({'value': [8.0]}),
 }
 
 
-def _idle_data(floor: float, ceiling: float) -> dict[str, object]:
-    labels = ['a', 'b']
-    return {
-        'g': labels,
-        'cap': pl.DataFrame({'g': labels, 'value': [2.0, 3.0]}),
-        'floor': pl.DataFrame({'g': labels, 'value': [floor] * 2}),
-        'ceiling': pl.DataFrame({'g': labels, 'value': [ceiling] * 2}),
-    }
+#: `eff` scales `p` on each generator's own row, after `meet`'s, so a moved
+#: coefficient sits in a row the matrix does not start with.
+PER_ROW = override(
+    ROLES,
+    **{
+        'constraints.meet.expression': 'sum(p, over=generator) >= demand',
+        'constraints.limit': {'dims': ['generator'], 'expression': 'eff * p <= cap'},
+    },
+)
 
 
-def test_a_refill_reads_nothing_for_a_declaration_without_a_label(monkeypatch):
-    """A variable or constraint that holds nothing has no share to splice, so the refill compiles none of it."""
-    from specsolve._engine import assembly as assembly_module
+def test_a_moved_coefficient_is_taken_in_place_and_taken_back(solver_name):
+    """A changed coefficient reaches the loaded solver in place, and so does the change undone.
 
-    read: list[str] = []
-    compiled, columns = assembly_module.Assembly._compiled, assembly_module.Assembly._columns
+    `eff` of `a` doubles, so `a` reaches half its capacity and `b`, dearer,
+    covers the rest. Each answer is a fresh build's on the same solver.
+    """
+    doubled = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [2.0, 1.0]))}
+    with sps.build(PER_ROW, ROLE_DATA) as model:
+        model.solve(solver_name)
+        for data in (ROLE_DATA | doubled, ROLE_DATA):
+            with sps.build(PER_ROW, data) as reference:
+                got = model.update({'eff': data['eff']}).solve(solver_name).objective
+                assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
+        assert model.diagnostics().loads == 1, 'the coefficients moved in place, so the solver stayed loaded'
 
-    def spied_compiled(self, name, *args, **kwargs):
-        read.append(name)
-        return compiled(self, name, *args, **kwargs)
 
-    def spied_columns(self, name, *args, **kwargs):
-        read.append(name)
-        return columns(self, name, *args, **kwargs)
-
-    with sps.build(IDLE, _idle_data(1.0, 5.0)) as model, sps.build(IDLE, _idle_data(0.5, 9.0)) as reference:
-        monkeypatch.setattr(assembly_module.Assembly, '_compiled', spied_compiled)
-        monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
-        model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
-    assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no label'
+def test_a_quadratic_constraint_whose_linear_part_moved_loads_again():
+    """A quadratic row goes to the solver whole, so a coefficient of its linear part loads the model again."""
+    pytest.importorskip('gurobipy', reason='only the gurobi sink takes a quadratic constraint')
+    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p + p * p, over=generator) >= demand'})
+    changed = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 4.0]))}
+    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | changed) as reference:
+        model.solve('gurobi')
+        got = model.update(changed).solve('gurobi').objective
+        assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
+        assert model.diagnostics().loads == 2, 'a quadratic row whose linear part moved was kept'
