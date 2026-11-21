@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from specsolve._collect import collected, in_memory
+from specsolve._collect import collected, collected_all, in_memory
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -56,12 +56,19 @@ class AttachedSources:
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
 
+#: A float parameter's value column, whatever numeric type it arrived in.
+_AS_FLOAT = pl.col(VALUE).cast(pl.Float64)
+
+
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
     """Shape the door's frames into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every frame that
     carries the dimension is re-encoded against it. Each frame is read
-    [`in_memory`][], since every read holds one table whole.
+    [`in_memory`][], since every read holds one table whole. A dimension's
+    cast is built once and the parameters are cast in one batch: building a
+    cast to an ``Enum`` of many labels costs a fixed time per expression, and
+    PyPSA's spec casts hundreds of tables over the same dozen dimensions.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -80,12 +87,19 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
         if casts:
             relations[name] = relations[name].with_columns(casts)
+    to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
+    uncollected: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
         frame = _plain_strings(parameters[name], p.dims)
-        casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
+        casts = [to_enum[d] for d in p.dims if d in to_enum]
         if p.dtype == 'float':
-            casts.append(pl.col(VALUE).cast(pl.Float64))
-        parameters[name] = frame.with_columns(casts) if casts else frame
+            casts.append(_AS_FLOAT)
+        if casts:
+            uncollected[name] = frame.lazy().with_columns(casts)
+        else:
+            parameters[name] = frame
+    with in_memory():
+        parameters |= dict(zip(uncollected, collected_all(uncollected.values()), strict=True))
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
