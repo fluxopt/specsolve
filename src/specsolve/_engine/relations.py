@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from specsolve._names import LABEL, POSITION
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
@@ -119,7 +121,7 @@ class Grouping:
     def whole(cls, data: AttachedSources, dimension: str) -> Grouping:
         """*dimension* as one group, so an unpartitioned call reads the same table shape."""
         table = data.dimensions[dimension].with_columns(
-            pl.col('ord').alias(GROUP_RANK),
+            pl.col(POSITION).alias(GROUP_RANK),
             pl.lit(data.cardinality[dimension], dtype=pl.Int64).alias(GROUP_SIZE),
         )
         return cls(dimension, (), (), (), table)
@@ -131,16 +133,16 @@ class Grouping:
         joined = partition.joined_dims
         groups = tuple(group_column(role) for role in partition.grouped)
         rows = data.relations[partition.name].select(
-            pl.col(partition.along).alias('val'),
+            pl.col(partition.along).alias(LABEL),
             *(pl.col(role).alias(dim) for role, dim in zip(partition.joined, joined, strict=True)),
             *(pl.col(role).alias(column) for role, column in zip(partition.grouped, groups, strict=True)),
         )
         key = [*joined, *groups]
         table = (
             data.dimensions[dimension]
-            .join(rows, on='val', how='inner')
+            .join(rows, on=LABEL, how='inner')
             .with_columns(
-                (pl.col('ord').rank('ordinal').over(key) - 1).cast(pl.Int64).alias(GROUP_RANK),
+                (pl.col(POSITION).rank('ordinal').over(key) - 1).cast(pl.Int64).alias(GROUP_RANK),
                 pl.len().over(key).cast(pl.Int64).alias(GROUP_SIZE),
             )
         )
@@ -163,7 +165,7 @@ class Grouping:
 
     def placed(self) -> pl.LazyFrame:
         """The coordinates the partition places in some group, under [`keys`][]; the rest build no row."""
-        return self.table.select(pl.col('val').alias(self.dimension), *self.joined).unique()
+        return self.table.select(pl.col(LABEL).alias(self.dimension), *self.joined).unique()
 
     def column_of(self, dim: str) -> str | None:
         """The group column carrying *dim*'s labels, or ``None`` where the partition does not group into it.

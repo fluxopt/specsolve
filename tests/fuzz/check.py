@@ -41,6 +41,7 @@ from mathspec.errors import MathSpecError
 import specsolve as sps
 from specsolve._engine.engine import Engine
 from specsolve._inputs import as_program
+from specsolve._names import COEFF, ROW
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, SpecsolveError
 from tests.differential import RTOL, _hold, _table, by_coordinate
@@ -382,7 +383,7 @@ def _up_to_sign(row: list[float]) -> tuple[float, ...]:
 
 
 def _canonical(matrix: pl.DataFrame, height: int) -> list[tuple[float, ...]]:
-    rows = matrix.group_by('row').agg(pl.col('coeff')).get_column('coeff').to_list()
+    rows = matrix.group_by(ROW).agg(pl.col(COEFF)).get_column(COEFF).to_list()
     return sorted([_up_to_sign(r) for r in rows] + [()] * (height - len(rows)))
 
 

@@ -13,6 +13,7 @@ from typing import IO, TYPE_CHECKING
 import numpy as np
 import polars as pl
 
+from specsolve._names import COEFF, COL, ROW
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.handoff import SENSE_CODES, ranges
 from specsolve._sinks.text import append_lines, chunk_key, digits, number
@@ -72,8 +73,8 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
 
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
     """The matrix in ``(col, row)`` order, and the offsets a column range slices it by."""
-    entries = handoff.matrix_block(0, handoff.row_count).sort('col', 'row')
-    counts = np.bincount(entries['col'].to_numpy(), minlength=handoff.column_count)
+    entries = handoff.matrix_block(0, handoff.row_count).sort(COL, ROW)
+    counts = np.bincount(entries[COL].to_numpy(), minlength=handoff.column_count)
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
 
@@ -84,7 +85,7 @@ def _row_lines(handoff: Handoff) -> pl.LazyFrame:
             pl.lit(' '),
             pl.col('sense').replace_strict(_MPS_SENSE, return_dtype=pl.String),
             pl.lit('  c'),
-            digits(pl.col('row')),
+            digits(pl.col(ROW)),
         )
     )
 
@@ -92,7 +93,7 @@ def _row_lines(handoff: Handoff) -> pl.LazyFrame:
 def _rhs_lines(handoff: Handoff) -> pl.LazyFrame:
     """Each row's right-hand side, in row order."""
     return handoff.rows.lazy().select(
-        pl.concat_str(pl.lit('    rhs c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('rhs')))
+        pl.concat_str(pl.lit('    rhs c'), digits(pl.col(ROW)), pl.lit(' '), number(pl.col('rhs')))
     )
 
 
@@ -108,28 +109,23 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
     slots = handoff.row_count + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
-        return chunk_key(pl.col('col'), lo, slots, within)
+        return chunk_key(pl.col(COL), lo, slots, within)
 
     columns = (
-        handoff.cols.lazy()
-        .slice(lo, hi - lo)
-        .with_row_index('col', offset=lo)
-        .with_columns(pl.col('col').cast(pl.Int64))
+        handoff.cols.lazy().slice(lo, hi - lo).with_row_index(COL, offset=lo).with_columns(pl.col(COL).cast(pl.Int64))
     )
     integral = columns.filter(pl.col('vtype') != 'continuous')
-    name = pl.concat_str(pl.lit('    x'), digits(pl.col('col')))
-    cost = columns.join(handoff.obj.lazy().with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left').select(
+    name = pl.concat_str(pl.lit('    x'), digits(pl.col(COL)))
+    cost = columns.join(handoff.obj.lazy().with_columns(pl.col(COL).cast(pl.Int64)), on=COL, how='left').select(
         _key(pl.lit(1, dtype=pl.Int64)),
-        pl.concat_str(name, pl.lit(' obj '), number(pl.col('coeff').fill_null(0.0))).alias('line'),
+        pl.concat_str(name, pl.lit(' obj '), number(pl.col(COEFF).fill_null(0.0))).alias('line'),
     )
     terms = (
         entries.lazy()
-        .with_columns(pl.col('col').cast(pl.Int64))
+        .with_columns(pl.col(COL).cast(pl.Int64))
         .select(
-            _key(pl.col('row').cast(pl.Int64) + 2),
-            pl.concat_str(name, pl.lit(' c'), digits(pl.col('row')), pl.lit(' '), number(pl.col('coeff'))).alias(
-                'line'
-            ),
+            _key(pl.col(ROW).cast(pl.Int64) + 2),
+            pl.concat_str(name, pl.lit(' c'), digits(pl.col(ROW)), pl.lit(' '), number(pl.col(COEFF))).alias('line'),
         )
     )
     markers = [
@@ -146,10 +142,10 @@ def _write_bounds(handoff: Handoff, f: IO[bytes]) -> None:
     below zero implies an unbounded lower one.
     """
     for keyword, unbounded, column in (('LO', 'MI', 'lb'), ('UP', 'PL', 'ub')):
-        name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col('col')))
+        name = pl.concat_str(pl.lit(' bnd x'), digits(pl.col(COL)))
         append_lines(
             handoff.cols.lazy()
-            .with_row_index('col')
+            .with_row_index(COL)
             .select(
                 pl.when(pl.col(column).is_infinite())
                 .then(pl.concat_str(pl.lit(f' {unbounded}'), name))
@@ -177,6 +173,6 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     )
     lines = members.select(
         (pl.col('ord') * 2 + 1).alias('key'),
-        pl.concat_str(pl.lit('    x'), digits(pl.col('col')), pl.lit(' '), digits(pl.col('weight'))).alias('line'),
+        pl.concat_str(pl.lit('    x'), digits(pl.col(COL)), pl.lit(' '), digits(pl.col('weight'))).alias('line'),
     )
     return pl.concat([headers, lines]).sort('key').select('line')

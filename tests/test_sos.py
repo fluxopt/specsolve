@@ -17,6 +17,7 @@ import pytest
 from mathspec import to_spec
 
 import specsolve as sps
+from specsolve._names import COL
 from specsolve.errors import LanguageError, SpecsolveError
 from tests.conftest import EXAMPLES_DIR, expanded, solve_written_file
 
@@ -367,7 +368,7 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
         sets = model._engine._model.handoff.sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
-        assert sets['col'].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
+        assert sets[COL].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
 
 
 @pytest.mark.parametrize('dims', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])

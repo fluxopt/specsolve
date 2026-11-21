@@ -14,6 +14,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COEFF, ROW
 from specsolve.errors import SpecsolveError
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -243,9 +244,9 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
             for offset in range(block.height):
                 at = block.start + offset
                 given = tables.matrix_block(at, at + 1)
-                where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != 'row'}
+                where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != ROW}
                 read = model.row(name, **where)
-                assert read.terms['coefficient'].to_list() == pytest.approx(given['coeff'].to_list()), (
+                assert read.terms['coefficient'].to_list() == pytest.approx(given[COEFF].to_list()), (
                     f'{name} at {where} does not carry the coefficients the sink was handed for row {at}'
                 )
                 assert read.terms.height == given.height

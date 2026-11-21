@@ -128,6 +128,11 @@ class _Clock:
         self.calls = 0
 
 
+def _column(table: Any, name: str) -> Any:
+    """*name*, or its ``specsolve_`` spelling: a ref before the engine's columns took the prefix names them bare."""
+    return table[name if name in table.columns else f'specsolve_{name}']
+
+
 class _Built:
     """A built model's size, and its numbers as its fingerprint."""
 
@@ -151,7 +156,7 @@ class _Built:
             'structure': np.frombuffer(handoff.structure, dtype=np.uint8),
             'objective_constant': np.array([handoff.objective_constant], dtype=np.float64),
             'cost': handoff._dense_cost(),
-            **{f'{frame}.{column}': getattr(handoff, frame)[column].to_numpy() for frame, column in fields},
+            **{f'{frame}.{column}': _column(getattr(handoff, frame), column).to_numpy() for frame, column in fields},
         }
 
 

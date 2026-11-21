@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COL_L, COL_R
 from specsolve.errors import SpecsolveError
 from tests.conftest import recomputed_row_values
 
@@ -229,7 +230,7 @@ def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
     written = _entries('p * q >= floor')
     reversed_ = _entries('q * p >= floor')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
-    assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
+    assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
 
 def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
@@ -296,7 +297,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     with sps.build(SPEC, SOURCES) as model:
         tables = model._engine._model.handoff
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
-        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col('col_r') + 1))
+        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col(COL_R) + 1))
         assert moved.structure != tables.structure, (
             'the same coefficient on a different pair is a different row, and a digest that '
             'missed it would push new numbers onto a solver holding the old constraint'

@@ -14,6 +14,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from specsolve._names import COEFF, ROW
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 from tests.linopy_lane.loader import OracleCannotBuildError
@@ -67,7 +68,7 @@ def _same_matrix(name: str, run: Any) -> None:
 
 def _canonical(matrix: pl.DataFrame) -> list[tuple[float, ...]]:
     """``(row, col, coeff)`` as a sorted multiset of sorted coefficient rows."""
-    rows = matrix.group_by('row').agg(pl.col('coeff').sort()).get_column('coeff').to_list()
+    rows = matrix.group_by(ROW).agg(pl.col(COEFF).sort()).get_column(COEFF).to_list()
     return sorted(tuple(r) for r in rows)
 
 

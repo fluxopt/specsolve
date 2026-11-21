@@ -43,6 +43,7 @@ from specsolve._engine.assembly import _sorted
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.engine import Engine
 from specsolve._engine.scope import Scope
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
 from specsolve._sinks.handoff import ranges
 from specsolve._sinks.highs import Highs
@@ -581,9 +582,7 @@ class TestTheIndexSpace:
         with sps.build(spec, sources) as model:
             indexed = model._engine._model.variables['p'].frame.collect()
 
-        assert indexed['col_index'].to_list() == list(range(len(expected))), (
-            'column indices must be dense and ascending'
-        )
+        assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be dense and ascending'
         assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
@@ -666,7 +665,7 @@ class TestTheIndexSpace:
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
-                indexed.append(engine._model.variables['p'].frame.collect().sort('col_index'))
+                indexed.append(engine._model.variables['p'].frame.collect().sort(COL))
         assert indexed[0].equals(indexed[1])
 
     def test_a_condition_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
@@ -736,8 +735,8 @@ class TestTheIndexSpace:
             engine = model._engine
             tables = engine._model.handoff
             for names, total, held, index in (
-                (['x', 'y', 'z'], tables.column_count, engine._model.variables, 'col_index'),
-                (['c1', 'c2'], tables.row_count, engine._model.constraints, 'row'),
+                (['x', 'y', 'z'], tables.column_count, engine._model.variables, COL),
+                (['c1', 'c2'], tables.row_count, engine._model.constraints, ROW),
             ):
                 at = 0
                 for name in names:
@@ -892,7 +891,7 @@ def _objective_table(program, sources):
     with Engine() as engine:
         engine.build(program, tidy_sources(program, sources))
         obj = engine._model.handoff.obj
-        return dict(zip(obj['col'].to_list(), obj['coeff'].to_list(), strict=True)), obj.height
+        return dict(zip(obj[COL].to_list(), obj[COEFF].to_list(), strict=True)), obj.height
 
 
 def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
@@ -989,7 +988,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
             assert matrix.height == 2, 'one entry per row, not one per term'
-            assert sorted(matrix['coeff'].to_list()) == [3.0, 3.0]
+            assert sorted(matrix[COEFF].to_list()) == [3.0, 3.0]
             result = model.solve()
         assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
 
@@ -1004,7 +1003,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         }
         with sps.build(spec, {'i': [0], 'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as model:
             assert model._engine._model.handoff.obj.height == 1
-            assert model._engine._model.handoff.obj['coeff'].to_list() == [5.0]
+            assert model._engine._model.handoff.obj[COEFF].to_list() == [5.0]
             assert model.solve().objective == pytest.approx(10.0)
 
     @pytest.mark.parametrize(
@@ -1035,7 +1034,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
             assert matrix.height == height, 'one entry per (row, col) cell the expression reaches'
-            assert set(matrix['coeff'].to_list()) == {coeff}
+            assert set(matrix[COEFF].to_list()) == {coeff}
 
     @pytest.mark.parametrize(
         'ends',
@@ -1067,7 +1066,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             assert len(terms) == 2
 
             tables = model._engine._model.handoff
-            cells = tables.matrix_block(0, tables.row_count).select('row', 'col')
+            cells = tables.matrix_block(0, tables.row_count).select(ROW, COL)
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
     @pytest.mark.parametrize(
@@ -1132,7 +1131,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_LABELS | {'a': a}) as model:
             tables = model._engine._model.handoff
             assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
-            assert list(tables.matrix['coeff']) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
+            assert list(tables.matrix[COEFF]) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
 
     def test_a_row_of_only_zeros_stays_the_infeasibility_it_is(self):
         """Pruning may not turn `0 >= 10` into no constraint at all.
@@ -1158,7 +1157,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
             tables = model._engine._model.handoff
             assert tables.obj.height == 1, 'the zero-cost column reached the objective table'
-            assert list(tables.obj['coeff']) == [5.0]
+            assert list(tables.obj[COEFF]) == [5.0]
 
     def test_infinite_bounds_survive_the_handoff(self, dispatch_data):
         """An absent upper bound must reach HiGHS as infinity, not as a number."""
@@ -1461,10 +1460,10 @@ class TestThePositionalHandoff:
 
         with sps.build(spec, {'i': list(range(4)), 'j': ['a', 'b', 'c'], 'cap': pl.DataFrame(caps)}) as model:
             tables = model._engine._model.handoff
-            assert 'col' not in tables.cols.columns, 'cols carries an index it does not need'
+            assert COL not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            indexed = model._engine._model.variables['x'].frame.collect().sort('col_index')
+            indexed = model._engine._model.variables['x'].frame.collect().sort(COL)
             raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(indexed['j'].dtype))
             expected = indexed.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
@@ -1776,8 +1775,8 @@ def test_a_share_sorts_into_key_order_whether_or_not_its_keys_fit_one_integer(la
     """Three solver indices near 2^31 have no common base under 2^63, so that share sorts on its columns."""
     rng = np.random.default_rng(0)
     share = pl.DataFrame(
-        {key: rng.integers(0, largest, 1_000) for key in ('row', 'col_l', 'col_r')} | {'coeff': rng.random(1_000)}
+        {key: rng.integers(0, largest, 1_000) for key in (ROW, COL_L, COL_R)} | {COEFF: rng.random(1_000)}
     )
-    assert _sorted(share, ('row', 'col_l', 'col_r')).equals(share.sort('row', 'col_l', 'col_r')), (
+    assert _sorted(share, (ROW, COL_L, COL_R)).equals(share.sort(ROW, COL_L, COL_R)), (
         'the share comes back in (row, col_l, col_r) order'
     )

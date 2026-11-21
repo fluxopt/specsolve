@@ -102,6 +102,7 @@ from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test nee
 import specsolve as sps  # noqa: E402
 from specsolve._engine.conditions import narrowed  # noqa: E402
 from specsolve._engine.scope import Scope  # noqa: E402
+from specsolve._names import COEFF, COL, ROW  # noqa: E402
 from specsolve._sources import tidy_sources  # noqa: E402
 
 
@@ -321,7 +322,7 @@ def _keyed_model(model) -> dict[str, object]:
         out = {}
         for name, indexed in held.items():
             frame = indexed.frame.collect()
-            index = 'col_index' if 'col_index' in frame.columns else 'row'
+            index = COL if COL in frame.columns else ROW
             dims = [c for c in frame.columns if c != index]
             for row in frame.iter_rows(named=True):
                 out[row[index]] = (name, *(str(row[d]) for d in dims))
@@ -333,8 +334,8 @@ def _keyed_model(model) -> dict[str, object]:
     terms = {}
     for r, (sense, rhs) in enumerate(zip(handoff.rows['sense'], handoff.rows['rhs'], strict=True)):
         span = matrix.slice(starts[r], starts[r + 1] - starts[r])
-        pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span['col'], span['coeff'], strict=True) if v)
-        terms[rows[handoff.rows['row'][r]]] = (str(sense), round(float(rhs), 9), pairs)
+        pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span[COL], span[COEFF], strict=True) if v)
+        terms[rows[handoff.rows[ROW][r]]] = (str(sense), round(float(rhs), 9), pairs)
     return {
         'columns': {
             columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
@@ -426,7 +427,7 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
 def _dual_rows(constraint) -> pd.DataFrame:
     """A PyPSA constraint's dual per coordinate, with the label of the row that carries it."""
     if not constraint.dual.ndim:
-        return pd.DataFrame({'dual': [float(constraint.dual)], 'row': [int(constraint.labels)]})
+        return pd.DataFrame({'dual': [float(constraint.dual)], ROW: [int(constraint.labels)]})
     frame = constraint.dual.to_dataframe('dual')
     return frame.assign(row=constraint.labels.to_series().reindex(frame.index).to_numpy()).reset_index()
 
@@ -502,7 +503,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
             theirs = pd.concat(
                 [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'], label) for label in labels]
-                or [pd.DataFrame({'name': [], 'dual': [], 'row': []})]
+                or [pd.DataFrame({'name': [], 'dual': [], ROW: []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']

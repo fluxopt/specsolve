@@ -11,7 +11,7 @@ from specsolve._collect import collected
 from specsolve._engine import coverage, indices
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
-from specsolve._names import VALUE
+from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
 from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, settled
@@ -64,21 +64,19 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     A row carries its sense and right-hand side, a bound its side and value,
     read off the hand-off the solver was given.
     """
-    rows = pl.DataFrame({'row': found.rows}).join(
-        model.handoff.rows.select(pl.col('row').cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on='row'
+    rows = pl.DataFrame({ROW: found.rows}).join(
+        model.handoff.rows.select(pl.col(ROW).cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on=ROW
     )
     columns = model.handoff.cols
     bounds = pl.concat(
         [
-            pl.DataFrame({'col_index': at, VALUE: columns[column].gather(at)}).select(
-                'col_index', pl.lit(side).alias('bound'), VALUE
-            )
+            pl.DataFrame({COL: at, VALUE: columns[column].gather(at)}).select(COL, pl.lit(side).alias('bound'), VALUE)
             for side, column, at in (('lower', 'lb', found.lower), ('upper', 'ub', found.upper))
         ]
     )
     return InfeasibleSubsystem(
-        constraints=_members(model, model.constraints, model.program.constraints, rows, 'row', ('sense', 'rhs')),
-        bounds=_members(model, model.variables, model.program.variables, bounds, 'col_index', ('bound', VALUE)),
+        constraints=_members(model, model.constraints, model.program.constraints, rows, ROW, ('sense', 'rhs')),
+        bounds=_members(model, model.variables, model.program.variables, bounds, COL, ('bound', VALUE)),
     )
 
 
@@ -132,7 +130,7 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
             'dimension holds — and which of those it is, is what diagnostics() reports as an '
             'omission.'
         )
-    return int(found.item(0, 'row')), ordered
+    return int(found.item(0, ROW)), ordered
 
 
 def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
@@ -157,7 +155,7 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
     ``coordinate`` is one string because one row's terms may span variables
     with different dimensions.
     """
-    wanted = entries['col'].to_numpy()
+    wanted = entries[COL].to_numpy()
     named = []
     for variable, held in model.variables.items():
         inside = wanted[(wanted >= held.start) & (wanted < held.start + held.height)]
@@ -165,12 +163,12 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
             continue
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
-        picked = held.frame.select(pl.col('col_index'), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
+        picked = held.frame.select(pl.col(COL), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
         schema = held.frame.collect_schema()
         rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
-                pl.col('col_index').alias('col'),
+                pl.col(COL).alias(COL),
                 pl.lit(variable).alias('variable'),
                 rendered.alias('coordinate'),
             ).pipe(collected)
@@ -178,12 +176,12 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
     owners = (
         pl.concat(named)
         if named
-        else pl.DataFrame(schema={'col': pl.Int64, 'variable': pl.String, 'coordinate': pl.String})
+        else pl.DataFrame(schema={COL: pl.Int64, 'variable': pl.String, 'coordinate': pl.String})
     )
     return (
-        entries.with_columns(pl.col('col').cast(pl.Int64))
-        .join(owners.with_columns(pl.col('col').cast(pl.Int64)), on='col', how='left', maintain_order='left')
-        .select('variable', 'coordinate', pl.col('coeff').alias('coefficient'))
+        entries.with_columns(pl.col(COL).cast(pl.Int64))
+        .join(owners.with_columns(pl.col(COL).cast(pl.Int64)), on=COL, how='left', maintain_order='left')
+        .select('variable', 'coordinate', pl.col(COEFF).alias('coefficient'))
     )
 
 
@@ -219,14 +217,14 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     obj, quad, matrix, qmatrix = handoff.obj, handoff.quad, handoff.matrix, handoff.qmatrix
     entry_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
     reduced = np.zeros(handoff.column_count, dtype=np.float64)
-    reduced += summed(obj['col'], obj['coeff'].to_numpy())
-    reduced -= summed(matrix['col'], matrix['coeff'].to_numpy() * y[entry_rows])
+    reduced += summed(obj[COL], obj[COEFF].to_numpy())
+    reduced -= summed(matrix[COL], matrix[COEFF].to_numpy() * y[entry_rows])
     for frame, weights in (
-        (quad, quad['coeff'].to_numpy()),
-        (qmatrix, -qmatrix['coeff'].to_numpy() * y[index(qmatrix['row'])]),
+        (quad, quad[COEFF].to_numpy()),
+        (qmatrix, -qmatrix[COEFF].to_numpy() * y[index(qmatrix[ROW])]),
     ):
-        reduced += summed(frame['col_l'], weights * x[index(frame['col_r'])])
-        reduced += summed(frame['col_r'], weights * x[index(frame['col_l'])])
+        reduced += summed(frame[COL_L], weights * x[index(frame[COL_R])])
+        reduced += summed(frame[COL_R], weights * x[index(frame[COL_L])])
     return pl.Series(VALUE, reduced, dtype=pl.Float64)
 
 
@@ -351,20 +349,20 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     carrier = indices.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
 
     coverage.refuse_null_constants(
-        [_holed(carrier, terms), *(p.frame.with_columns(pl.col('cval').fill_null(0.0)) for p in terms)],
+        [_holed(carrier, terms), *(p.frame.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
     )
 
     added = compiler.summed_onto(terms, carrier, absent='zero')
-    out = added.select(_EXPRESSION_ROW, *dims, pl.col('cval').alias(VALUE)).pipe(collected)
+    out = added.select(_EXPRESSION_ROW, *dims, pl.col(CONSTANT).alias(VALUE)).pipe(collected)
     ordered = indices.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
     return _as_strings(ordered, compiler.scope.data, dims)
 
 
 def _holed(carrier: pl.LazyFrame, terms: Sequence[Term]) -> pl.LazyFrame:
-    """One ``cval`` per row of *carrier*, null where any of *terms* holds a null there, else zero.
+    """One ``CONSTANT`` per row of *carrier*, null where any of *terms* holds a null there, else zero.
 
     The refusal counts the coordinates the expression divides at, and two
     terms can hold a hole at one coordinate, as ``v / p - v / p`` does.
@@ -374,16 +372,16 @@ def _holed(carrier: pl.LazyFrame, terms: Sequence[Term]) -> pl.LazyFrame:
         column = f'__hole {i}__'
         if p.dims:
             hole = (
-                p.frame.filter(pl.col('cval').is_null())
+                p.frame.filter(pl.col(CONSTANT).is_null())
                 .select(*p.dims)
                 .unique()
                 .with_columns(pl.lit(True).alias(column))
             )
             carrier = carrier.join(hole, on=list(p.dims), how='left')
         else:
-            carrier = carrier.join(p.frame.select(pl.col('cval').is_null().any().alias(column)), how='cross')
+            carrier = carrier.join(p.frame.select(pl.col(CONSTANT).is_null().any().alias(column)), how='cross')
         holed = holed | pl.col(column).fill_null(False)
-    return carrier.select(pl.when(holed).then(None).otherwise(0.0).alias('cval'))
+    return carrier.select(pl.when(holed).then(None).otherwise(0.0).alias(CONSTANT))
 
 
 def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: Mapping[str, pl.LazyFrame]) -> Basis:
