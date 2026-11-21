@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
-from specsolve._engine import labels, predicates
+from specsolve._engine import conditions, labels
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,11 +49,11 @@ SOURCES = {
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
     """Which constraints were compiled, which variables had their bounds compiled, which dimensions were labelled by a query, and which an assumption was read over."""
     seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'labelled': set(), 'assumption': set()}
-    expression, bounds, frame, masked = (
+    expression, bounds, frame, narrowed = (
         compiler_module.Compiler.expression,
         compiler_module.Compiler.bounds,
         labels.frame,
-        _assumptions.masked,
+        _assumptions.narrowed,
     )
 
     def spied_expression(self, e, what, **kwargs):
@@ -69,14 +69,14 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         seen['labelled'].add(tuple(dims))
         return frame(scope, dims, *args, **kwargs)
 
-    def spied_masked(scope, dims, where):
+    def spied_narrowed(scope, dims, where):
         seen['assumption'].update(dims)
-        return masked(scope, dims, where)
+        return narrowed(scope, dims, where)
 
     monkeypatch.setattr(compiler_module.Compiler, 'expression', spied_expression)
     monkeypatch.setattr(compiler_module.Compiler, 'bounds', spied_bounds)
     monkeypatch.setattr(labels, 'frame', spied_frame)
-    monkeypatch.setattr(_assumptions, 'masked', spied_masked)
+    monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
     return seen
 
@@ -174,13 +174,13 @@ COUNTED_SOURCES = {
 def test_a_count_over_a_dimension_without_a_label_is_zero_without_a_query(monkeypatch, where, columns):
     """`breakpoint` is empty for most of PyPSA's components, and each curve's assumptions count along it."""
     counted = []
-    real = predicates._counted
+    real = conditions._counted
 
     def spied(scope, p, alias):
         counted.append(p.over)
         return real(scope, p, alias)
 
-    monkeypatch.setattr(predicates, '_counted', spied)
+    monkeypatch.setattr(conditions, '_counted', spied)
     spec = {**COUNTED_SPEC, 'variables': {'x': {**COUNTED_SPEC['variables']['x'], 'where': where}}}
     with sps.build(spec, COUNTED_SOURCES) as model:
         assert model.diagnostics().columns == columns, (

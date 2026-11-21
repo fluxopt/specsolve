@@ -162,8 +162,8 @@ class Assembly:
         """
         cardinality = self.attached.cardinality
         return max(
-            sum(math.prod(cardinality[d] for d in declared.dims) for declared in declarations.values())
-            for declarations in (self.program.variables, self.program.constraints)
+            sum(math.prod(cardinality[d] for d in declared.dims) for declared in entries.values())
+            for entries in (self.program.variables, self.program.constraints)
         )
 
     def _matrix_share(

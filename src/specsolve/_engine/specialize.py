@@ -17,6 +17,6 @@ if TYPE_CHECKING:
     from specsolve._engine.attaching import AttachedSources
 
 
-def rowless(declaration: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
-    """Whether *declaration* holds no row whatever its terms: it spans a dimension without a label."""
-    return any(not attached.cardinality[d] for d in declaration.dims)
+def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
+    """Whether *entry* holds no row whatever its terms: it spans a dimension without a label."""
+    return any(not attached.cardinality[d] for d in entry.dims)

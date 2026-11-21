@@ -123,8 +123,8 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
     frame = model.constraints[name].frame
     schema = frame.collect_schema()
     ordered = {d: coordinate[d] for d in dims}
-    predicates = [pl.col(d) == _label(name, d, v, schema[d]) for d, v in ordered.items()]
-    found = frame.filter(predicates).pipe(collected) if predicates else frame.pipe(collected)
+    matches = [pl.col(d) == _label(name, d, v, schema[d]) for d, v in ordered.items()]
+    found = frame.filter(matches).pipe(collected) if matches else frame.pipe(collected)
     if not found.height:
         raise SpecsolveError(
             f"constraint '{name}' built no row at {ordered}. Either a `where` left the "
@@ -338,7 +338,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     parameter does not cover contributes zero, and one where a variable is
     absent has no row, or a zero under ``missing: neutral``. A quotient has no row
     where its divisor is absent or zero. A variable-free expression is one row.
-    Dimensions come in entry order, rows in label order.
+    Dimensions come in the order the spec declares them, rows in label order.
 
     Raises:
         DataError: A divisor parameter with no row where the expression

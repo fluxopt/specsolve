@@ -141,7 +141,7 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
     missing = [d for d in dims if d not in p.dims]
     if not missing:
         return p
-    out = scope.in_declaration_order((*p.dims, *missing))
+    out = scope.in_dimension_order((*p.dims, *missing))
     frame = scope.spread(p.frame, missing).select(*out, *p.carried)
     return replace(p, dims=out, frame=frame, presences=_keyed(p))
 
@@ -252,7 +252,7 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
             if any(d in along for d in missing):
                 continue
             if missing:
-                dims = scope.in_declaration_order((*dims, *missing))
+                dims = scope.in_dimension_order((*dims, *missing))
                 frame = scope.spread(frame, missing).select(*dims, *p.carried)
             frame = presence.restrict(frame, on)
         return p if frame is p.frame else replace(p, dims=dims, frame=frame)

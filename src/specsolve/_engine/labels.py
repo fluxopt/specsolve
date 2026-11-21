@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import UNIT, ordinal
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ def frame(
             if factored is not None:
                 return factored
 
-    surviving = masked(scope, dims, where)
+    surviving = narrowed(scope, dims, where)
     for restriction in restrictions:
         surviving = restriction.restrict(surviving, restriction.keyed_by or ())
 
@@ -123,7 +123,7 @@ def _factored(
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
     survivors = (
-        masked(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
+        narrowed(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
     )
     width = survivors.height
     if width == 0:
@@ -132,7 +132,7 @@ def _factored(
     position = '#position'
     labelled = (
         survivors.lazy()
-        .join(masked(scope, head, None).select(*head, _row_major(scope, head).alias(position)), how='cross')
+        .join(narrowed(scope, head, None).select(*head, _row_major(scope, head).alias(position)), how='cross')
         .select(
             *dims,
             (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(label),

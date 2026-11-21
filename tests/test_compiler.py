@@ -30,8 +30,8 @@ from mathspec import program
 
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.compiler import Compiler
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.labels import Labelled
-from specsolve._engine.predicates import masked
 from specsolve._engine.scope import Scope
 from specsolve.errors import SpecsolveError
 
@@ -299,14 +299,14 @@ def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
 
 def test_a_dimension_comparison_filters_a_column_already_in_the_frame():
     """Pointwise, and free: no table is read to decide it."""
-    frame = masked(compiler().scope, ('snapshot',), program.Mask(program.DimensionComparison('snapshot', '>', 0)))
+    frame = narrowed(compiler().scope, ('snapshot',), program.Mask(program.DimensionComparison('snapshot', '>', 0)))
     text = query(frame)
     assert 'FILTER' in text
     assert 'JOIN' not in text
 
 
 def test_a_parameter_predicate_needs_a_join():
-    frame = masked(
+    frame = narrowed(
         compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',)))
     )
     text = query(frame)
@@ -317,7 +317,7 @@ def test_a_parameter_predicate_needs_a_join():
 def test_a_name_the_mask_is_certain_of_is_inner_joined():
     """The rows a left join would keep here are rows the filter then drops."""
     text = query(
-        masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
+        narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
     assert 'INNER JOIN' in text
     assert 'LEFT JOIN' not in text
@@ -331,7 +331,7 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
             program.DimensionComparison('generator', '==', 'g'),
         )
     )
-    text = query(masked(compiler().scope, ('generator',), where))
+    text = query(narrowed(compiler().scope, ('generator',), where))
     assert 'LEFT JOIN' in text
     assert 'INNER JOIN' not in text
 
@@ -339,17 +339,17 @@ def test_the_same_predicate_under_an_or_is_left_joined_again():
 def test_what_a_bare_name_asks_is_decided_by_its_declaration():
     """Three readings, and the declared dtype picks — not the column that turned up."""
     numeric = query(
-        masked(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
+        narrowed(compiler().scope, ('generator',), program.Mask(program.ParameterDefined('available', ('generator',))))
     )
     boolean = query(
-        masked(
+        narrowed(
             compiler({'available': 'bool'}).scope,
             ('generator',),
             program.Mask(program.ParameterDefined('available', ('generator',))),
         )
     )
     text = query(
-        masked(
+        narrowed(
             compiler({'available': 'str'}).scope,
             ('generator',),
             program.Mask(program.ParameterDefined('available', ('generator',))),
@@ -368,18 +368,18 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
 
 
 def test_a_frame_cross_joins_its_dim_tables_and_carries_their_ordinals():
-    frame = masked(compiler().scope, ('snapshot', 'generator'), None)
+    frame = narrowed(compiler().scope, ('snapshot', 'generator'), None)
     assert columns(frame) == ['snapshot', '__ord snapshot__', 'generator', '__ord generator__']
     assert 'CROSS' in query(frame)
 
 
 def test_an_unmasked_frame_has_nothing_to_filter():
-    assert 'FILTER' not in query(masked(compiler().scope, ('snapshot', 'generator'), None))
+    assert 'FILTER' not in query(narrowed(compiler().scope, ('snapshot', 'generator'), None))
 
 
 def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
     """The condition is evaluated over the product of the dimensions it reads, and the full product semi-joined."""
-    frame = masked(
+    frame = narrowed(
         compiler().scope,
         ('snapshot', 'generator'),
         program.Mask(program.ParameterDefined('available', ('generator',))),
@@ -395,7 +395,7 @@ def test_a_mask_reading_every_dim_filters_instead():
             program.ParameterDefined('available', ('generator',)),
         )
     )
-    assert 'SEMI JOIN' not in query(masked(compiler().scope, ('snapshot', 'generator'), where))
+    assert 'SEMI JOIN' not in query(narrowed(compiler().scope, ('snapshot', 'generator'), where))
 
 
 def test_a_parameter_bound_joins_on_the_variable_frame():

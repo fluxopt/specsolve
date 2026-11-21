@@ -218,7 +218,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/compiler.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
 | `_engine/shifts.py` | `shift` and `sum_back` |
-| `_engine/predicates.py` | a `where:` condition as a boolean query |
+| `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |

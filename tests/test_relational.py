@@ -585,11 +585,11 @@ class TestTheLabelSpace:
         assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
-        """A string dimension is an ``Enum`` over its labels in entry order for the
+        """A string dimension is an ``Enum`` over its labels in index order for the
         whole build — and plain ``String`` the moment it is handed back.
 
         A caller joins the result against their own data, which an ``Enum``
-        refuses. Entry order survives the cast because it is the row order,
+        refuses. Index order survives the cast because it is the row order,
         and `to_pandas` puts the ordered categories back for the bridge out.
         """
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
@@ -631,7 +631,7 @@ class TestTheLabelSpace:
         with sps.solve(spec, data) as result:
             x = by_coord(result, 'x', 't')
 
-        assert list(x) == labels, 'read-back follows entry order'
+        assert list(x) == labels, 'read-back follows index order'
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 

@@ -170,9 +170,9 @@ class ConstraintRow:
                 f'{_number(coefficient, sign=True)} {variable}{_bracket(coordinate)}'
                 for variable, coordinate, coefficient in self.terms.iter_rows()
             )
-        return f'{self.terms.height} terms — {self._per_declaration()}'
+        return f'{self.terms.height} terms — {self._per_variable()}'
 
-    def _per_declaration(self) -> str:
+    def _per_variable(self) -> str:
         """``p: 300 (|coef| 1…50)`` per variable, in the row's own term order."""
         import polars as pl
 

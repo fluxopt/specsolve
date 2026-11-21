@@ -13,7 +13,7 @@ from mathspec.program import assumption_message
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import attach
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import Scope
 from specsolve._messages import coordinate_text
 from specsolve.errors import DataError
@@ -66,10 +66,10 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
     failing = ~assumption.holds
     if assumption.where is not None:
         failing = failing & assumption.where
-    dims = scope.in_declaration_order(failing.dims)
+    dims = scope.in_dimension_order(failing.dims)
     if any(not scope.data.cardinality[d] for d in dims):
         return None
-    offending = masked(scope, dims, failing).head(1).pipe(collected)
+    offending = narrowed(scope, dims, failing).head(1).pipe(collected)
     if not offending.height:
         return None
     row = offending.row(0, named=True)

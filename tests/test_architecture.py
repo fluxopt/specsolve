@@ -600,7 +600,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
     walkers = [
         ('program', program.Expression, engine_dir / 'compiler.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
-        ('program', program.Condition, engine_dir / 'predicates.py'),
+        ('program', program.Condition, engine_dir / 'conditions.py'),
         ('program', program.Condition, ORACLE / 'where.py'),
     ]
     for qualifier, union, module in walkers:
@@ -874,7 +874,7 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('_engine/predicates.py', 'specsolve._engine.compiler'): (
+    ('_engine/conditions.py', 'specsolve._engine.compiler'): (
         'the same comparison on the relational lane, and the compiler reads this module for the condition '
         'walk and the carrier both of its walks join on'
     ),

@@ -100,7 +100,7 @@ from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
-from specsolve._engine.predicates import masked  # noqa: E402
+from specsolve._engine.conditions import narrowed  # noqa: E402
 from specsolve._engine.scope import Scope  # noqa: E402
 from specsolve._sources import tidy_sources  # noqa: E402
 
@@ -403,9 +403,9 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
         if where is None:
             continue
         dims = tuple(getattr(block, 'dims', ()) or ())
-        whole = masked(scope, dims, None).select(pl.len()).collect().item()
+        whole = narrowed(scope, dims, None).select(pl.len()).collect().item()
         held = [
-            masked(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
+            narrowed(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
             for conjunct in where.conjuncts
         ]
         verdicts[name] = ''.join(

@@ -64,7 +64,9 @@ def result():
 
 def test_a_referenced_expression_reads_the_value_its_constraint_pinned(result):
     frame = result.evaluate('total_gen')
-    assert frame.columns == ['snapshot', 'value'], 'an expression table is (dims…, value), dimensions in entry order'
+    assert frame.columns == ['snapshot', 'value'], (
+        'an expression table is (dims…, value), dimensions in the order the spec declares them'
+    )
     got = dict(zip(frame['snapshot'], frame['value'], strict=True))
     assert got == pytest.approx({0: 50.0, 1: 120.0, 2: 80.0}), (
         'balance pins total_gen to load, so the reader must hand back exactly the load values'

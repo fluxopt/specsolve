@@ -26,7 +26,7 @@ from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import refuse_a_negative_window
-from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
+from specsolve._engine.conditions import Carrier, compile_condition, falsy_if_null, narrowed
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
@@ -164,8 +164,8 @@ class Compiler:
         variable without a condition, in order. Height stands in for density because
         duplicates are refused at the door.
         """
-        declaration = self.scope.program.parameters[param]
-        if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
+        entry = self.scope.program.parameters[param]
+        if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
 
         expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
@@ -286,7 +286,7 @@ class Compiler:
         def region(r: program.Region) -> CompiledExpression:
             """One region's value, kept only where that region applies."""
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            truth = masked(self.scope, on, r.when).select(*on) if on else None
+            truth = narrowed(self.scope, on, r.when).select(*on) if on else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
                 """A region's presence, silent about the coordinates the region does not claim.
@@ -299,7 +299,7 @@ class Compiler:
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
-                complement = masked(self.scope, on, ~r.when)
+                complement = narrowed(self.scope, on, ~r.when)
                 if not keys:
                     marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
                     return Presence(pl.concat(marks).unique(), keys)
@@ -315,7 +315,7 @@ class Compiler:
                 filters by its own constant instead.
                 """
                 if truth is None:
-                    carrier, condition = compile_predicate(self.scope, p.frame, r.when, p.dims)
+                    carrier, condition = compile_condition(self.scope, p.frame, r.when, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
                     return replace(p, frame=frame, presences=presences, region=both_regions(p.region, r.when))
@@ -428,8 +428,8 @@ class Compiler:
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
-        declaration = self.scope.program.variables[name]
-        propagates = declaration.where is not None and declaration.missing == 'absent'
+        entry = self.scope.program.variables[name]
+        propagates = entry.where is not None and entry.missing == 'absent'
         return (Presence(_presence(self.scope.variables[name], dims, 'var_label'), dims),) if propagates else ()
 
     def _solved_term(self, name: str) -> Term:
@@ -439,12 +439,12 @@ class Compiler:
         because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
         """
         assert self.solution is not None
-        held, declaration = self.scope.variables[name], self.scope.program.variables[name]
-        dims = declaration.dims
+        held, entry = self.scope.variables[name], self.scope.program.variables[name]
+        dims = entry.dims
         keys = dims or (UNIT,)
         rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
-        if declaration.where is not None and declaration.missing == 'neutral':
-            everywhere = masked(self.scope, dims, None).select(*keys)
+        if entry.where is not None and entry.missing == 'neutral':
+            everywhere = narrowed(self.scope, dims, None).select(*keys)
             rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
         return Term(dims, rows.select(*dims, 'cval'), 'constant', presences=self._variable_presences(name, dims))
 
@@ -473,7 +473,7 @@ class Compiler:
         """
         zeros = divisor.frame.filter(pl.col('cval') == 0)
         if divisor.dims:
-            present = masked(self.scope, divisor.dims, None).select(*divisor.dims)
+            present = narrowed(self.scope, divisor.dims, None).select(*divisor.dims)
             present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
         else:
             count = zeros.select(pl.len().alias('__zeros__'))
@@ -519,7 +519,7 @@ class Compiler:
                 return compiled
             return CompiledExpression((), (replace(terms[0], frame=_totalled(terms[0])),))
         dims, restrictions = self.scope.spanned(terms), absence_restrictions(terms)
-        carrier = masked(self.scope, dims, None)
+        carrier = narrowed(self.scope, dims, None)
         for restriction in restrictions:
             carrier = restriction.restrict(carrier, restriction.keyed_by or ())
         added = self.summed_onto(terms, carrier, absent='hole' if self.solution is not None else absent)
@@ -562,7 +562,7 @@ class Compiler:
         no row would find a hole at every coordinate another region claims.
         """
         keys = list(dims or (UNIT,))
-        claimed = masked(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
+        claimed = narrowed(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
         inside = carrier.join(claimed, on=keys, how='left')
         value = pl.when(pl.col('__claimed__')).then(pl.col(column)).otherwise(0.0)
         return inside.with_columns(value.alias(column)).drop('__claimed__')

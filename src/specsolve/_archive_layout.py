@@ -241,8 +241,8 @@ def _declared_files(
         yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
     answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
     for kind, declared in answered.items():
-        for name, declaration in declared.items():
-            yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
+        for name, entry in declared.items():
+            yield name, kind, entry.description, None, [(d, d) for d in entry.dims]
 
 
 def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:

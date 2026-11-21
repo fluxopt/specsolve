@@ -24,7 +24,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected, collected_all
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import join_on
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
@@ -153,7 +153,7 @@ def constant_side(
         gap = pl.col(column).is_null()
         if p.region is not None:
             inside = f'__inside {i}__'
-            claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
+            claimed = narrowed(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
         carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))

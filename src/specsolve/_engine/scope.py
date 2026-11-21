@@ -59,10 +59,10 @@ class Scope:
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
-        declaration = self.program.parameters[param]
-        if declaration.missing != 'absent':
+        entry = self.program.parameters[param]
+        if entry.missing != 'absent':
             return False
-        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in declaration.dims)
+        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in entry.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dimension tables: labels and ordinals, nothing else.
@@ -99,13 +99,13 @@ class Scope:
         dimensions keeps every row of *frame*, reading null where the parameter
         has no row, which a cross join with its empty table would not.
         """
-        declaration = self.program.parameters[param]
-        assert not set(declaration.dims) - set(frame_dims), f'{subject} has dimensions outside {list(frame_dims)}'
+        entry = self.program.parameters[param]
+        assert not set(entry.dims) - set(frame_dims), f'{subject} has dimensions outside {list(frame_dims)}'
         table = self.data.parameters[param].rename({VALUE: alias})
-        if not declaration.dims and how == 'left':
+        if not entry.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
-        return join_on(frame, table, declaration.dims, how, maintain_order)
+        return join_on(frame, table, entry.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
@@ -148,10 +148,10 @@ class Scope:
         return frame
 
     def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:
-        """The dimensions *terms* carry between them, in entry order."""
-        return self.in_declaration_order(d for p in terms for d in p.dims)
+        """The dimensions *terms* carry between them, in the order the file declares them."""
+        return self.in_dimension_order(d for p in terms for d in p.dims)
 
-    def in_declaration_order(self, dims: Iterable[str]) -> tuple[str, ...]:
+    def in_dimension_order(self, dims: Iterable[str]) -> tuple[str, ...]:
         """*dims* in the order the file declares them, duplicates dropped.
 
         Two tables keyed by the same dimensions in two orders would join on a key
