@@ -204,7 +204,7 @@ def dispatch_yaml() -> Path:
 
 @pytest.fixture
 def dispatch_spec_inputs():
-    """``DISPATCH_SPEC``'s data as pandas, index included — one mapping, both lanes."""
+    """``DISPATCH_SPEC``'s data as pandas, labels included — one mapping, both lanes."""
     import pandas as pd
 
     return {

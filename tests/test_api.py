@@ -129,14 +129,14 @@ _PLAIN = {
 def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dispatch_table_inputs, shape):
     """A dict and a sequence are sources, and mean what the tables mean.
 
-    A dict carries its own labels; a sequence is positional against the index.
+    A dict carries its own labels; a sequence is positional against the dimension's labels.
     """
     frames = dispatch_table_inputs
     with sps.solve(dispatch_yaml, frames) as tables:
         expected = tables.objective
 
-    index = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
-    with sps.solve(dispatch_yaml, _PLAIN[shape] | index) as plain:
+    labels = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
+    with sps.solve(dispatch_yaml, _PLAIN[shape] | labels) as plain:
         assert plain.objective == pytest.approx(expected, rel=1e-9)
 
 
@@ -158,7 +158,7 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_table_in
     [
         pytest.param({'p_max': [100.0, 60.0]}, 'one value per label', id='a-sequence-of-the-wrong-length'),
         pytest.param({'p_max': object()}, 'cannot adapt', id='nothing-table-shaped-at-all'),
-        pytest.param({'snapshot': 3.0}, 'cannot read labels out of float', id='an-index-that-is-one-number'),
+        pytest.param({'snapshot': 3.0}, 'cannot read labels out of float', id='labels-that-are-one-number'),
     ],
 )
 def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_table_inputs, sources, match):
@@ -206,7 +206,7 @@ def test_a_positional_source_needs_the_labels_it_is_written_against():
         'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x, over=g)'},
     }
-    with pytest.raises(sps.errors.DataError, match='nothing else supplies an index'):
+    with pytest.raises(sps.errors.DataError, match='nothing else supplies the labels'):
         sps.build(spec, {'cap': [1.0, 2.0]}).close()
 
 

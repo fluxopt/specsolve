@@ -85,7 +85,7 @@ class Rung(NamedTuple):
 
 
 def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
-    """The rung's model and the sources that build it, index included."""
+    """The rung's model and the sources that build it, labels included."""
     return {
         'dispatch': lambda: (dispatch_yaml, sources() | COORDS),
         'reach': lambda: (REACH, reach_sources()),
@@ -543,7 +543,7 @@ def test_closing_a_result_never_touches_the_model(model):
     ('call', 'unknown'),
     [
         pytest.param(lambda model: model.update({'p_maxx': 1}), 'p_maxx', id='sources'),
-        pytest.param(lambda model: model.update({'snapshots': [0]}), 'snapshots', id='an index'),
+        pytest.param(lambda model: model.update({'snapshots': [0]}), 'snapshots', id='labels'),
     ],
 )
 def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown):
@@ -555,12 +555,12 @@ def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown
         call(model)
 
 
-def test_a_dimension_index_updates_as_a_source(model):
-    """A dimension index is a source (the data-attachment rules), so `update` takes it where it
+def test_a_dimension_s_labels_update_as_a_source(model):
+    """A dimension's labels are a source (the data-attachment rules), so `update` takes them where it
     takes any other — the refusal above is for names the model never declared,
     not for names that happen not to be parameters."""
     change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
-    assert model.update(change).solve().primal('p').height > 0, 'a dimension index is a source, and updates as one'
+    assert model.update(change).solve().primal('p').height > 0, "a dimension's labels are a source, and update as one"
 
 
 def test_a_update_can_grow_a_dimension():

@@ -62,7 +62,7 @@ class ArrowTable(Protocol):
 #: types ``Series`` invariantly.
 type PandasSeries = pd.Series[float] | pd.Series[int] | pd.Series[bool] | pd.Series[str] | pd.Series[datetime]
 
-#: A label along a dimension: the Python type of each dtype an index may
+#: A label along a dimension: the Python type of each dtype a dimension may
 #: declare (`mathspec.program.DimensionDtype`).
 type Label = int | float | str | datetime
 
@@ -70,7 +70,7 @@ type Label = int | float | str | datetime
 #: path, a table — polars, pandas, or any [`ArrowTable`][] — or one of the
 #: plain-Python shapes a hand-written model reaches for, a ``{label: value}``
 #: map, a sequence in the dimension's own label order, and one number for
-#: every coordinate. A dimension's index: a table carrying a column named
+#: every coordinate. A dimension's labels: a table carrying a column named
 #: after it, or a bare sequence of its labels. A relation: the table of the
 #: rows it holds, one column per column it declares.
 type Source = (

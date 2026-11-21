@@ -362,7 +362,7 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
     """A row order is not a breakpoint order, and only the second is the model's.
 
     Rows reach a lane in whatever order the join or the group-by that made
-    them left behind; what orders the breakpoints is the `bp` index, which is
+    them left behind; what orders the breakpoints is the order of `bp`'s labels, which is
     ascending here (#1122).
     """
     shuffled = {
@@ -376,11 +376,11 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
     tidy_sources(schema.expand('piecewise').program, shuffled)
 
 
-def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_inputs):
-    """With no index there is no order, so the guard has no question to answer.
+def test_a_breakpoint_dimension_with_no_labels_keeps_its_own_message(nonconvex_inputs):
+    """With no labels there is no order, so the guard has no question to answer.
 
     A curve written out of order reaches the message that names the missing
-    index, not "requires strictly increasing breakpoints".
+    labels, not "requires strictly increasing breakpoints".
     """
     orphaned = {k: v for k, v in nonconvex_inputs.items() if k != 'bp'}
     orphaned['bp_x'] = pd.Series([100.0, 0.0, 40.0], index=OUT_OF_ORDER_BP)
@@ -388,14 +388,14 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
 
     schema = schema_of(CONVEX_SPEC)
 
-    with pytest.raises(DataError, match='has no index'):
+    with pytest.raises(DataError, match='has no labels'):
         tidy_sources(schema.expand('piecewise').program, orphaned)
 
 
-def test_the_linopy_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
+def test_the_linopy_lane_reads_the_curve_in_label_order(nonconvex_inputs, tmp_path):
     """The linopy loader lays the values out first, so the guard walks the dimension's order.
 
-    The shuffled curve is attached and the backwards index is refused; the relational
+    The shuffled curve is attached and the backwards labels are refused; the relational
     lane owes the same two answers.
     """
     path = tmp_path / 'convex.yaml'
@@ -412,11 +412,11 @@ def test_the_linopy_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tm
         specsolve_linopy.build(expanded(path), {**nonconvex_inputs, 'bp': pd.Index([2, 1, 0], name='bp')})
 
 
-def test_a_breakpoint_index_that_runs_backwards_is_refused(nonconvex_inputs):
-    """A breakpoint index that runs backwards is refused (#1122).
+def test_breakpoint_labels_that_run_backwards_are_refused(nonconvex_inputs):
+    """Breakpoint labels that run backwards are refused (#1122).
 
-    A dimension's index is its order — `shift` walks it and `index(bp, 0)`
-    names its first label — so an index written `[2, 1, 0]` puts the fixture's
+    A dimension's labels are its order — `shift` walks them and `index(bp, 0)`
+    names the first — so labels written `[2, 1, 0]` put the fixture's
     breakpoints at x = 100, 40, 0. `adjacency` would then pair segments that
     are not neighbours, and `lp` would write its chords against a negative run.
     """
@@ -510,12 +510,12 @@ def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
         specsolve_linopy.build(expanded(path), data)
 
 
-def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
-    """The guard runs before the index is attached, and must not answer for its absence.
+def test_a_dimension_with_no_labels_keeps_its_own_message(ragged_inputs):
+    """The guard runs before the labels are attached, and must not answer for its absence.
 
     Where nothing declares the breakpoints, the curve's own labels are all
     there is — it cannot be short of a breakpoint no one declared — so a
-    complete curve has to reach the message that names the missing index.
+    complete curve has to reach the message that names the missing labels.
     """
     whole = {k: v for k, v in ragged_inputs.items() if k != 'bp'}
     whole['bp_x'] = curve_table({('A', 0): 0.0, ('A', 1): 20.0, ('B', 0): 10.0, ('B', 1): 20.0})
@@ -523,7 +523,7 @@ def test_a_dimension_with_no_index_keeps_its_own_message(ragged_inputs):
 
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    with pytest.raises(DataError, match='has no index'):
+    with pytest.raises(DataError, match='has no labels'):
         tidy_sources(schema.expand('piecewise').program, whole)
 
 

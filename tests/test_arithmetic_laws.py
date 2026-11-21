@@ -315,9 +315,9 @@ def test_a_condition_on_a_dim_the_reduction_does_not_touch_still_propagates():
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
     data = {'tgate': pd.Series([True], index=pd.Index([0], name='t'))}
-    index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
+    labels = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(spec, data | index, lp=True) as run:
+    with differential(spec, data | labels, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0 the row binds; t=1 the term is absent everywhere, so both x are free'
         )
@@ -339,9 +339,9 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
         'constraints': {'c': {'dims': ['t'], 'expression': 'sum(x + shift(v, along=t, offset=1), over=f) <= 120'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    index = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
+    labels = {'f': pd.Index(['a', 'b'], name='f'), 't': pd.Index([0, 1], name='t')}
 
-    with differential(spec, {} | index, lp=True) as run:
+    with differential(spec, {} | labels, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(320.0, rel=RTOL), (
             't=0: the shifted operand vacates, so both x[.,0] stay at 100; t=1: the row binds'
         )

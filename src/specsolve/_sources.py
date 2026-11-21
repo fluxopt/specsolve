@@ -50,7 +50,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     """Read the caller's ``sources`` into the tables both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
-    as tidy ``(dims…, value)``, a dimension's index as one column of labels
+    as tidy ``(dims…, value)``, a dimension's labels as one column
     under its own name in the order they arrived, a relation as one column
     per declared column. A datetime label is held in microseconds, and a date
     under a ``datetime`` dimension as the microsecond its day starts on.
@@ -58,13 +58,13 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
-            accepts or short of the columns its entry needs; an index
-            holding a label twice; a parameter with two rows for one
+            accepts or short of the columns its entry needs; a dimension's
+            labels holding one twice; a parameter with two rows for one
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
             row twice, or a label its column's dimension lacks; a datetime
             label finer than a microsecond, or in another time zone than its
-            index; or an
+            dimension's labels; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
@@ -97,7 +97,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
-            sources[dname] = _index(data[dname], dname, declared.dtype)
+            sources[dname] = _labels_table(data[dname], dname, declared.dtype)
     relations = {
         name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
     }
@@ -116,7 +116,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
 
     for dname in program.dimensions:
         if dname not in sources:
-            raise DataError(_no_index_source_message(dname))
+            raise DataError(_no_labels_source_message(dname))
 
     return sources
 
@@ -149,7 +149,7 @@ def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict
     """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
-    ``Int64`` from 0 in index order; a parameter and a relation unchanged.
+    ``Int64`` from 0 in label order; a parameter and a relation unchanged.
     Nothing is read again, so a model archives what its build read.
     """
     tables = dict(tidied)
@@ -174,12 +174,12 @@ def _no_parameter_source_message(name: str) -> str:
     return f"no data provided for parameter '{name}'"
 
 
-def _no_index_source_message(dim: str) -> str:
-    """A dimension with no index."""
+def _no_labels_source_message(dim: str) -> str:
+    """A dimension with no labels."""
     return (
-        f"dimension '{dim}' has no index: pass its labels under key '{dim}' — a table "
-        f'carrying that column, a parquet path, or a bare sequence of them. The index is what '
-        f'says which labels exist, and without one a mistyped label is indistinguishable from '
+        f"dimension '{dim}' has no labels: pass them under key '{dim}' — a table "
+        f'carrying that column, a parquet path, or a bare sequence of them. Its labels are what '
+        f'say which coordinates exist, and without them a mistyped label is indistinguishable from '
         f'a new one.'
     )
 
@@ -188,10 +188,10 @@ def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
     """A dimension whose relations have an author and whose labels have none."""
     declared = ', '.join(sorted(authors))
     return (
-        f"dimension '{dim}' has its maps ({declared}) but no index of its own, so nothing says "
+        f"dimension '{dim}' has its maps ({declared}) but no labels of its own, so nothing says "
         f'which of its labels exist. A relation is a table over the dimension, not the dimension '
-        f"itself — it may omit labels, and its row order is arbitrary. Pass an index for '{dim}' "
-        f'under that key: every relation column over it is checked against the index, and a label no '
+        f"itself — it may omit labels, and its row order is arbitrary. Pass the labels of '{dim}' "
+        f"under key '{dim}': every relation column over it is checked against them, and a label no "
         f'row mentions is unmapped.'
     )
 
@@ -201,7 +201,7 @@ def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
+def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     """One dimension's labels, read once and held in memory as one column in the order they arrived.
 
     Raises:
@@ -213,41 +213,43 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(
-            f"index for dimension '{dim}' is a table without a '{dim}' column (has "
+            f"the labels of dimension '{dim}' are a table without a '{dim}' column (has "
             f'{list(available)}). The label column is named after the dimension.'
         )
     labels = in_microseconds(
-        table.select(dim).pipe(collected), f"index for dimension '{dim}'", (dim,) if dtype == 'datetime' else ()
+        table.select(dim).pipe(collected),
+        f"the labels table of dimension '{dim}'",
+        (dim,) if dtype == 'datetime' else (),
     )
     _check_labels_are_present(dim, labels[dim])
     _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
 
-def index_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
-    """*dim*'s labels as the door reads its index out of *data*, in index order.
+def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
+    """*dim*'s labels as the door reads them out of *data*, in label order.
 
     Raises:
-        DataError: No index for *dim*, or one the door refuses.
+        DataError: No labels for *dim*, or labels the door refuses.
     """
     if dim not in data:
-        raise DataError(_no_index_source_message(dim))
-    _refuse_a_relation_on_the_index(program, dim, data[dim])
-    return _labels_of(dim, _index(data[dim], dim, program.dimensions[dim].dtype))
+        raise DataError(_no_labels_source_message(dim))
+    _refuse_a_relation_on_the_labels(program, dim, data[dim])
+    return _labels_of(dim, _labels_table(data[dim], dim, program.dimensions[dim].dtype))
 
 
 def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
-    """Refuse an index holding a null: a coordinate is a label, and a null names none."""
+    """Refuse labels holding a null: a coordinate is a label, and a null names none."""
     if not (nulls := labels.null_count()):
         return
     raise DataError(
-        f"index for dimension '{dim}' holds a null label ({nulls} row(s)). A coordinate is a label, and a "
+        f"the labels of dimension '{dim}' hold a null ({nulls} row(s)). A coordinate is a label, and a "
         'null names none. Drop it: polars .drop_nulls(), pandas .dropna().'
     )
 
 
 def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
-    """Refuse an index that holds a label twice: a label's position is the row it is on."""
+    """Refuse labels that hold one twice: a label's position is the row it is on."""
     twice = labels.filter(labels.is_duplicated()).unique(maintain_order=True).to_list()
     if not twice:
         return
@@ -258,13 +260,13 @@ def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: boo
         else 'Pass each label once: list(dict.fromkeys(labels))'
     )
     raise DataError(
-        f"index for dimension '{dim}' holds {len(twice)} label(s) more than once: {shown}. An index "
-        f'lists each label once, and its row is the position `shift` counts. {rewrite} keeps the first '
+        f"the labels of dimension '{dim}' hold {len(twice)} label(s) more than once: {shown}. A dimension's "
+        f"labels list each label once, and a label's row is the position `shift` counts. {rewrite} keeps the first "
         f'occurrence of each.'
     )
 
 
-#: The declared dimension dtypes as the column an empty index becomes.
+#: The declared dimension dtypes as the column an empty labels table becomes.
 _DECLARED: dict[str, pl.DataType] = {
     'int': pl.Int64(),
     'float': pl.Float64(),
@@ -274,9 +276,9 @@ _DECLARED: dict[str, pl.DataType] = {
 
 
 def _labels_frame(dim: str, values: Source, dtype: str) -> pl.LazyFrame:
-    """A one-column index table from a plain sequence of labels.
+    """A one-column labels table from a plain sequence of labels.
 
-    An empty index takes the dimension's declared dtype: polars infers
+    An empty table takes the dimension's declared dtype: polars infers
     ``Null`` from no labels, and a ``Null`` key joins against nothing.
     """
     if not isinstance(values, Iterable):
@@ -291,34 +293,34 @@ def _labels_frame(dim: str, values: Source, dtype: str) -> pl.LazyFrame:
 
 
 def _not_labels(dim: str, values: object) -> str:
-    """One wording for an index nothing can read labels out of."""
+    """One wording for a labels key nothing can read labels out of."""
     return (
-        f"index for dimension '{dim}': cannot read labels out of "
+        f"dimension '{dim}': cannot read labels out of "
         f'{type(values).__name__} — pass a sequence of labels, a table '
         f'polars can read with a {dim!r} column, or a parquet path'
     )
 
 
 def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> None:
-    """Refuse a relation nothing supplies, and a relation column carried on an index."""
+    """Refuse a relation nothing supplies, and a relation column carried beside a dimension's labels."""
     for name, relation in program.relations.items():
         if name not in data:
             raise DataError(_unsupplied_relation_message(name, relation))
 
     for dim in program.dimensions:
         if dim in data:
-            _refuse_a_relation_on_the_index(program, dim, data[dim])
+            _refuse_a_relation_on_the_labels(program, dim, data[dim])
 
 
-def _refuse_a_relation_on_the_index(program: Program, dim: str, index: Source) -> None:
-    """Refuse an *index* of *dim* that carries a column named for a relation over *dim*."""
-    carried = _column_names(index, dim)
+def _refuse_a_relation_on_the_labels(program: Program, dim: str, source: Source) -> None:
+    """Refuse the labels *source* of *dim* where it carries a column named for a relation over *dim*."""
+    carried = _column_names(source, dim)
     for name in _relations_over(program, dim):
         if name in carried:
             raise DataError(
-                f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
+                f"the labels table of dimension '{dim}' carries a '{name}' column, and '{name}' "
                 f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
-                f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
+                f'beside the labels of a dimension it runs over: pass it as sources[{name!r}], a table of '
                 f'the rows it holds.'
             )
 
@@ -349,22 +351,22 @@ def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] =
     )
 
 
-def _over_datetimes(columns: Iterable[tuple[str, str]], indexes: Mapping[str, pl.LazyFrame]) -> list[str]:
-    """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's index holds datetime labels.
+def _over_datetimes(columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]) -> list[str]:
+    """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's labels are datetimes.
 
-    The index is read first and follows its entry, so a column follows
-    the index rather than the entry: a date beside an index of dates
+    The labels are read first and follow their entry, so a column follows
+    the labels rather than the entry: a date beside labels that are dates
     stays a date.
     """
-    return [c for c, dim in columns if dim in indexes and isinstance(indexes[dim].collect_schema()[dim], pl.Datetime)]
+    return [c for c, dim in columns if dim in labels and isinstance(labels[dim].collect_schema()[dim], pl.Datetime)]
 
 
-def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, index: pl.DataType) -> None:
-    """Refuse a datetime column in another time zone than its index: the two compare on one clock only."""
-    if isinstance(given, pl.Datetime) and isinstance(index, pl.Datetime) and given.time_zone != index.time_zone:
+def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, listed: pl.DataType) -> None:
+    """Refuse a datetime column in another time zone than its dimension's labels: the two compare on one clock only."""
+    if isinstance(given, pl.Datetime) and isinstance(listed, pl.Datetime) and given.time_zone != listed.time_zone:
         raise DataError(
-            f"{owner} holds '{column}' in {given.time_zone or 'no time zone'}, and the index for dimension "
-            f"'{dim}' in {index.time_zone or 'no time zone'}. Put it on the index's first: polars "
+            f"{owner} holds '{column}' in {given.time_zone or 'no time zone'}, and the labels of dimension "
+            f"'{dim}' are in {listed.time_zone or 'no time zone'}. Put it on theirs first: polars "
             f'.dt.convert_time_zone, or .dt.replace_time_zone for a column without one.'
         )
 
@@ -384,13 +386,13 @@ def _unsupplied_relation_message(name: str, relation: Relation) -> str:
 
 
 def _column_names(source: Source, dim: str) -> frozenset[str]:
-    """What a supplied index carries, or nothing where it is a bare label sequence."""
+    """What a supplied labels table carries, or nothing where it is a bare label sequence."""
     table = as_frame(source, (dim,))
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
 def _check_relations_hold_labels(
-    program: Program, relations: Mapping[str, pl.LazyFrame], indices: Mapping[str, pl.LazyFrame]
+    program: Program, relations: Mapping[str, pl.LazyFrame], labels: Mapping[str, pl.LazyFrame]
 ) -> None:
     """Every column of every relation holds labels of its dimension.
 
@@ -399,7 +401,7 @@ def _check_relations_hold_labels(
     """
     for name, relation in program.relations.items():
         for role, dim in relation.columns:
-            _check_column_holds_labels(relations[name], name, role, dim, _labels_of(dim, indices[dim]))
+            _check_column_holds_labels(relations[name], name, role, dim, _labels_of(dim, labels[dim]))
 
 
 def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
@@ -423,15 +425,15 @@ def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: st
     )
 
 
-def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
+def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
     """One dimension's labels."""
-    return index.select(dim).pipe(collected)[dim]
+    return table.select(dim).pipe(collected)[dim]
 
 
-def _read_relation(source: Source, name: str, relation: Relation, indexes: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
+def _read_relation(source: Source, name: str, relation: Relation, labels: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
     """One supplied relation as the table both lanes read: one column per declared column, under its own name.
 
-    A column is read in its dimension's label type, from *indexes*.
+    A column is read in its dimension's label type, from *labels*.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -457,7 +459,7 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
     rows = in_microseconds(
-        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, indexes)
+        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, labels)
     )
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
@@ -521,19 +523,19 @@ def parameter_frame(
 
 
 def read_values(
-    kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame], dtype: str
+    kind: str, name: str, dims: Sequence[str], obj: Source, labels: Mapping[str, pl.LazyFrame], dtype: str
 ) -> pl.LazyFrame:
     """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
 
     For values that are no parameter's, such as a start's. *kind* and *name*
-    say whose they are in a refusal, and *indexes* holds each dimension's
+    say whose they are in a refusal, and *labels* holds each dimension's
     labels under its own name.
 
     Raises:
         DataError: A table a parameter over the same dimensions would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
+    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, labels, kind), labels, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -548,7 +550,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
     if isinstance(obj, (bool, int, float)):
         least = float(obj)
     elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-        least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
+        least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is a dimension's
     else:
         least = (
             parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
@@ -591,7 +593,7 @@ def _spread(
             raise DataError(
                 f"{kind} '{name}': {len(values)} values against {len(labels)} "
                 f"'{dims[0]}' labels. A sequence is positional, so it must have "
-                f'one value per label, in the order the index declares them.'
+                f'one value per label, in label order.'
             )
         return pl.LazyFrame({dims[0]: labels, VALUE: values})
 
@@ -619,7 +621,7 @@ def _broadcast(
 
 
 def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str) -> list[Label]:
-    """*dim*'s labels, in index order, for a shape that has none of its own.
+    """*dim*'s labels, in label order, for a shape that has none of its own.
 
     Raises:
         DataError: Nothing supplies the labels.
@@ -628,8 +630,8 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str)
     if source is None:
         raise DataError(
             f"{kind} '{name}' is written positionally over '{dim}', so it says what the "
-            f'values are but not what they are labelled — and nothing else supplies an index '
-            f"for '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
+            f'values are but not what they are labelled — and nothing else supplies the labels '
+            f"of '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
         )
     return source.select(dim).pipe(collected)[dim].to_list()
@@ -673,7 +675,7 @@ def _check_one_row_per_coordinate(
 ) -> None:
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
 
-    Labels are checked against the dimensions whose index has been read; one
+    Labels are checked against the dimensions whose labels have been read; one
     still missing is refused once every source is in.
     """
     if not p.dims:

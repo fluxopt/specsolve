@@ -39,7 +39,7 @@ within_cap:
 `at` and `sum(by=)` take the same argument: the relation names one table, and
 the operator says which direction it is walked.
 
-A per-period **parameter** needs neither: join it onto the snapshot index
+A per-period **parameter** needs neither: join it onto the snapshot labels
 before the model sees it. `p_nom` is a **variable**, which no join can reach,
 so the pullback is a construct in the language.
 

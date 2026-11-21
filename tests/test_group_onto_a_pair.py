@@ -66,7 +66,7 @@ OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
 def _inputs():
-    index = pd.DataFrame({'generator': GENERATORS})
+    labels = pd.DataFrame({'generator': GENERATORS})
     limits = pd.DataFrame(
         {
             'bus': ['a', 'a', 'b', 'b'],
@@ -75,10 +75,10 @@ def _inputs():
         }
     )
     return {
-        'cost': index.assign(value=[1.0, 2.0, 3.0, 4.0]).set_index('generator')['value'],
+        'cost': labels.assign(value=[1.0, 2.0, 3.0, 4.0]).set_index('generator')['value'],
         'limit': limits,
         'demand': 20.0,
-        'generator': index,
+        'generator': labels,
         'gen_placement': pd.DataFrame({'generator': GENERATORS, 'bus': OF_BUS, 'technology': OF_TECH}),
         'bus': pd.Index(['a', 'b'], name='bus'),
         'technology': pd.Index(['wind', 'sun'], name='technology'),

@@ -80,7 +80,7 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
 
 
 def sparse_divisor_message(name: str, missing: int) -> str:
-    """The message for a divisor parameter that is sparse over its index."""
+    """The message for a divisor parameter that is sparse over its dimensions."""
     return (
         f"parameter '{name}' is used as a divisor but covers {missing} fewer "
         f'coordinates than it is indexed over. A missing row means a zero '

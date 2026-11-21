@@ -26,7 +26,7 @@ RESERVED_PREFIX = 'specsolve_'
 #: table came from. Read back, a table comes without it.
 RUN = f'{RESERVED_PREFIX}run'
 
-#: The column a dimension's table numbers its labels in, from 0 in index order.
+#: The column a dimension's table numbers its labels in, from 0 in label order.
 POSITION = f'{RESERVED_PREFIX}position'
 
 

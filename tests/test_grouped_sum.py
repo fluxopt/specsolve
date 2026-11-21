@@ -9,7 +9,7 @@ Three-way differential on examples/transport.yaml:
 Plus ``examples/monthly_budget.yaml``, which is the same operator over *time*:
 a relation over ``snapshot`` groups it into months exactly as a relation over
 ``generator`` groups onto buses. The gallery page quotes its dual and prints
-its snapshot index, so a test has to hold both.
+its `month_of` table, so a test has to hold both.
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     """Two rows disagreeing about a generator's bus is a data bug, not a
     silently-picked winner.
 
-    Only the *index* is doubled here. Doubling the generator table outright
+    Only the *relation* is doubled here. Doubling the generator table outright
     duplicates the parameters it also feeds, and the keyed-parameter check
     below catches that first — which is correct, and would leave this test
     asserting the wrong message.
@@ -158,7 +158,7 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
         _relationally(data)
 
 
-def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
+def test_a_coordinate_bearing_dim_needs_a_labels_source(transport_data):
     """A coordinate cannot be inferred from the parameters that use the dimension —
     inferring it is what would let a typo extend the label space.
 
@@ -199,11 +199,11 @@ objective:
 def _partial_inputs():
     """`item` carries relation `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
-    index = pd.DataFrame({'item': items})
+    labels = pd.DataFrame({'item': items})
     grp = pd.DataFrame({'item': ['i0', 'i1'], 'g': ['g0', 'g0']})
     return (
         {  # relational sources
-            'item': index,
+            'item': labels,
             'grp': grp,
             'g': pd.DataFrame({'g': ['g0']}),
             'cap': pd.DataFrame({'item': items, 'value': [5.0, 5.0, 5.0]}),
@@ -212,7 +212,7 @@ def _partial_inputs():
         {  # the same, in the shapes the linopy lane is usually fed
             'cap': pd.Series([5.0, 5.0, 5.0], index=pd.Index(items, name='item')),
             'target': pd.Series([3.0], index=pd.Index(['g0'], name='g')),
-            'item': index,
+            'item': labels,
             'grp': grp,
             'g': pd.Index(['g0'], name='g'),
         },
@@ -250,9 +250,9 @@ GROUPED_ONTO_BUS = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
 }
 
-#: The two ways a grouped sum's own index departs from the dimension it
+#: The two ways a grouped sum's own labels depart from the dimension it
 #: produces. Both instances carry 10 of load in total, so landing the group on
-#: the declared index is the only thing between them and the same optimum.
+#: the declared labels is the only thing between them and the same optimum.
 GROUPED_ONTO_BUS_SOURCES = {
     'a label no generator reaches': {
         'bus': pl.DataFrame({'bus': ['north', 'south', 'east']}),
@@ -273,7 +273,7 @@ GROUPED_ONTO_BUS_SOURCES = {
 
 @pytest.mark.parametrize('sources', GROUPED_ONTO_BUS_SOURCES.values(), ids=GROUPED_ONTO_BUS_SOURCES.keys())
 def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
-    """The result spans ``bus``'s declared index, not the labels the relation reaches.
+    """The result spans the labels ``bus`` is given, not the ones the relation reaches.
 
     A groupby yields only the labels some generator points at, and in sorted
     order. Either departure — a bus no generator sits on, or a declared order
@@ -400,8 +400,8 @@ def test_the_broadcast_objective_agrees_with_the_linopy_lane():
         'w': pd.Series([1.0, 10.0, 100.0, 1000.0], index=pd.Index([0, 1, 2, 3], name='snapshot')),
         'floor': pd.Series([1.0, 2.0, 3.0], index=pd.Index(['b0', 'b1', 'b2'], name='bus')),
     }
-    index = {'snapshot': [0, 1, 2, 3], 'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
-    with differential(BROADCAST_OBJECTIVE, data | index, lp=True) as run:
+    labels = {'snapshot': [0, 1, 2, 3], 'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
+    with differential(BROADCAST_OBJECTIVE, data | labels, lp=True) as run:
         assert run.oracle == pytest.approx(6666.0)
 
 
@@ -429,7 +429,7 @@ MONTHLY_PAGE = Path('docs/examples/monthly_budget.md')
 
 @pytest.fixture
 def monthly():
-    """The snapshot index and sources: six snapshots over three calendar months,
+    """The `month_of` table and the sources: six snapshots over three calendar months,
     wind capped in the first.
 
     The `month_of` relation is data prep: one polars expression.
@@ -492,7 +492,7 @@ def test_a_monthly_budget_binds_and_prices_itself(monthly):
 def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     """Re-grouping the same snapshots re-states the budget, model untouched.
 
-    Quarters instead of months: one different column in the snapshot index,
+    Quarters instead of months: one different column in `month_of`,
     and the constraint now spans three-month blocks. That is the claim the
     page makes about weeks, seasons and representative periods, checked once.
     """
@@ -514,7 +514,7 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
 def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     """Why the target of a coordinate has to be a declared dimension.
 
-    Without one there is nothing to check the snapshot index against, and
+    Without one there is nothing to check `month_of`'s values against, and
     `2030-3` beside `2030-03` would quietly become a fourth group with a budget
     of its own — the model then solves a smaller problem and says nothing. The
     same check catches a generator assigned to a bus that does not exist.
@@ -527,7 +527,7 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
         sps.solve(MONTHLY_YAML, {**sources, 'month_of': typo})
 
 
-def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
+def test_the_table_the_page_prints_is_the_table_it_solves(monthly):
     """The table printed on the page is the table these tests build.
 
     `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,

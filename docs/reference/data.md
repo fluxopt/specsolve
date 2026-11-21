@@ -16,10 +16,10 @@ For a parameter declared `dims: [d1, d2]`, the value under its key is one of:
   [coordinate](glossary.md#the-data) the parameter covers;
 - a **`dict`** of label to value, over one dimension;
 - a **sequence** (list, tuple, `np.ndarray`) over one dimension, positional
-  against its index.
+  against its dimension's labels.
 
 **A number, a dict and a sequence are dense**, so declare a constant as
-`dims: []`. A sequence carries no labels, so its dimension's index comes from
+`dims: []`. A sequence carries no labels, so its dimension's labels come from
 [another source](#where-coordinates-come-from).
 
 **A `pd.Series` attaches by its index.** An unnamed index attaches to the
@@ -31,12 +31,12 @@ dimensions raises.
 
 ## Where coordinates come from
 
-**Each dimension's index is a key in `sources` named after the dimension**: a
-table with a column of that name, a parquet path, or a bare sequence of labels.
-Other columns of the table are ignored.
+**Each dimension's labels are a key in `sources` named after the dimension**:
+a table with a column of that name, a parquet path, or a bare sequence of
+labels. Other columns of the table are ignored.
 
-**An index lists each label once, in order.** On a dimension the spec declares
-`ordered: true`,
+**A dimension's labels list each label once, in order.** On a dimension the
+spec declares `ordered: true`,
 [`shift`](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift),
 `sum_back`, `position`, a curve and an SOS read that order. A label on two rows is refused:
 `table.select('generator').unique(maintain_order=True)` keeps the first row of
@@ -44,7 +44,7 @@ each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
 **A datetime label is held in microseconds**, in the time zone it arrives in.
-A column must be in its index's time zone. Under a `dtype: datetime`
+A column must be in the time zone of its dimension's labels. Under a `dtype: datetime`
 dimension, a date is the microsecond its day starts on.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
@@ -86,13 +86,13 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a relation table short of a column it declares | names them, and what each is |
 | a relation table with a null in any column | |
 | a map with both authors, or neither | names them, and says which way out |
-| an index carrying a column named after a relation with a column over it | names the key it belongs under |
+| a labels table carrying a column named after a relation with a column over it | names the key it belongs under |
 | a datetime label finer than a microsecond | names a label, and the rounding |
 | a table missing a declared dimension column, or `value` | names the columns needed |
-| a label outside the dimension's index | names the parameter and the strays |
+| a label the dimension does not have | names the parameter and the strays |
 | two rows for one coordinate | |
 | a relation with two values for one key | |
-| a dimension carrying relations with no index | |
+| a dimension carrying relations, with no labels | |
 | a dimension nothing can supply labels for | names both ways to fix it |
 | a dimension the spec declares and the caller also supplies | names the entry and the colliding key |
 | a relation whose map the spec declares and the caller also supplies | names the map and the colliding column |

@@ -106,19 +106,19 @@ class TestMasterCoords:
     def test_labels_come_from_the_source_under_the_dimensions_own_key(self):
         assert list(_master_coords(_schema(dims={'x': {'dtype': 'int'}}), {'x': [10, 20]})['x']) == [10, 20]
 
-    def test_a_dimension_with_no_index_is_refused(self):
-        """The index is the authority, and both lanes refuse a dimension without one in the same sentence.
+    def test_a_dimension_with_no_labels_is_refused(self):
+        """The labels are the authority, and both lanes refuse a dimension without them in the same sentence.
 
         Labels read out of the parameters would *be* the definition, so a
         mistyped one could not be told from a new one.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
-        with pytest.raises(ValueError, match="dimension 'x' has no index"):
+        with pytest.raises(ValueError, match="dimension 'x' has no labels"):
             _master_coords(schema, {'a': {'wind': 1.0}})
 
     def test_the_labels_keep_the_order_they_arrived_in(self):
-        """A caller's index is read in its own order on both lanes.
+        """A caller's labels are read in their own order on both lanes.
 
         The ordinals a translation moves by are positions in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
@@ -128,8 +128,8 @@ class TestMasterCoords:
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
 
-    @pytest.mark.parametrize('index', ['pandas', 'polars', 'a bare list'])
-    def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):
+    @pytest.mark.parametrize('spelling', ['pandas', 'polars', 'a bare list'])
+    def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, spelling):
         """`datetime.date` out of pandas and `datetime64` out of polars are one label.
 
         They compare unequal, so the entry makes the axis canonical past
@@ -147,9 +147,9 @@ class TestMasterCoords:
             dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 'neutral'}}
         )
 
-        labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
+        labels = _master_coords(schema, {'t': sources[spelling], 'a': {days[0]: 1.0}})['t']
 
-        assert labels.dtype.kind == 'M', f'a {index} index reads as the instants it holds'
+        assert labels.dtype.kind == 'M', f'labels from {spelling} read as the instants they hold'
         assert list(labels) == list(pd.DatetimeIndex(days)), 'and as the same three of them'
 
 
@@ -864,7 +864,7 @@ def test_a_constraint_carrying_its_terms_on_the_right_builds_on_both_lanes():
 
 
 def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
-    """The index is what says which labels exist, on either lane.
+    """A dimension's own key is what says which labels exist, on either lane.
 
     Neither `values:` nor a table under `g` says what it holds, so a mistyped
     label in `cost` would define a generator rather than fail. Both lanes
@@ -884,14 +884,14 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
         'cost': pd.Series({'wind': 3.0, 'gas': 1.0}).rename_axis('g'),
     }
 
-    with pytest.raises(DataError, match="dimension 'g' has no index") as native:
+    with pytest.raises(DataError, match="dimension 'g' has no labels") as native:
         sps.build(spec, sources).close()
-    with pytest.raises(DataError, match="dimension 'g' has no index") as linopy_lane:
+    with pytest.raises(DataError, match="dimension 'g' has no labels") as linopy_lane:
         specsolve_linopy.build(spec, sources)
     assert str(native.value) == str(linopy_lane.value), 'one refusal, one wording'
 
-    indexed = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
-    assert 'x' in specsolve_linopy.build(spec, indexed).variables
+    labelled = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
+    assert 'x' in specsolve_linopy.build(spec, labelled).variables
 
 
 def test_from_yaml_fails_before_data_validation(tmp_path):

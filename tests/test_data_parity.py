@@ -58,15 +58,15 @@ class Case:
 
 
 def _cases() -> list[Case]:
-    index = {'f': ['a', 'b']}
-    good_r = {**index, 'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
-    good_e = {**index, 'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    labels = {'f': ['a', 'b']}
+    good_r = {**labels, 'cost': _tidy(f=['a', 'b'], value=[1.0, 2.0]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    good_e = {**labels, 'cost': pd.Series({'a': 1.0, 'b': 2.0}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
     return [
         Case('valid', good_r, good_e, ACCEPTED),
         Case(
             'parameter missing entirely',
-            {**index, 'cost': good_r['cost']},
-            {**index, 'cost': good_e['cost']},
+            {**labels, 'cost': good_r['cost']},
+            {**labels, 'cost': good_e['cost']},
             DataError,
         ),
         Case(
@@ -111,7 +111,7 @@ def _cases() -> list[Case]:
             DataError,
         ),
         Case(
-            'an index holding a label twice',
+            'labels holding a label twice',
             {**good_r, 'f': ['a', 'b', 'a']},
             {**good_e, 'f': ['a', 'b', 'a']},
             # A label's row is its position, so a second row gives it two.
@@ -172,9 +172,9 @@ def test_the_table_covers_both_verdicts():
 
 def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path):
     """`x * cost` divides by nothing, so a hole in `cost` is refused at attach as a hole."""
-    index = {'f': ['a', 'b']}
-    holed = {**index, 'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
-    linopy_lane = {**index, 'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
+    labels = {'f': ['a', 'b']}
+    holed = {**labels, 'cost': _tidy(f=['a', 'b'], value=[1.0, None]), 'cap': _tidy(f=['a', 'b'], value=[5.0, 5.0])}
+    linopy_lane = {**labels, 'cost': pd.Series({'a': 1.0, 'b': None}), 'cap': pd.Series({'a': 5.0, 'b': 5.0})}
 
     with pytest.raises(DataError, match="parameter 'cost'") as relational_error:
         sps.build(spec_path, holed).close()
@@ -318,7 +318,7 @@ RELATION_SPEC = {
 }
 
 _P_MAX = {'p_max': _tidy(g=['w', 's'], value=[5.0, 5.0])}
-_INDEX = {'g': _tidy(g=['w', 's']), 'b': _tidy(b=['n', 'e'])}
+_LABELS = {'g': _tidy(g=['w', 's']), 'b': _tidy(b=['n', 'e'])}
 _MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
 
 
@@ -326,36 +326,36 @@ _MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
     ('sources', 'match'),
     [
         pytest.param({**_P_MAX, **_MAP}, 'has its maps', id='a-map-and-no-labels'),
-        pytest.param({**_P_MAX, **_INDEX}, 'no data provided for relation', id='an-index-and-no-map'),
+        pytest.param({**_P_MAX, **_LABELS}, 'no data provided for relation', id='labels-and-no-map'),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
+            {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
             r"must carry a column per column it declares, \['g', 'b'\]",
             id='a-map-named-after-itself-and-not-its-target',
         ),
         pytest.param(
             {**_P_MAX, **_MAP, 'g': _tidy(gg=['w', 's'])},
             "without a 'g' column",
-            id='an-index-without-the-label-column',
+            id='labels-without-the-label-column',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'zz'])},
+            {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'zz'])},
             'not .b. labels',
             id='a-relation-value-that-is-no-label-of-its-target',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=['n', 'e', 'e'])},
+            {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 'w', 's'], b=['n', 'e', 'e'])},
             'more than once',
             id='a-relation-with-two-values-for-one-label',
         ),
         pytest.param(
-            {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[None, 'e'])},
+            {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=[None, 'e'])},
             "null in 'b'",
             id='a-relation-mapping-a-label-to-nothing',
         ),
         pytest.param(
             {**_P_MAX, **_MAP, 'g': _tidy(g=['w', 's'], gen_bus=['n', 'e'])},
             "is a relation with a column over 'g'",
-            id='a-map-carried-on-the-index-it-runs-over',
+            id='a-map-carried-on-the-labels-it-runs-over',
         ),
     ],
 )
@@ -366,8 +366,8 @@ def test_a_relation_defect_reads_the_same_on_both_lanes(tmp_path, sources, match
     both_lanes_refuse(path, sources, match=match)
 
 
-def test_an_index_a_declared_map_is_read_against_is_checked_before_the_read(tmp_path):
-    """The front door, not the engine, refuses an index without its label column."""
+def test_the_labels_a_declared_map_is_read_against_are_checked_before_the_read(tmp_path):
+    """The front door, not the engine, refuses a labels table without its label column."""
     spec = {**RELATION_SPEC, 'relations': {'gen_bus': {'key': 'g', 'values': 'b'}}}
     path = _written(tmp_path, spec)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': _tidy(gg=['w', 's'])}
@@ -386,37 +386,37 @@ def test_a_relation_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_
         'constraints': {'k': {'dims': ['b'], 'expression': 'sum(x, over=g, by=gen_bus[b]) <= 3'}},
     }
     path = _written(tmp_path, spec)
-    clean = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
-    holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
+    clean = {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=['n', 'n'])}
+    holed = {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
 
     with sps.solve(path, clean) as run:
         assert run.objective == pytest.approx(3.0), 'both generators are on the bus, and the bus caps them'
     built = specsolve_linopy.build(path, clean)
     built.solve(solver_name='highs', output_flag=False)
-    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane agrees where the index is clean'
+    assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane agrees where the labels are clean'
 
     both_lanes_refuse(path, holed, match="null in 'b'")
 
 
-def test_a_dimension_index_is_a_table_on_both_lanes(tmp_path):
-    """A polars index under the dimension's own key reaches both lanes."""
+def test_a_dimension_s_labels_are_a_table_on_both_lanes(tmp_path):
+    """A polars table of labels under the dimension's own key reaches both lanes."""
     path = _written(tmp_path, RELATION_SPEC)
-    sources = {**_P_MAX, **_INDEX, **_MAP}
+    sources = {**_P_MAX, **_LABELS, **_MAP}
 
     with sps.solve(path, sources) as relational:
         assert relational.is_ok
     built = specsolve_linopy.build(path, sources)
-    assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the linopy lane read the same index'
+    assert set(built.variables['x'].coords['g'].to_numpy()) == {'w', 's'}, 'the linopy lane read the same labels'
 
 
-def test_a_dimension_index_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch, polars_parquet):
+def test_a_dimension_s_labels_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch, polars_parquet):
     """The oracle brings pandas and xarray, and nothing says it brings pyarrow."""
     import sys
 
     path = _written(tmp_path, RELATION_SPEC)
-    index = tmp_path / 'g.parquet'
-    _tidy(g=['w', 's']).write_parquet(index)
-    sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': str(index)}
+    labels = tmp_path / 'g.parquet'
+    _tidy(g=['w', 's']).write_parquet(labels)
+    sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': str(labels)}
 
     monkeypatch.setitem(sys.modules, 'pyarrow', None)
     with sps.solve(path, sources) as relational:
@@ -485,12 +485,12 @@ _SPELLINGS = {
 
 
 @pytest.mark.parametrize('column', list(_SPELLINGS), ids=[f'column-{i}' for i in _SPELLINGS.values()])
-@pytest.mark.parametrize('index', list(_SPELLINGS), ids=[f'index-{i}' for i in _SPELLINGS.values()])
-def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
+@pytest.mark.parametrize('labels', list(_SPELLINGS), ids=[f'labels-{i}' for i in _SPELLINGS.values()])
+def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, labels, column):
     """A relation's values and a parameter's labels are labels of the dimension, canonicalised as those are.
 
     Both generators map to the same day, so that day's cap binds them together.
-    A date and a midnight datetime are one instant, whichever spells the index
+    A date and a midnight datetime are one instant, whichever spells the labels
     and whichever the columns (#1630). A date was compared with a datetime and
     matched nothing, so it was refused as not a label of its dimension; and the
     seconds `pd.to_datetime` gives a date reached polars, which reads no such
@@ -499,7 +499,7 @@ def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_p
     days = _days()
     sources = {
         **_P_MAX,
-        'd': _spelled(index, {'d': days}, tmp_path / 'd.parquet'),
+        'd': _spelled(labels, {'d': days}, tmp_path / 'd.parquet'),
         'g': ['w', 's'],
         'cap': _spelled(column, {'d': days, 'value': [3.0, 7.0]}, tmp_path / 'cap.parquet'),
         'day_of': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'day_of.parquet'),
@@ -515,7 +515,7 @@ def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_p
         'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
     path = _written(tmp_path, spec)
-    sources = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
+    sources = {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
     sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
     assert '99.' in sentence, 'the label as the caller wrote it, not as numpy holds it'
@@ -525,7 +525,7 @@ def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
     """A MultiIndex restates the declared dimensions and can contradict them, so it is refused."""
     path = _written(tmp_path, RELATION_SPEC)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
-    sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_INDEX, **_MAP}
+    sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_LABELS, **_MAP}
 
     sentence = both_lanes_refuse(path, sources, match='MultiIndex is not a source')
     assert "['g', 'value']" in sentence, 'and it names the tidy table the caller should pass'
@@ -559,7 +559,7 @@ def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_pa
     both_lanes_refuse(path, typo, match="Did you mean 'cost'")
 
 
-def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
+def test_an_entity_table_is_a_dimension_s_labels_columns_and_all(tmp_path):
     """An undeclared column is ignored where an undeclared key is not.
 
     A misspelled required column is a missing one. A column named after a
@@ -589,12 +589,12 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         sps.build(path, {**sources, 'cap': _tidy(gg=['w', 's'], value=[10.0, 20.0])}).close()
 
     carried = _tidy(g=['w', 's'], cap=[10.0, 20.0], gen_bus=['n', 'e'])
-    with pytest.raises(DataError, match=r"index for dimension 'g' carries a 'gen_bus' column"):
+    with pytest.raises(DataError, match=r"the labels table of dimension 'g' carries a 'gen_bus' column"):
         sps.build(path, {**sources, 'g': carried}).close()
 
 
 @pytest.mark.parametrize(
-    ('index', 'rewrite'),
+    ('labels', 'rewrite'),
     [
         pytest.param(['a', 'b', 'a', 'c', 'b'], 'list(dict.fromkeys(labels))', id='a-bare-sequence'),
         pytest.param(
@@ -604,21 +604,21 @@ def test_an_entity_table_is_a_dimension_index_columns_and_all(tmp_path):
         ),
     ],
 )
-def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: Path, index: Any, rewrite: str):
+def test_labels_holding_a_label_twice_name_the_labels_and_the_fix(spec_path: Path, labels: Any, rewrite: str):
     """Two rows give one label two positions, so `shift` would read one of them as the other.
 
-    The rewrite is in the shape the index came in: a bare sequence was once told
+    The rewrite is in the shape the labels came in: a bare sequence was once told
     to call `.select` on a table it does not have.
     """
     sources = {
-        'f': index,
+        'f': labels,
         'cost': _tidy(f=['a', 'b', 'c'], value=[1.0, 2.0, 3.0]),
         'cap': _tidy(f=['a', 'b', 'c'], value=[5.0, 5.0, 5.0]),
     }
     with pytest.raises(DataError) as refused:
         sps.build(spec_path, sources).close()
     message = str(refused.value)
-    assert "index for dimension 'f' holds 2 label(s) more than once: 'a', 'b'" in message, (
+    assert "the labels of dimension 'f' hold 2 label(s) more than once: 'a', 'b'" in message, (
         'the dimension and the repeated labels, in the order they first repeat'
     )
     assert rewrite in message, 'and the rewrite that keeps the first of each, for the shape that was given'
@@ -626,28 +626,28 @@ def test_an_index_holding_a_label_twice_names_the_labels_and_the_fix(spec_path: 
 
 
 @pytest.mark.parametrize(
-    'index',
+    'labels',
     [
         pytest.param([None, 'a', 'c'], id='a-bare-sequence-leading-with-a-null'),
         pytest.param(_tidy(f=['a', None, 'c']), id='a-table-with-a-null-inside'),
     ],
 )
-def test_an_index_holding_a_null_label_is_refused(spec_path: Path, index: Any):
-    """A null in an index is refused at load, before it can become a coordinate.
+def test_labels_holding_a_null_are_refused(spec_path: Path, labels: Any):
+    """A null among a dimension's labels is refused at load, before it can become a coordinate.
 
     It was read as a label: a string dimension failed with polars' own ``TypeError``
     on the null category, and an integer one built a coordinate labelled null.
     """
     sources = {
-        'f': index,
+        'f': labels,
         'cost': _tidy(f=['a', 'c'], value=[1.0, 3.0]),
         'cap': _tidy(f=['a', 'c'], value=[5.0, 5.0]),
     }
-    with pytest.raises(DataError, match="index for dimension 'f' holds a null label"):
+    with pytest.raises(DataError, match="the labels of dimension 'f' hold a null"):
         sps.build(spec_path, sources).close()
 
 
-#: A temporal dimension whose index bounds a variable.
+#: A temporal dimension whose labels bound a variable.
 TEMPORAL_BOUND_SPEC = {
     'dimensions': {'t': {'dtype': 'datetime', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},
@@ -666,31 +666,31 @@ def _instants(unit: str, time_zone: str | None = None, *, nanoseconds: int = 0) 
 
 
 @pytest.mark.parametrize(
-    ('index', 'column', 'zone'),
+    ('labels', 'column', 'zone'),
     [
         pytest.param('ns', 'ns', None, id='nanoseconds-both'),
         pytest.param('ms', 'ms', None, id='milliseconds-both'),
-        pytest.param('ns', 'us', None, id='nanosecond-index-microsecond-column'),
-        pytest.param('us', 'ns', None, id='microsecond-index-nanosecond-column'),
+        pytest.param('ns', 'us', None, id='nanosecond-labels-microsecond-column'),
+        pytest.param('us', 'ns', None, id='microsecond-labels-nanosecond-column'),
         pytest.param('ns', 'ms', 'Europe/Berlin', id='zone-aware-both'),
     ],
 )
-def test_a_datetime_index_in_any_unit_bounds_a_variable_on_both_lanes(tmp_path, index, column, zone):
-    """An index in nanoseconds, pandas' default, crashed the bound attach: the labels it met were microseconds."""
+def test_datetime_labels_in_any_unit_bound_a_variable_on_both_lanes(tmp_path, labels, column, zone):
+    """Labels in nanoseconds, pandas' default, crashed the bound attach: the labels it met were microseconds."""
     sources = {
-        't': pl.DataFrame({'t': _instants(index, zone)}),
+        't': pl.DataFrame({'t': _instants(labels, zone)}),
         'cap': pl.DataFrame({'t': _instants(column, zone), 'value': [3.0, 4.0]}),
     }
     with differential(_written(tmp_path, TEMPORAL_BOUND_SPEC), sources) as run:
         assert run.oracle == pytest.approx(7.0), 'each instant takes its own cap, on both lanes'
 
 
-def _temporal_sources(*, index: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
+def _temporal_sources(*, labels: pl.Series, cap: pl.Series, day_of: pl.Series) -> dict[str, Any]:
     """The temporal relation model's sources, its three datetime columns given."""
     return {
         **_P_MAX,
         'cap': pl.DataFrame({'d': cap, 'value': [3.0, 7.0]}),
-        'd': pl.DataFrame({'d': index}),
+        'd': pl.DataFrame({'d': labels}),
         'g': ['w', 's'],
         'day_of': pl.DataFrame({'g': ['w', 's'], 'd': day_of}),
     }
@@ -706,32 +706,32 @@ _DATES = _EVEN.cast(pl.Date)
     ('sources', 'owner', 'match'),
     [
         pytest.param(
-            _temporal_sources(index=_FINE, cap=_FINE, day_of=_FINE),
-            "index for dimension 'd'",
+            _temporal_sources(labels=_FINE, cap=_FINE, day_of=_FINE),
+            "the labels table of dimension 'd'",
             'finer',
-            id='index-finer',
+            id='labels-finer',
         ),
         pytest.param(
-            _temporal_sources(index=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
+            _temporal_sources(labels=_EVEN, cap=_FINE, day_of=_EVEN), "parameter 'cap'", 'finer', id='parameter-finer'
         ),
         pytest.param(
-            _temporal_sources(index=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
+            _temporal_sources(labels=_EVEN, cap=_EVEN, day_of=_FINE), "relation 'day_of'", 'finer', id='relation-finer'
         ),
         pytest.param(
-            _temporal_sources(index=_DATES, cap=_DATES, day_of=_instants('ns', nanoseconds=3_600_000_000_000)),
+            _temporal_sources(labels=_DATES, cap=_DATES, day_of=_instants('ns', nanoseconds=3_600_000_000_000)),
             "relation 'day_of'",
             "not 'd' labels",
             id='relation-past-midnight-of-a-date',
         ),
         pytest.param(
-            _temporal_sources(index=_UTC, cap=_EVEN, day_of=_UTC),
+            _temporal_sources(labels=_UTC, cap=_EVEN, day_of=_UTC),
             "parameter 'cap'",
             'convert_time_zone',
             id='parameter-zone',
         ),
         pytest.param(
             _temporal_sources(
-                index=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day_of=_UTC
+                labels=_instants('us', 'Europe/Berlin'), cap=_instants('us', 'Europe/Berlin'), day_of=_UTC
             ),
             "relation 'day_of'",
             'convert_time_zone',
@@ -739,7 +739,7 @@ _DATES = _EVEN.cast(pl.Date)
         ),
     ],
 )
-def test_a_datetime_label_the_index_cannot_hold_is_refused_on_both_lanes(tmp_path, sources, owner, match):
+def test_a_datetime_label_the_dimension_cannot_hold_is_refused_on_both_lanes(tmp_path, sources, owner, match):
     """A cast that drops a nanosecond, or a compare across two clocks, is refused rather than made."""
     sentence = both_lanes_refuse(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources, match=match)
     assert sentence.startswith(owner), 'the refusal names what carried the label'

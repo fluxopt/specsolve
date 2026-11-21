@@ -250,8 +250,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the
 row there drops on its own. That is the boundary PyPSA wants, and no `where`
 states it. `edge='wrap'` would put the last snapshot onto the first and build
-a different model, and a gate such as `snapshot > 0` would hardcode the index
-origin. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
+a different model, and a gate such as `snapshot > 0` would hardcode the first
+label. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
 it by name.
 
 ## What it exercises

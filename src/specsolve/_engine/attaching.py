@@ -188,9 +188,9 @@ def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
     return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
 
 
-def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
-    """A dimension's ``(val, ord)`` from its index, a label's ordinal being its row."""
-    return index.with_row_index('ord').select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
+def _ordinal_frame(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
+    """A dimension's ``(val, ord)`` from its labels, a label's ordinal being its row."""
+    return labels.with_row_index('ord').select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
 
 
 def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:

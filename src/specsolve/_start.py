@@ -59,12 +59,12 @@ class Start(TypedDict, total=False):
 
 
 def read_start(
-    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
+    start: Start, program: Program, labels: Mapping[str, pl.LazyFrame]
 ) -> dict[str, dict[str, pl.LazyFrame]]:
     """*start*'s tables, each read and checked as a parameter's source is, over its entry's dimensions.
 
     Every shape a parameter takes is read, from a parquet path to one number
-    for every coordinate; *indexes* holds each dimension's labels under its
+    for every coordinate; *labels* holds each dimension's labels under its
     own name. ``primal`` holds numbers, and ``variable_basis`` and
     ``constraint_basis`` hold basis statuses in their words.
 
@@ -82,7 +82,7 @@ def read_start(
         read[reader] = {}
         for name, obj in tables.items():
             kind = _kind(reader, per)
-            frame = read_values(kind, name, declared[name].dims, obj, indexes, dtype)
+            frame = read_values(kind, name, declared[name].dims, obj, labels, dtype)
             if reader != 'primal':
                 _refuse_unknown_statuses(kind, name, frame)
             read[reader][name] = frame

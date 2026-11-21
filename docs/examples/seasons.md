@@ -188,7 +188,7 @@ the boundary.
 
 ## The grouping is data
 
-`season_of` is a table passed beside the snapshot index, so the same file
+`season_of` is a table passed beside the snapshot labels, so the same file
 expresses maintenance campaigns, representative days, market quarters or
 contract windows. Move two snapshots between seasons by editing that table and
 no clause changes:

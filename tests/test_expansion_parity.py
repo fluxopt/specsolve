@@ -56,7 +56,7 @@ def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    index = {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': list(DISPATCH_GENERATORS)}
+    labels = {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': list(DISPATCH_GENERATORS)}
 
-    with differential(EXPANSION_YAML, data | index):
+    with differential(EXPANSION_YAML, data | labels):
         pass  # agreement on the objective is the whole assertion

@@ -117,12 +117,12 @@ def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_y
     snapshot = pl.read_parquet(unpacked['snapshot'])
 
     assert cost.columns == ['generator', 'value', RUN], 'a positional sequence is spread over its labels'
-    assert cost['value'].to_list() == list(DISPATCH_COST), 'in the order the index declares them'
+    assert cost['value'].to_list() == list(DISPATCH_COST), 'in label order'
     assert snapshot.columns == ['snapshot', 'specsolve_position', RUN], (
-        'a bare label range is written as an index table'
+        'a bare label range is written as a labels table'
     )
     assert snapshot['specsolve_position'].to_list() == list(range(DISPATCH_SNAPSHOTS)), (
-        'one row per label, numbered in index order'
+        'one row per label, numbered in label order'
     )
 
 
@@ -168,7 +168,7 @@ def test_a_parquet_path_is_archived_as_the_table_the_solve_read(
     assert held[RUN].unique().to_list() == ['dispatch'], 'stamped with the run that wrote it'
 
 
-def test_an_index_given_as_an_iterator_is_archived_as_the_labels_the_solve_read(
+def test_labels_given_as_an_iterator_are_archived_as_the_solve_read_them(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
     """The archive read the sources a second time after the solve, so a one-shot iterator came back empty.
@@ -180,7 +180,7 @@ def test_an_index_given_as_an_iterator_is_archived_as_the_labels_the_solve_read(
     archive = _archived(dispatch_yaml, sources, tmp_path / 'dispatch')
 
     held = pl.read_parquet(archive / 'sources' / 'generator.parquet')
-    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels the build read, in index order'
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels the build read, in label order'
 
 
 def test_a_path_rewritten_after_the_build_is_archived_as_the_table_the_solve_read(
@@ -457,7 +457,7 @@ def test_a_sweep_archive_holds_the_sources_it_was_cut_from(
     )
 
 
-def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
+def test_a_sweep_over_labels_given_as_an_iterator_reads_them_once(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
     """Every slice and the archive read each source again, so a one-shot iterator was empty after the first read.
@@ -469,7 +469,7 @@ def test_a_sweep_over_an_index_given_as_an_iterator_reads_it_once(
     sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
 
     held = pl.read_parquet(tmp_path / 'study' / 'sources' / 'generator.parquet')
-    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in index order'
+    assert held['generator'].to_list() == list(DISPATCH_GENERATORS), 'the labels every slice read, in label order'
 
 
 #: A relation with a role, a named expression over no dimension, and a

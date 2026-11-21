@@ -552,7 +552,7 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> Model:
     Args:
         spec: As [`check`][] takes it.
         sources: Parameter names to parquet paths or in-memory tables, and
-            dimension names to their labels — an index table, a parquet path,
+            dimension names to their labels — a table of labels, a parquet path,
             or a bare sequence — wherever the YAML declares none. The shapes a
             value may take, and what attaching refuses, are
             [the data contract](https://specsolve.readthedocs.io/en/latest/reference/data/).

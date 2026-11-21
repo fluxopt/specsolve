@@ -102,7 +102,7 @@ def test_a_boundary_survives_the_horizon_being_relabelled():
 def test_the_label_that_happens_to_be_first_is_not_the_rule():
     """The same model with the horizon at 0..2 gives the same answer.
 
-    Which is the claim: the clause names the position, so relabelling the index
+    Which is the claim: the clause names the position, so relabelling the dimension
     moves the boundary with it rather than silently seeding nothing.
     """
     sources = _inputs(snapshots=[0, 1, 2])
@@ -242,7 +242,7 @@ objective:
 
 
 def _grouped_sources():
-    """One mapping both lanes take, the relation arriving as a column of the index.
+    """One mapping both lanes take, the relation arriving as its own two-column table.
 
     Arrow tables rather than pandas: a partial relation read out of a pandas table
     arrives as ``float64`` beside an ``i64`` target, which is an attaching question

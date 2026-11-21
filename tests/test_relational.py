@@ -277,8 +277,8 @@ def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
     Below the front door: `Engine.build` takes a *program* and the tables
-    a built model reads, which is the same shape `tidy_sources` hands over — an
-    index of labels, and each map as its own two-column relation.
+    a built model reads, which is the same shape `tidy_sources` hands over — a
+    table of labels per dimension, and each map as its own two-column relation.
     """
     return {
         'p_max': gens[['generator', 'p_max']].rename(columns={'p_max': 'value'}),
@@ -441,13 +441,13 @@ class TestWhatBindRefusesAndWhatItTakes:
 
         ``o'brien`` is a legal directory name, and a quote in one must be as
         uninteresting as a quote in a label. Every path-carrying sink and source is
-        exercised here: a parquet source, an explicit index source, the LP writer,
+        exercised here: a parquet source, an explicit labels source, the LP writer,
         and the parquet sink.
         """
         odd = tmp_path / "o'brien"
         odd.mkdir()
         pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]}).write_parquet(odd / 'load.parquet')
-        pl.DataFrame({'snapshot': [0, 1]}).write_parquet(odd / 'index.parquet')
+        pl.DataFrame({'snapshot': [0, 1]}).write_parquet(odd / 'labels.parquet')
 
         spec = {
             'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
@@ -456,7 +456,7 @@ class TestWhatBindRefusesAndWhatItTakes:
             'constraints': {'meet': {'dims': ['snapshot'], 'expression': 'p >= load'}},
             'objective': {'sense': 'minimize', 'expression': 'sum(p, over=snapshot)'},
         }
-        sources = {'load': str(odd / 'load.parquet'), 'snapshot': str(odd / 'index.parquet')}
+        sources = {'load': str(odd / 'load.parquet'), 'snapshot': str(odd / 'labels.parquet')}
 
         sps.write(spec, sources, odd / 'model.lp')
         result = sps.solve(spec, sources)
@@ -483,7 +483,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         assert from_encoded == pytest.approx(7.0)
         assert from_encoded == pytest.approx(from_plain), 'the encoding changed the model'
 
-    def test_a_dimension_with_no_index_is_refused_rather_than_taking_one_from_the_data(self):
+    def test_a_dimension_with_no_labels_is_refused_rather_than_taking_them_from_the_data(self):
         """Which is what makes the stranger above a stranger.
 
         Labels read out of the parameters would *be* the definition, so a mistyped
@@ -492,7 +492,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         """
         data = {'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'cap': _CAP}
 
-        with pytest.raises(DataError, match="dimension 'f' has no index"):
+        with pytest.raises(DataError, match="dimension 'f' has no labels"):
             sps.solve(LABEL_SPEC, data)
 
         supplied = {**data, 'f': pl.DataFrame({'f': ['a', 'b']})}
@@ -585,11 +585,11 @@ class TestTheLabelSpace:
         assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
-        """A string dimension is an ``Enum`` over its labels in index order for the
+        """A string dimension is an ``Enum`` over its labels in label order for the
         whole build — and plain ``String`` the moment it is handed back.
 
         A caller joins the result against their own data, which an ``Enum``
-        refuses. Index order survives the cast because it is the row order,
+        refuses. Label order survives the cast because it is the row order,
         and `to_pandas` puts the ordered categories back for the bridge out.
         """
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
@@ -631,7 +631,7 @@ class TestTheLabelSpace:
         with sps.solve(spec, data) as result:
             x = by_coord(result, 'x', 't')
 
-        assert list(x) == labels, 'read-back follows index order'
+        assert list(x) == labels, 'read-back follows label order'
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 
@@ -729,8 +729,8 @@ class TestTheLabelSpace:
             },
             'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
         }
-        index = {'i': [0, 1, 2], 'j': ['a', 'b']}
-        with sps.build(spec, index | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
+        listed = {'i': [0, 1, 2], 'j': ['a', 'b']}
+        with sps.build(spec, listed | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
             engine = model._engine
             tables = engine._model.handoff
             for names, total, held, label in (
@@ -848,7 +848,7 @@ class TestTheLabelSpace:
             pytest.param({}, pl.String, ['a', 'b'], id='the-default-dtype-str'),
         ],
     )
-    def test_an_empty_index_keeps_the_dimension_s_declared_dtype(self, declared, dtype, grown):
+    def test_a_dimension_with_no_labels_keeps_its_declared_dtype(self, declared, dtype, grown):
         """polars infers `Null` from no labels, and a `Null` key joins nothing.
 
         A dimension whose labels a caller appends to between solves starts empty —
@@ -944,7 +944,7 @@ PINNED_SPEC = {
 #: `a` spells its sparsity out as zeros rather than as absent rows, which is
 #: what a caller handing over a dense table does. `i=1` is zero throughout, so
 #: that row asserts `0 >= 10` and is infeasible.
-SPELLED_ZEROS_INDEX = {'i': [0, 1], 'j': [0, 1, 2, 3]}
+SPELLED_ZEROS_LABELS = {'i': [0, 1], 'j': [0, 1, 2, 3]}
 
 SPELLED_ZEROS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
@@ -1127,7 +1127,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         builds none either.
         """
         a = _spelled_zeros([[1.0, 0.0, 0.0, 2.0], [0.0, 3.0, 0.0, 0.0]])
-        with sps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_INDEX | {'a': a}) as model:
+        with sps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_LABELS | {'a': a}) as model:
             tables = model._engine._model.handoff
             assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
             assert list(tables.matrix['coeff']) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
@@ -1224,9 +1224,9 @@ SHUFFLED_BOUND = pl.DataFrame(
 
 FLAT_COST = pl.DataFrame({'n': ['a', 'b'], 'value': [1.0, 1.0]})
 
-#: The indices those two carry, which every build of them has to be handed.
-DENSE_BOUND_INDEX = {'t': [0, 1, 2], 'n': ['a', 'b']}
-FLAT_INDEX = {'n': ['a', 'b', 'c']}
+#: The labels those two carry, which every build of them has to be handed.
+DENSE_BOUND_LABELS = {'t': [0, 1, 2], 'n': ['a', 'b']}
+FLAT_LABELS = {'n': ['a', 'b', 'c']}
 
 
 def _aligned_for(spec, data, monkeypatch):
@@ -1477,7 +1477,7 @@ class TestThePositionalHandoff:
         Checked against the oracle, because a misaligned bound is a different model
         rather than an error.
         """
-        data = FLAT_INDEX | {
+        data = FLAT_LABELS | {
             'avail': pd.Series({'a': 1.0, 'b': 2.0, 'c': 3.0}),
             'cost': pd.Series({'a': 1.0, 'b': 1.0, 'c': 1.0}),
         }
@@ -1495,7 +1495,7 @@ class TestThePositionalHandoff:
         sorting would be right only for a file that happened to be written in label
         order and silently wrong for every other one.
         """
-        shuffled = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
+        shuffled = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
         assert _aligned_for(DENSE_BOUND_SPEC, shuffled, monkeypatch) == {'avail': True}
 
         with sps.solve(DENSE_BOUND_SPEC, shuffled) as result:
@@ -1513,10 +1513,10 @@ class TestThePositionalHandoff:
         the gate declines and nothing else changes.
         """
         masked = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0'})
-        shuffled = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
+        shuffled = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
         assert _aligned_for(masked, shuffled, monkeypatch) == {'avail': False}
 
-        holey = DENSE_BOUND_INDEX | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
+        holey = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
         neutral = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'neutral'})
         assert _aligned_for(neutral, holey, monkeypatch) == {'avail': False}
 
@@ -1734,7 +1734,7 @@ MAPPED = {
 @pytest.mark.parametrize(
     ('name', 'short', 'match'),
     [
-        pytest.param('g', {'gg': ['w', 's']}, "without a 'g' column", id='an-index'),
+        pytest.param('g', {'gg': ['w', 's']}, "without a 'g' column", id='a-labels-table'),
         pytest.param(
             'gen_bus',
             {'g': ['w', 's'], 'bus': ['n', 'e']},

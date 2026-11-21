@@ -35,7 +35,7 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
     Args:
         program: The compiled spec.
         sources: What [`tidy_sources`][specsolve._sources.tidy_sources] holds once every
-            parameter, relation and index is read.
+            parameter, relation and dimension's labels is read.
 
     Returns:
         The attached *sources* the assumptions were read against, for a build

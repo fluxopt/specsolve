@@ -43,7 +43,7 @@ STORES = ['battery', 'pumped']
 #: in the model.
 DISPATCH = DISPATCH_SPEC
 
-#: Storage over a *local* index, with the seam split out by a `where` on a dimension
+#: Storage over a window's *own* labels, with the seam split out by a `where` on a dimension
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: narrowed `soc_open` supplies it from a carried parameter.
 WINDOW = {
@@ -603,8 +603,8 @@ def test_per_window_keeps_every_row_the_answer_drops(overlapping):
 # named expressions across a sweep
 # ---------------------------------------------------------------------------
 
-#: The window model with its cost named twice: `spend` keeps the local index
-#: (pointwise in `t`, so it can be stitched) and `window_spend` reduces over it
+#: The window model with its cost named twice: `spend` keeps the window's labels
+#: (pointwise in `t`, so it can be stitched) and `window_spend` reduces over them
 #: (one number per window, so it cannot).
 SPENDING = override(
     WINDOW,
@@ -1113,12 +1113,12 @@ def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, source
 BY_THE_HOUR = override(WINDOW, **{'dimensions.snapshot': {'dtype': 'datetime', 'ordered': True}})
 
 
-def _dated_sources(index: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
-    """The horizon over *index*, its load keyed by *load_labels*."""
-    sources = horizon_sources(len(index))
+def _dated_sources(labels: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
+    """The horizon over *labels*, its load keyed by *load_labels*."""
+    sources = horizon_sources(len(labels))
     return {
         **sources,
-        'snapshot': pl.DataFrame({'snapshot': index}),
+        'snapshot': pl.DataFrame({'snapshot': labels}),
         'load': sources['load'].with_columns(load_labels.alias('snapshot')),
     }
 
@@ -1167,8 +1167,8 @@ def test_a_window_cuts_a_start_keyed_by_date_as_a_single_solve_reads_it():
     assert swept.records['has_primal'].all(), 'every window solved from the rows of the start it covers'
 
 
-def test_a_window_refuses_an_index_that_carries_a_relation_as_a_single_solve_does():
-    """A window replaced the index with its own labels, so a column the door refuses on an index went unseen."""
+def test_a_window_refuses_labels_that_carry_a_relation_as_a_single_solve_does():
+    """A window replaced the labels table with its own labels, so a column the door refuses there went unseen."""
     spec = override(
         WINDOW,
         **{'dimensions.season': {'dtype': 'str'}, 'relations.season_of': {'key': 'snapshot', 'values': 'season'}},
@@ -1180,7 +1180,7 @@ def test_a_window_refuses_an_index_that_carries_a_relation_as_a_single_solve_doe
         'season_of': pl.DataFrame({'snapshot': range(8), 'season': seasons}),
         'snapshot': pl.DataFrame({'snapshot': range(8), 'season_of': seasons}),
     }
-    carried = "index for dimension 'snapshot' carries a 'season_of' column"
+    carried = "the labels table of dimension 'snapshot' carries a 'season_of' column"
     with pytest.raises(sps.errors.DataError, match=carried):
         sps.solve(spec, sources)
     with pytest.raises(sps.errors.DataError, match=carried):
@@ -2063,7 +2063,7 @@ def test_a_window_over_a_dimension_not_declared_ordered_is_refused():
     """A window is a run of consecutive labels, and only an ordered dimension says which labels are consecutive.
 
     Nothing in the dispatch model steps along `snapshot`, so the coupling
-    check passes it, and the windows would follow the row order of the index.
+    check passes it, and the windows would follow the row order of its labels.
     """
     unordered = override(DISPATCH, **{'dimensions.snapshot': {'dtype': 'int'}})
     sources = {
@@ -2091,12 +2091,12 @@ def test_a_label_sweep_over_a_dimension_the_spec_declares_is_refused():
 
 
 #: Every shape `build` takes for a source that does not carry the axis: a
-#: number for a scalar parameter, a bare sequence for an index, a
+#: number for a scalar parameter, a bare sequence for a dimension's labels, a
 #: `{label: value}` map. None of them is a table: the axis has nothing to filter
 #: in them.
 NOT_A_TABLE = [
     pytest.param(WINDOW, horizon_sources, WINDOW_AXIS, {'soc_initial': 0.0}, id='a-number'),
-    pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'snapshot': range(4)}, id='a-bare-index'),
+    pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'snapshot': range(4)}, id='bare-labels'),
     pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), {'cost': {'wind': 1.0, 'gas': 50.0}}, id='a-map'),
 ]  # fmt: skip
 
@@ -2880,15 +2880,15 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 
 
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
-    """A scalar-per-window quantity has no local index to restore, so its answer is refused — as `expression` is."""
+    """A scalar-per-window quantity has no labels of the sliced dimension to restore, so its answer is refused — as `expression` is."""
     sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
     answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     with pytest.raises(sps.errors.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
 
 
-#: An index of another dimension that carries the axis column, under each axis.
-CUT_INDEXES = [
+#: The labels table of another dimension, carrying the axis column, under each axis.
+CUT_LABELS = [
     pytest.param(
         MYOPIC,
         lambda: {
@@ -2896,17 +2896,17 @@ CUT_INDEXES = [
             'generator': pl.DataFrame({'generator': ['wind', 'gas', 'wind', 'gas'], 'period': [1, 1, 2, 2]}),
         },
         sps.EachLabel('period'),
-        "index for dimension 'generator' carries a 'period' column, and EachLabel('period')",
+        "the labels table of dimension 'generator' carries a 'period' column, and EachLabel('period')",
         id='each-label',
     ),
 ]
 
 
-@pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_INDEXES)
-def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a_slice(spec, sources, axis, match):
-    """An index lists the labels every slice has; which of them a slice has is a parameter or a relation.
+@pytest.mark.parametrize(('spec', 'sources', 'axis', 'match'), CUT_LABELS)
+def test_the_labels_of_another_dimension_carrying_the_axis_are_refused_before_a_slice(spec, sources, axis, match):
+    """A labels table lists the labels every slice has; which of them a slice has is a parameter or a relation.
 
-    Cut by the axis, the index would make each slice a model over other labels.
+    Cut by the axis, the labels table would make each slice a model over other labels.
     """
     with (
         mock.patch.object(type(axis), '_slice', side_effect=AssertionError('the axis cut the sources')),
@@ -2917,8 +2917,8 @@ def test_an_index_of_another_dimension_that_carries_the_axis_is_refused_before_a
 
 
 def test_a_window_cuts_what_the_spec_declares_over_the_dimension_and_nothing_else():
-    """A window cuts what the spec declares, so an index of another dimension that happens to carry a column of the
-    windowed name is read as the index it is."""
+    """A window cuts what the spec declares, so the labels table of another dimension that happens to carry a column
+    of the windowed name is read as the labels table it is."""
     sources = {**horizon_sources(8), 'generator': pl.DataFrame({'generator': GENERATORS, 'snapshot': [0, 1]})}
     runs = sps.solve_over(WINDOW, sources, WINDOW_AXIS)
     assert runs.primal('p')['generator'].unique().sort().to_list() == sorted(GENERATORS), 'every window has both'
@@ -2934,8 +2934,8 @@ def test_one_window_over_the_whole_horizon_is_the_single_solve():
     assert windowed.primal('p').columns == whole.primal('p').columns, 'with its dimensions in the same order'
 
 
-def test_a_label_the_index_lacks_is_refused_under_windows_as_for_a_single_solve():
-    """A row whose label the index lacks falls in no window, so cutting alone would drop it without a word.
+def test_a_label_the_dimension_does_not_have_is_refused_under_windows_as_for_a_single_solve():
+    """A row whose label the dimension does not have falls in no window, so cutting alone would drop it without a word.
 
     Every window keeps such rows, and the door refuses them as it does for a
     single solve.
@@ -2946,9 +2946,9 @@ def test_a_label_the_index_lacks_is_refused_under_windows_as_for_a_single_solve(
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)
 
 
-def test_a_window_needs_the_index_a_single_solve_needs():
-    """The labels a window cuts are the dimension's own, in index order, so the index has to be there."""
+def test_a_window_needs_the_labels_a_single_solve_needs():
+    """The labels a window cuts are the dimension's own, in label order, so they have to be there."""
     sources = horizon_sources(8)
     del sources['snapshot']
-    with pytest.raises(sps.errors.DataError, match="dimension 'snapshot' has no index"):
+    with pytest.raises(sps.errors.DataError, match="dimension 'snapshot' has no labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)

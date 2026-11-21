@@ -150,8 +150,8 @@ def solve_over(
             refuses; a *start* word other than ``'previous'`` — each answerable from the entries alone; keys of more than one
             type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
-        DataError: No source carries an EachLabel axis, an index
-            carries it, an EachWindow axis's dimension has no index, or the
+        DataError: No source carries an EachLabel axis, a labels table
+            carries it, an EachWindow axis's dimension has no labels, or the
             axis produced no slices.
 
     Warns:

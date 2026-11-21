@@ -152,12 +152,12 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'cost': pd.Series([1.0, 2.0, 1.5], index=flows),
         'share': pd.Series([1.0, 2.0, 3.0], index=flows),
     }
-    index = {
+    structure = {
         'flow': pd.DataFrame({'flow': flows}),
         'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pd.Index(components, name='component'),
     }
-    with differential(spec, data | index) as run:
+    with differential(spec, data | structure) as run:
         assert run.result.objective > 0
 
 

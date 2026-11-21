@@ -121,7 +121,7 @@ def _drop(spec: dict[str, Any], sources: dict[str, Any], section: str, name: str
 
 
 def _drop_label(sources: dict[str, Any], dim: str, label: Any) -> None:
-    """*label* gone from *dim*'s index and from every table and dict keyed by it."""
+    """*label* gone from *dim*'s labels and from every table and dict keyed by it."""
     for name, source in sources.items():
         if isinstance(source, pl.DataFrame) and dim in source.columns:
             sources[name] = source.filter(pl.col(dim) != label)
