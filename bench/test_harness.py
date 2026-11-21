@@ -1145,7 +1145,7 @@ def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> N
 
 
 def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request: pytest.FixtureRequest) -> None:
-    """Two runs of one server type differed by host alone, and nothing in the file said so (#PRNUM)."""
+    """Two runs of one server type differed by host alone, and nothing in the file said so (#2168)."""
     machine_info: dict[str, object] = {}
     harness.pytest_benchmark_update_machine_info(request.config, machine_info)
     host = machine_info['host']
@@ -1169,7 +1169,7 @@ def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request:
 def test_the_comment_warns_when_the_two_runs_were_taken_on_different_machines(
     ours: dict[str, object], theirs: dict[str, object], warned: bool
 ) -> None:
-    """#2139's comment compared a 2.4 GHz host with the 2.2 GHz host of the committed run, and blamed the code (#PRNUM)."""
+    """#2139's comment compared a 2.4 GHz host with the 2.2 GHz host of the committed run, and blamed the code (#2168)."""
     pr = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **ours}], [], [])
     base = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **theirs}], [], [])
     lines = comment.hosts(pr, base)

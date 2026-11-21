@@ -118,7 +118,7 @@ time, or the page mixes two machines.
 
 **One server type is not one machine.** Each run draws a fresh `ccx33`, and two
 of them measured the same code with specsolve 1.24x to 1.75x apart while linopy
-stayed within 9% (#PRNUM). The other libraries do not stand in for specsolve
+stayed within 9% (#2168). The other libraries do not stand in for specsolve
 here. Every result file records the host, its processor's `/proc/cpuinfo`
 fields, its memory and polars' thread count, and the pull request comment warns
 when the two runs it compares report different clocks or microcode.

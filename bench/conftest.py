@@ -288,7 +288,7 @@ def _host() -> dict[str, Any]:
     """The first processor's `CPUINFO` fields, the memory and polars' thread count, from what this machine says.
 
     A cloud server type is not one machine: two of them measured the same
-    code with specsolve 1.24x to 1.75x apart and linopy within 9% (#PRNUM),
+    code with specsolve 1.24x to 1.75x apart and linopy within 9% (#2168),
     and the processor's clock and microcode are what told them apart. A field
     the platform does not have is left out.
     """

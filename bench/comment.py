@@ -176,7 +176,7 @@ def hosts(pr: Side, base: Side) -> list[str]:
 
     The other libraries do not stand in for specsolve here: on two servers of
     one type they moved within 9% while specsolve moved 1.24x to 1.75x
-    (#PRNUM), so a different machine makes every specsolve factor below suspect.
+    (#2168), so a different machine makes every specsolve factor below suspect.
     """
     ours, theirs = {report.machine(r) for r in pr.runs}, {report.machine(r) for r in base.runs}
     if not ours or not theirs or ours == theirs:
