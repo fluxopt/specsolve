@@ -15,7 +15,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, in_memory
-from specsolve._engine.specialize import settle, zero_parameters
+from specsolve._engine.specialize import settle
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -42,8 +42,6 @@ class AttachedSources:
     ``first`` is its ordinal. ``settled`` is each test of a ``where`` that the
     data decides at every coordinate: ``True`` where it holds everywhere,
     ``False`` where nowhere ([`settle`][]).
-    ``zero`` names each parameter the objective multiplies a variable by that
-    is zero at every row it has ([`zero_parameters`][]).
     ``seconds`` is how long attaching took, for the
     build these are handed to, which did not run the attach itself.
     """
@@ -56,7 +54,6 @@ class AttachedSources:
     consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
-    zero: frozenset[str] = frozenset()
     seconds: float = 0.0
 
     def is_enum_encoded(self, dim: str) -> bool:
@@ -124,12 +121,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
-    return replace(
-        attached,
-        settled=settle(program, attached),
-        zero=zero_parameters(program, attached),
-        seconds=perf_counter() - started,
-    )
+    return replace(attached, settled=settle(program, attached), seconds=perf_counter() - started)
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
