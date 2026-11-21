@@ -1,6 +1,9 @@
 # Glossary
 
-The one definition of each name this project uses.
+The one definition of each name this project uses. A word of the language,
+such as entry, condition or operator, means what the
+[mathspec glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)
+says.
 
 > A **spec** is what you write: the math, with no data. A **model** is a spec
 > with your data attached, a `Model` in Python. A **result** is one answer read

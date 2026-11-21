@@ -184,6 +184,15 @@ not
   rhythm.
 - **No overloaded words** — do not write "the case in point" beside a `cases:`
   keyword.
+- **mathspec's word wins.** A meaning the
+  [mathspec glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)
+  names takes its word, in prose, messages and docstrings alike: an _entry_,
+  not a declaration; a _condition_, not a mask or a predicate; _absent_, not
+  masked out; an _operator_, not a primitive; _compile_, not lower; the
+  _program_, not the plan or the AST; a _term of a sum_, not a summand. A
+  polars `DataFrame` is a _table_, never a frame: a frame is mathspec's word
+  for the dimensions of an entry. specsolve's own words are in
+  `docs/reference/glossary.md`.
 - **Gloss where the term is used**, and link
   `docs/reference/glossary.md` rather than redefine it.
   The glossary holds the one definition; a second copy drifts.
