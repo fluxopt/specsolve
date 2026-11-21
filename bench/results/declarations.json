@@ -1,0 +1,566 @@
+{
+ "machine_info": {
+  "node": "ip-10-0-137-116",
+  "processor": "x86_64",
+  "machine": "x86_64",
+  "python_compiler": "GCC 15.3.0",
+  "python_implementation": "CPython",
+  "python_implementation_version": "3.12.16",
+  "python_version": "3.12.16",
+  "python_build": [
+   "main",
+   "Oct 26 2026 11:37:43"
+  ],
+  "release": "7.0.0-1014-aws",
+  "system": "Linux",
+  "cpu": {
+   "python_version": "3.12.16.final.0 (64 bit)",
+   "cpuinfo_version": [
+    10,
+    1,
+    1
+   ],
+   "cpuinfo_version_string": "10.1.1",
+   "arch": "X86_64",
+   "bits": 64,
+   "count": 4,
+   "arch_string_raw": "x86_64",
+   "vendor_id_raw": "GenuineIntel",
+   "brand_raw": "Intel(R) Xeon(R) 6975P-C",
+   "hz_advertised_friendly": "3.0076 GHz",
+   "hz_actual_friendly": "3.0076 GHz",
+   "hz_advertised": [
+    3007563000,
+    0
+   ],
+   "hz_actual": [
+    3007563000,
+    0
+   ],
+   "stepping": 1,
+   "model": 173,
+   "family": 6,
+   "flags": [
+    "3dnowprefetch",
+    "abm",
+    "adx",
+    "aes",
+    "amx_bf16",
+    "amx_int8",
+    "amx_tile",
+    "aperfmperf",
+    "apic",
+    "arat",
+    "arch_capabilities",
+    "arch_perfmon",
+    "avx",
+    "avx2",
+    "avx512_bf16",
+    "avx512_bitalg",
+    "avx512_fp16",
+    "avx512_vbmi2",
+    "avx512_vnni",
+    "avx512_vpopcntdq",
+    "avx512bitalg",
+    "avx512bw",
+    "avx512cd",
+    "avx512dq",
+    "avx512f",
+    "avx512ifma",
+    "avx512vbmi",
+    "avx512vbmi2",
+    "avx512vl",
+    "avx512vnni",
+    "avx512vpopcntdq",
+    "avx_vnni",
+    "bmi1",
+    "bmi2",
+    "bus_lock_detect",
+    "cldemote",
+    "clflush",
+    "clflushopt",
+    "clwb",
+    "cmov",
+    "constant_tsc",
+    "cpuid",
+    "cpuid_fault",
+    "cx16",
+    "cx8",
+    "de",
+    "ept",
+    "ept_ad",
+    "erms",
+    "f16c",
+    "flexpriority",
+    "flush_l1d",
+    "fma",
+    "fpu",
+    "fsgsbase",
+    "fxsr",
+    "gfni",
+    "ht",
+    "hypervisor",
+    "ibpb",
+    "ibrs",
+    "ibrs_enhanced",
+    "ida",
+    "invpcid",
+    "lahf_lm",
+    "lm",
+    "mca",
+    "mce",
+    "md_clear",
+    "mmx",
+    "monitor",
+    "movbe",
+    "movdir64b",
+    "movdiri",
+    "msr",
+    "mtrr",
+    "nonstop_tsc",
+    "nopl",
+    "nx",
+    "ospke",
+    "osxsave",
+    "pae",
+    "pat",
+    "pcid",
+    "pclmulqdq",
+    "pdcm",
+    "pdpe1gb",
+    "pge",
+    "pku",
+    "pni",
+    "popcnt",
+    "pse",
+    "pse36",
+    "rdpid",
+    "rdrand",
+    "rdrnd",
+    "rdseed",
+    "rdtscp",
+    "rep_good",
+    "sep",
+    "serialize",
+    "sha",
+    "sha_ni",
+    "smap",
+    "smep",
+    "ss",
+    "ssbd",
+    "sse",
+    "sse2",
+    "sse4_1",
+    "sse4_2",
+    "ssse3",
+    "stibp",
+    "syscall",
+    "tme",
+    "tpr_shadow",
+    "tsc",
+    "tsc_adjust",
+    "tsc_deadline_timer",
+    "tsc_known_freq",
+    "tscdeadline",
+    "umip",
+    "vaes",
+    "vme",
+    "vmx",
+    "vnmi",
+    "vpclmulqdq",
+    "vpid",
+    "waitpkg",
+    "wbnoinvd",
+    "x2apic",
+    "xgetbv1",
+    "xsave",
+    "xsavec",
+    "xsaveopt",
+    "xsaves",
+    "xtopology"
+   ],
+   "l3_cache_size": 503316480,
+   "l2_cache_size": 4194304,
+   "l1_data_cache_size": 98304,
+   "l1_instruction_cache_size": 131072,
+   "l2_cache_line_size": 2048,
+   "l2_cache_associativity": 7
+  },
+  "versions": {
+   "specsolve": "0.11.2.dev9+g0b125f149.d20261117",
+   "highspy": "1.15.1",
+   "gurobipy": "13.0.3",
+   "scipy": "1.18.1",
+   "polars": "2.1.0",
+   "pandas": "3.1.1",
+   "numpy": "2.5.5",
+   "pyarrow": "26.0.1",
+   "pytest-benchmem": "0.5.5"
+  },
+  "load_avg": [
+   1.62744140625,
+   1.6943359375,
+   1.4697265625
+  ]
+ },
+ "commit_info": {
+  "id": "0b125f149a2ec8b18d44abc279e0aa9d169f6a9c",
+  "time": "2026-11-17T12:11:56Z",
+  "author_time": "2026-11-17T12:11:56Z",
+  "dirty": true,
+  "project": "specsolve",
+  "branch": "probe/bench-linopy-master"
+ },
+ "benchmarks": [
+  {
+   "group": null,
+   "name": "test_emit[declarations-n008-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[declarations-n008-specsolve-highs]",
+   "params": {
+    "case_name": "declarations",
+    "size": "n008",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "declarations-n008-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      526214871,
+      509962279,
+      536176679,
+      523593431
+     ],
+     "allocations": [
+      93937,
+      93944,
+      93947,
+      93936
+     ],
+     "total_bytes": [
+      728568117,
+      712315501,
+      738529941,
+      725946685
+     ],
+     "rss_bytes": [
+      595693568,
+      602353664,
+      602529792,
+      600326144
+     ]
+    },
+    "columns": 1024000,
+    "rows": 1026000,
+    "nonzeros": 2048000,
+    "live_fraction": 1.0,
+    "variables": 1024000,
+    "phase_seconds": {
+     "attach": 0.0006006339999657939,
+     "build": 0.1645475250002164
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.2768397620000087,
+    "max": 0.4943826859998808,
+    "mean": 0.3102072365555715,
+    "stddev": 0.06930482437320365,
+    "rounds": 9,
+    "median": 0.2902663899999425,
+    "iqr": 0.009437754250086527,
+    "q1": 0.2831106832500154,
+    "q3": 0.29254843750010195,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.2768397620000087,
+    "hd15iqr": 0.29605612300019857,
+    "ops": 3.2236514244594576,
+    "total": 2.7918651290001435,
+    "data": [
+     0.4943826859998808,
+     0.2768397620000087,
+     0.2906187510000109,
+     0.28344790599999214,
+     0.2820990150000853,
+     0.29137920900006975,
+     0.2867752869999549,
+     0.29605612300019857,
+     0.2902663899999425
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[declarations-n008-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[declarations-n008-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "declarations",
+    "size": "n008",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "declarations-n008-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1381120216,
+      1381120728,
+      1381120216
+     ],
+     "allocations": [
+      140053,
+      140055,
+      140054
+     ],
+     "total_bytes": [
+      1949650242,
+      1949652002,
+      1949651018
+     ],
+     "rss_bytes": [
+      512045056,
+      511713280,
+      515330048
+     ]
+    },
+    "columns": 1024000,
+    "rows": 1026000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1024000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.26502776400002404,
+    "max": 0.4388877149999644,
+    "mean": 0.28648783033332215,
+    "stddev": 0.057178729774228804,
+    "rounds": 9,
+    "median": 0.2673131930000636,
+    "iqr": 0.0024307617500767265,
+    "q1": 0.2665335347498967,
+    "q3": 0.26896429649997344,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.26502776400002404,
+    "hd15iqr": 0.2714134829998329,
+    "ops": 3.490549664313917,
+    "total": 2.5783904729998994,
+    "data": [
+     0.4388877149999644,
+     0.26502776400002404,
+     0.26792196200017315,
+     0.26554277199988974,
+     0.26686378899989904,
+     0.2681479010000203,
+     0.2673131930000636,
+     0.26727189400003226,
+     0.2714134829998329
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[declarations-n008e-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[declarations-n008e-specsolve-highs]",
+   "params": {
+    "case_name": "declarations",
+    "size": "n008e",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "declarations-n008e-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      562282136,
+      526629992,
+      535019048,
+      547601736
+     ],
+     "allocations": [
+      109322,
+      109301,
+      109318,
+      109310
+     ],
+     "total_bytes": [
+      768561390,
+      732909198,
+      741298294,
+      753880998
+     ],
+     "rss_bytes": [
+      603930624,
+      602161152,
+      604446720,
+      608391168
+     ]
+    },
+    "columns": 1024000,
+    "rows": 1026000,
+    "nonzeros": 2048000,
+    "live_fraction": 1.0,
+    "variables": 1024000,
+    "phase_seconds": {
+     "attach": 0.0007866819996706909,
+     "build": 0.34945437599981233
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.4954665170002954,
+    "max": 0.5418691289996787,
+    "mean": 0.5092956261110986,
+    "stddev": 0.014270567535041665,
+    "rounds": 9,
+    "median": 0.503092610999829,
+    "iqr": 0.014388844250106558,
+    "q1": 0.500500495749975,
+    "q3": 0.5148893400000816,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.4954665170002954,
+    "hd15iqr": 0.5185549020002327,
+    "ops": 1.9634961478774968,
+    "total": 4.583660634999887,
+    "data": [
+     0.5418691289996787,
+     0.4954665170002954,
+     0.5014753189998373,
+     0.5136674860000312,
+     0.5009471289999965,
+     0.4991605959999106,
+     0.5185549020002327,
+     0.509426946000076,
+     0.503092610999829
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[declarations-n008e-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[declarations-n008e-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "declarations",
+    "size": "n008e",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "declarations-n008e-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1444070699,
+      1444070699,
+      1444070243,
+      1444070699,
+      1444071211
+     ],
+     "allocations": [
+      170053,
+      170053,
+      170048,
+      170053,
+      170055
+     ],
+     "total_bytes": [
+      2377173381,
+      2377173389,
+      2377172781,
+      2377173397,
+      2377174373
+     ],
+     "rss_bytes": [
+      571686912,
+      571576320,
+      571961344,
+      569233408,
+      571240448
+     ]
+    },
+    "columns": 1024000,
+    "rows": 1026000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1024000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.49828561899994384,
+    "max": 0.5095999700001812,
+    "mean": 0.5037140435554951,
+    "stddev": 0.003667985188040188,
+    "rounds": 9,
+    "median": 0.5045719299996563,
+    "iqr": 0.004735988499646737,
+    "q1": 0.5013669442500941,
+    "q3": 0.5061029327497408,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.49828561899994384,
+    "hd15iqr": 0.5095999700001812,
+    "ops": 1.9852533650668969,
+    "total": 4.5334263919994555,
+    "data": [
+     0.5045719299996563,
+     0.50593981899965,
+     0.5095999700001812,
+     0.5022829720001027,
+     0.49861886100006814,
+     0.504642739999781,
+     0.5065922740000133,
+     0.502892207000059,
+     0.49828561899994384
+    ],
+    "iterations": 1
+   }
+  }
+ ],
+ "datetime": "2026-11-17T12:45:57.748160+00:00",
+ "version": "5.3.1"
+}

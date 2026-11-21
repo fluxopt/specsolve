@@ -68,7 +68,7 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     if where is None:
         return out
     on = tuple(d for d in dims if d in where.dims)
-    if on and len(on) < len(dims) and where.dims <= set(dims):
+    if on and len(on) < len(dims) and set(where.dims) <= set(dims):
         keyed = scope.product(on)
         carrier, condition = compile_predicate(scope, keyed, where, on)
         if carrier is keyed:

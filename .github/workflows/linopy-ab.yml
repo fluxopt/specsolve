@@ -1,0 +1,65 @@
+name: linopy 0.10.0 against master, on one hosted runner
+
+# A probe, not for merging. Both passes run in one job, so on one machine:
+# linopy 0.10.0 first, then linopy master hand-written and through Model.from_spec;
+# specsolve runs in both as the control.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      BENCH_MEMORY_BUDGET: '12'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          run-install: false
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+
+      - name: pass A, linopy 0.10.0
+        run: |
+          git show origin/main:bench/arms/linopy.py > bench/arms/linopy.py
+          sed -i 's|    "linopy @ git+https://github.com/PyPSA/linopy@[0-9a-f]*",|    "linopy==0.10.0",|' pyproject.toml
+          sed -i 's|"specsolve linopy linopy-from-spec"|"specsolve linopy"|' pyproject.toml
+          grep -n '"linopy' pyproject.toml
+          pixi install -e bench
+          pixi run -e bench python -c "import linopy; print('linopy', linopy.__version__)"
+          rm -f bench/results/latest*.json bench/results/declarations.json
+          sleep 60
+          pixi run -e bench ladder-ci highs "dispatch nodal network sector curves" || echo "pass A: some files did not finish"
+          pixi run -e bench pytest bench/test_ladder.py --cases declarations --sizes n008 n008e --arms specsolve linopy --sinks highs -k test_emit -q --benchmark-memory --benchmark-json=bench/results/declarations.json || echo "pass A: the declaration pair did not finish"
+          mkdir -p ab/a && cp bench/results/latest*.json bench/results/declarations.json ab/a/
+
+      - name: pass B, linopy master
+        if: ${{ !cancelled() }}
+        run: |
+          git checkout HEAD -- pyproject.toml bench/arms/linopy.py
+          grep -n '"linopy' pyproject.toml
+          pixi install -e bench
+          pixi run -e bench python -c "import linopy; print('linopy', linopy.__version__)"
+          rm -f bench/results/latest*.json bench/results/declarations.json
+          sleep 60
+          pixi run -e bench ladder-ci highs "dispatch nodal network sector curves" || echo "pass B: some files did not finish"
+          pixi run -e bench pytest bench/test_ladder.py --cases declarations --sizes n008 n008e --arms specsolve linopy linopy-from-spec --sinks highs -k test_emit -q --benchmark-memory --benchmark-json=bench/results/declarations.json || echo "pass B: the declaration pair did not finish"
+          mkdir -p ab/b && cp bench/results/latest*.json bench/results/declarations.json ab/b/
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linopy-ab-${{ github.run_id }}
+          path: ab
+          retention-days: 30

@@ -1,0 +1,4681 @@
+{
+ "machine_info": {
+  "node": "ip-10-0-137-116",
+  "processor": "x86_64",
+  "machine": "x86_64",
+  "python_compiler": "GCC 15.3.0",
+  "python_implementation": "CPython",
+  "python_implementation_version": "3.12.16",
+  "python_version": "3.12.16",
+  "python_build": [
+   "main",
+   "Oct 26 2026 11:37:43"
+  ],
+  "release": "7.0.0-1014-aws",
+  "system": "Linux",
+  "cpu": {
+   "python_version": "3.12.16.final.0 (64 bit)",
+   "cpuinfo_version": [
+    10,
+    1,
+    1
+   ],
+   "cpuinfo_version_string": "10.1.1",
+   "arch": "X86_64",
+   "bits": 64,
+   "count": 4,
+   "arch_string_raw": "x86_64",
+   "vendor_id_raw": "GenuineIntel",
+   "brand_raw": "Intel(R) Xeon(R) 6975P-C",
+   "hz_advertised_friendly": "3.8657 GHz",
+   "hz_actual_friendly": "3.8657 GHz",
+   "hz_advertised": [
+    3865717000,
+    0
+   ],
+   "hz_actual": [
+    3865717000,
+    0
+   ],
+   "stepping": 1,
+   "model": 173,
+   "family": 6,
+   "flags": [
+    "3dnowprefetch",
+    "abm",
+    "adx",
+    "aes",
+    "amx_bf16",
+    "amx_int8",
+    "amx_tile",
+    "aperfmperf",
+    "apic",
+    "arat",
+    "arch_capabilities",
+    "arch_perfmon",
+    "avx",
+    "avx2",
+    "avx512_bf16",
+    "avx512_bitalg",
+    "avx512_fp16",
+    "avx512_vbmi2",
+    "avx512_vnni",
+    "avx512_vpopcntdq",
+    "avx512bitalg",
+    "avx512bw",
+    "avx512cd",
+    "avx512dq",
+    "avx512f",
+    "avx512ifma",
+    "avx512vbmi",
+    "avx512vbmi2",
+    "avx512vl",
+    "avx512vnni",
+    "avx512vpopcntdq",
+    "avx_vnni",
+    "bmi1",
+    "bmi2",
+    "bus_lock_detect",
+    "cldemote",
+    "clflush",
+    "clflushopt",
+    "clwb",
+    "cmov",
+    "constant_tsc",
+    "cpuid",
+    "cpuid_fault",
+    "cx16",
+    "cx8",
+    "de",
+    "ept",
+    "ept_ad",
+    "erms",
+    "f16c",
+    "flexpriority",
+    "flush_l1d",
+    "fma",
+    "fpu",
+    "fsgsbase",
+    "fxsr",
+    "gfni",
+    "ht",
+    "hypervisor",
+    "ibpb",
+    "ibrs",
+    "ibrs_enhanced",
+    "ida",
+    "invpcid",
+    "lahf_lm",
+    "lm",
+    "mca",
+    "mce",
+    "md_clear",
+    "mmx",
+    "monitor",
+    "movbe",
+    "movdir64b",
+    "movdiri",
+    "msr",
+    "mtrr",
+    "nonstop_tsc",
+    "nopl",
+    "nx",
+    "ospke",
+    "osxsave",
+    "pae",
+    "pat",
+    "pcid",
+    "pclmulqdq",
+    "pdcm",
+    "pdpe1gb",
+    "pge",
+    "pku",
+    "pni",
+    "popcnt",
+    "pse",
+    "pse36",
+    "rdpid",
+    "rdrand",
+    "rdrnd",
+    "rdseed",
+    "rdtscp",
+    "rep_good",
+    "sep",
+    "serialize",
+    "sha",
+    "sha_ni",
+    "smap",
+    "smep",
+    "ss",
+    "ssbd",
+    "sse",
+    "sse2",
+    "sse4_1",
+    "sse4_2",
+    "ssse3",
+    "stibp",
+    "syscall",
+    "tme",
+    "tpr_shadow",
+    "tsc",
+    "tsc_adjust",
+    "tsc_deadline_timer",
+    "tsc_known_freq",
+    "tscdeadline",
+    "umip",
+    "vaes",
+    "vme",
+    "vmx",
+    "vnmi",
+    "vpclmulqdq",
+    "vpid",
+    "waitpkg",
+    "wbnoinvd",
+    "x2apic",
+    "xgetbv1",
+    "xsave",
+    "xsavec",
+    "xsaveopt",
+    "xsaves",
+    "xtopology"
+   ],
+   "l3_cache_size": 503316480,
+   "l2_cache_size": 4194304,
+   "l1_data_cache_size": 98304,
+   "l1_instruction_cache_size": 131072,
+   "l2_cache_line_size": 2048,
+   "l2_cache_associativity": 7
+  },
+  "versions": {
+   "specsolve": "0.11.2.dev9+g0b125f149.d20261117",
+   "highspy": "1.15.1",
+   "gurobipy": "13.0.3",
+   "scipy": "1.18.1",
+   "polars": "2.1.0",
+   "pandas": "3.1.1",
+   "numpy": "2.5.5",
+   "pyarrow": "26.0.1",
+   "pytest-benchmem": "0.5.5"
+  },
+  "load_avg": [
+   2.3154296875,
+   1.80517578125,
+   1.4931640625
+  ]
+ },
+ "commit_info": {
+  "id": "0b125f149a2ec8b18d44abc279e0aa9d169f6a9c",
+  "time": "2026-11-17T12:11:56Z",
+  "author_time": "2026-11-17T12:11:56Z",
+  "dirty": true,
+  "project": "specsolve",
+  "branch": "probe/bench-linopy-master"
+ },
+ "benchmarks": [
+  {
+   "group": null,
+   "name": "test_emit[curves-3xs-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-3xs-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-3xs-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      97053435
+     ],
+     "allocations": [
+      78223
+     ],
+     "total_bytes": [
+      233133305
+     ],
+     "rss_bytes": [
+      228319232
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": 1100,
+    "live_fraction": 1.0,
+    "variables": 200,
+    "phase_seconds": {
+     "attach": 0.0007963890000155516,
+     "build": 0.016883874000086507
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04351249599994844,
+    "max": 0.07005271799994262,
+    "mean": 0.047911539777765536,
+    "stddev": 0.008375335608755115,
+    "rounds": 9,
+    "median": 0.04534736999994493,
+    "iqr": 0.00191617174999692,
+    "q1": 0.044426953250024326,
+    "q3": 0.046343125000021246,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.04351249599994844,
+    "hd15iqr": 0.046642926999993506,
+    "ops": 20.871798415129902,
+    "total": 0.4312038579998898,
+    "data": [
+     0.07005271799994262,
+     0.04534736999994493,
+     0.04624319100003049,
+     0.04365886999994473,
+     0.04468298100005086,
+     0.046642926999993506,
+     0.04615709700010484,
+     0.04490620799992939,
+     0.04351249599994844
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-3xs-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-3xs-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-3xs-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1098450353
+     ],
+     "allocations": [
+      76609
+     ],
+     "total_bytes": [
+      1197973973
+     ],
+     "rss_bytes": [
+      225665024
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04228632000013022,
+    "max": 0.20922517799999696,
+    "mean": 0.061254680333351845,
+    "stddev": 0.055491007752031085,
+    "rounds": 9,
+    "median": 0.042743102000031286,
+    "iqr": 0.0007413200002588383,
+    "q1": 0.0424590604998798,
+    "q3": 0.043200380500138635,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.04228632000013022,
+    "hd15iqr": 0.043898808999983885,
+    "ops": 16.325283138495486,
+    "total": 0.5512921230001666,
+    "data": [
+     0.20922517799999696,
+     0.04279292599994733,
+     0.04242307399999845,
+     0.042471055999840246,
+     0.042743102000031286,
+     0.04228632000013022,
+     0.04248408700004802,
+     0.04296757100019022,
+     0.043898808999983885
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-3xs-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-3xs-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-3xs-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1111960809
+     ],
+     "allocations": [
+      130173
+     ],
+     "total_bytes": [
+      1316703804
+     ],
+     "rss_bytes": [
+      248889344
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.056788807999964774,
+    "max": 0.06465197700003955,
+    "mean": 0.05861359466669253,
+    "stddev": 0.0024177759037549065,
+    "rounds": 9,
+    "median": 0.05787121000003026,
+    "iqr": 0.001375981999956366,
+    "q1": 0.057293992750032885,
+    "q3": 0.05866997474998925,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.056788807999964774,
+    "hd15iqr": 0.05959151100000781,
+    "ops": 17.060888445530793,
+    "total": 0.5275223520002328,
+    "data": [
+     0.06465197700003955,
+     0.05787121000003026,
+     0.05686306899997362,
+     0.056788807999964774,
+     0.058248639000112234,
+     0.05959151100000781,
+     0.05770670800006883,
+     0.05743763400005264,
+     0.058362795999983064
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      103088827
+     ],
+     "allocations": [
+      78222
+     ],
+     "total_bytes": [
+      239295532
+     ],
+     "rss_bytes": [
+      230203392
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": 5500,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "attach": 0.0010948610001833003,
+     "build": 0.018502100999967297
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04506683699992209,
+    "max": 0.049746446999961336,
+    "mean": 0.04706959311106908,
+    "stddev": 0.0012315932007405923,
+    "rounds": 9,
+    "median": 0.04698001499991733,
+    "iqr": 0.000892625499773203,
+    "q1": 0.04650053725009684,
+    "q3": 0.047393162749870044,
+    "iqr_outliers": 2,
+    "stddev_outliers": 2,
+    "outliers": "2;2",
+    "ld15iqr": 0.04644330400014951,
+    "hd15iqr": 0.04741262299990012,
+    "ops": 21.245137973475195,
+    "total": 0.4236263379996217,
+    "data": [
+     0.049746446999961336,
+     0.04698001499991733,
+     0.04716714799997135,
+     0.046519615000079284,
+     0.04644330400014951,
+     0.04738667599986002,
+     0.04506683699992209,
+     0.04741262299990012,
+     0.046903672999860646
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1098888879
+     ],
+     "allocations": [
+      76737
+     ],
+     "total_bytes": [
+      1199880171
+     ],
+     "rss_bytes": [
+      225947648
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04247102499994071,
+    "max": 0.044370047000029444,
+    "mean": 0.04324859244441844,
+    "stddev": 0.0006791145890338654,
+    "rounds": 9,
+    "median": 0.043091261999961716,
+    "iqr": 0.001265617999990809,
+    "q1": 0.04261725849994491,
+    "q3": 0.04388287649993572,
+    "iqr_outliers": 0,
+    "stddev_outliers": 4,
+    "outliers": "4;0",
+    "ld15iqr": 0.04247102499994071,
+    "hd15iqr": 0.044370047000029444,
+    "ops": 23.122139784899694,
+    "total": 0.38923733199976596,
+    "data": [
+     0.043931679000024815,
+     0.04298954299997604,
+     0.044370047000029444,
+     0.042530598999974245,
+     0.043091261999961716,
+     0.04386660899990602,
+     0.04247102499994071,
+     0.043340423000017836,
+     0.04264614499993513
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1112441965
+     ],
+     "allocations": [
+      130313
+     ],
+     "total_bytes": [
+      1318735006
+     ],
+     "rss_bytes": [
+      247197696
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.05755899500013584,
+    "max": 0.05902554400017834,
+    "mean": 0.058105361666725405,
+    "stddev": 0.0005595568076687895,
+    "rounds": 9,
+    "median": 0.057928977000074156,
+    "iqr": 0.00100276524972287,
+    "q1": 0.057646841250175385,
+    "q3": 0.058649606499898255,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.05755899500013584,
+    "hd15iqr": 0.05902554400017834,
+    "ops": 17.21011575034494,
+    "total": 0.5229482550005287,
+    "data": [
+     0.05883411099989644,
+     0.05760182100016209,
+     0.05755899500013584,
+     0.05781347199990705,
+     0.057928977000074156,
+     0.05902554400017834,
+     0.05858810499989886,
+     0.057661848000179816,
+     0.05793538200009607
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs5-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs5-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs5",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-2xs5-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      114940491
+     ],
+     "allocations": [
+      78238
+     ],
+     "total_bytes": [
+      251700045
+     ],
+     "rss_bytes": [
+      242495488
+     ]
+    },
+    "columns": 5000,
+    "rows": 15050,
+    "nonzeros": 27500,
+    "live_fraction": 1.0,
+    "variables": 5000,
+    "phase_seconds": {
+     "attach": 0.0007412970001041685,
+     "build": 0.024423688000069887
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.05213631899982829,
+    "max": 0.0559645119999459,
+    "mean": 0.05327367199995731,
+    "stddev": 0.0011304004889290912,
+    "rounds": 9,
+    "median": 0.05312795700001516,
+    "iqr": 0.0010965712498887115,
+    "q1": 0.05253941475001511,
+    "q3": 0.053635985999903824,
+    "iqr_outliers": 1,
+    "stddev_outliers": 2,
+    "outliers": "2;1",
+    "ld15iqr": 0.05213631899982829,
+    "hd15iqr": 0.05364537299988115,
+    "ops": 18.770998177125865,
+    "total": 0.4794630479996158,
+    "data": [
+     0.0559645119999459,
+     0.05213631899982829,
+     0.052550586000052135,
+     0.05275267599995459,
+     0.053146867000123166,
+     0.05363285699991138,
+     0.05364537299988115,
+     0.05250590099990404,
+     0.05312795700001516
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs5-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs5-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs5",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-2xs5-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1101257881
+     ],
+     "allocations": [
+      76835
+     ],
+     "total_bytes": [
+      1208540685
+     ],
+     "rss_bytes": [
+      228835328
+     ]
+    },
+    "columns": 5000,
+    "rows": 15050,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.0459406410000156,
+    "max": 0.046896435999997266,
+    "mean": 0.04635665988891762,
+    "stddev": 0.0002674537239326668,
+    "rounds": 9,
+    "median": 0.04636720799999239,
+    "iqr": 0.0002821490000428639,
+    "q1": 0.046180796749979436,
+    "q3": 0.0464629457500223,
+    "iqr_outliers": 1,
+    "stddev_outliers": 2,
+    "outliers": "2;1",
+    "ld15iqr": 0.0459406410000156,
+    "hd15iqr": 0.046483768000143755,
+    "ops": 21.57187343514945,
+    "total": 0.4172099390002586,
+    "data": [
+     0.046896435999997266,
+     0.04643751599996904,
+     0.04636720799999239,
+     0.046456004999981815,
+     0.046149029000162045,
+     0.046191385999918566,
+     0.046483768000143755,
+     0.0459406410000156,
+     0.046287950000078126
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs5-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs5-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs5",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-2xs5-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1115025365
+     ],
+     "allocations": [
+      130353
+     ],
+     "total_bytes": [
+      1327168216
+     ],
+     "rss_bytes": [
+      248815616
+     ]
+    },
+    "columns": 5000,
+    "rows": 15050,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.059975100999963615,
+    "max": 0.06108815499987941,
+    "mean": 0.06057598466665897,
+    "stddev": 0.00034250256487694357,
+    "rounds": 9,
+    "median": 0.06059191200006353,
+    "iqr": 0.0004451244999472692,
+    "q1": 0.06038715124998362,
+    "q3": 0.060832275749930886,
+    "iqr_outliers": 0,
+    "stddev_outliers": 4,
+    "outliers": "4;0",
+    "ld15iqr": 0.059975100999963615,
+    "hd15iqr": 0.06108815499987941,
+    "ops": 16.508192239925737,
+    "total": 0.5451838619999307,
+    "data": [
+     0.06080283899996175,
+     0.06044101099996624,
+     0.060920585999838295,
+     0.06052737500021976,
+     0.06061131100000239,
+     0.059975100999963615,
+     0.060225572000035754,
+     0.06108815499987941,
+     0.06059191200006353
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-xs-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      134998293
+     ],
+     "allocations": [
+      78226
+     ],
+     "total_bytes": [
+      272395405
+     ],
+     "rss_bytes": [
+      253743104
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": 55000,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "attach": 0.0007395499999347521,
+     "build": 0.03069230100004461
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.06098326699998324,
+    "max": 0.0649097409998376,
+    "mean": 0.06216882388889644,
+    "stddev": 0.0014235998224689593,
+    "rounds": 9,
+    "median": 0.06153479700014941,
+    "iqr": 0.0018368420001024788,
+    "q1": 0.06120651174995828,
+    "q3": 0.06304335375006076,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.06098326699998324,
+    "hd15iqr": 0.0649097409998376,
+    "ops": 16.08523271707901,
+    "total": 0.559519415000068,
+    "data": [
+     0.0649097409998376,
+     0.06407441400006064,
+     0.061035979000052976,
+     0.06156465300000491,
+     0.061263355999926716,
+     0.06098326699998324,
+     0.0626996670000608,
+     0.061453540999991674,
+     0.06153479700014941
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1105268023
+     ],
+     "allocations": [
+      76828
+     ],
+     "total_bytes": [
+      1218167897
+     ],
+     "rss_bytes": [
+      227094528
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.049237464999805525,
+    "max": 0.05086172699998315,
+    "mean": 0.05011751844441884,
+    "stddev": 0.0005126285567309109,
+    "rounds": 9,
+    "median": 0.0501377919999868,
+    "iqr": 0.0007548235001877401,
+    "q1": 0.049721305499872415,
+    "q3": 0.050476129000060155,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.049237464999805525,
+    "hd15iqr": 0.05086172699998315,
+    "ops": 19.953102847839855,
+    "total": 0.4510576659997696,
+    "data": [
+     0.05086172699998315,
+     0.050416667000035886,
+     0.049668293999957314,
+     0.05002135599988833,
+     0.05032087400013552,
+     0.05065451500013296,
+     0.0501377919999868,
+     0.049738975999844115,
+     0.049237464999805525
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1118256257
+     ],
+     "allocations": [
+      130350
+     ],
+     "total_bytes": [
+      1335648178
+     ],
+     "rss_bytes": [
+      250294272
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.06403457399983381,
+    "max": 0.06508617999998023,
+    "mean": 0.06461745833333528,
+    "stddev": 0.0003938062728103846,
+    "rounds": 9,
+    "median": 0.06468378800013852,
+    "iqr": 0.0006636547498715117,
+    "q1": 0.06425600725009417,
+    "q3": 0.06491966199996568,
+    "iqr_outliers": 0,
+    "stddev_outliers": 4,
+    "outliers": "4;0",
+    "ld15iqr": 0.06403457399983381,
+    "hd15iqr": 0.06508617999998023,
+    "ops": 15.475693810818203,
+    "total": 0.5815571250000175,
+    "data": [
+     0.06486612799994873,
+     0.06467987099995298,
+     0.06431574900011583,
+     0.0640767820000292,
+     0.06508617999998023,
+     0.0647337890000017,
+     0.06508026400001654,
+     0.06468378800013852,
+     0.06403457399983381
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs5-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs5-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs5",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-xs5-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      271344165
+     ],
+     "allocations": [
+      78272
+     ],
+     "total_bytes": [
+      413313934
+     ],
+     "rss_bytes": [
+      358486016
+     ]
+    },
+    "columns": 50000,
+    "rows": 150500,
+    "nonzeros": 275000,
+    "live_fraction": 1.0,
+    "variables": 50000,
+    "phase_seconds": {
+     "attach": 0.0007253349999700731,
+     "build": 0.1126786689999335
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.1532525559998703,
+    "max": 0.1679446559999178,
+    "mean": 0.15724533944439323,
+    "stddev": 0.00466205268922822,
+    "rounds": 9,
+    "median": 0.1552816379999058,
+    "iqr": 0.00545295575000182,
+    "q1": 0.15397328774986363,
+    "q3": 0.15942624349986545,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.1532525559998703,
+    "hd15iqr": 0.16002092899998388,
+    "ops": 6.359488958676773,
+    "total": 1.415208054999539,
+    "data": [
+     0.1679446559999178,
+     0.15503632400009337,
+     0.15368082899999536,
+     0.16002092899998388,
+     0.1552816379999058,
+     0.15669233400012672,
+     0.15407077399981972,
+     0.15922801499982597,
+     0.1532525559998703
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs5-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs5-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs5",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-xs5-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1127895339
+     ],
+     "allocations": [
+      76853
+     ],
+     "total_bytes": [
+      1282888557
+     ],
+     "rss_bytes": [
+      251314176
+     ]
+    },
+    "columns": 50000,
+    "rows": 150500,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 50000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.08133978600017144,
+    "max": 0.08269808400018519,
+    "mean": 0.08182965488895712,
+    "stddev": 0.00043160919237094817,
+    "rounds": 9,
+    "median": 0.08189444699996784,
+    "iqr": 0.0005675265002196284,
+    "q1": 0.08147612949994709,
+    "q3": 0.08204365600016672,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.08133978600017144,
+    "hd15iqr": 0.08269808400018519,
+    "ops": 12.22050858404573,
+    "total": 0.736466894000614,
+    "data": [
+     0.08269808400018519,
+     0.08139140799994493,
+     0.08150436999994781,
+     0.08205841000017244,
+     0.08189444699996784,
+     0.08198426900003142,
+     0.08155738200002816,
+     0.08203873800016481,
+     0.08133978600017144
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs5-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs5-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs5",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-xs5-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1144096061
+     ],
+     "allocations": [
+      130366
+     ],
+     "total_bytes": [
+      1402006062
+     ],
+     "rss_bytes": [
+      271503360
+     ]
+    },
+    "columns": 50000,
+    "rows": 150500,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 50000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09107621000021027,
+    "max": 0.09365268800002013,
+    "mean": 0.09208350133333927,
+    "stddev": 0.0006923413951903004,
+    "rounds": 9,
+    "median": 0.09200125899997147,
+    "iqr": 0.00037909375004119283,
+    "q1": 0.09184428999992633,
+    "q3": 0.09222338374996752,
+    "iqr_outliers": 2,
+    "stddev_outliers": 2,
+    "outliers": "2;2",
+    "ld15iqr": 0.09163413400005993,
+    "hd15iqr": 0.09236483600011525,
+    "ops": 10.859708693960632,
+    "total": 0.8287515120000535,
+    "data": [
+     0.09365268800002013,
+     0.09200125899997147,
+     0.09217623299991828,
+     0.09107621000021027,
+     0.09236483600011525,
+     0.0919143419998818,
+     0.09191593299988199,
+     0.09201587699999436,
+     0.09163413400005993
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-s-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      468253337
+     ],
+     "allocations": [
+      78290
+     ],
+     "total_bytes": [
+      615809366
+     ],
+     "rss_bytes": [
+      504504320
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": 550000,
+    "live_fraction": 1.0,
+    "variables": 100000,
+    "phase_seconds": {
+     "attach": 0.0008175629998277145,
+     "build": 0.2110685029999786
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.259924195999929,
+    "max": 0.2804084500000954,
+    "mean": 0.2681126141110831,
+    "stddev": 0.006168849438293916,
+    "rounds": 9,
+    "median": 0.26678733600010673,
+    "iqr": 0.008493920750083817,
+    "q1": 0.26397940124991237,
+    "q3": 0.2724733219999962,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.259924195999929,
+    "hd15iqr": 0.2804084500000954,
+    "ops": 3.7297760245837774,
+    "total": 2.413013526999748,
+    "data": [
+     0.2804084500000954,
+     0.26771644899986313,
+     0.2638313580000613,
+     0.259924195999929,
+     0.26512300299987146,
+     0.26678733600010673,
+     0.2723496510000132,
+     0.2728443349999452,
+     0.26402874899986273
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-s-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1157493339
+     ],
+     "allocations": [
+      76843
+     ],
+     "total_bytes": [
+      1364199093
+     ],
+     "rss_bytes": [
+      278462464
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.12042346299995188,
+    "max": 0.12215251299994634,
+    "mean": 0.12158214688886598,
+    "stddev": 0.0006105891012867419,
+    "rounds": 9,
+    "median": 0.12171136300003127,
+    "iqr": 0.0007058512500748293,
+    "q1": 0.12135763949993361,
+    "q3": 0.12206349075000844,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.12042346299995188,
+    "hd15iqr": 0.12215251299994634,
+    "ops": 8.224891775550445,
+    "total": 1.094239321999794,
+    "data": [
+     0.12156762299991897,
+     0.12204599000006056,
+     0.12215251299994634,
+     0.12182783699995525,
+     0.1216668510001,
+     0.12171136300003127,
+     0.12042346299995188,
+     0.1221159929998521,
+     0.12072768899997754
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-s-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1176397061
+     ],
+     "allocations": [
+      130364
+     ],
+     "total_bytes": [
+      1484149230
+     ],
+     "rss_bytes": [
+      303968256
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.1265722939999705,
+    "max": 0.13166702400008035,
+    "mean": 0.1285562102222381,
+    "stddev": 0.0014365744194803607,
+    "rounds": 9,
+    "median": 0.12810435599999437,
+    "iqr": 0.001321815750031874,
+    "q1": 0.12781443149998495,
+    "q3": 0.12913624725001682,
+    "iqr_outliers": 1,
+    "stddev_outliers": 2,
+    "outliers": "2;1",
+    "ld15iqr": 0.1265722939999705,
+    "hd15iqr": 0.1294013100000484,
+    "ops": 7.778698502944952,
+    "total": 1.157005892000143,
+    "data": [
+     0.13166702400008035,
+     0.1290478930000063,
+     0.12805631400010498,
+     0.1279072699999233,
+     0.1294013100000484,
+     0.12871351499984485,
+     0.1265722939999705,
+     0.12810435599999437,
+     0.1275359160001699
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s5-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s5-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s5",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-s5-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      2790108433
+     ],
+     "allocations": [
+      78332
+     ],
+     "total_bytes": [
+      2982369594
+     ],
+     "rss_bytes": [
+      1122500608
+     ]
+    },
+    "columns": 500000,
+    "rows": 1505000,
+    "nonzeros": 2750000,
+    "live_fraction": 1.0,
+    "variables": 500000,
+    "phase_seconds": {
+     "attach": 0.0007019829999990179,
+     "build": 0.9819017410000015
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 1.1250026210000215,
+    "max": 1.1452217080000082,
+    "mean": 1.1334809512000448,
+    "stddev": 0.00760643895391857,
+    "rounds": 5,
+    "median": 1.1324620880000111,
+    "iqr": 0.009573399499856805,
+    "q1": 1.1282607185001439,
+    "q3": 1.1378341180000007,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 1.1250026210000215,
+    "hd15iqr": 1.1452217080000082,
+    "ops": 0.8822380287390581,
+    "total": 5.667404756000224,
+    "data": [
+     1.1293467510001847,
+     1.1324620880000111,
+     1.1353715879999982,
+     1.1250026210000215,
+     1.1452217080000082
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s5-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s5-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s5",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-s5-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1394257827
+     ],
+     "allocations": [
+      76851
+     ],
+     "total_bytes": [
+      2011348125
+     ],
+     "rss_bytes": [
+      520466432
+     ]
+    },
+    "columns": 500000,
+    "rows": 1505000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 500000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.39257617199996275,
+    "max": 0.40755622099982247,
+    "mean": 0.401247041111118,
+    "stddev": 0.005157928642404891,
+    "rounds": 9,
+    "median": 0.3999080490000324,
+    "iqr": 0.00889077699991958,
+    "q1": 0.3972077917500769,
+    "q3": 0.4060985687499965,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.39257617199996275,
+    "hd15iqr": 0.40755622099982247,
+    "ops": 2.4922302161552103,
+    "total": 3.6112233700000615,
+    "data": [
+     0.3971733660000609,
+     0.3996811060001164,
+     0.40481139799999255,
+     0.40624954899999466,
+     0.3999080490000324,
+     0.39257617199996275,
+     0.4060482419999971,
+     0.39721926700008225,
+     0.40755622099982247
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s5-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s5-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s5",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-s5-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1434793965
+     ],
+     "allocations": [
+      130384
+     ],
+     "total_bytes": [
+      2114228118
+     ],
+     "rss_bytes": [
+      567549952
+     ]
+    },
+    "columns": 500000,
+    "rows": 1505000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 500000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.3880304189999606,
+    "max": 0.39369509600010133,
+    "mean": 0.39087823633334057,
+    "stddev": 0.0018935113348520843,
+    "rounds": 9,
+    "median": 0.3907050559998879,
+    "iqr": 0.0022417742500806526,
+    "q1": 0.38990884449998475,
+    "q3": 0.3921506187500654,
+    "iqr_outliers": 0,
+    "stddev_outliers": 4,
+    "outliers": "4;0",
+    "ld15iqr": 0.3880304189999606,
+    "hd15iqr": 0.39369509600010133,
+    "ops": 2.558341465568835,
+    "total": 3.5179041270000653,
+    "data": [
+     0.3905620970001564,
+     0.3880304189999606,
+     0.38852645199995095,
+     0.39331393999987085,
+     0.390369641999996,
+     0.39176284500013026,
+     0.39369509600010133,
+     0.3909385800000109,
+     0.3907050559998879
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-m-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      4178809937
+     ],
+     "allocations": [
+      78363
+     ],
+     "total_bytes": [
+      4426954171
+     ],
+     "rss_bytes": [
+      1706590208
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": 5500000,
+    "live_fraction": 1.0,
+    "variables": 1000000,
+    "phase_seconds": {
+     "attach": 0.0011429080000198155,
+     "build": 1.989974084000096
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 2.2925055620000876,
+    "max": 2.3208817049999197,
+    "mean": 2.3072077476000232,
+    "stddev": 0.013777435958030217,
+    "rounds": 5,
+    "median": 2.3087445369999386,
+    "iqr": 0.02704032925004185,
+    "q1": 2.2933683440000436,
+    "q3": 2.3204086732500855,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 2.2925055620000876,
+    "hd15iqr": 2.3208817049999197,
+    "ops": 0.43342434206031444,
+    "total": 11.536038738000116,
+    "data": [
+     2.3087445369999386,
+     2.3208817049999197,
+     2.293655938000029,
+     2.3202509960001407,
+     2.2925055620000876
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-m-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1690218243
+     ],
+     "allocations": [
+      76848
+     ],
+     "total_bytes": [
+      2815004793
+     ],
+     "rss_bytes": [
+      819908608
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.7601183930000843,
+    "max": 0.7795448660001512,
+    "mean": 0.7706679575555881,
+    "stddev": 0.007226033329459195,
+    "rounds": 9,
+    "median": 0.7735812770001758,
+    "iqr": 0.013262151500157415,
+    "q1": 0.7630277717498757,
+    "q3": 0.7762899232500331,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.7601183930000843,
+    "hd15iqr": 0.7795448660001512,
+    "ops": 1.2975756811945438,
+    "total": 6.936011618000293,
+    "data": [
+     0.7601183930000843,
+     0.7765855530001318,
+     0.7735812770001758,
+     0.7761913800000002,
+     0.7746080389999861,
+     0.7612713789999361,
+     0.7636132359998555,
+     0.7704974949999723,
+     0.7795448660001512
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-m-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1757793965
+     ],
+     "allocations": [
+      130382
+     ],
+     "total_bytes": [
+      2907471162
+     ],
+     "rss_bytes": [
+      895287296
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.7252395070001967,
+    "max": 0.7426902760000758,
+    "mean": 0.7309739296666875,
+    "stddev": 0.005736675778663942,
+    "rounds": 9,
+    "median": 0.7283874610000112,
+    "iqr": 0.007283728999880168,
+    "q1": 0.7273327099999847,
+    "q3": 0.7346164389998648,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.7252395070001967,
+    "hd15iqr": 0.7426902760000758,
+    "ops": 1.3680378456944204,
+    "total": 6.578765367000187,
+    "data": [
+     0.7426902760000758,
+     0.7277950590000728,
+     0.7302001440000367,
+     0.7283874610000112,
+     0.7366948989999855,
+     0.7339236189998246,
+     0.7277482189999773,
+     0.7260861830000067,
+     0.7252395070001967
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m5-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m5-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m5",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-m5-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      4058943847
+     ],
+     "allocations": [
+      76888
+     ],
+     "total_bytes": [
+      9271100249
+     ],
+     "rss_bytes": [
+      3137716224
+     ]
+    },
+    "columns": 5000000,
+    "rows": 15050000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 3.8923296379998646,
+    "max": 3.9379588140000124,
+    "mean": 3.918110646199966,
+    "stddev": 0.019378884686175338,
+    "rounds": 5,
+    "median": 3.9276516509999055,
+    "iqr": 0.03113712250012668,
+    "q1": 3.9004474182499393,
+    "q3": 3.931584540750066,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 3.8923296379998646,
+    "hd15iqr": 3.9379588140000124,
+    "ops": 0.2552250536798556,
+    "total": 19.59055323099983,
+    "data": [
+     3.8923296379998646,
+     3.9379588140000124,
+     3.9276516509999055,
+     3.9031533449999642,
+     3.929459783000084
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m5-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m5-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m5",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-m5-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      4341792941
+     ],
+     "allocations": [
+      130428
+     ],
+     "total_bytes": [
+      9259075610
+     ],
+     "rss_bytes": [
+      3433119744
+     ]
+    },
+    "columns": 5000000,
+    "rows": 15050000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 3.629306664999831,
+    "max": 3.6547232579998763,
+    "mean": 3.6442289525999056,
+    "stddev": 0.009382136871926348,
+    "rounds": 5,
+    "median": 3.6456161270000393,
+    "iqr": 0.010140771499891343,
+    "q1": 3.639745371999936,
+    "q3": 3.6498861434998275,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 3.629306664999831,
+    "hd15iqr": 3.6547232579998763,
+    "ops": 0.27440646924408224,
+    "total": 18.22114476299953,
+    "data": [
+     3.6432249409999713,
+     3.6456161270000393,
+     3.6482737719998113,
+     3.6547232579998763,
+     3.629306664999831
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-2xs-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-2xs-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      21
+     ],
+     "total_bytes": [
+      132305
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": 5500,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "attach": 0.0007841409999400639,
+     "build": 0.019940516000133357,
+     "first_window": 0.3576990009999008
+    },
+    "process_rss_bytes": 142532608
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.4528223679999428,
+    "max": 0.47177045299986275,
+    "mean": 0.4621284106666381,
+    "stddev": 0.005639965370636348,
+    "rounds": 9,
+    "median": 0.46127574899992396,
+    "iqr": 0.006572437749866822,
+    "q1": 0.459278274250039,
+    "q3": 0.4658507119999058,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.4528223679999428,
+    "hd15iqr": 0.47177045299986275,
+    "ops": 2.163900718757934,
+    "total": 4.159155695999743,
+    "data": [
+     0.4650964089998979,
+     0.45724958499999957,
+     0.4612673960000393,
+     0.4681136209999295,
+     0.4599545040000521,
+     0.47177045299986275,
+     0.46160561100009545,
+     0.46127574899992396,
+     0.4528223679999428
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-2xs-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-2xs-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      23
+     ],
+     "total_bytes": [
+      165310
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "first_window": 0.5115442080000321
+    },
+    "process_rss_bytes": 209858560
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.6441330369998468,
+    "max": 0.6600793970001178,
+    "mean": 0.6526522933332772,
+    "stddev": 0.004851625155490577,
+    "rounds": 9,
+    "median": 0.6522178249999797,
+    "iqr": 0.006448369249881125,
+    "q1": 0.6493829684999355,
+    "q3": 0.6558313377498166,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.6441330369998468,
+    "hd15iqr": 0.6600793970001178,
+    "ops": 1.53220943251838,
+    "total": 5.873870639999495,
+    "data": [
+     0.6554556709997996,
+     0.6484549589999915,
+     0.6552225460000045,
+     0.6569583379998676,
+     0.6600793970001178,
+     0.651656561999971,
+     0.6496923049999168,
+     0.6522178249999797,
+     0.6441330369998468
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-2xs-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-2xs-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      27
+     ],
+     "total_bytes": [
+      231300
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "first_window": 0.6443929649999518
+    },
+    "process_rss_bytes": 227405824
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.8026915479999843,
+    "max": 0.8208574589998534,
+    "mean": 0.808865390444478,
+    "stddev": 0.005731082890562949,
+    "rounds": 9,
+    "median": 0.8093809839999722,
+    "iqr": 0.0072378257498826315,
+    "q1": 0.8038769110001454,
+    "q3": 0.811114736750028,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.8026915479999843,
+    "hd15iqr": 0.8208574589998534,
+    "ops": 1.2362996511081925,
+    "total": 7.279788514000302,
+    "data": [
+     0.8105788860000303,
+     0.8067645650000941,
+     0.804213812000171,
+     0.8028662080000686,
+     0.8097127630001069,
+     0.8127222890000212,
+     0.8093809839999722,
+     0.8208574589998534,
+     0.8026915479999843
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-xs-specsolve-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-xs-specsolve-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "specsolve",
+    "sink": "highs"
+   },
+   "param": "curves-xs-specsolve-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      21
+     ],
+     "total_bytes": [
+      132305
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": 55000,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "attach": 0.0008097149998320674,
+     "build": 0.03537045899997793,
+     "first_window": 0.389576261000002
+    },
+    "process_rss_bytes": 171692032
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.46042209500001263,
+    "max": 0.48115253499986466,
+    "mean": 0.47288071119996855,
+    "stddev": 0.008525274522741945,
+    "rounds": 5,
+    "median": 0.47359047100007956,
+    "iqr": 0.013434818749772148,
+    "q1": 0.46694384000005584,
+    "q3": 0.480378658749828,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.46042209500001263,
+    "hd15iqr": 0.48115253499986466,
+    "ops": 2.1146982237072613,
+    "total": 2.364403555999843,
+    "data": [
+     0.48115253499986466,
+     0.46911775500007025,
+     0.46042209500001263,
+     0.47359047100007956,
+     0.48012069999981577
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-xs-linopy-master-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-xs-linopy-master-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-master",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-master-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      23
+     ],
+     "total_bytes": [
+      165310
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "first_window": 0.5045130699998026
+    },
+    "process_rss_bytes": 214679552
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.6327006449998862,
+    "max": 0.6405087800001183,
+    "mean": 0.6369616623999719,
+    "stddev": 0.002852864655086386,
+    "rounds": 5,
+    "median": 0.6374662020000414,
+    "iqr": 0.003268516999980875,
+    "q1": 0.6353166764999401,
+    "q3": 0.6385851934999209,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.6327006449998862,
+    "hd15iqr": 0.6405087800001183,
+    "ops": 1.5699531997454235,
+    "total": 3.184808311999859,
+    "data": [
+     0.6405087800001183,
+     0.6327006449998862,
+     0.6374662020000414,
+     0.6379439979998551,
+     0.636188686999958
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-xs-linopy-from-spec-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-xs-linopy-from-spec-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-from-spec",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-from-spec-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      27
+     ],
+     "total_bytes": [
+      231300
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "first_window": 0.6538248629999543
+    },
+    "process_rss_bytes": 233267200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.8078212870000243,
+    "max": 0.8188307179998446,
+    "mean": 0.8138043855999513,
+    "stddev": 0.004335979720665514,
+    "rounds": 5,
+    "median": 0.8131957539999348,
+    "iqr": 0.006509210499700657,
+    "q1": 0.8110172087501155,
+    "q3": 0.8175264192498162,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.8078212870000243,
+    "hd15iqr": 0.8188307179998446,
+    "ops": 1.228796523703644,
+    "total": 4.069021927999756,
+    "data": [
+     0.8131957539999348,
+     0.8188307179998446,
+     0.8170916529998067,
+     0.8078212870000243,
+     0.8120825160001459
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-3xs-specsolve]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-3xs-specsolve]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "specsolve"
+   },
+   "param": "curves-3xs-specsolve",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      80596
+     ],
+     "allocations": [
+      706
+     ],
+     "total_bytes": [
+      200011
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200,
+    "phase_seconds": {
+     "attach": 0.0008412120000684808,
+     "build": 0.016456022999818742
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04240464999998039,
+    "max": 0.04454226799998651,
+    "mean": 0.04329497919998175,
+    "stddev": 0.000876018678882694,
+    "rounds": 5,
+    "median": 0.042994158000055904,
+    "iqr": 0.0013757094999391484,
+    "q1": 0.042630692499983525,
+    "q3": 0.04400640199992267,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.04240464999998039,
+    "hd15iqr": 0.04454226799998651,
+    "ops": 23.097366449373915,
+    "total": 0.21647489599990877,
+    "data": [
+     0.04454226799998651,
+     0.04240464999998039,
+     0.042994158000055904,
+     0.04270603999998457,
+     0.043827779999901395
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-3xs-linopy-master]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-3xs-linopy-master]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-master"
+   },
+   "param": "curves-3xs-linopy-master",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      77915
+     ],
+     "allocations": [
+      19024
+     ],
+     "total_bytes": [
+      1966681
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.041050659999882555,
+    "max": 0.043968333000066195,
+    "mean": 0.042009698599986225,
+    "stddev": 0.0011340614976581213,
+    "rounds": 5,
+    "median": 0.041754714000035165,
+    "iqr": 0.00095724574993028,
+    "q1": 0.04137679600000865,
+    "q3": 0.04233404174993893,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.041050659999882555,
+    "hd15iqr": 0.04178927799989651,
+    "ops": 23.80402700628583,
+    "total": 0.2100484929999311,
+    "data": [
+     0.043968333000066195,
+     0.041485508000050686,
+     0.041050659999882555,
+     0.04178927799989651,
+     0.041754714000035165
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-3xs-linopy-from-spec]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-3xs-linopy-from-spec]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-from-spec"
+   },
+   "param": "curves-3xs-linopy-from-spec",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      87564
+     ],
+     "allocations": [
+      24069
+     ],
+     "total_bytes": [
+      4591923
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.05561336799996752,
+    "max": 0.05917755300015415,
+    "mean": 0.05659687920001488,
+    "stddev": 0.0014854886303786324,
+    "rounds": 5,
+    "median": 0.05588274399997317,
+    "iqr": 0.0014716805000603017,
+    "q1": 0.055729548999977396,
+    "q3": 0.0572012295000377,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.05561336799996752,
+    "hd15iqr": 0.05917755300015415,
+    "ops": 17.668818742919964,
+    "total": 0.2829843960000744,
+    "data": [
+     0.05917755300015415,
+     0.05654245499999888,
+     0.05588274399997317,
+     0.05576827599998069,
+     0.05561336799996752
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-2xs-specsolve]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-2xs-specsolve]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "specsolve"
+   },
+   "param": "curves-2xs-specsolve",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      80596
+     ],
+     "allocations": [
+      698
+     ],
+     "total_bytes": [
+      264148
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "attach": 0.0007391309998183715,
+     "build": 0.018441962999986572
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.043935542000099304,
+    "max": 0.046846963000007236,
+    "mean": 0.045293699800004104,
+    "stddev": 0.0011341017497823117,
+    "rounds": 5,
+    "median": 0.04493553499992231,
+    "iqr": 0.0016439314999274757,
+    "q1": 0.04455726950004646,
+    "q3": 0.046201200999973935,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.043935542000099304,
+    "hd15iqr": 0.046846963000007236,
+    "ops": 22.07812575293108,
+    "total": 0.22646849900002053,
+    "data": [
+     0.046846963000007236,
+     0.04493553499992231,
+     0.044764512000028844,
+     0.045985946999962835,
+     0.043935542000099304
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-2xs-linopy-master]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-2xs-linopy-master]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-master"
+   },
+   "param": "curves-2xs-linopy-master",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      201784
+     ],
+     "allocations": [
+      19110
+     ],
+     "total_bytes": [
+      3045933
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.04084238199993706,
+    "max": 0.04302396499997485,
+    "mean": 0.041527430399992224,
+    "stddev": 0.0008798101749160794,
+    "rounds": 5,
+    "median": 0.04113337099988712,
+    "iqr": 0.0009492152500456541,
+    "q1": 0.04099772350002695,
+    "q3": 0.041946938750072604,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.04084238199993706,
+    "hd15iqr": 0.04302396499997485,
+    "ops": 24.08046899044799,
+    "total": 0.20763715199996113,
+    "data": [
+     0.04302396499997485,
+     0.04084238199993706,
+     0.04104950400005691,
+     0.04113337099988712,
+     0.04158793000010519
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-2xs-linopy-from-spec]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-2xs-linopy-from-spec]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-from-spec"
+   },
+   "param": "curves-2xs-linopy-from-spec",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      191956
+     ],
+     "allocations": [
+      24133
+     ],
+     "total_bytes": [
+      5519439
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.0559800850001011,
+    "max": 0.0586692409999614,
+    "mean": 0.05703887079998822,
+    "stddev": 0.000999726343784997,
+    "rounds": 5,
+    "median": 0.05682398599992666,
+    "iqr": 0.0010222810000186655,
+    "q1": 0.05646541599998045,
+    "q3": 0.057487696999999116,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.0559800850001011,
+    "hd15iqr": 0.0586692409999614,
+    "ops": 17.531903874930965,
+    "total": 0.2851943539999411,
+    "data": [
+     0.0586692409999614,
+     0.05682398599992666,
+     0.056627192999940235,
+     0.05709384900001169,
+     0.0559800850001011
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-xs-specsolve]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-xs-specsolve]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "specsolve"
+   },
+   "param": "curves-xs-specsolve",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      549984
+     ],
+     "allocations": [
+      699
+     ],
+     "total_bytes": [
+      823221
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "attach": 0.0007195969999429508,
+     "build": 0.03232185299998491
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.05564795400005096,
+    "max": 0.059047847999863734,
+    "mean": 0.05732282119997763,
+    "stddev": 0.001551540907983781,
+    "rounds": 5,
+    "median": 0.056940294000014546,
+    "iqr": 0.0028754340002024037,
+    "q1": 0.05601601199987272,
+    "q3": 0.05889144600007512,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.05564795400005096,
+    "hd15iqr": 0.059047847999863734,
+    "ops": 17.44505903698247,
+    "total": 0.2866141059998881,
+    "data": [
+     0.05883931200014558,
+     0.05564795400005096,
+     0.056940294000014546,
+     0.0561386979998133,
+     0.059047847999863734
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-xs-linopy-master]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-xs-linopy-master]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-master"
+   },
+   "param": "curves-xs-linopy-master",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1785784
+     ],
+     "allocations": [
+      19172
+     ],
+     "total_bytes": [
+      11639417
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.044373185000040394,
+    "max": 0.04605073900006573,
+    "mean": 0.044988820800062966,
+    "stddev": 0.0007284506332552797,
+    "rounds": 5,
+    "median": 0.04458191000003353,
+    "iqr": 0.0011305309999443125,
+    "q1": 0.0444645762501068,
+    "q3": 0.045595107250051115,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.044373185000040394,
+    "hd15iqr": 0.04605073900006573,
+    "ops": 22.227744186586914,
+    "total": 0.22494410400031484,
+    "data": [
+     0.04605073900006573,
+     0.04544323000004624,
+     0.044373185000040394,
+     0.04449504000012894,
+     0.04458191000003353
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-xs-linopy-from-spec]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-xs-linopy-from-spec]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-from-spec"
+   },
+   "param": "curves-xs-linopy-from-spec",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1735456
+     ],
+     "allocations": [
+      24160
+     ],
+     "total_bytes": [
+      11908081
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.057251510000014605,
+    "max": 0.05978962699987278,
+    "mean": 0.05803280139998605,
+    "stddev": 0.001016403036707945,
+    "rounds": 5,
+    "median": 0.057752297000206454,
+    "iqr": 0.0009945794998884594,
+    "q1": 0.05739681724998036,
+    "q3": 0.05839139674986882,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.057251510000014605,
+    "hd15iqr": 0.05978962699987278,
+    "ops": 17.23163410822763,
+    "total": 0.2901640069999303,
+    "data": [
+     0.05978962699987278,
+     0.0579253199998675,
+     0.057752297000206454,
+     0.05744525299996894,
+     0.057251510000014605
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-s-specsolve]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-s-specsolve]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "specsolve"
+   },
+   "param": "curves-s-specsolve",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      4884624
+     ],
+     "allocations": [
+      708
+     ],
+     "total_bytes": [
+      5337582
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000,
+    "phase_seconds": {
+     "attach": 0.0007023460000255,
+     "build": 0.21762580900008288
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.23426908900000853,
+    "max": 0.24532234500020422,
+    "mean": 0.2399185018000935,
+    "stddev": 0.004900298792926415,
+    "rounds": 5,
+    "median": 0.23826587400003518,
+    "iqr": 0.00861154175009915,
+    "q1": 0.23629385875005937,
+    "q3": 0.24490540050015852,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.23426908900000853,
+    "hd15iqr": 0.24532234500020422,
+    "ops": 4.168082046599419,
+    "total": 1.1995925090004675,
+    "data": [
+     0.24532234500020422,
+     0.23426908900000853,
+     0.23826587400003518,
+     0.23696878200007632,
+     0.2447664190001433
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-s-linopy-master]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-s-linopy-master]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-master"
+   },
+   "param": "curves-s-linopy-master",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      17633784
+     ],
+     "allocations": [
+      19189
+     ],
+     "total_bytes": [
+      78506157
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.06814553200001683,
+    "max": 0.07013658400001077,
+    "mean": 0.06876029800005198,
+    "stddev": 0.0007866692279512745,
+    "rounds": 5,
+    "median": 0.06847099800006617,
+    "iqr": 0.0005932409998194998,
+    "q1": 0.06838178500015601,
+    "q3": 0.06897502599997551,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.06814553200001683,
+    "hd15iqr": 0.06858783999996376,
+    "ops": 14.543276121334493,
+    "total": 0.34380149000025995,
+    "data": [
+     0.07013658400001077,
+     0.06847099800006617,
+     0.06858783999996376,
+     0.06814553200001683,
+     0.06846053600020241
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-s-linopy-from-spec]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-s-linopy-from-spec]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-from-spec"
+   },
+   "param": "curves-s-linopy-from-spec",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      17186456
+     ],
+     "allocations": [
+      24176
+     ],
+     "total_bytes": [
+      63237789
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.06962079699997048,
+    "max": 0.07117253799992795,
+    "mean": 0.07026681400006965,
+    "stddev": 0.000609537042498563,
+    "rounds": 5,
+    "median": 0.0703076960000999,
+    "iqr": 0.0008641934999786827,
+    "q1": 0.06975445975012917,
+    "q3": 0.07061865325010785,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.06962079699997048,
+    "hd15iqr": 0.07117253799992795,
+    "ops": 14.231469211041913,
+    "total": 0.3513340700003482,
+    "data": [
+     0.07117253799992795,
+     0.0703076960000999,
+     0.06962079699997048,
+     0.07043402500016782,
+     0.06979901400018207
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-m-specsolve]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-m-specsolve]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "specsolve"
+   },
+   "param": "curves-m-specsolve",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      148891680
+     ],
+     "allocations": [
+      704
+     ],
+     "total_bytes": [
+      150653851
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000,
+    "phase_seconds": {
+     "attach": 0.0007780170001296938,
+     "build": 1.8974586300000738
+    }
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 1.9024323529999947,
+    "max": 1.9636079629999585,
+    "mean": 1.9398411399999986,
+    "stddev": 0.025795444593725365,
+    "rounds": 5,
+    "median": 1.9456445030000395,
+    "iqr": 0.041978303250004956,
+    "q1": 1.9200862182499918,
+    "q3": 1.9620645214999968,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 1.9024323529999947,
+    "hd15iqr": 1.9636079629999585,
+    "ops": 0.5155061305690221,
+    "total": 9.699205699999993,
+    "data": [
+     1.9456445030000395,
+     1.9024323529999947,
+     1.9615500410000095,
+     1.9636079629999585,
+     1.9259708399999909
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-m-linopy-master]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-m-linopy-master]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-master"
+   },
+   "param": "curves-m-linopy-master",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      176105784
+     ],
+     "allocations": [
+      19189
+     ],
+     "total_bytes": [
+      735861889
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.3228872260001481,
+    "max": 0.33228863500016814,
+    "mean": 0.32650186680002663,
+    "stddev": 0.003709616491001693,
+    "rounds": 5,
+    "median": 0.3250383869999496,
+    "iqr": 0.00496995524997601,
+    "q1": 0.32402266225000176,
+    "q3": 0.32899261749997777,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.3228872260001481,
+    "hd15iqr": 0.33228863500016814,
+    "ops": 3.062769624568402,
+    "total": 1.632509334000133,
+    "data": [
+     0.33228863500016814,
+     0.3278939449999143,
+     0.3228872260001481,
+     0.324401140999953,
+     0.3250383869999496
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-m-linopy-from-spec]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-m-linopy-from-spec]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-from-spec"
+   },
+   "param": "curves-m-linopy-from-spec",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      169180440
+     ],
+     "allocations": [
+      24198
+     ],
+     "total_bytes": [
+      532009161
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.20396183499997278,
+    "max": 0.21104469400006565,
+    "mean": 0.20785531019996598,
+    "stddev": 0.003505737773026764,
+    "rounds": 5,
+    "median": 0.20995260099994084,
+    "iqr": 0.006327893999923617,
+    "q1": 0.20408090199998696,
+    "q3": 0.21040879599991058,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.20396183499997278,
+    "hd15iqr": 0.21104469400006565,
+    "ops": 4.8110389820589905,
+    "total": 1.0392765509998299,
+    "data": [
+     0.2041205909999917,
+     0.20396183499997278,
+     0.21104469400006565,
+     0.20995260099994084,
+     0.2101968299998589
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-3xs-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-3xs-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-3xs-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1111618979
+     ],
+     "allocations": [
+      249780
+     ],
+     "total_bytes": [
+      1350119508
+     ],
+     "rss_bytes": [
+      252342272
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09348641299993687,
+    "max": 0.4928929169999492,
+    "mean": 0.1387478721110761,
+    "stddev": 0.13280615908037477,
+    "rounds": 9,
+    "median": 0.09426325999993423,
+    "iqr": 0.0013867564999827664,
+    "q1": 0.09402504899998121,
+    "q3": 0.09541180549996398,
+    "iqr_outliers": 1,
+    "stddev_outliers": 1,
+    "outliers": "1;1",
+    "ld15iqr": 0.09348641299993687,
+    "hd15iqr": 0.09542414599991389,
+    "ops": 7.207317739615057,
+    "total": 1.248730848999685,
+    "data": [
+     0.4928929169999492,
+     0.09540769199998067,
+     0.09407022799996412,
+     0.09542414599991389,
+     0.09420352899996942,
+     0.09426325999993423,
+     0.09348641299993687,
+     0.09509315200000401,
+     0.09388951200003248
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1112203345
+     ],
+     "allocations": [
+      249956
+     ],
+     "total_bytes": [
+      1352513874
+     ],
+     "rss_bytes": [
+      252706816
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09490945599998213,
+    "max": 0.09723967599995831,
+    "mean": 0.09603601499998149,
+    "stddev": 0.0008107859309010525,
+    "rounds": 9,
+    "median": 0.09620560799999112,
+    "iqr": 0.0013958877499931077,
+    "q1": 0.0953001284999857,
+    "q3": 0.09669601624997881,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.09490945599998213,
+    "hd15iqr": 0.09723967599995831,
+    "ops": 10.412760254579418,
+    "total": 0.8643241349998334,
+    "data": [
+     0.09675098900004286,
+     0.09667769199995746,
+     0.09723967599995831,
+     0.09490945599998213,
+     0.09537959099998261,
+     0.09572651899998164,
+     0.09620560799999112,
+     0.09506174099999498,
+     0.0963728629999423
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-2xs5-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-2xs5-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs5",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-2xs5-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1116203521
+     ],
+     "allocations": [
+      250077
+     ],
+     "total_bytes": [
+      1364651042
+     ],
+     "rss_bytes": [
+      253054976
+     ]
+    },
+    "columns": 5000,
+    "rows": 15050,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09792773800006671,
+    "max": 0.09986566499992477,
+    "mean": 0.09892258411108894,
+    "stddev": 0.0006081633648117537,
+    "rounds": 9,
+    "median": 0.09883476499999233,
+    "iqr": 0.0009141500000566793,
+    "q1": 0.0985674732499433,
+    "q3": 0.09948162324999998,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.09792773800006671,
+    "hd15iqr": 0.09986566499992477,
+    "ops": 10.108915057020866,
+    "total": 0.8903032569998004,
+    "data": [
+     0.09986566499992477,
+     0.09854091799991238,
+     0.09792773800006671,
+     0.09887301300000217,
+     0.09864419799998814,
+     0.09857632499995361,
+     0.09959770599994044,
+     0.09883476499999233,
+     0.09944292900001983
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1120026293
+     ],
+     "allocations": [
+      250078
+     ],
+     "total_bytes": [
+      1376395412
+     ],
+     "rss_bytes": [
+      254164992
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.1034100460000218,
+    "max": 0.10720746100002998,
+    "mean": 0.10512598133331924,
+    "stddev": 0.0011729050060002065,
+    "rounds": 9,
+    "median": 0.10527421899996625,
+    "iqr": 0.0016577477499879478,
+    "q1": 0.10422227349997115,
+    "q3": 0.1058800212499591,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.1034100460000218,
+    "hd15iqr": 0.10720746100002998,
+    "ops": 9.512396339296329,
+    "total": 0.9461338319998731,
+    "data": [
+     0.10720746100002998,
+     0.10527421899996625,
+     0.10462365099999715,
+     0.10599453800000447,
+     0.1043114809999679,
+     0.10584184899994398,
+     0.1034100460000218,
+     0.10551593599996067,
+     0.10395465099998091
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-xs5-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-xs5-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs5",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-xs5-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1148370345
+     ],
+     "allocations": [
+      250103
+     ],
+     "total_bytes": [
+      1465958258
+     ],
+     "rss_bytes": [
+      281006080
+     ]
+    },
+    "columns": 50000,
+    "rows": 150500,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 50000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.1455906490000416,
+    "max": 0.14919930100006695,
+    "mean": 0.14720092977779586,
+    "stddev": 0.0010904588080720371,
+    "rounds": 9,
+    "median": 0.14736930399999437,
+    "iqr": 0.0014504490000319947,
+    "q1": 0.1463714632499773,
+    "q3": 0.1478219122500093,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.1455906490000416,
+    "hd15iqr": 0.14919930100006695,
+    "ops": 6.793435350643025,
+    "total": 1.3248083680001628,
+    "data": [
+     0.14747411700000157,
+     0.14666307300001336,
+     0.14736930399999437,
+     0.1455906490000416,
+     0.14629523400003563,
+     0.14773391599999286,
+     0.14808590100005858,
+     0.14919930100006695,
+     0.14639687299995785
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-s-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1185277833
+     ],
+     "allocations": [
+      250099
+     ],
+     "total_bytes": [
+      1579004914
+     ],
+     "rss_bytes": [
+      318676992
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.19433691700010058,
+    "max": 0.19742032999999992,
+    "mean": 0.19536149522222482,
+    "stddev": 0.0010336313804134576,
+    "rounds": 9,
+    "median": 0.1950527209999109,
+    "iqr": 0.0010218240000483547,
+    "q1": 0.1947726582499456,
+    "q3": 0.19579448224999396,
+    "iqr_outliers": 1,
+    "stddev_outliers": 2,
+    "outliers": "2;1",
+    "ld15iqr": 0.19433691700010058,
+    "hd15iqr": 0.19666555700007393,
+    "ops": 5.11871594175963,
+    "total": 1.7582534570000234,
+    "data": [
+     0.19666555700007393,
+     0.1950527209999109,
+     0.19506739500002368,
+     0.19490051799994035,
+     0.19438907899996138,
+     0.1949168160000454,
+     0.1955041239999673,
+     0.19433691700010058,
+     0.19742032999999992
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-s5-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-s5-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "s5",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-s5-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1480522833
+     ],
+     "allocations": [
+      250120
+     ],
+     "total_bytes": [
+      2479505914
+     ],
+     "rss_bytes": [
+      635797504
+     ]
+    },
+    "columns": 500000,
+    "rows": 1505000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 500000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.547596444000078,
+    "max": 0.5614062959999728,
+    "mean": 0.5555259737778013,
+    "stddev": 0.004207293500771881,
+    "rounds": 9,
+    "median": 0.5552210079999895,
+    "iqr": 0.005292394249977406,
+    "q1": 0.553421630000031,
+    "q3": 0.5587140242500084,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.547596444000078,
+    "hd15iqr": 0.5614062959999728,
+    "ops": 1.8000958500636715,
+    "total": 4.9997337640002115,
+    "data": [
+     0.5583078930000056,
+     0.5599324180000167,
+     0.5614062959999728,
+     0.5535991190000686,
+     0.5529242690000729,
+     0.553587417000017,
+     0.547596444000078,
+     0.5552210079999895,
+     0.5571588999999904
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-m-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      1850631409
+     ],
+     "allocations": [
+      250112
+     ],
+     "total_bytes": [
+      3602635214
+     ],
+     "rss_bytes": [
+      1031360512
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 1.0248123080000369,
+    "max": 1.0434072560000232,
+    "mean": 1.0339685130000134,
+    "stddev": 0.00797613433536411,
+    "rounds": 5,
+    "median": 1.0334126199999218,
+    "iqr": 0.014206605750018753,
+    "q1": 1.0270030355000301,
+    "q3": 1.041209641250049,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 1.0248123080000369,
+    "hd15iqr": 1.0434072560000232,
+    "ops": 0.9671474396241958,
+    "total": 5.169842565000067,
+    "data": [
+     1.0434072560000232,
+     1.0248123080000369,
+     1.027733278000028,
+     1.0334126199999218,
+     1.0404771030000575
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_emit[curves-m5-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_emit[curves-m5-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "m5",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-m5-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      4803110993
+     ],
+     "allocations": [
+      250160
+     ],
+     "total_bytes": [
+      12597081510
+     ],
+     "rss_bytes": [
+      3898966016
+     ]
+    },
+    "columns": 5000000,
+    "rows": 15050000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 5000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 5.32064506800009,
+    "max": 5.390389712000001,
+    "mean": 5.348534376799989,
+    "stddev": 0.030684022390685375,
+    "rounds": 5,
+    "median": 5.330361532999973,
+    "iqr": 0.04920737524994934,
+    "q1": 5.327253998999993,
+    "q3": 5.376461374249942,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 5.32064506800009,
+    "hd15iqr": 5.390389712000001,
+    "ops": 0.18696710716446713,
+    "total": 26.742671883999947,
+    "data": [
+     5.32064506800009,
+     5.32945697599996,
+     5.390389712000001,
+     5.330361532999973,
+     5.371818594999922
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-2xs-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-2xs-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-2xs-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      23
+     ],
+     "total_bytes": [
+      165310
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000,
+    "phase_seconds": {
+     "first_window": 0.7383041479999974
+    },
+    "process_rss_bytes": 233279488
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.8807074679999687,
+    "max": 0.898464777000072,
+    "mean": 0.8899595200000098,
+    "stddev": 0.005910462269387928,
+    "rounds": 9,
+    "median": 0.8910910559999365,
+    "iqr": 0.009404033999999228,
+    "q1": 0.8851574420000361,
+    "q3": 0.8945614760000353,
+    "iqr_outliers": 0,
+    "stddev_outliers": 3,
+    "outliers": "3;0",
+    "ld15iqr": 0.8807074679999687,
+    "hd15iqr": 0.898464777000072,
+    "ops": 1.1236466126009743,
+    "total": 8.009635680000088,
+    "data": [
+     0.898464777000072,
+     0.8919723839999278,
+     0.8889433870000403,
+     0.8807074679999687,
+     0.88284512000007,
+     0.8942813160000469,
+     0.8859282160000248,
+     0.8954019560000006,
+     0.8910910559999365
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_fresh[curves-xs-linopy-0.10.0-highs]",
+   "fullname": "bench/test_ladder.py::test_fresh[curves-xs-linopy-0.10.0-highs]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-0.10.0",
+    "sink": "highs"
+   },
+   "param": "curves-xs-linopy-0.10.0-highs",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      59705
+     ],
+     "allocations": [
+      23
+     ],
+     "total_bytes": [
+      165310
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000,
+    "phase_seconds": {
+     "first_window": 0.7561021440000104
+    },
+    "process_rss_bytes": 239706112
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.9009817200000043,
+    "max": 0.9226455399999622,
+    "mean": 0.9114959677999878,
+    "stddev": 0.010622950140588679,
+    "rounds": 5,
+    "median": 0.9093281169999727,
+    "iqr": 0.020810224000058497,
+    "q1": 0.9017449687499663,
+    "q3": 0.9225551927500248,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.9009817200000043,
+    "hd15iqr": 0.9226455399999622,
+    "ops": 1.0970975575609272,
+    "total": 4.557479838999939,
+    "data": [
+     0.9019993849999537,
+     0.9009817200000043,
+     0.9093281169999727,
+     0.9225250770000457,
+     0.9226455399999622
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-3xs-linopy-0.10.0]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-3xs-linopy-0.10.0]",
+   "params": {
+    "case_name": "curves",
+    "size": "3xs",
+    "arm": "linopy-0.10.0"
+   },
+   "param": "curves-3xs-linopy-0.10.0",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      77539
+     ],
+     "allocations": [
+      19092
+     ],
+     "total_bytes": [
+      1989602
+     ]
+    },
+    "columns": 200,
+    "rows": 602,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 200
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09328852999999526,
+    "max": 0.09501353400003154,
+    "mean": 0.09413409320000028,
+    "stddev": 0.0008020006375584069,
+    "rounds": 5,
+    "median": 0.09413160999997672,
+    "iqr": 0.0015355239999621517,
+    "q1": 0.09335879300002148,
+    "q3": 0.09489431699998363,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.09328852999999526,
+    "hd15iqr": 0.09501353400003154,
+    "ops": 10.623143709212435,
+    "total": 0.4706704660000014,
+    "data": [
+     0.09413160999997672,
+     0.09485457799996766,
+     0.09338221400003022,
+     0.09501353400003154,
+     0.09328852999999526
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-2xs-linopy-0.10.0]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-2xs-linopy-0.10.0]",
+   "params": {
+    "case_name": "curves",
+    "size": "2xs",
+    "arm": "linopy-0.10.0"
+   },
+   "param": "curves-2xs-linopy-0.10.0",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      239480
+     ],
+     "allocations": [
+      19205
+     ],
+     "total_bytes": [
+      3282046
+     ]
+    },
+    "columns": 1000,
+    "rows": 3010,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09212760600007641,
+    "max": 0.09575917000006484,
+    "mean": 0.09361539820004054,
+    "stddev": 0.001336397719968517,
+    "rounds": 5,
+    "median": 0.09345551000001251,
+    "iqr": 0.0013652492499147684,
+    "q1": 0.09282873675007863,
+    "q3": 0.0941939859999934,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.09212760600007641,
+    "hd15iqr": 0.09575917000006484,
+    "ops": 10.682003380076067,
+    "total": 0.4680769910002027,
+    "data": [
+     0.09575917000006484,
+     0.09306244700007937,
+     0.09345551000001251,
+     0.09367225799996959,
+     0.09212760600007641
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-xs-linopy-0.10.0]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-xs-linopy-0.10.0]",
+   "params": {
+    "case_name": "curves",
+    "size": "xs",
+    "arm": "linopy-0.10.0"
+   },
+   "param": "curves-xs-linopy-0.10.0",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      2147480
+     ],
+     "allocations": [
+      19286
+     ],
+     "total_bytes": [
+      14069282
+     ]
+    },
+    "columns": 10000,
+    "rows": 30100,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 10000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.09570258799999465,
+    "max": 0.09908612300000641,
+    "mean": 0.09714022499999828,
+    "stddev": 0.0013551666101188793,
+    "rounds": 5,
+    "median": 0.097179188000041,
+    "iqr": 0.00207430124999064,
+    "q1": 0.09596139799998582,
+    "q3": 0.09803569924997646,
+    "iqr_outliers": 0,
+    "stddev_outliers": 2,
+    "outliers": "2;0",
+    "ld15iqr": 0.09570258799999465,
+    "hd15iqr": 0.09908612300000641,
+    "ops": 10.294396579789863,
+    "total": 0.4857011249999914,
+    "data": [
+     0.09908612300000641,
+     0.09570258799999465,
+     0.09604766799998288,
+     0.09768555799996648,
+     0.097179188000041
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-s-linopy-0.10.0]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-s-linopy-0.10.0]",
+   "params": {
+    "case_name": "curves",
+    "size": "s",
+    "arm": "linopy-0.10.0"
+   },
+   "param": "curves-s-linopy-0.10.0",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      21251480
+     ],
+     "allocations": [
+      19311
+     ],
+     "total_bytes": [
+      102814222
+     ]
+    },
+    "columns": 100000,
+    "rows": 301000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 100000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.12733032399989952,
+    "max": 0.13094107500000973,
+    "mean": 0.12844543339997472,
+    "stddev": 0.001444766639593343,
+    "rounds": 5,
+    "median": 0.12788297800000237,
+    "iqr": 0.001407728750024262,
+    "q1": 0.12760735674996226,
+    "q3": 0.12901508549998653,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.12733032399989952,
+    "hd15iqr": 0.13094107500000973,
+    "ops": 7.785407184434763,
+    "total": 0.6422271669998736,
+    "data": [
+     0.13094107500000973,
+     0.12788297800000237,
+     0.12769970099998318,
+     0.1283730889999788,
+     0.12733032399989952
+    ],
+    "iterations": 1
+   }
+  },
+  {
+   "group": null,
+   "name": "test_rebuild[curves-m-linopy-0.10.0]",
+   "fullname": "bench/test_ladder.py::test_rebuild[curves-m-linopy-0.10.0]",
+   "params": {
+    "case_name": "curves",
+    "size": "m",
+    "arm": "linopy-0.10.0"
+   },
+   "param": "curves-m-linopy-0.10.0",
+   "extra_info": {
+    "benchmem": {
+     "peak_bytes": [
+      212267480
+     ],
+     "allocations": [
+      19325
+     ],
+     "total_bytes": [
+      986199954
+     ]
+    },
+    "columns": 1000000,
+    "rows": 3010000,
+    "nonzeros": null,
+    "live_fraction": 1.0,
+    "variables": 1000000
+   },
+   "options": {
+    "disable_gc": false,
+    "timer": "perf_counter",
+    "min_rounds": 5,
+    "max_time": 1.0,
+    "min_time": 5e-06,
+    "precision": null,
+    "confidence": null,
+    "warmup": false
+   },
+   "stats": {
+    "min": 0.42391911000004256,
+    "max": 0.44087223600001835,
+    "mean": 0.4294352024000091,
+    "stddev": 0.006648930770606988,
+    "rounds": 5,
+    "median": 0.42721530799997254,
+    "iqr": 0.006312219000022878,
+    "q1": 0.42563131800000065,
+    "q3": 0.4319435370000235,
+    "iqr_outliers": 0,
+    "stddev_outliers": 1,
+    "outliers": "1;0",
+    "ld15iqr": 0.42391911000004256,
+    "hd15iqr": 0.44087223600001835,
+    "ops": 2.328640023945971,
+    "total": 2.1471760120000454,
+    "data": [
+     0.44087223600001835,
+     0.42896730400002525,
+     0.4262020539999867,
+     0.42721530799997254,
+     0.42391911000004256
+    ],
+    "iterations": 1
+   }
+  }
+ ],
+ "datetime": "2026-11-17T12:45:10.807577+00:00",
+ "version": "5.3.1"
+}
