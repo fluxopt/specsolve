@@ -90,14 +90,24 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 ## How it runs
 
+**Engine**
+: A tool that attaches data to a spec, builds the model and hands it to a
+  solver, as mathspec
+  [defines it](https://mathspec.readthedocs.io/en/latest/reference/glossary/#tool).
+  specsolve is one.
+
 **attach**
 : Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
   `update`.
 
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
-  writer (`.lp`, `.mps`). What a sink can take is its **capability**
-  ([what each sink takes](api.md#what-each-sink-takes)).
+  writer (`.lp`, `.mps`).
+
+**Capability**
+: One kind of model a sink takes, such as integer variables or a quadratic
+  constraint. A model that needs a capability its sink lacks is refused before
+  the solve ([what each sink takes](api.md#what-each-sink-takes)).
 
 **start**
 : What a solve begins from: `'previous'`, the default, or `None`. It never

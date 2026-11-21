@@ -42,7 +42,7 @@ flowchart TB
             direction TB
             COMP["compiler.py<br/>program → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
-            SPECIALIZE --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
+            SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
@@ -142,7 +142,7 @@ absence is pushed into the operand first
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row constant term |
 | `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `VariableReference` | a declared name | one-to-one | `(dims…, var_label, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
+| `VariableReference` | a declared name | one-to-one | `(dims…, col_index, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a constant term present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two lists of terms concatenated |
@@ -174,11 +174,11 @@ lifecycle. `scope.py` sits under them all.
 leaves no model.
 
 **Tables are tidy.** Parameters are `(dims…, value)`. A variable table is
-`(dims…, var_label)`. A linear expression is `(dims…, var_label, coeff)` plus a
+`(dims…, col_index)`. A linear expression is `(dims…, col_index, coeff)` plus a
 constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
-**Labels are dense `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
-So `var_label` is the solver column, `row` is the solver row, and a build is
+**Solver indices are dense `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
+So `col_index` is the solver column, `row` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position.
 
@@ -221,7 +221,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
-| `_engine/labels.py` | which coordinate gets which solver index |
+| `_engine/indices.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
 | `_engine/specialize.py` | what the data decides before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
@@ -249,7 +249,9 @@ The names the code uses for its own parts. The names a caller meets are in
 [the glossary](../reference/glossary.md).
 
 **Lane**
-: One way to build a spec: the relational lane or the oracle.
+: One way to build a spec: the relational lane, which is this package, or the
+  oracle, the linopy lane under `tests/linopy_lane/` that builds a
+  `linopy.Model`.
 
 **The door**
 : `_sources.tidy_sources`, the one function both lanes read data through.
@@ -266,8 +268,14 @@ The names the code uses for its own parts. The names a caller meets are in
   quadratic or constant; where the variable under it exists; the part of a
   `cases:` block it covers (`terms.py`).
 
-**Label**
-: The solver's index of one column or row (`labels.py`).
+**Solver index**
+: The position of one column or row in the solver: a column index for a
+  variable at a coordinate, a row index for a constraint at one
+  (`indices.py`). A label is a dimension's member, never a solver index.
+
+**Handoff**
+: Everything a sink reads of a built model, and nothing more: the tables, the
+  column and row vectors, the matrix a block at a time (`handoff.py`).
 
 **Collect engine**
 : Which polars engine materialises a table. A build within `IN_MEMORY_REACH`

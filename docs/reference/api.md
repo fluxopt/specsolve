@@ -228,7 +228,7 @@ sinks that do. `solve` and `write` refuse the same. The check reads the built
 model, so a square the data prices at zero, an integer variable with no column
 or an empty set asks for nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
-from whether it is sayable.
+from whether the language states it.
 
 | | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
 |---|---|---|---|---|---|
