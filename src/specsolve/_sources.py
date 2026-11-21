@@ -112,9 +112,9 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
-    labels: dict[str, pl.Series] = {}
+    dimension_labels = _dimension_labels(program.dimensions, sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels=labels)
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, dimension_labels)
 
     for dname in program.dimensions:
         if dname not in sources:
@@ -430,6 +430,11 @@ def _labels_of(dim: str, index: pl.LazyFrame) -> pl.Series:
     return index.select(dim).pipe(collected)[dim]
 
 
+def _dimension_labels(dims: Iterable[str], indexes: Mapping[str, pl.LazyFrame]) -> dict[str, pl.Series]:
+    """The labels of each of *dims* whose index *indexes* holds, read once; a dimension not read yet is left out."""
+    return {d: _labels_of(d, indexes[d]) for d in dims if d in indexes}
+
+
 def _read_relation(source: Source, name: str, relation: Relation, indexes: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
     """One supplied relation as the frame both lanes read: one column per declared column, under its own name.
 
@@ -535,7 +540,8 @@ def read_values(
         DataError: A table a parameter over the same dims would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
+    frame = parameter_frame(name, declared, obj, indexes, kind)
+    return _checked_parameter(name, declared, frame, indexes, _dimension_labels(dims, indexes), kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -642,13 +648,14 @@ def _checked_parameter(
     p: Parameter,
     table: pl.LazyFrame,
     sources: Mapping[str, pl.LazyFrame],
+    dimension_labels: Mapping[str, pl.Series],
     kind: str = 'parameter',
-    labels: dict[str, pl.Series] | None = None,
 ) -> pl.LazyFrame:
     """*table* held to what its declaration claims, collected once.
 
-    *labels* holds each dimension's labels once read, for a caller checking
-    many tables over the same dimensions to read each index once.
+    *dimension_labels* holds the labels of each dimension whose index has been
+    read ([`_dimension_labels`][]), read once for every table checked against
+    them.
 
     The collect is the one model-sized materialisation on the way in.
 
@@ -668,19 +675,14 @@ def _checked_parameter(
     frame = in_microseconds(
         table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
     )
-    _check_one_row_per_coordinate(name, p, frame, sources, kind, {} if labels is None else labels)
+    _check_one_row_per_coordinate(name, p, frame, dimension_labels, kind)
     _check_values_are_present(name, p, frame, kind)
     _check_value_dtype(name, p, frame, kind)
     return frame.lazy()
 
 
 def _check_one_row_per_coordinate(
-    name: str,
-    p: Parameter,
-    frame: pl.DataFrame,
-    sources: Mapping[str, pl.LazyFrame],
-    kind: str,
-    read_labels: dict[str, pl.Series],
+    name: str, p: Parameter, frame: pl.DataFrame, dimension_labels: Mapping[str, pl.Series], kind: str
 ) -> None:
     """A table of values is a function of its dims: one row per coordinate, every label a real one.
 
@@ -697,11 +699,7 @@ def _check_one_row_per_coordinate(
             )
         return
 
-    known = {
-        d: read_labels[d] if d in read_labels else read_labels.setdefault(d, _labels_of(d, sources[d]))
-        for d in p.dims
-        if d in sources
-    }
+    known = {d: dimension_labels[d] for d in p.dims if d in dimension_labels}
     for d, labels in known.items():
         _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
     positions = _row_major_positions(p.dims, frame, known)
