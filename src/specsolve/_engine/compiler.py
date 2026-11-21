@@ -408,7 +408,7 @@ class Compiler:
                 if sums and any(
                     isinstance(f, program.ParameterReference)
                     and program.carries_variable(g)
-                    and self.scope.is_zero(f.name)
+                    and f.name in self.scope.data.zero
                     for f, g in ((e.left, e.right), (e.right, e.left))
                 ):
                     return CompiledExpression((), ())
