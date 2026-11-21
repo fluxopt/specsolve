@@ -19,16 +19,18 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The chain
 
 **Spec**
-: The math before any data: a YAML file, a mapping, or a `Spec`. What it may
+: The math before any data: a YAML file, a mapping, or a `Spec`
+  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#spec)). What it may
   contain is
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
-: What [`check`](api.md#specsolve.check) returns: what the spec compiles to,
-  and what a build reads. No function takes one back, so keep the `Spec`.
+: What [`check`](api.md#specsolve.check) returns: what the spec compiles to
+  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#program)), and what a build reads. No function takes one back, so keep the `Spec`.
 
 **Model**
-: A spec with data attached: what [`build`](api.md) returns.
+: A spec with data attached ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#model)): what
+  [`build`](api.md) returns.
 
 **Result**
 : One answer read back from a solve:
@@ -57,7 +59,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : `model.update(sources)` puts new numbers on a built model in place. A change
   that alters which coordinates a `where:` keeps builds again.
 
-**load** · **scan**
+**`load_…`** · **`scan_…`**
 : `load_…` reads a saved answer whole. `scan_…` reads each table when asked,
   so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
@@ -69,12 +71,14 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   each dimension to its labels ([the data contract](data.md)).
 
 **Label**
-: One member of a dimension, such as `wind` in `generator`. A dimension's
+: One member of a dimension, such as `wind` in `generator`
+  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#label)). A dimension's
   labels arrive in `sources` under its name, in order, each once
   ([where coordinates come from](data.md#where-coordinates-come-from)).
 
 **Coordinate**
-: One point of an entry's dimensions: one snapshot for one generator.
+: One point of an entry's dimensions: one snapshot for one generator
+  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#coordinate)).
 
 **Table**
 : A polars `DataFrame` with one column per dimension and a `value` column, one
@@ -85,8 +89,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **`where:`**
 : Narrows an entry to the coordinates where its condition is true, and
-  leaves the entry absent elsewhere
-  ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
+  leaves the entry absent elsewhere ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#where),
+  [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
 
 ## How it runs
 
@@ -98,7 +102,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **attach**
 : Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
-  `update`.
+  `update` ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#attach)).
 
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
