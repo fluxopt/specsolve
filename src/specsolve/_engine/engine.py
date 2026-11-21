@@ -10,7 +10,6 @@ The lane is described in docs/development/architecture.md.
 
 from __future__ import annotations
 
-import dataclasses
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,11 +17,8 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
-from mathspec import program
-from mathspec.program import walk
 
 from specsolve import _sinks as sinks
-from specsolve._collect import in_memory
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -33,7 +29,6 @@ from specsolve._engine.assembly import (
 )
 from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.compiler import Compiler, Solution
-from specsolve._engine.predicates import folded, holds_everywhere, settled
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
@@ -45,6 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
     import numpy as np
+    from mathspec import program
     from polars._typing import PolarsDataType
 
     from specsolve._outputs import Output
@@ -156,8 +152,7 @@ class Engine:
             attached = attach(program, sources)
         self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
-        settled_program, tests = _with_wheres_settled(program, attached)
-        assembly = Assembly(settled_program, attached, self._measured, tests)
+        assembly = Assembly(program, attached, self._measured)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
 
@@ -629,46 +624,3 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         yield
     finally:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
-
-
-def _with_wheres_settled(
-    lowered: program.Program, attached: AttachedSources
-) -> tuple[program.Program, Mapping[program.Condition, bool]]:
-    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles, and those tests.
-
-    Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
-    not once per declaration. A ``where`` that folds to true is dropped, so
-    the declaration takes the path of one without a ``where``: dense labels,
-    and terms placed on their rows without a join. One that folds to false
-    is kept as that literal, and the declaration is skipped with no further
-    read. The program the model keeps is this one, so readback reads the
-    declarations it built. The conditions of every ``cases:`` region the rows
-    and bounds read are settled in the same batch, for the compiler to fold.
-    The tests read one parameter's table whole, so they run on the in-memory
-    engine whatever the model's size.
-    """
-    declared = [*lowered.variables.values(), *lowered.constraints.values()]
-    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
-    regions = [
-        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
-    ]
-    with in_memory():
-        tests = settled(Scope(lowered, attached, {}), [*(d.where for d in declared if d.where is not None), *regions])
-
-    def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
-        out = {}
-        for name, declaration in declarations.items():
-            where = declaration.where
-            if where is None or not tests:
-                out[name] = declaration
-                continue
-            kept = folded(where, tests)
-            out[name] = dataclasses.replace(declaration, where=None if holds_everywhere(kept) else kept)
-        return out
-
-    if not tests:
-        return lowered, tests
-    narrowed_program = dataclasses.replace(
-        lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints)
-    )
-    return narrowed_program, tests
