@@ -26,9 +26,12 @@ for numbers in steps:
     result = model.update(numbers).solve()
 ```
 
-An `update` that moves a mask or adds a label builds and loads again.
-[Change it and solve again](../change.md) shows the loop and how to check
-that it stays loaded.
+An `update` that moves a mask or adds a label builds and loads again. An
+`update` that gives a parameter new numbers at the coordinates it already
+has, where the parameter is only a bound, a right-hand side or a cost, also
+skips most of the build: only the bounds, right-hand sides and costs it
+feeds are read again. [Change it and solve again](../change.md) shows the
+loop and how to check that it stays loaded.
 
 ## Start from an earlier answer
 
