@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(engine): a dimension may be called row, coeff, cval or ord, as any other name ([#2170](https://github.com/fluxopt/specsolve/pull/2170))
 - refactor: messages and docs use one word per meaning, as the glossary defines it ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
 - refactor(sweep): EachWindow takes the labels each window keeps as horizon= rather than steps=, and an archive written before reads as another layout ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
 - refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
