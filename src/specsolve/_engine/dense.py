@@ -20,7 +20,7 @@ such leaf is a frame from there on.
 from __future__ import annotations
 
 import math
-from functools import cached_property
+from functools import cached_property, reduce
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -265,8 +265,9 @@ def placed(
         variable has no column at a coordinate holds no entry there. Within
         a coordinate the terms are laid out by ``reach``, which is column
         order for terms over different variables, so their share is not
-        sorted: each term's entries are read as one block, and the blocks
-        are then read back a coordinate at a time.
+        sorted: each term's entries are read as one block in coordinate
+        order, and the blocks are merged on the coordinate, one that ties
+        leaving in the order of the blocks.
     """
     kept = None
     there = [_columns_of(body, at) >= 0 for body, _ in terms if body.absent is not None]
@@ -275,20 +276,18 @@ def placed(
         if not standing.all():
             kept, positions = standing, positions.filter(standing)
 
-    count, rows = len(terms), positions.len()
-    coordinates = pl.LazyFrame({POSITION: positions})
+    index = pl.int_range(positions.len(), dtype=pl.Int64, eager=True).set_sorted()
+    coordinates = pl.LazyFrame({'index': index, POSITION: positions})
     blocks = [
-        coordinates.with_columns(
-            _columns_of(body, at).cast(pl.Int32).alias('col'), (body.values(at) * sign).cast(pl.Float64).alias('coeff')
-        ).select('col', 'coeff')
+        coordinates.select(
+            'index',
+            _columns_of(body, at).cast(pl.Int32).alias('col'),
+            (body.values(at) * sign).cast(pl.Float64).alias('coeff'),
+        )
         for body, sign in sorted(terms, key=lambda term: term[0].reach)
     ]
-    entry = pl.int_range(rows * count, dtype=pl.Int64)
-    turn = (entry % count) * rows + entry // count
-    stacked = pl.concat(blocks) if count > 1 else blocks[0]
-    read = [pl.col('col').gather(turn), pl.col('coeff').gather(turn)] if count > 1 else [pl.col('col'), pl.col('coeff')]
-    entries = stacked.select((entry // count).alias('index'), *read).pipe(collected)
-    if rows and entries.get_column('col').min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
+    entries = reduce(lambda merged, block: merged.merge_sorted(block, key='index'), blocks).pipe(collected)
+    if entries.height and entries.get_column('col').min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
         entries = entries.filter(pl.col('col') >= 0)
     return positions, kept, entries
 
