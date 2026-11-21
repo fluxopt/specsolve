@@ -40,7 +40,7 @@ from mathspec.errors import MathSpecError
 
 import specsolve as sps
 from specsolve._engine.engine import Engine
-from specsolve._inputs import lowered
+from specsolve._inputs import as_program
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, SpecsolveError
 from tests.differential import RTOL, _frame, _hold, by_coordinate
@@ -288,7 +288,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
     m = specsolve_linopy.build(spec, dict(sources))
     status, condition = m.solve(solver_name='highs', output_flag=False, io_api='direct', sanitize_zeros=False)
     oracle = float(m.objective.value) if status == 'ok' else math.nan
-    program = lowered(spec)
+    program = as_program(spec)
     findings = []
     with Engine() as engine:
         engine.build(program, tidy_sources(program, dict(sources)))

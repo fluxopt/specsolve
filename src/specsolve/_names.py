@@ -5,7 +5,7 @@ name is refused where it starts with [`RESERVED_PREFIX`][], which covers every
 column specsolve adds under it. A dimension alone is refused where it is
 [`VALUE`][], the one whole name, because only a dimension becomes a column
 beside it: a parameter or a variable called ``value`` is accepted.
-[`lowered`][specsolve._inputs.lowered] applies both, so
+[`as_program`][specsolve._inputs.as_program] applies both, so
 [`check`][specsolve._api.check] and every other verb name the collision before
 any data is read.
 

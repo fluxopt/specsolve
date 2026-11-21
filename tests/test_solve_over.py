@@ -28,7 +28,7 @@ import specsolve as sps
 from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
 from specsolve._axes import CarryRule, Slice, as_built, axis_from
-from specsolve._inputs import lowered
+from specsolve._inputs import as_program
 from specsolve._records import Metrics, Provenance, Record
 from tests.conftest import DISPATCH_SPEC, override
 
@@ -891,7 +891,7 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert axis._blocks(periods) == expected, 'each block is trimmed to what the axis has left'
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
-    slices, stitch = axis._slice(lowered(WINDOW), horizon_sources(periods), 'snapshot_start')
+    slices, stitch = axis._slice(as_program(WINDOW), horizon_sources(periods), 'snapshot_start')
     owned = stitch.owned.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
     assert owned == expected, 'which is what each slice records owning'
     for current in slices:

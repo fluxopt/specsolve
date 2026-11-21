@@ -26,7 +26,7 @@ import pytest
 
 import specsolve as sps
 from specsolve._engine.engine import Engine
-from specsolve._inputs import lowered
+from specsolve._inputs import as_program
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
 from tests.conftest import schema_of, solve_written_file
@@ -99,7 +99,7 @@ def differential(
         if not np.isfinite(oracle):
             raise NoFiniteAnswerError('the linopy oracle is infeasible or unbounded — fix the data, not the tolerance')
 
-        program = lowered(model)
+        program = as_program(model)
         with Engine() as engine:
             engine.build(program, tidy_sources(program, dict(sources)))
             result = engine.solve(outputs=outputs)

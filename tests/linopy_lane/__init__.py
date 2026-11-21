@@ -48,7 +48,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
-from specsolve._inputs import as_spec, lower_expression, lowered
+from specsolve._inputs import as_program, as_spec, expression_node
 from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
@@ -96,7 +96,7 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> linopy.Model:
             walks or by more than one column.
     """
     with note(f'while loading {_named(spec)}'):
-        program = lowered(spec)
+        program = as_program(spec)
         refuse_relations_the_lane_does_not_build(program)
 
         tidy = tidy_sources(program, sources)
@@ -143,8 +143,8 @@ def evaluate(
     """
     with note(f'while evaluating an expression against {_named(spec)}'):
         written = as_spec(spec)
-        node = lower_expression(written, expression)
-        program = lowered(written)
+        node = expression_node(written, expression)
+        program = as_program(written)
         refuse_relations_the_lane_does_not_build(program)
         tidy = tidy_sources(program, sources)
         master_coords, relations = dimension_coords(program, tidy)

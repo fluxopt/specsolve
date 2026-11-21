@@ -664,7 +664,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
 
 
 def test_both_lanes_lower_a_spec_through_one_function():
-    """Neither lane accepts a file the other refuses, which is what ``lowered`` is for."""
+    """Neither lane accepts a file the other refuses, which is what ``as_program`` is for."""
     import ast
 
     reading = {
@@ -675,7 +675,7 @@ def test_both_lanes_lower_a_spec_through_one_function():
     }
     assert reading == {'_inputs.py'}, (
         f'a program is read off a freshly opened model in {sorted(reading)}; every lane lowers through '
-        f'inputs.lowered, which is what refuses a spec this package cannot build or write down'
+        f'inputs.as_program, which is what refuses a spec this package cannot build or write down'
     )
 
 

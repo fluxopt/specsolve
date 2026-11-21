@@ -83,7 +83,7 @@ flowchart TB
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
   accepts into tidy polars tables, and `_assumptions.py` checks a spec's
   assumptions there.
-- **One gate decides what either lane builds.** `_inputs.lowered` returns a
+- **One gate decides what either lane builds.** `_inputs.as_program` returns a
   `Program` or raises `LanguageError`. `DataError` is what a source failed to
   supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
@@ -116,7 +116,7 @@ the dependency claims.*
    nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
 3. **One language, two builds, and linopy is only the oracle.** Both pass
-   `_inputs.lowered`, and nothing under `src/` imports linopy. The three files
+   `_inputs.as_program`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
    [Verification](verification.md#the-same-language-but-not-every-build).
 4. **A YAML file is self-contained.** No Python-side state may change what a
@@ -255,7 +255,7 @@ The names the code uses for its own parts. The names a caller meets are in
 : `_sources.tidy_sources`, the one function both lanes read data through.
 
 **Lowering**
-: Turning a spec into its `Program`, through `_inputs.lowered`.
+: Turning a spec into its `Program`, through `_inputs.as_program`.
 
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(val, ord)`, a

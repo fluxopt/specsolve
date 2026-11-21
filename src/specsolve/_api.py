@@ -34,7 +34,7 @@ from specsolve._answer_layout import METRICS_FILE
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
-from specsolve._inputs import Label, Source, SpecLike, as_spec, lower_expression, lowered
+from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
 from specsolve._outputs import checked_outputs
 from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
 from specsolve._result import Result
@@ -89,7 +89,7 @@ def check(spec: SpecLike) -> Program:
             uses as an axis, a variable the objective drives to infinity with
             nothing to stop it. Issued here and nowhere else.
     """
-    program = lowered(spec)
+    program = as_program(spec)
     for note in advice(program):
         warnings.warn(str(note), SpecsolveWarning, stacklevel=2)
     return program
@@ -116,7 +116,7 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         LanguageError: A construct outside the streaming language.
         DataError: As [`build`][] refuses the sources.
     """
-    program = lowered(spec)
+    program = as_program(spec)
     return {
         name: table.pipe(collected) for name, table in with_positions(program, tidy_sources(program, sources)).items()
     }
@@ -171,10 +171,10 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
             or a divisor with no value where the expression divides.
     """
     document = as_spec(spec)
-    program = lowered(document)
+    program = as_program(document)
     _refuse_a_decision(program)
     tidied = tidy_sources(program, sources)
-    return expressions_of(program, tidied, lambda written: lower_expression(document, written)).value(expression)
+    return expressions_of(program, tidied, lambda written: expression_node(document, written)).value(expression)
 
 
 class Model:
@@ -191,7 +191,7 @@ class Model:
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._spec = as_spec(spec)
-        self._program = lowered(self._spec)
+        self._program = as_program(self._spec)
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
@@ -204,7 +204,7 @@ class Model:
         Held here because the engine may not see the model as written
         (docs/development/architecture.md, hard rule 2).
         """
-        return lower_expression(self._spec, written)
+        return expression_node(self._spec, written)
 
     def _fill(self) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.

@@ -26,7 +26,7 @@ import specsolve as sps
 from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
-from specsolve._inputs import lowered
+from specsolve._inputs import as_program
 from specsolve._names import RUN
 from specsolve._outputs import KINDS
 from specsolve._records import Metrics, Provenance, Record
@@ -935,7 +935,7 @@ def test_a_loaded_sweep_archive_answers_the_frame_readers(
 
 def _cuts(axis, spec, sources) -> list[dict[str, object]]:
     """The sources of each slice *axis* cuts for *spec*, in slice order."""
-    slices, _ = axis._slice(lowered(spec), sources, axis._key_name())
+    slices, _ = axis._slice(as_program(spec), sources, axis._key_name())
     return [dict(current.sources) for current in slices]
 
 

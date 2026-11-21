@@ -1,6 +1,6 @@
 """What a spec and its sources may arrive as, and the one door every verb lowers a spec through.
 
-An expression the file never named passes the same door: [`lower_expression`][] splices
+An expression the file never named passes the same door: [`expression_node`][] splices
 it into the spec as a named one and lowers the whole spec again. This sits
 above both lanes because nothing
 in the engine or a sink may see the spec as written
@@ -135,7 +135,7 @@ def _refuse_reserved_names(program: Program) -> None:
         refuse_value(name, f"dimension '{name}'")
 
 
-def lowered(spec: SpecLike) -> Program:
+def as_program(spec: SpecLike) -> Program:
     """*spec* as a program, refusing what this package cannot build or keep apart.
 
     Every verb lowers through here.
@@ -175,7 +175,7 @@ def lowered(spec: SpecLike) -> Program:
 _EVALUATED = '_evaluated'
 
 
-def lower_expression(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
+def expression_node(spec: Spec, expression: str | Mapping[str, object]) -> Expression:
     """One unnamed expression as a plan node, read in *spec*'s namespace.
 
     The expression is spliced under ``expressions:`` with a name no section
@@ -201,4 +201,4 @@ def lower_expression(spec: Spec, expression: str | Mapping[str, object]) -> Expr
         name += '_'
     section = written.get('expressions')
     written['expressions'] = {**section, name: expression} if isinstance(section, dict) else {name: expression}
-    return lowered(written).expressions[name].expression
+    return as_program(written).expressions[name].expression
