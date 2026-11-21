@@ -27,15 +27,7 @@ from specsolve._collect import collected
 from specsolve._engine import positional
 from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.positional import Positional
-from specsolve._engine.predicates import (
-    Carrier,
-    compile_predicate,
-    falsy_if_null,
-    folded,
-    holds_everywhere,
-    holds_nowhere,
-    masked,
-)
+from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
@@ -193,23 +185,14 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def expression(
-        self,
-        expr: program.Expression,
-        context: str,
-        *,
-        admits_quadratic: bool = False,
-        reported: bool = False,
-        sums: bool = False,
+        self, expr: program.Expression, context: str, *, admits_quadratic: bool = False, reported: bool = False
     ) -> CompiledExpression:
         """Compile an expression into linear, quadratic and constant terms.
 
         *admits_quadratic* is the position's ceiling: whether it may hold a
         product of two variables, as the objective and a quadratic constraint
         may. *reported* is set by a read, where a quotient is absent wherever
-        its divisor is zero ([`_read_divisor`][]). *sums* is set where the
-        expression is only ever summed, as the objective is: there a variable
-        times a parameter that is zero at every row builds no term, where in a
-        constraint it would still keep its row. The asserts are the
+        its divisor is zero ([`_read_divisor`][]). The asserts are the
         plan-boundary backstop to ``mathspec.degree``. No join in the walk
         maintains order; every consumer verifies order where it reads.
         """
@@ -306,29 +289,18 @@ class Compiler:
         def region(r: program.Region) -> CompiledExpression:
             """One region's value, kept only where that region applies.
 
-            The condition is folded over the tests the data settles first
-            ([`Scope.settled`][specsolve._engine.scope.Scope.settled]), which
-            only a build holds: one settled false builds no term, and one
-            settled true claims every coordinate without a read, still
-            spreading the value over the dims its condition reads. Otherwise
-            the coordinates it claims are read once. In a build, a region that
-            claims none builds no term: each term would carry presences over
-            the full product of its dims, read only to be cut away. A read
-            keeps it, since a read takes its dims from its terms and the
-            region may be the only one over a dim.
+            The coordinates it claims are read once, over the dims its
+            condition reads. In a build, a region that claims none builds no
+            term: each term would carry presences over the full product of its
+            dims, read only to be cut away. A read keeps it, since a read
+            takes its dims from its terms and the region may be the only one
+            over a dim.
             """
-            when = folded(r.when, self.scope.settled) if self.scope.settled else r.when
-            if holds_nowhere(when):
-                return CompiledExpression((), ())
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            everywhere = holds_everywhere(when)
-            if everywhere:
-                truth = self.scope.product(on).select(*on) if on else None
-            else:
-                truth = masked(self.scope, on, when).select(*on).pipe(collected) if on else None
-                if truth is not None and not truth.height and self.builds:
-                    return CompiledExpression((), ())
-                truth = truth.lazy() if truth is not None else None
+            truth = masked(self.scope, on, r.when).select(*on).pipe(collected) if on else None
+            if truth is not None and not truth.height and self.builds:
+                return CompiledExpression((), ())
+            truth = truth.lazy() if truth is not None else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
                 """A region's presence, silent about the coordinates the region does not claim.
@@ -341,7 +313,7 @@ class Compiler:
                 """
                 have = x.keys(dims)
                 keys = tuple(dict.fromkeys((*have, *on)))
-                complement = self.scope.product(on).head(0) if everywhere else masked(self.scope, on, ~when)
+                complement = masked(self.scope, on, ~r.when)
                 if not keys:
                     marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
                     return Presence(pl.concat(marks).unique(), keys)
@@ -357,15 +329,15 @@ class Compiler:
                 constant instead.
                 """
                 if truth is None:
-                    carrier, condition = compile_predicate(self.scope, p.frame, when, p.dims)
+                    carrier, condition = compile_predicate(self.scope, p.frame, r.when, p.dims)
                     frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                    return replace(p, body=frame, presences=presences, region=both_regions(p.region, when))
+                    return replace(p, body=frame, presences=presences, region=both_regions(p.region, r.when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
                 frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)
                 presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                return replace(p, dims=out_dims, body=frame, presences=presences, region=both_regions(p.region, when))
+                return replace(p, dims=out_dims, body=frame, presences=presences, region=both_regions(p.region, r.when))
 
             return map_terms(ev(r.value), kept)
 
@@ -406,13 +378,6 @@ class Compiler:
                 a, b = ev(e.left), ev(e.right)
                 return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
-                if sums and any(
-                    isinstance(f, program.ParameterReference)
-                    and program.carries_variable(g)
-                    and f.name in self.scope.data.zero
-                    for f, g in ((e.left, e.right), (e.right, e.left))
-                ):
-                    return CompiledExpression((), ())
                 return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
                 return quotient(e)

@@ -57,8 +57,6 @@ class Scope:
     program: program.Program
     data: AttachedSources
     variables: Mapping[str, Labelled]
-    #: Each condition test the data settles at every coordinate, true or false: the attach's, which only a build hands its scope.
-    settled: Mapping[program.Condition, bool] = field(default_factory=dict)
     #: Each column read by position, by what it holds and its name; [`positional`][specsolve._engine.positional] fills it.
     by_position: dict[tuple[str, str], pl.Series] = field(default_factory=dict)
 

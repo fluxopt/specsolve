@@ -101,17 +101,13 @@ class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
-        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*.
-
-        The scope holds what *attached* settled, so the compiler folds each
-        ``cases:`` region over it too.
-        """
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
-        self.scope = Scope(program, attached, self.variables, attached.settled)
+        self.scope = Scope(program, attached, self.variables)
         self.compiler = Compiler(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
@@ -517,7 +513,7 @@ class Assembly:
         """
         if o is None:
             return None
-        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True, sums=True)
+        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True)
         coverage.refuse_null_constants(
             [p.frame for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )

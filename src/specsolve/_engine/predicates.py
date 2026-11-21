@@ -8,13 +8,12 @@ declaration is instantiated over, cut by its mask.
 from __future__ import annotations
 
 import itertools
-import math
 from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected, collected_all
+from specsolve._collect import collected
 from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
 from specsolve._engine.scope import join_on
 from specsolve._engine.shifts import translate_rows
@@ -23,7 +22,7 @@ from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     import datetime
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable
 
     from polars._typing import JoinStrategy
 
@@ -80,39 +79,7 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
     return carrier.filter(falsy_if_null(condition))
 
 
-def settled(scope: Scope, masks: Iterable[program.Mask]) -> dict[program.Condition, bool]:
-    """Each test in *masks* that the data settles at every coordinate: ``True`` where it holds everywhere, ``False`` where nowhere.
-
-    A test is a parameter's bare name or comparison, anywhere in a mask, a
-    named condition read through. Each is read once over the parameter's own
-    table, all in one batch: a model gates hundreds of declarations on the
-    same few flags, and reading a flag per declaration over the product of
-    its dims was most of the cost of the declarations that build nothing. A
-    parameter with no row, and a count along a dimension without a label,
-    settle without a query. A test the data leaves partial is not in the
-    answer.
-    """
-    atoms = {atom for mask in masks for atom in mask.atoms}
-    out: dict[program.Condition, bool] = {}
-    queried: list[program.ParameterDefined | program.ParameterComparison] = []
-    for atom in atoms:
-        if isinstance(atom, program.CountComparison) and not scope.data.cardinality[atom.over]:
-            out[atom] = pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
-        elif isinstance(atom, program.ParameterDefined | program.ParameterComparison):
-            if scope.data.parameter_rows[atom.name]:
-                queried.append(atom)
-            else:
-                out[atom] = False
-    for atom, passing in zip(queried, collected_all(_passing(scope, atom) for atom in queried), strict=True):
-        count = passing.item()
-        if not count:
-            out[atom] = False
-        elif count == math.prod(scope.data.cardinality[d] for d in atom.dims):
-            out[atom] = True
-    return out
-
-
-def _passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
+def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
     """How many rows of *atom*'s parameter pass its test, as a one-cell frame; a missing row reads as false.
 
     The parameter is joined onto its own keys, never read by position:
@@ -125,34 +92,9 @@ def _passing(scope: Scope, atom: program.ParameterDefined | program.ParameterCom
     return carrier.filter(falsy_if_null(condition)).select(pl.len())
 
 
-def folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:
-    """*mask* with each settled test written as the literal it is, folded by mathspec into what is left."""
-    return program.Mask(_substituted(mask.root, tests))
-
-
-def holds_nowhere(mask: program.Mask) -> bool:
-    """Whether *mask* folded to the literal false."""
-    return isinstance(mask.root, program.BooleanLiteral) and not mask.root.value
-
-
-def holds_everywhere(mask: program.Mask) -> bool:
-    """Whether *mask* folded to the literal true."""
-    return isinstance(mask.root, program.BooleanLiteral) and mask.root.value
-
-
-def _substituted(node: program.Condition, tests: Mapping[program.Condition, bool]) -> program.Condition:
-    """*node* rebuilt with each settled test as a literal, a named condition read as its body."""
-    if node in tests:
-        return program.BooleanLiteral(tests[node])
-    if isinstance(node, program.And):
-        return program.And(_substituted(node.left, tests), _substituted(node.right, tests))
-    if isinstance(node, program.Or):
-        return program.Or(_substituted(node.left, tests), _substituted(node.right, tests))
-    if isinstance(node, program.Not):
-        return program.Not(_substituted(node.operand, tests))
-    if isinstance(node, program.ConditionReference):
-        return _substituted(node.body, tests)
-    return node
+def counted_over_nothing(atom: program.CountComparison) -> bool:
+    """Whether *atom* holds where the dimension it counts along has no label: its count is zero."""
+    return pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
 
 
 def compile_predicate(
