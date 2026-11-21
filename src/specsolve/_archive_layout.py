@@ -22,7 +22,7 @@ import polars as pl
 import polars.selectors as cs
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import FORMAT_FILE, MANIFEST_FILE, OWNED_FILE, write_format, write_whole
+from specsolve._answer_layout import FORMAT_FILE, HORIZON_FILE, MANIFEST_FILE, write_format, write_whole
 from specsolve._inputs import as_program
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._outputs import OUTPUT_KINDS
@@ -159,14 +159,14 @@ _HELD_UNDER = MappingProxyType(
 )
 
 
-#: What ``answer/owned.parquet`` holds, as its catalog row describes it.
-_OWNED = 'the labels of the windowed dimension that each window owns, by window'
+#: What ``answer/horizon.parquet`` holds, as its catalog row describes it.
+_HORIZON = 'the labels of the windowed dimension in each window\'s horizon, by window'
 
 
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
-    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/owned.parquet`` where a sweep cut windows."""
-    owned = f'{ANSWER_DIR}/{OWNED_FILE}'
-    extra = [(owned, 'owned', 'window', _OWNED)] if (tree / owned).is_file() else []
+    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/horizon.parquet`` where a sweep cut windows."""
+    horizon = f'{ANSWER_DIR}/{HORIZON_FILE}'
+    extra = [(horizon, 'horizon', 'window', _HORIZON)] if (tree / horizon).is_file() else []
     parquet.write(_catalog(program, tree, run, _HELD_UNDER, _axis_dims(tree, axis), extra), tree / CATALOG_MEMBER)
 
 

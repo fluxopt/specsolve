@@ -702,7 +702,7 @@ def test_a_rolling_horizon_catalogs_its_windows_and_what_each_owns(tmp_path: Pat
     assert catalog.filter(path='answer/primal/soc', column='snapshot_start')['dim'].to_list() == ['snapshot'], (
         'the key a window table carries is where the window started, a label of the dimension the axis cut'
     )
-    owned = catalog.filter(path='answer/owned.parquet').select('column', 'dim').rows()
+    owned = catalog.filter(path='answer/horizon.parquet').select('column', 'dim').rows()
     assert owned == [('snapshot', 'snapshot'), ('snapshot_start', 'snapshot')], (
         'what each window owns maps the window to labels of the windowed dimension'
     )
@@ -1169,7 +1169,7 @@ def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the
         table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
         for table in tables
     }
-    kept = {'answer/owned.parquet', 'answer/keys.parquet', 'answer/primal/soc/000000.parquet'}
+    kept = {'answer/horizon.parquet', 'answer/keys.parquet', 'answer/primal/soc/000000.parquet'}
 
     assert kept <= stamps.keys(), 'the windows, their keys and what each window owns are all archived'
     assert stamps == {table: ['nightly-2026-09-10'] for table in stamps}, 'and every one of them carries the run'

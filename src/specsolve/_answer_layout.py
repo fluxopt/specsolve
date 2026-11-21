@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 5
+ANSWER_LAYOUT = 6
 FORMAT_FILE = 'format.json'
 
 
@@ -123,7 +123,7 @@ REASONS_FILE = 'reasons.parquet'
 #: each window owns.
 MANIFEST_FILE = 'sweep.json'
 KEYS_FILE = 'keys.parquet'
-OWNED_FILE = 'owned.parquet'
+HORIZON_FILE = 'horizon.parquet'
 
 
 def consolidated(under: Path, file: str) -> pl.DataFrame:
@@ -157,7 +157,7 @@ def clear_the_answer(directory: Path) -> None:
     per_slice = (file.removesuffix('.parquet') for file in (RECORD_FILE, METRICS_FILE))
     for held in (*KINDS, *per_slice):
         shutil.rmtree(directory / held, ignore_errors=True)
-    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, OWNED_FILE)
+    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, HORIZON_FILE)
     for member in whole:
         (directory / member).unlink(missing_ok=True)
 

@@ -19,10 +19,10 @@ import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
+    HORIZON_FILE,
     KEYS_FILE,
     MANIFEST_FILE,
     METRICS_FILE,
-    OWNED_FILE,
     RECORD_FILE,
     check_format,
     clear_the_answer,
@@ -205,7 +205,7 @@ class Spill:
             write_spec(directory, spec)
             spill._write(pl.DataFrame([pl.Series(key_name, keys, dtype=key_dtype)]), directory / KEYS_FILE)
             if stitch is not None:
-                spill._write(stitch.owned, directory / OWNED_FILE)
+                spill._write(stitch.horizon, directory / HORIZON_FILE)
             record.write_text(json.dumps(manifest))
         return spill
 
@@ -962,7 +962,7 @@ def _opened_sweep(under: Path) -> Sweep:
         _outputs=read_outputs(under),
         _stitch=None
         if stitch is None
-        else Stitch(stitch['dim'], parquet.read(under / OWNED_FILE).drop(RUN, strict=False)),
+        else Stitch(stitch['dim'], parquet.read(under / HORIZON_FILE).drop(RUN, strict=False)),
     )
 
 

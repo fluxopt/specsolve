@@ -41,7 +41,7 @@ CARRY = 'carry'
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and where it ends.
 
-    ``handover`` is the last label of the windowed dimension this slice owns, the
+    ``horizon_end`` is the last label of the windowed dimension this slice owns, the
     ones after it being lookahead, or ``None`` where the axis windows nothing;
     a ``carry`` hands on the row there.
     """
@@ -51,7 +51,7 @@ class Slice(NamedTuple):
     #: How this slice cuts a table that carries the sliced dimension, as it
     #: cut its sources.
     cut: Callable[[pl.LazyFrame], pl.LazyFrame]
-    handover: Label | None = None
+    horizon_end: Label | None = None
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ class Stitch:
     """
 
     dim: str
-    owned: pl.DataFrame
+    horizon: pl.DataFrame
 
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
@@ -88,8 +88,8 @@ class Stitch:
         if why := self.unstitchable(frame):
             raise SpecsolveError(why)
         rest = [column for column in frame.collect_schema().names() if column not in (key_name, self.dim, VALUE)]
-        owned = frame.lazy().join(self.owned.lazy(), on=[key_name, self.dim], how='semi')
-        stitched = owned.drop(key_name).sort(self.dim, *rest)
+        kept = frame.lazy().join(self.horizon.lazy(), on=[key_name, self.dim], how='semi')
+        stitched = kept.drop(key_name).sort(self.dim, *rest)
         return stitched if isinstance(frame, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
@@ -298,20 +298,20 @@ class EachWindow:
         labels = dimension_labels(program, sources, self.dim).to_list()
         tables = _tables_over(program, sources, self.dim, labels)
         out: list[Slice] = []
-        owned: list[dict[str, object]] = []
+        horizons: list[dict[str, object]] = []
         start = 0
-        for owns in self._blocks(len(labels)):
-            window = labels[start : start + owns + self.lookahead]
+        for length in self._blocks(len(labels)):
+            window = labels[start : start + length + self.lookahead]
             cut = {
                 name: _within(table, columns, window, strangers) for name, (table, columns, strangers) in tables.items()
             }
-            handover = window[owns - 1]
+            horizon_end = window[length - 1]
             out.append(
-                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), handover)
+                Slice(window[0], {**sources, **cut, self.dim: window}, partial(_one_window, self.dim, window), horizon_end)
             )
-            owned.extend({key_name: window[0], self.dim: label} for label in window[:owns])
-            start += owns
-        return out, Stitch(self.dim, pl.DataFrame(owned))
+            horizons.extend({key_name: window[0], self.dim: label} for label in window[:length])
+            start += length
+        return out, Stitch(self.dim, pl.DataFrame(horizons))
 
     def _blocks(self, total: int) -> list[int]:
         """How many labels each window owns, in order, summing to exactly *total*.
@@ -380,22 +380,22 @@ class CarryRule:
         return cls(variable, dropped[0] if dropped else None)
 
     def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, handover: Label | None
+        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, horizon_end: Label | None
     ) -> pl.DataFrame:
         """What this rule hands the next slice, read out of one slice's primals.
 
-        The row handed on is the one at *handover*, the last label the slice owns,
+        The row handed on is the one at *horizon_end*, the last label the slice owns,
         never a lookahead row.
         """
         frame = frames[self.variable]
         if self.dropped is None:
             return frame
-        assert handover is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == handover).drop(self.dropped)
+        assert horizon_end is not None, 'a carry that drops a dimension is refused unless the axis windows it'
+        picked = frame.filter(pl.col(self.dropped) == horizon_end).drop(self.dropped)
         if picked.is_empty():
             raise SpecsolveError(
                 f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {handover!r}, the last label it owns, so there is no '
+                f'{self.variable!r} at {self.dropped} == {horizon_end!r}, the last label it owns, so there is no '
                 f'value there to hand forward.'
             )
         return picked
@@ -429,7 +429,7 @@ def as_built(
         if before is not None and plan:
             primals = primals_of(before)
             handed = {
-                parameter: rule.value_from(primals, parameter, before.key, before.handover)
+                parameter: rule.value_from(primals, parameter, before.key, before.horizon_end)
                 for parameter, rule in plan.items()
             }
         yield current._replace(sources={**current.sources, **handed})

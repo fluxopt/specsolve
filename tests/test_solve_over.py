@@ -892,10 +892,10 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
     slices, stitch = axis._slice(as_program(WINDOW), horizon_sources(periods), 'snapshot_start')
-    owned = stitch.owned.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
+    owned = stitch.horizon.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
     assert owned == expected, 'which is what each slice records owning'
     for current in slices:
-        assert current.handover in current.sources['snapshot'], 'no window owns a label it does not hold'
+        assert current.horizon_end in current.sources['snapshot'], 'no window owns a label it does not hold'
 
 
 def test_a_block_list_that_stops_short_of_the_axis_is_refused():
@@ -1591,9 +1591,9 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
         'dual',
         'expression',
         'format.json',
+        'horizon.parquet',
         'keys.parquet',
         'metrics',
-        'owned.parquet',
         'primal',
         'record',
         'spec.yaml',
@@ -1646,12 +1646,12 @@ class _CrashError(Exception):
     """The process dying while the spill directory is being stamped."""
 
 
-@pytest.mark.parametrize('lost', ['keys.parquet', 'owned.parquet'])
+@pytest.mark.parametrize('lost', ['keys.parquet', 'horizon.parquet'])
 def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatch, tmp_path, lost) -> None:
     """``sweep.json`` lands after the files a scan reads beside it.
 
     It was written first, so a crash before ``keys.parquet`` or
-    ``owned.parquet`` left a directory the next run took for a stamped one and
+    ``horizon.parquet`` left a directory the next run took for a stamped one and
     resumed, and ``scan_sweep`` of it failed on the missing file.
     """
     write_whole = sweep_module.write_whole
