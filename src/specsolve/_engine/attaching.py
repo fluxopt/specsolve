@@ -15,8 +15,7 @@ import numpy as np
 import polars as pl
 
 from specsolve._collect import collected, collected_all, in_memory
-from specsolve._engine.predicates import settled
-from specsolve._engine.scope import Scope
+from specsolve._engine.specialize import settle
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import VALUE
 from specsolve.errors import DataError
@@ -75,7 +74,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     cast is built once and the parameters are cast in one batch: building a
     cast to an ``Enum`` of many labels costs a fixed time per expression, and
     PyPSA's spec casts hundreds of tables over the same dozen dimensions.
-    Every test a ``where`` makes is then read once ([`_settled`][]), for the
+    Every test a ``where`` makes is then read once ([`settle`][]), for the
     assumptions and the build both.
 
     Raises:
@@ -136,19 +135,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
-    return replace(attached, settled=_settled(program, attached), seconds=perf_counter() - started)
-
-
-def _settled(program: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """The tests the ``where`` of every variable, constraint and assumption makes, settled over *attached*.
-
-    One batch for the whole program: a model gates hundreds of declarations
-    on the same few flags. In memory, since each test reads one parameter's
-    table whole.
-    """
-    declared = [*program.variables.values(), *program.constraints.values(), *program.assumptions.values()]
-    with in_memory():
-        return settled(Scope(program, attached, {}), [d.where for d in declared if d.where is not None])
+    return replace(attached, settled=settle(program, attached), seconds=perf_counter() - started)
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
