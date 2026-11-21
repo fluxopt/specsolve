@@ -7,6 +7,7 @@ builds of one model must agree on every label (docs/development/architecture.md,
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -98,6 +99,34 @@ def frame(
     return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
 
 
+def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], label: str, start: int) -> pl.DataFrame:
+    """*kept*, some rows of a labelled frame still in label order, numbered again from *start*."""
+    return (
+        kept.drop(label)
+        .with_row_index(label, offset=start)
+        .select(*(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted())
+    )
+
+
+def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, label: str, start: int) -> pl.DataFrame:
+    """[`frame`][]'s answer for the coordinates at *positions* in the product of *dims*, ascending, numbered from *start*.
+
+    Each label is read off its dimension at the coordinate's ordinal, so the
+    product the coordinates lie in is never formed: a constraint a masked
+    variable cuts to half its coordinates holds half the frame, not the whole
+    of it first. Over no dims [`frame`][] keys the one row itself.
+    """
+    assert dims, 'a declaration over no dims is one row, which frame() labels'
+    columns: list[pl.Series] = []
+    stride = math.prod(scope.data.cardinality[d] for d in dims)
+    for d in dims:
+        stride //= scope.data.cardinality[d]
+        ordinal = (positions // stride) % scope.data.cardinality[d]
+        columns.append(scope.data.dimensions[d].pipe(collected).sort('ord').get_column('val').gather(ordinal).alias(d))
+    numbered = pl.int_range(start, start + positions.len(), dtype=pl.Int64, eager=True).alias(label)
+    return pl.DataFrame([*columns, numbered.set_sorted()])
+
+
 def narrowed(
     labelled: pl.DataFrame, dims: tuple[str, ...], label: str, start: int, restrictions: Sequence[Presence]
 ) -> pl.DataFrame:
@@ -110,10 +139,7 @@ def narrowed(
     surviving = labelled.lazy()
     for restriction in restrictions:
         surviving = restriction.restrict(surviving, restriction.keyed_by or ())
-    kept = in_position_order(surviving.pipe(collected), label).drop(label)
-    return kept.with_row_index(label, offset=start).select(
-        *(dims or (UNIT,)), pl.col(label).cast(pl.Int64).set_sorted()
-    )
+    return renumbered(in_position_order(surviving.pipe(collected), label), dims, label, start)
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:

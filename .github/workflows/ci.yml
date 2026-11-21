@@ -42,6 +42,7 @@ jobs:
       - run: pixi run typecheck github
       - run: pixi run test
       - run: pixi run test-via-pyarrow
+      - run: pixi run test-by-join
 
       # `test` does not reach the bench tests (#1185, #1245).
       - run: pixi run test-bench

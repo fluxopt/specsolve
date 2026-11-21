@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
+from specsolve._engine import positional
 from specsolve._names import VALUE
 
 if TYPE_CHECKING:
@@ -58,6 +59,8 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false: the attach's, which only a build hands its scope.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+    #: Each column read by position, by what it holds and its name; [`positional`][specsolve._engine.positional] fills it.
+    by_position: dict[tuple[str, str], pl.Series] = field(default_factory=dict)
 
     def absent(self, param: str) -> bool:
         """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
@@ -93,23 +96,44 @@ class Scope:
         subject: str,
         how: JoinStrategy = 'left',
         maintain_order: MaintainOrderJoin | None = None,
+        *,
+        by_position: bool = True,
     ) -> pl.LazyFrame:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
         A parameter over a dim the frame lacks would be reduced over it, so that is
         refused, naming *subject*. A left join of a parameter over no dims keeps
         every row of *frame*, reading null where the parameter has no row, which a
-        cross join with its empty table would not.
+        cross join with its empty table would not. A parameter with a row at
+        every coordinate, and enough of them to be
+        [worth reading][specsolve._engine.positional.worth_reading], is read at
+        each row's [`position`][Scope.position] instead, which is what a left
+        or an inner join of it finds, unless *by_position* is false.
         """
         declaration = self.program.parameters[param]
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
+        reads = by_position and how in ('left', 'inner') and positional.worth_reading(self, param)
+        position = self.position(declaration.dims) if reads else None
+        if position is not None:
+            return frame.with_columns(pl.lit(positional.column(self, param)).gather(position).alias(alias))
         table = self.data.parameters[param].rename({VALUE: alias})
         if not declaration.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
             table = pl.concat([table, null]).head(1)
         return join_on(frame, table, declaration.dims, how, maintain_order)
+
+    def position(self, dims: tuple[str, ...]) -> pl.Expr | None:
+        """A frame row's [`row_major`][Scope.row_major] position over *dims*, read off its label columns alone.
+
+        ``None`` where a dim's labels are neither an ``Enum`` nor a run of
+        consecutive integers: their ordinals are then a lookup per row, which
+        is the join this is offered in place of.
+        """
+        if not all(self.data.is_enum_encoded(d) or d in self.data.consecutive for d in dims):
+            return None
+        return self.row_major(dims, self.ordinal_of)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.

@@ -83,14 +83,13 @@ def test_a_folded_coefficient_writes_the_model_the_distributed_product_writes(
 def test_a_variable_times_a_difference_stacks_one_term_per_cell(monkeypatch) -> None:
     """Distributed, the row stacked one frame per parameter and summed the copies at assembly."""
     stacked = []
-    share = assembly.Assembly._matrix_share
+    placed = assembly.Assembly._placed_by_join
 
-    def spied(self, frames, name, *expressions):
-        if name == "constraint 'row'":
-            stacked.append(len(frames))
-        return share(self, frames, name, *expressions)
+    def spied(self, linear, c, *args, **kwargs):
+        stacked.append(len(linear))
+        return placed(self, linear, c, *args, **kwargs)
 
-    monkeypatch.setattr(assembly.Assembly, '_matrix_share', spied)
+    monkeypatch.setattr(assembly.Assembly, '_placed_by_join', spied)
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a - b) <= 10'}}}
     sps.build(spec, SOURCES).close()
     assert stacked == [1], f'x * (a - b) stacked {stacked} frames, not one'
