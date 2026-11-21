@@ -234,20 +234,18 @@ class Assembly:
         """
         cardinality = self.attached.cardinality
         if labelled is None:
-            positions = np.arange(math.prod(cardinality[d] for d in dims), dtype=np.int64)
+            positions = pl.int_range(math.prod(cardinality[d] for d in dims), dtype=pl.Int64, eager=True)
         else:
             position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
-            positions = labelled.select(position.alias('#position'), 'row').get_column('#position').to_numpy()
-        at, kept, index, col, coeff = dense.placed(linear, dense.At(dims, positions, cardinality))
+            positions = labelled.select(position.alias(dense.POSITION), 'row').get_column(dense.POSITION)
+        positions, kept, entries = dense.placed(linear, positions, dense.At(dims, cardinality))
         if labelled is None and kept is None:
             labelled = labels.frame(self.scope, dims, None, 'row', start)
         elif labelled is None:
-            labelled = labels.at(self.scope, at, 'row', start)
+            labelled = labels.at(self.scope, dims, positions, 'row', start)
         elif kept is not None:
-            labelled = labels.renumbered(labelled.filter(pl.Series(kept)), dims, 'row', start)
-        index += start
-        entries = {'row': index, 'col': col, 'coeff': coeff}
-        return pl.DataFrame(entries, schema={column: _DTYPES[column] for column in _MATRIX}), labelled
+            labelled = labels.renumbered(labelled.filter(kept), dims, 'row', start)
+        return entries.select((pl.col('index') + start).alias('row'), 'col', 'coeff'), labelled
 
     # ------------------------------------------------------------------
     # declarations

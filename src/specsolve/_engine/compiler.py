@@ -186,7 +186,7 @@ class Compiler:
             return None
         if not dense.covers(self.scope, param):
             return None
-        return frame.with_columns(pl.Series(alias, dense.values(self.scope, param)))
+        return frame.with_columns(dense.values(self.scope, param).alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → terms

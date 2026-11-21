@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
 import pytest
 
@@ -291,7 +290,7 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
     values = dense.parameter(Scope(program, data, {}), 'a')
     assert values is not None, 'a table of three rows over three labels is taken for whole'
     with pytest.raises(SpecsolveError, match='does not cover'):
-        values(dense.At(('i',), np.arange(3), {'i': 3}))
+        values(dense.At(('i',), {'i': 3}))
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:

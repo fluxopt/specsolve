@@ -7,6 +7,7 @@ builds of one model must agree on every label (docs/development/architecture.md,
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
-    from specsolve._engine.dense import At
     from specsolve._engine.scope import Scope
     from specsolve._engine.terms import Presence
 
@@ -108,20 +108,22 @@ def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], label: str, start: int
     )
 
 
-def at(scope: Scope, coordinates: At, label: str, start: int) -> pl.DataFrame:
-    """[`frame`][]'s answer for *coordinates*, which ascend in position, numbered from *start*.
+def at(scope: Scope, dims: tuple[str, ...], positions: pl.Series, label: str, start: int) -> pl.DataFrame:
+    """[`frame`][]'s answer for the coordinates at *positions* in the product of *dims*, ascending, numbered from *start*.
 
     Each label is read off its dimension at the coordinate's ordinal, so the
     product the coordinates lie in is never formed: a constraint a masked
     variable cuts to half its coordinates holds half the frame, not the whole
     of it first. Over no dims [`frame`][] keys the one row itself.
     """
-    assert coordinates.dims, 'a declaration over no dims is one row, which frame() labels'
-    columns = [
-        scope.data.dimensions[d].pipe(collected).sort('ord').get_column('val').gather(coordinates.ordinal(d)).alias(d)
-        for d in coordinates.dims
-    ]
-    numbered = pl.int_range(start, start + len(coordinates), dtype=pl.Int64, eager=True).alias(label)
+    assert dims, 'a declaration over no dims is one row, which frame() labels'
+    columns: list[pl.Series] = []
+    stride = math.prod(scope.data.cardinality[d] for d in dims)
+    for d in dims:
+        stride //= scope.data.cardinality[d]
+        ordinal = (positions // stride) % scope.data.cardinality[d]
+        columns.append(scope.data.dimensions[d].pipe(collected).sort('ord').get_column('val').gather(ordinal).alias(d))
+    numbered = pl.int_range(start, start + positions.len(), dtype=pl.Int64, eager=True).alias(label)
     return pl.DataFrame([*columns, numbered.set_sorted()])
 
 
