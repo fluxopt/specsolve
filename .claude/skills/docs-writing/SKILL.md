@@ -188,7 +188,8 @@ not
   [mathspec glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)
   names takes its word, in prose, messages and docstrings alike.
   `tests/test_words.py` refuses the words it replaces and names the one to
-  write. specsolve's own words are in `docs/reference/glossary.md`, and the
+  write; it reads mathspec's words from the copy in `tests/mathspec/`, which is
+  taken again whenever the mathspec pin moves. specsolve's own words are in `docs/reference/glossary.md`, and the
   names of its parts in `docs/development/architecture.md`.
 - **Gloss where the term is used**, and link
   `docs/reference/glossary.md` rather than redefine it.
