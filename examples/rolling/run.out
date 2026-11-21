@@ -1,5 +1,5 @@
 4 days of 12 hours: six of cheap wind, then six of none.
-full foresight   one window                      cost  62400.00   peak soc  120.0
+full foresight   one solve                       cost  62400.00   peak soc  120.0
 
 rolling  steps=8   lookahead=0   windows  6   cost  74000.00   peak soc   90.0   + 18.6%
 rolling  steps=8   lookahead=4   windows  6   cost  68000.00   peak soc  120.0   +  9.0%

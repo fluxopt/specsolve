@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 26.6 s on sector/m, so the next rung projects to 133 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 27 s on sector/m, so the next rung projects to 135 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -21,7 +21,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 3.41 s on sector/m, so the next rung projects to 34.1 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 3.87 s on sector/m, so the next rung projects to 38.7 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -33,6 +33,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 3 s on sector/m, so the next rung projects to 30 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 3.05 s on sector/m, so the next rung projects to 30.5 s \u2014 over the 30 s budget"
  }
 ]

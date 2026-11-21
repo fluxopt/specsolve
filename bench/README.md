@@ -25,7 +25,7 @@ pixi run refresh
 # or a rung at a time — the same five tasks `refresh` depends on, in order
 pixi run ladder        # --sizes 3xs 2xs 2xs5 xs xs5 … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
-pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
+pixi run declarations  # --sizes n002 … n128, n008m n128m n008e -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
 pixi run plot          #                           -> the chart page
 
@@ -124,9 +124,12 @@ numbers.
 **Set the box up once, snapshot it, and let the workflow do the rest.** After
 that a run is one dispatch: `provision` creates the server from the snapshot,
 `benchmark` lands on the runner that snapshot already carries, and `teardown`
-deletes it — `if: always()`, on a hosted runner, because deleting is the only
-thing that stops the bill and a teardown running on the machine it is deleting
-dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
+shuts it down and deletes it — `if: always()`, on a hosted runner, because
+deleting is the only thing that stops the bill and a teardown running on the
+machine it is deleting dies half way. The shutdown comes first because a
+runner deleted while running keeps its session on GitHub, and the next box's
+runner stops for good after four minutes of "a session for this runner
+already exists". `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
@@ -568,6 +571,7 @@ verdict off the SQL"), not to cover the language:
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no linopy cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 | `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP of the comparison, so integrality reaches every sink at scale |
+| `curves` | dispatch with each unit's cost bounded below by its own convex piecewise curve, five breakpoints, `method: lp` | a `shift` along `bp` in every segment row, and the curve's assumptions: PyPSA's spec declares 27 curves. specsolve builds the expansion of `piecewise.yaml`, linopy `add_piecewise_formulation(method='lp')`. The two agree on counts and objective, not row by row: linopy divides each segment row by its step in `p`, the expansion multiplies by it |
 | `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a relation's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
@@ -622,6 +626,17 @@ alone, with no row-count change mixed into it. The density sweep answers the
 other half of the question, how much a mask *keeps*, and cannot answer this
 one: the mask that isolates the per-declaration cost is the one that keeps
 everything.
+
+**A third pairing prices declarations that hold no row.** `n008e` is `n008`
+plus 60 declarations of each kind that holds no row in PyPSA's spec: a variable
+and its constraint over `store`, a dimension without a label; a variable and
+its constraint whose `where:` admits nothing (`p_max > 1000`, drawn below 150);
+and an assumption that counts along `store`. PyPSA's spec declares every
+component and a network has rows for few of them, so most of its declarations
+are of these kinds. None of the 300 reaches the matrix, and the rung draws its
+twin's numbers, so the pair writes one LP file and the difference is what the
+empty declarations cost, with nothing else mixed in. No other case has a
+declaration that holds no row.
 
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
@@ -702,10 +717,11 @@ same on every case's `2xs` and `xs` rungs on every pull request. The phases are
 `window`, `window-reshaped`, `window-one`, `window-coefficient` and
 `window-cold`, and only `bench.tidy` renders them.
 
-`test_sweep` is `solve_over` across four hand-built slices of one rung, folded
-in order on one model: the first slice loads and the rest push, which the test
-asserts. A sweep cannot be timed short of its solves, so the solver runs on
-every slice, and the sweep's own per-slice clocks are summed into the result's
+`test_sweep` is `solve_over` across four scenarios of one rung, each with the
+same values, folded in order on one model: the first slice loads and the rest
+push, which the test asserts. A sweep cannot be timed short of its solves, so
+the solver runs on every slice, and the sweep's own per-slice clocks are summed
+into the result's
 phases — `solve_seconds` is what the wall time owes the solver, and the rest is
 the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
@@ -845,7 +861,8 @@ installed, and the worker refuses to run if it imported `specsolve` from
 anywhere else. The base is the PR's own base branch, so a stacked PR proves its
 own change. A claim about memory takes `--memory`: the verdict is on the
 peak resident memory of a fresh process per measurement, at the cost of a second
-of imports each time.
+of imports each time. That process runs the cell once: its peak is the highest
+it ever stood, so a warm run would be counted in it.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
 may assume: the dimension count, terms per row, a term over fewer dimensions,

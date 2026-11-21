@@ -101,9 +101,9 @@ one per value that exists. Every variable and constraint also runs over
 
 From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
 on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.7× at 1M columns, 1.75 GB against 0.65 GB, and the memory
+There it is 2.5× at 1M columns, 1.80 GB against 0.72 GB, and the memory
 budget stops linopy at that size
-([#2039](https://github.com/fluxopt/specsolve/pull/2039)).
+([#2086](https://github.com/fluxopt/specsolve/pull/2086)).
 
 ## A script that builds one model
 
@@ -116,10 +116,10 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.51 s</td><td class="own">0.47 s</td><td class="own">0.49 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.009">0.46 s · 1.0x</td><td data-ratio="0.977">0.50 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td><td data-ratio="0.956">0.47 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.088">0.96 s · 2.1x</td><td data-ratio="2.141">1.10 s · 2.1x</td><td data-ratio="1.969">0.92 s · 2.0x</td><td data-ratio="1.935">0.95 s · 1.9x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.500">0.69 s · 1.5x</td><td data-ratio="1.735">0.89 s · 1.7x</td><td data-ratio="1.449">0.68 s · 1.4x</td><td data-ratio="1.507">0.74 s · 1.5x</td></tr>
+<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.53 s</td><td class="own">0.45 s</td><td class="own">0.57 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="0.981">0.45 s · 1.0x</td><td data-ratio="0.984">0.52 s · 1.0x</td><td data-ratio="1.017">0.46 s · 1.0x</td><td data-ratio="1.036">0.59 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.029">0.93 s · 2.0x</td><td data-ratio="2.514">1.32 s · 2.5x</td><td data-ratio="2.097">0.94 s · 2.1x</td><td data-ratio="2.121">1.21 s · 2.1x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.409">0.65 s · 1.4x</td><td data-ratio="1.988">1.05 s · 2.0x</td><td data-ratio="1.403">0.63 s · 1.4x</td><td data-ratio="1.600">0.91 s · 1.6x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->

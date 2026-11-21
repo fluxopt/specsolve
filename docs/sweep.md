@@ -61,26 +61,27 @@ and hours than this one, and its solve gets slower as it grows.
 ## Window by window
 
 A rolling horizon solves the horizon in windows. Here three days stand in for
-a year, and the load is over `hour`:
+a year:
 
 ```python exec="true" source="material-block" session="horizon" workdir="examples"
-days = pl.DataFrame({'hour': range(12), 'value': 3 * load['value'].to_list()})
-hourly = fleet | {'load': days, 'soc_initial': 0.0}
+three_days = horizon(3)
 ```
 
-[`EachWindow`](reference/sweeps.md#the-axes) cuts `hour` into windows of
-three hours, and numbers the hours of each window from zero into `snapshot`.
-`lookahead=0` means a window sees only the hours it keeps.
+[`EachWindow`](reference/sweeps.md#the-axes) cuts `snapshot` into windows of
+three hours. Each window is the same model over its own snapshots, so the
+spec and the sources are the ones a single solve takes. The battery's first
+row is written `position(snapshot) == 0`, which is the first snapshot of each
+window. `lookahead=0` means a window sees only the hours it keeps.
 [`carry`](reference/sweeps.md#carrying-state-between-slices) copies the last
 `soc` of a window into the `soc_initial` of the next:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
 windows = sps.solve_over(
     'tutorial/storage.yaml',
-    hourly,
-    sps.EachWindow('hour', steps=3, lookahead=0, into='snapshot', carry={'soc_initial': 'soc'}),
+    three_days,
+    sps.EachWindow('snapshot', steps=3, lookahead=0, carry={'soc_initial': 'soc'}),
 )
-print(windows.metrics.select('hour_start', 'columns', 'rows'))
+print(windows.metrics.select('snapshot_start', 'columns', 'rows'))
 ```
 
 Each window has 21 columns, however long the horizon is.
@@ -98,7 +99,7 @@ def schedule_cost(sweep: sps.types.Sweep) -> float:
     return (output['value'] * output['cost']).sum() + (on['value'] * on['no_load_cost']).sum()
 
 
-whole = sps.solve('tutorial/storage.yaml', horizon(3))
+whole = sps.solve('tutorial/storage.yaml', three_days)
 print(f'one solve {whole.objective:.1f}, windows {schedule_cost(windows):.1f}')
 ```
 
@@ -106,7 +107,7 @@ The windows cost 12% more. To see why, look at the battery level at the end of
 each window:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
-print(windows.primal('soc').filter(pl.col('hour') % 3 == 2))
+print(windows.primal('soc').filter(pl.col('snapshot') % 3 == 2))
 ```
 
 Every window ends with the battery empty. A window cannot see the hours after
@@ -122,8 +123,8 @@ rows = []
 for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
         'tutorial/storage.yaml',
-        hourly,
-        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
+        three_days,
+        sps.EachWindow('snapshot', steps=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     rows.append(
         {

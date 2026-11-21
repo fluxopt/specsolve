@@ -11,7 +11,7 @@ import specsolve as sps
 sps.check('dispatch.yaml')
 ```
 
-`check` raises on a construct outside the language. `model.check('highs')`
+`check` raises on a construct outside the language. `model.check_sink('highs')`
 refuses a built model the solver cannot take
 ([what each sink takes](../reference/api.md#what-each-sink-takes)).
 

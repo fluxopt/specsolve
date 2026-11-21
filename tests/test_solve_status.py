@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._answer_layout import Metrics, Record, _column_types
+from specsolve._records import Metrics, Record, _column_types
 from specsolve._sinks.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
 from specsolve._sinks.highs import _CONDITION_OF_HIGHS_STATUS
 from specsolve._sinks.xpress import _CONDITION_OF_SOL_STATUS

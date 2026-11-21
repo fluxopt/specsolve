@@ -79,6 +79,6 @@ dimension it sliced, or window by window with `per_window=True`:
 
 ```python
 sweep.to_dataarray('p')  # (scenario, snapshot, generator)
-rolling.to_pandas('soc')  # over hour
-rolling.to_pandas('soc', per_window=True)  # over hour_start and t, lookahead included
+rolling.to_pandas('soc')  # over snapshot
+rolling.to_pandas('soc', per_window=True)  # over snapshot_start and snapshot, lookahead included
 ```

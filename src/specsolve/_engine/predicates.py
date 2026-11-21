@@ -172,6 +172,8 @@ def compile_predicate(
             )
             return _COLUMN_COMPARISONS[p.op](pl.col(columns[0]), pl.col(columns[1]))
         if isinstance(p, program.CountComparison):
+            if not scope.data.cardinality[p.over]:
+                return _COLUMN_COMPARISONS[p.op](pl.lit(0), pl.lit(p.value))
             keys = scope.in_declaration_order(p.dims)
             alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
             return _COLUMN_COMPARISONS[p.op](pl.col(alias).fill_null(0), pl.lit(p.value))
