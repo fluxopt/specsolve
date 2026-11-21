@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
-from specsolve._engine import labels, predicates
+from specsolve._engine import labels, predicates, specialize
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -365,13 +365,13 @@ def test_a_test_the_assumptions_and_the_build_share_is_read_once(monkeypatch):
 
     Each read its own before, so a model gated on `cap > 2` in both read `cap`'s table twice.
     """
-    reads, real = [], predicates._passing
+    reads, real = [], specialize.passing
 
     def counted(scope, atom):
         reads.append(atom)
         return real(scope, atom)
 
-    monkeypatch.setattr(predicates, '_passing', counted)
+    monkeypatch.setattr(specialize, 'passing', counted)
     spec = {
         **TABLED_SPEC,
         'constraints': {'probe': {'dims': ['g', 't'], 'where': 'cap > 2', 'expression': 'x >= 0'}},

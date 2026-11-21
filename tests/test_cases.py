@@ -593,3 +593,28 @@ def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkey
     with differential(DELAYED, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
     assert not read, f'a region whose condition the data settles was read over {read}'
+
+
+@pytest.mark.parametrize('delay', [pytest.param([0, 0], id='settled-false'), pytest.param([1, 1], id='settled-true')])
+def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_compiles(monkeypatch, delay):
+    """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to compile.
+
+    The false one leaves, and the true one, left alone, stands for the `cases:`. Either kept builds the same model
+    over a filter no query needs, which only this sees.
+    """
+    from mathspec import program
+
+    from specsolve._engine import assembly as assembly_module
+
+    compiled, real = [], assembly_module.Assembly.__init__
+
+    def spied(self, lowered, *args):
+        compiled.append(lowered)
+        real(self, lowered, *args)
+
+    monkeypatch.setattr(assembly_module.Assembly, '__init__', spied)
+    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    sps.build(DELAYED, sources).close()
+    held = compiled[0].constraints['held']
+    left = [e for e in program.walk(held.lhs, held.rhs) if isinstance(e, program.Cases)]
+    assert not left, f'the build compiles {left}, where the data settled every region of it'
