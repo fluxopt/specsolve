@@ -155,7 +155,7 @@ class Engine:
             attached = attach(program, sources)
         self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(_settled_wheres(program, attached), attached, self._measured)
+        assembly = Assembly(_with_wheres_settled(program, attached), attached, self._measured)
         with _clocked(self._seconds, 'build'):
             self._built = assembly.run()
 
@@ -629,7 +629,7 @@ def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
         seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started
 
 
-def _settled_wheres(lowered: program.Program, attached: AttachedSources) -> program.Program:
+def _with_wheres_settled(lowered: program.Program, attached: AttachedSources) -> program.Program:
     """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles.
 
     Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
