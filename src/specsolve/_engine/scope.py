@@ -56,7 +56,7 @@ class Scope:
     program: program.Program
     data: AttachedSources
     variables: Mapping[str, Labelled]
-    #: Each condition test the data settles at every coordinate, true or false, read once for the build.
+    #: Each condition test the data settles at every coordinate, true or false: the attach's, which only a build hands its scope.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
     #: Whether each parameter asked about is zero at every row it has.
     _zero: dict[str, bool] = field(default_factory=dict)
