@@ -20,7 +20,7 @@ import xarray as xr
 from tests.linopy_lane import absence
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Mapping
+    from collections.abc import Callable, Hashable, Mapping
 
     import pandas as pd
 
@@ -206,14 +206,17 @@ def operator_shift(array: Any, *, over: str, offset: Any, wrap: bool, fill: floa
 
     *offset* arrives as an array where the model named a parameter — an offset
     that differs per entity, which is a gather rather than a shift
-    (:func:`_gather_by_offset`).
+    (:func:`_gather_by_offset`), and absent where it has no value
+    (:func:`_absent_where_unread`).
     """
     edge = _Edge(wrap, fill)
     if by is not None:
         groups = _grouped(over, np.asarray(array.indexes[over]), by)
-        return _gather_in_groups(array, over, _per_group(offset, by), groups=groups, edge=edge)
+        return _absent_where_unread(
+            _per_group(offset, by), lambda amount: _gather_in_groups(array, over, amount, groups=groups, edge=edge)
+        )
     if isinstance(offset, xr.DataArray) and offset.ndim:
-        return _gather_by_offset(array, over, offset, edge=edge)
+        return _absent_where_unread(offset, lambda amount: _gather_by_offset(array, over, amount, edge=edge))
     amount: dict[Hashable, int] = {over: int(offset)}
     if wrap:
         return array.roll(amount, roll_coords=False) if isinstance(array, xr.DataArray) else array.roll(amount)
@@ -234,16 +237,16 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     the data asks for — a bound read from data, sound because it decides how
     many *terms* are added rather than what the plan does.
 
-    A position the window cannot reach contributes a **zero**, never an
-    absence: absence propagates, so an unreachable lag would annihilate the
-    whole row, and a window at the first position is short, not empty. A
-    window that reaches nothing, a width of zero among them, is an empty sum
-    and reads zero; a row it leaves with no variable is not built. Over an
-    operand that is absent somewhere, a window that reaches no present slot is
-    absent instead, as the relational lane carries the operand's presence
-    through the window.
+    A position the window cannot reach, or an absent slot it reaches,
+    contributes a **zero**, never an absence: a window is a sum, so an absent
+    summand is one summand fewer and a window at the first position is short,
+    not empty. A window that reaches nothing, a width of zero or only absent
+    slots, is an empty sum and reads zero; a row it leaves with no variable is
+    not built.
 
-    ``by=`` stops the window at each group's edge. A width declared over the
+    ``by=`` stops the window at each group's edge. A coordinate with no
+    window is absent: one the relation places in no group, or one a
+    ``missing: absent`` width arrives NaN at. A width declared over the
     group's own dim is read through the relation first (:func:`_per_group`).
     """
     within = _per_group(within, by) if by is not None else within
@@ -252,23 +255,21 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     probe = _Edge(wrap=wrap, fill=None)
     groups = _grouped(over, np.asarray(array.indexes[over]), by) if by is not None else None
     terms: list[Any] = []
-    reached: list[Any] = []
-    holed = False
     for lag in range(widest):
         lagged = (
             _gather_in_groups(array, over, lag, groups=groups, edge=probe)
             if groups is not None
             else _gather_by_offset(array, over, lag, edge=probe)
         )
-        live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
-        if lag == 0:
-            holed = not bool(live.all())
+        term = absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term.where(within > lag, 0)
+            term = term.where(within > lag, 0)
         terms.append(term)
-        reached.append(live)
     merged = _merged(terms)
-    return merged.where(reduce(operator.or_, reached)) if holed else merged
+    defined = groups.grouped if groups is not None else None
+    if isinstance(within, xr.DataArray):
+        defined = within.notnull() if defined is None else defined & within.notnull()
+    return merged if defined is None or bool(defined.all()) else merged.where(defined)
 
 
 def _widest(within: Any) -> int:
@@ -355,6 +356,18 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     inside = ((source >= 0) & (source < card)).assign_coords({over: labels})
     moved = gathered(source.clip(0, card - 1)).where(inside)
     return moved if edge.fill is None else absence.vacated(moved, array, over, ~inside, edge.fill)
+
+
+def _absent_where_unread(offset: Any, gather: Callable[[Any], Any]) -> Any:
+    """*gather* at *offset*, absent wherever *offset* is NaN — a ``missing: absent`` row — whatever the edge.
+
+    The gather takes a stand-in of 0 there and is emptied after, so no edge
+    fills the slot: a NaN in the arithmetic would read as off the axis, which a
+    fill writes.
+    """
+    if not isinstance(offset, xr.DataArray) or bool(offset.notnull().all()):
+        return gather(offset)
+    return gather(offset.fillna(0)).where(offset.notnull())
 
 
 def _per_group(offset: Any, groups: Any) -> Any:

@@ -48,16 +48,17 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
 
 
 #: `polars>=2.0` -> ('polars', '2.0', None), `mathspec>=0.2.1,<0.3` ->
-#: ('mathspec', '0.2.1', '0.3'). A lower bound is a claim the `floors`
-#: environment has to pin to prove; a ceiling, where there is one, is not.
-_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,<([0-9][0-9a-zA-Z.]*))?$')
+#: ('mathspec', '0.2.1', '0.3'), `highspy>=1.13,!=1.16.0` -> ('highspy', '1.13', None).
+#: A lower bound is a claim the `floors` environment has to pin to prove; an
+#: excluded release or a ceiling, where there is one, is not.
+_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,!=[0-9][0-9a-zA-Z.]*)*(?:,<([0-9][0-9a-zA-Z.]*))?$')
 
 
 def _declared_floors() -> dict[str, str]:
     declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
     unparsed = [spec for spec in declared if not _FLOOR.match(spec)]
     assert not unparsed, (
-        f'{unparsed} is not a `name>=version` lower bound, with or without a `,<version` ceiling. A '
+        f'{unparsed} is not a `name>=version` lower bound, with or without `,!=version` exclusions and a `,<version` ceiling. A '
         f'runtime dependency written any other way has no floor for the `floors` environment to '
         f'pin, so teach this pattern the new shape rather than leaving the dependency unchecked.'
     )

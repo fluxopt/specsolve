@@ -1,6 +1,6 @@
 """Whether a sink takes a model is asked of the model that was built, not of the file.
 
-`Model.check(sink)` asks it with no solve. The answer needs no installed
+`Model.check_sink(sink)` asks it with no solve. The answer needs no installed
 solver — it is read off a declared table — and a refusal names the sinks that
 would have taken it. The file is an upper
 bound: a square the data prices at zero, an integer variable no column is
@@ -51,10 +51,10 @@ def _handoff(spec, sources=SOURCES):
 
 
 def _refusal(spec, sink: str, sources=SOURCES) -> str | None:
-    """What `Model.check` says of *sink*, or ``None`` where it takes the build."""
+    """What `Model.check_sink` says of *sink*, or ``None`` where it takes the build."""
     with sps.build(spec, dict(sources)) as model:
         try:
-            model.check(sink)
+            model.check_sink(sink)
         except SpecsolveError as refused:
             return str(refused)
     return None
@@ -79,7 +79,7 @@ def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
 
 def test_an_unknown_sink_names_the_ones_there_are():
     with sps.build(PLAIN, dict(SOURCES)) as model, pytest.raises(SpecsolveError, match='unknown sink') as refused:
-        model.check('cplex')
+        model.check_sink('cplex')
     assert re.search(r'\.lp, \.mps, gurobi, highs, xpress', str(refused.value)), (
         'the refusal lists every sink there is, so a reader picks one instead of guessing'
     )
@@ -169,7 +169,7 @@ def test_check_refuses_exactly_what_the_verb_refuses(spec, sink, verb, tmp_path)
     """One path, one message: a CI job that checks instead of solving learns the same thing."""
     with sps.build(spec, dict(SOURCES)) as model:
         with pytest.raises(SpecsolveError) as checked:
-            model.check(sink)
+            model.check_sink(sink)
         with pytest.raises(SpecsolveError) as acted:
             verb(model, tmp_path)
     assert str(checked.value) == str(acted.value)

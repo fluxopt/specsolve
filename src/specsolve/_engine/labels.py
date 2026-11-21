@@ -7,7 +7,6 @@ builds of one model must agree on every label (docs/development/architecture.md,
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -99,15 +98,10 @@ def frame(
     return materialised.select(*(dims or (UNIT,)), pl.col(label).set_sorted())
 
 
-def declared_height(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> int:
-    """How many rows a declaration asks for: its coord product under its own mask.
-
-    Less [`frame`][]'s height, it is the rows a propagated absence removed.
-    With a mask it costs a pass over the masked product.
-    """
-    if where is None:
-        return math.prod(scope.data.cardinality[d] for d in dims)
-    return int(masked(scope, dims, where).select(pl.len()).pipe(collected).item())
+def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
+    """[`frame`][]'s answer over dims one of which has no label, read without a query: no row, in its columns and dtypes."""
+    schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
+    return pl.DataFrame(schema=schema | {label: pl.Int64})
 
 
 def _factored(

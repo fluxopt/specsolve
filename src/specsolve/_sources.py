@@ -9,31 +9,24 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
 from mathspec.program import Parameter
 
-from specsolve._answer_layout import BASIS_STATUSES
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._frames import as_frame, is_dense_array, is_multi_indexed
-from specsolve._messages import coordinate_text, coordinates_text, unknown_name_message
+from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
-from specsolve._result import Start
-from specsolve.errors import DataError, SpecsolveError
+from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from mathspec.program import (
-        Constraint,
-        Dimension,
-        Program,
-        Relation,
-        Variable,
-    )
+    from mathspec.program import Dimension, Program, Relation
 
+    from specsolve._engine.attaching import AttachedSources
     from specsolve._inputs import Label, Source
 
 
@@ -53,9 +46,7 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
         raise DataError(_unknown_source_keys_message(unknown, known))
 
 
-def tidy_sources(
-    program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.LazyFrame] | None = None
-) -> dict[str, pl.LazyFrame]:
+def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
     """Read the caller's ``sources`` into the frames both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
@@ -63,14 +54,6 @@ def tidy_sources(
     under its own name in the order they arrived, a relation as one column
     per declared column. A datetime label is held in microseconds, and a date
     under a ``datetime`` dimension as the microsecond its day starts on.
-
-    Args:
-        program: The plan whose declarations the sources are read against.
-        data: Each declared name's source.
-        kept: Parameters this function returned before, for sources and
-            indices that have not changed since ([`kept_parameters`][]). They
-            are taken as they are, neither read nor checked again; the
-            assumptions are still checked over every source.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -85,25 +68,39 @@ def tidy_sources(
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
+    return tidied_and_attached(program, data)[0]
+
+
+def tidied_and_attached(
+    program: Program,
+    data: Mapping[str, Source],
+    previous: Mapping[str, pl.LazyFrame] | None = None,
+    changed: Collection[str] = (),
+) -> tuple[dict[str, pl.LazyFrame], AttachedSources | None]:
+    """[`tidy_sources`][], and the attach its assumptions were read against, so a build attaches once.
+
+    The attach is ``None`` where the assumptions attached nothing, and a build
+    attaches itself. *previous* is what this returned before *data* replaced
+    the sources named *changed*: a parameter that replacement leaves alone is
+    taken from it, neither read nor checked again ([`_kept`][]). Dimensions,
+    relations and the assumptions are read and checked every time.
+    """
     refuse_unknown_sources(program, data)
-    sources = _read(program, data, kept or {})
-    validate_assumptions(program, sources)
-    return sources
+    sources = _read(program, data, _kept(program, previous or {}, changed))
+    return sources, validate_assumptions(program, sources)
 
 
-def kept_parameters(
-    program: Program, tidied: Mapping[str, pl.LazyFrame], changed: Collection[str]
-) -> dict[str, pl.LazyFrame]:
-    """The parameters of *tidied* that a change of the sources named *changed* leaves as the door checked them.
+def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Collection[str]) -> dict[str, pl.LazyFrame]:
+    """The parameters of *previous* that a change of the sources named *changed* leaves as the door checked them.
 
     A parameter's checks read its own source and the index of each of its
     dims, a positional source included, so it is kept only where none of
     them is in *changed*.
     """
     return {
-        name: tidied[name]
+        name: previous[name]
         for name, p in program.parameters.items()
-        if name in tidied and name not in changed and not set(p.dims) & set(changed)
+        if name in previous and name not in changed and not set(p.dims) & set(changed)
     }
 
 
@@ -116,7 +113,7 @@ def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.La
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
-    data = {**data, **_read_paths_at_once(program, {name: s for name, s in data.items() if name not in kept})}
+    data = _read_paths_at_once(program, {name: source for name, source in data.items() if name not in kept})
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
@@ -130,13 +127,14 @@ def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.La
     _check_relations_hold_labels(program, relations, sources)
     sources |= relations
 
-    for pname, pdef in program.parameters.items():
+    read = {name: p for name, p in program.parameters.items() if name not in kept}
+    for pname, pdef in read.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        if pname not in kept:
-            sources[pname] = _parameter_frame(pname, pdef, data[pname], sources)
-    for pname, pdef in program.parameters.items():
-        sources[pname] = kept[pname] if pname in kept else _checked_parameter(pname, pdef, sources[pname], sources)
+        sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
+    for pname, pdef in read.items():
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+    sources |= kept
 
     for dname in program.dimensions:
         if dname not in sources:
@@ -169,7 +167,7 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
 
 
-def numbered(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
     """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
@@ -248,6 +246,18 @@ def _index(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     return labels.lazy()
 
 
+def index_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
+    """*dim*'s labels as the door reads its index out of *data*, in index order.
+
+    Raises:
+        DataError: No index for *dim*, or one the door refuses.
+    """
+    if dim not in data:
+        raise DataError(_no_index_source_message(dim))
+    _refuse_a_relation_on_the_index(program, dim, data[dim])
+    return _labels_of(dim, _index(data[dim], dim, program.dimensions[dim].dtype))
+
+
 def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
     """Refuse an index holding a null: a coordinate is a label, and a null names none."""
     if not (nulls := labels.null_count()):
@@ -318,17 +328,21 @@ def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> Non
             raise DataError(_unsupplied_relation_message(name, relation))
 
     for dim in program.dimensions:
-        if dim not in data:
-            continue
-        carried = _column_names(data[dim], dim)
-        for name in _relations_over(program, dim):
-            if name in carried:
-                raise DataError(
-                    f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
-                    f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
-                    f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
-                    f'the rows it holds.'
-                )
+        if dim in data:
+            _refuse_a_relation_on_the_index(program, dim, data[dim])
+
+
+def _refuse_a_relation_on_the_index(program: Program, dim: str, index: Source) -> None:
+    """Refuse an *index* of *dim* that carries a column named for a relation over *dim*."""
+    carried = _column_names(index, dim)
+    for name in _relations_over(program, dim):
+        if name in carried:
+            raise DataError(
+                f"index for dimension '{dim}' carries a '{name}' column, and '{name}' "
+                f"is a relation with a column over '{dim}'. A relation is supplied under its own key, not "
+                f'as a column of an index it runs over: pass it as sources[{name!r}], a table of '
+                f'the rows it holds.'
+            )
 
 
 def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
@@ -502,7 +516,7 @@ def _read_relation(source: Source, name: str, relation: Relation, indexes: Mappi
 # ---------------------------------------------------------------------------
 
 
-def _parameter_frame(
+def parameter_frame(
     name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy frame, whatever shape it took.
@@ -528,100 +542,20 @@ def _parameter_frame(
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
 
 
-def read_start(
-    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
-) -> dict[str, dict[str, pl.LazyFrame]]:
-    """*start*'s tables, each read and checked as a parameter's source is, over its declaration's dims.
-
-    Every shape a parameter takes is read, from a parquet path to one number
-    for every coordinate; *indexes* holds each dimension's labels under its
-    own name. ``primal`` holds numbers, and ``variable_basis`` and
-    ``constraint_basis`` hold basis statuses in their words.
-
-    Raises:
-        SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
-            status outside the five words.
-        DataError: A table a parameter over the same dims would be refused
-            for.
-    """
-    refuse_unknown_start(start, program)
-    read: dict[str, dict[str, pl.LazyFrame]] = {}
-    for reader, tables in _by_reader(start).items():
-        per, declared = _read_by(reader, program)
-        dtype = 'float' if reader == 'primal' else 'str'
-        read[reader] = {}
-        for name, obj in tables.items():
-            kind = f'start= under {reader!r} for {per}'
-            frame = _read_values(kind, name, declared[name].dims, obj, indexes, dtype)
-            if reader != 'primal':
-                _refuse_unknown_statuses(kind, name, frame)
-            read[reader][name] = frame
-    return read
-
-
-def refuse_unknown_start_word(start: object) -> None:
-    """Refuse a *start* given as a word other than ``'previous'``.
-
-    Raises:
-        SpecsolveError: Any other string.
-    """
-    if isinstance(start, str) and start != 'previous':
-        raise SpecsolveError(f"start= takes 'previous' as a word, and not {start!r}.")
-
-
-def refuse_unknown_start(start: Start, program: Program) -> None:
-    """Refuse a *start* keyed by no reader [`Start`][specsolve.types.Start] takes, or naming no declaration its reader reads.
-
-    Asked of the names alone, so a sweep asks it before a slice is built.
-
-    Raises:
-        SpecsolveError: A key that names no reader, or a name the reader has
-            no declaration for.
-    """
-    readers = tuple(Start.__annotations__)
-    by_reader = _by_reader(start)
-    if unknown := sorted(set(by_reader) - set(readers)):
-        raise SpecsolveError(
-            f'start= takes, under the name of the reader that returns it, a table per declaration: '
-            f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
-        )
-    for reader, tables in by_reader.items():
-        per, declared = _read_by(reader, program)
-        if missing := next((name for name in tables if name not in declared), None):
-            raise SpecsolveError(f'start= names under {reader!r} an {unknown_name_message(per, missing, declared)}')
-
-
-def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
-    """*start* as the mapping it is, whatever keys it was given."""
-    return cast('Mapping[str, Mapping[str, Source]]', start)
-
-
-def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable] | Mapping[str, Constraint]]:
-    """What *reader* holds a table per, and those declarations by name."""
-    if reader == 'constraint_basis':
-        return 'constraint', program.constraints
-    return 'variable', program.variables
-
-
-def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
-    """Refuse a basis status outside [`BASIS_STATUSES`][specsolve._answer_layout.BASIS_STATUSES]."""
-    held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
-    if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
-        raise SpecsolveError(
-            f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
-            f'{", ".join(map(repr, BASIS_STATUSES))}.'
-        )
-
-
-def _read_values(
+def read_values(
     kind: str, name: str, dims: Sequence[str], obj: Source, indexes: Mapping[str, pl.LazyFrame], dtype: str
 ) -> pl.LazyFrame:
     """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
 
-    *kind* and *name* say whose values they are in a refusal.
+    For values that are no parameter's, such as a start's. *kind* and *name*
+    say whose they are in a refusal, and *indexes* holds each dimension's
+    labels under its own name.
+
+    Raises:
+        DataError: A table a parameter over the same dims would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, _parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
+    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, indexes, kind), indexes, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -639,7 +573,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is an index's
     else:
         least = (
-            _parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
+            parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
         )
     return 0 if least is None else int(least)
 
@@ -849,6 +783,11 @@ ACCEPTED_VALUE_TYPES: Mapping[str, tuple[type[pl.DataType], ...]] = {
 }
 
 
+def declared_dtype_of(column: pl.DataType) -> str | None:
+    """The declared dtype a polars column is, or ``None`` for a column no declaration names."""
+    return next((name for name, types in _COLUMNS.items() if column in types), None)
+
+
 def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the declaration claims.
 
@@ -858,7 +797,7 @@ def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) 
     column = frame.schema[VALUE]
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
-    arrived = next((name for name, types in _COLUMNS.items() if column in types), str(column))
+    arrived = declared_dtype_of(column) or str(column)
     raise DataError(
         f"{kind} '{name}' is declared '{p.dtype}' and its values arrived as '{arrived}'. "
         f'A declared dtype is a claim about the values, and it is checked here — the file '

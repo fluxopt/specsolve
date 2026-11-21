@@ -10,9 +10,13 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -77,6 +81,7 @@ class Gurobi(Solver):
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
 
+    name = 'gurobi'
     requires = ('gurobipy', 'scipy.sparse')
     recorded_options = frozenset(
         {
@@ -95,6 +100,11 @@ class Gurobi(Solver):
     )
     unavailable_message = (
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
+    )
+
+    dual_ray_advice = (
+        "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the solve to compute "
+        'the certificate at all'
     )
 
     #: The only sink with no quadratic exclusion, as
@@ -166,7 +176,7 @@ class Gurobi(Solver):
             return None
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
-    def _warm(self, basis: Basis) -> None:
+    def _start_from_basis(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
         self._m.setAttr(
             'VBasis', solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
@@ -175,7 +185,7 @@ class Gurobi(Solver):
         self._m.setAttr('CBasis', rows)
         self._m.update()
 
-    def _start(self, values: Any) -> None:
+    def _start_from_values(self, values: Any) -> None:
         """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
         import numpy as np
 

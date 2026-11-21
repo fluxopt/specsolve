@@ -19,6 +19,7 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope, join_on
+from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
@@ -195,9 +196,14 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
+        if rowless(v, self.attached):
+            labelled = labels.nothing(self.scope, v.dims, 'var_label')
+        else:
+            labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
         self.variables[name] = labels.Labelled(labelled.lazy(), start, labelled.height)
+        if not labelled.height:
+            return _stack([], _COLS)
         return self._columns(name, v, labelled.lazy())
 
     def _columns(self, name: str, v: program.Variable, frame: pl.LazyFrame) -> pl.DataFrame:
@@ -264,15 +270,27 @@ class Assembly:
 
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
-        labelled block narrows to the rows that survived.
+        labelled block narrows to the rows that survived. A constraint whose
+        ``where`` admits no row is not compiled. One without a ``where`` is
+        labelled only once its restrictions are known, so a sparse absence
+        never meets the full product of its dims.
         """
+        start = self.n_rows
+        if rowless(c, self.attached):
+            return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
+        admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
+        if admitted is not None and not admitted.height:
+            return self._without_a_row(name, admitted, start)
         linear, quadratic, constant = self._compiled(name, c)
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        start = self.n_rows
-        declared = labels.declared_height(self.scope, c.dims, c.where) if restrictions else None
-        labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
-        if declared is not None and declared > labelled.height:
-            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
+        if admitted is None or restrictions:
+            labelled = labels.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+        else:
+            labelled = admitted
+        if restrictions:
+            declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
+            if declared > labelled.height:
+                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - labelled.height
         self.n_rows = start + labelled.height
         frame = labelled.lazy()
         self.constraints[name] = labels.Labelled(frame, start, labelled.height)
@@ -297,6 +315,18 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
+
+    def _without_a_row(
+        self, name: str, labelled: pl.DataFrame, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+        """A constraint that holds no row, left uncompiled.
+
+        Its terms could only narrow its rows further, so compiling them would
+        change nothing but the cost: each query a compile plans costs a fixed
+        time that a declaration without a row never earns back.
+        """
+        self.constraints[name] = labels.Labelled(labelled.lazy(), start, 0)
+        return _stack([], _ROWS), None, None
 
     def _compiled(
         self, name: str, c: program.Constraint
@@ -516,7 +546,8 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     The hand-off a full build of the same data gives, where [`numbers_only`][]
     holds: the labels, the quadratic rows and the sets are *built*'s, and each
     recomputed share is spliced over the run of labels its declaration owns. A
-    constraint's matrix entries are read again only where *changed* scales a
+    declaration that owns no label has no share to read, so it is not
+    compiled. A constraint's matrix entries are read again only where *changed* scales a
     variable in it; it built every row it labelled, so one with no ``where``
     spans the whole product of its dims. *measured* is *built*'s, updated for
     what was read.
@@ -536,10 +567,14 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
         for name in _fed(plan.variables, changed, _bound_parameters):
             held = built.variables[name]
+            if not held.height:
+                continue
             share = assembly._columns(name, plan.variables[name], held.frame)
             cols = _spliced(cols, held.start, held.start + held.height, share)
         for name in _fed(plan.constraints, changed, _constraint_parameters):
             held = built.constraints[name]
+            if not held.height:
+                continue
             c = plan.constraints[name]
             terms, _, consts = assembly._compiled(name, c)
             share = labels.in_position_order(assembly._constant_side(name, c, held.frame, consts), 'row')

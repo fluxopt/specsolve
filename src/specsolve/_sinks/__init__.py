@@ -44,12 +44,8 @@ __all__ = [
     'writer',
 ]
 
-#: Every solver a caller may name. Closed.
-SOLVERS: Mapping[str, type[Solver]] = {
-    'highs': Highs,
-    'gurobi': Gurobi,
-    'xpress': Xpress,
-}
+#: Every solver a caller may name, by its [`name`][specsolve._sinks.solver.Solver.name]. Closed.
+SOLVERS: Mapping[str, type[Solver]] = {member.name: member for member in (Highs, Gurobi, Xpress)}
 
 
 @dataclass(frozen=True)

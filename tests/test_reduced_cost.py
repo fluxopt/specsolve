@@ -264,7 +264,7 @@ BY_HAND = {'low': [-1.0, 0.0, 1.0], 'high': [-2.0, -1.0, 0.0]}
 
 
 def _swept(tmp_path: Path, model_spec: dict, how: str) -> Sweep:
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')
