@@ -1,13 +1,13 @@
-"""Model builder: logical plan + data → linopy Model.
+"""Model builder: program + data → linopy Model.
 
 **One section per kind of translation**, in the order a build performs them:
-the four declarations (``Variables``, ``Special-ordered sets``,
+the four kinds of entry (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
-exist to make, then ``Plan evaluation`` for what an expression is worth.
+exist to make, then ``Program evaluation`` for what an expression is worth.
 
 Two questions a build asks are answered beside it: ``operators.py`` evaluates
-a built-in once its operands are values, and ``where.py`` turns a predicate
-into the boolean array a declaration is masked by. The positions an absent
+a built-in once its operands are values, and ``where.py`` turns a condition
+into the boolean array that narrows an entry. The positions an absent
 value is spelled differently in are ``absence.py``. *Which* linopy call each
 construct becomes is the table in ``docs/about/linopy.md``.
 """
@@ -237,11 +237,11 @@ def _refuse_a_coefficient_that_is_not_finite(
     """Refuse a quotient by zero that reaches a row the build keeps, and clear one that reaches none.
 
     A zero under a term is asked of the row rather than of the divisor's own
-    coordinates: a ``where``, a mask on the dividend, a shift and a sum with
+    coordinates: a ``where``, a condition on the dividend, a shift and a sum with
     no terms each decide whether the quotient lands in a row, and the built
     row is where all four have answered. Asked only of a row that divides, so
     an infinite limit on a side with no divisor stays the limit that never
-    binds. linopy refuses an infinity even in a row it then masks, so what
+    binds. linopy refuses an infinity even in a row it then leaves out, so what
     reaches no row is cleared: a coefficient to zero, a constant to absent.
 
     Raises:
@@ -332,7 +332,7 @@ def _term_free(side: Any) -> bool:
 
     A bare ``Variable`` is a term; a ``LinearExpression`` over an empty axis has
     a term dimension of length zero; anything else is data. Both sides
-    term-free is a constraint the *data* emptied — a dimension with no members
+    term-free is a constraint the *data* emptied — a dimension with no labels
     reduces away to a number — which the absence rules say is not a row. An
     expression naming no variable to begin with is refused at load.
     """
@@ -349,9 +349,9 @@ def _term_free(side: Any) -> bool:
 def _build_objective(ctx: EvaluationContext) -> None:
     """Build the declared objective, if any, onto the model.
 
-    An objective has no ``where``, so its divisor check runs with no row mask.
+    An objective has no ``where``, so its divisor check runs with no row condition.
     The expression is scalar by the time it gets here, the language having
-    refused one carrying dims, so it is evaluated like any other; linopy's
+    refused one carrying dimensions, so it is evaluated like any other; linopy's
     ``*`` answers a product of two variables with a ``QuadraticExpression`` on
     its own.
     """
@@ -375,7 +375,7 @@ _LINOPY_SENSE: dict[program.ObjectiveSense, str] = {'minimize': 'min', 'maximize
 OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
     "the objective carries a constant term, and this lane cannot build one: linopy's objective "
     'takes no constant. The relational lane builds it and returns the right number, so the spec '
-    'is sayable and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
+    'is in the language and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
     'Dropping the constant here is refused deliberately — it would answer a different model.'
 )
 
@@ -388,12 +388,12 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Plan evaluation
+# Program evaluation
 # ---------------------------------------------------------------------------
 
 
 def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
-    """One plan node as a linopy term, an array, or a number.
+    """One program node as a linopy term, an array, or a number.
 
     One node kind per branch: a variable is its linopy term, a parameter its
     filled array, arithmetic the Python operator linopy overloads, and an
@@ -621,7 +621,7 @@ def _grouped_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationCont
 def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:
     """A sum through the rows of a relation: every row carries its dropped columns' term to its added ones.
 
-    The operand's dims become the relation's roles, so two roles over one
+    The operand's dimensions become the relation's roles, so two roles over one
     dimension stay apart; the membership array multiplies in, a pair it does
     not relate leaves no term rather than a zero one, the dropped roles sum
     out, and the added roles take their dimensions back.
@@ -670,7 +670,7 @@ def _partition(node: program.Translate | program.WindowSum, ctx: EvaluationConte
     """The relation a windowed operator may not reach across, as its values.
 
     **Named for the dimension its values are labels of**, not for itself: an
-    amount declared over the group's own dim is read through this array by
+    amount declared over the group's own dimension is read through this array by
     :func:`~tests.linopy_lane.operators._per_group`, which pairs the two by that
     name.
     """

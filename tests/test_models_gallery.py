@@ -122,7 +122,7 @@ def test_the_generated_blocks_are_current(path: Path) -> None:
     """Every generated block on the page is current.
 
     The catalogue comes from the nav and each page's opening line, the
-    construct matrix from the resolved plan, and the reference table from
+    construct matrix from the resolved program, and the reference table from
     ``references.json``, the file ``test_ports.py`` asserts against.
     """
     page = path.read_text()
@@ -272,7 +272,7 @@ def test_no_tab_without_a_reference() -> None:
 #: run. `docs/run.md` links the language rather than teaching it, so it is
 #: not here.
 TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
-#: Both spellings of a declaration: a list item under `constraints:` and a
+#: Both spellings of an entry: a list item under `constraints:` and a
 #: mapping key under a named one.
 _TAUGHT_START = re.compile(r'^([ \t]*)(?:-\s*)?(?:expression|where):\s*\S')
 _QUOTED = ('expression', 'where')

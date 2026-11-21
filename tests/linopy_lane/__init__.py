@@ -82,12 +82,12 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> linopy.Model:
             or a bare sequence.
 
     Returns:
-        A model carrying every declaration the file makes.
+        A model carrying every entry the file declares.
 
     Raises:
         LanguageError: A construct the language does not accept — the same
             verdict :func:`specsolve.check` gives, reached through the same
-            lowering pass, so neither lane accepts a file the other refuses.
+            compile step, so neither lane accepts a file the other refuses.
         DataError: A source that is missing, unreadable, or the wrong shape, or
             one short of a row its ``missing:`` refuses.
         OracleCannotBuildError: A relation shape this lane does not build — a
@@ -123,14 +123,14 @@ def evaluate(
     Args:
         built: A solved model carrying this file's variables.
         spec: The model the expression is written against, as :func:`build`
-            takes it — but not a lowered ``Program``.
+            takes it — but not a compiled ``Program``.
         expression: What ``expressions:`` takes — a string, or the mapping
             carrying ``cases:`` with ``dims:`` and ``otherwise:``. A name
             *spec* declares works too.
         sources: As :func:`build` takes them.
 
     Returns:
-        The expression's value over its own dims, as an ``xarray.DataArray``
+        The expression's value over its own dimensions, as an ``xarray.DataArray``
         (0-dimensional for a variable-free scalar expression).
 
     Raises:
@@ -138,7 +138,7 @@ def evaluate(
             in the expression, or a name *spec* does not declare.
         DataError: A source that does not fit the file, or a divisor parameter
             with no row where the expression divides.
-        SpecsolveError: A lowered ``Program`` as *spec*, or an expression that
+        SpecsolveError: A compiled ``Program`` as *spec*, or an expression that
             reads a dual where the solve left none.
     """
     with note(f'while evaluating an expression against {_named(spec)}'):

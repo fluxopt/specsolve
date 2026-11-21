@@ -1,6 +1,6 @@
 """`cases:` — one quantity, a value per region, on both lanes.
 
-Each lane builds a region against its own mask and adds the results. The tests
+Each lane builds a region against its own condition and adds the results. The tests
 hold three things:
 
 * a region's value reaches the coordinates it claims, and only those;
@@ -54,7 +54,7 @@ CAPPED_SOURCES = {
 
 
 def _frames(sources):
-    """A dimension's labels as a Series and every parameter as a frame, the shape both lanes take."""
+    """A dimension's labels as a Series and every parameter as a table, the shape both lanes take."""
     import polars as pl
 
     built = {}
@@ -203,7 +203,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert sorted(set(rows.get_column('t'))) == [0, 1, 2, 3], 't == 0 is built like any other position'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
 
 
@@ -253,9 +253,9 @@ def test_a_region_binding_tighter_makes_the_model_infeasible_on_both_lanes():
 
 
 def test_a_region_that_claims_nothing_does_not_unmake_the_row():
-    """The complement of a mask reading no dimension claims nothing, and so may restrict nothing.
+    """The complement of a condition reading no dimension claims nothing, and so may restrict nothing.
 
-    With a true scalar mask the ``otherwise`` claims nothing, while its
+    With a true scalar condition the ``otherwise`` claims nothing, while its
     ``shift`` with no ``edge=`` is still absent at the first position.
     """
     spec = CARRIED_IN | {
@@ -274,7 +274,7 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row():
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
         assert run.oracle == pytest.approx(3990.0, rel=RTOL), (
             'carried is 1 everywhere, so the first position is held to step rather than first_step'
@@ -383,7 +383,7 @@ SUMMED_CASES_SOURCES = {
 
 
 def test_a_cased_quantity_summed_onto_a_constant_side_builds():
-    """A region's claim survives the reduction that keeps the dims it reads.
+    """A region's claim survives the reduction that keeps the dimensions it reads.
 
     After the sum over `t` the `a` term has no row at `k = b` and the
     `otherwise` term none at `k = a`; neither is a hole.

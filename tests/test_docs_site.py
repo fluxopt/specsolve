@@ -225,7 +225,7 @@ def test_the_plan_table_names_every_expression_node():
         'the instances below stand for every expression node, so a node added to the language is one here too'
     )
     assert set(rows) == set(nodes), (
-        f"the table shows {sorted(rows)} against the plan's {sorted(nodes)} — "
+        f"the table shows {sorted(rows)} against the program's {sorted(nodes)} — "
         f'every expression node needs the two readings it becomes'
     )
     shown = {name: cell.strip() for name, cell in rows.items()}

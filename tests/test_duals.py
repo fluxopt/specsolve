@@ -46,7 +46,7 @@ def test_dual_matches_the_linopy_lane(dispatch_yaml, dispatch_inputs):
 
 
 def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
-    """Duals are a label join, so a masked row is absent — never a zero."""
+    """Duals are a label join, so a row a condition leaves out is absent — never a zero."""
     data = dispatch_inputs
     trimmed = dict(data, snapshot=data['snapshot'][:12], load=data['load'].iloc[:12])
 

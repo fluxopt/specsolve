@@ -1,7 +1,7 @@
 """``archive=``: a spec, its data and its answer as one file, and back.
 
 What attaches from the archive is what attached from the caller's own tables,
-frame for frame, over every ported instance.
+table for table, over every ported instance.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     after = tidy_sources(to_spec(spec).program, unpacked)
     differing = [key for key in before if not before[key].collect().equals(after[key].collect())]
     assert not differing, (
-        f'frames that came back changed: {differing} — the archive carries the labels, values and dtypes'
+        f'tables that came back changed: {differing} — the archive carries the labels, values and dtypes'
     )
     tidied = sps.tidy(expanded(port_spec(name)), sources)
     unlike = [key for key, table in tidied.items() if not unpacked[key].equals(table)]
@@ -103,7 +103,7 @@ def test_the_round_trip_solves_to_the_same_objective(
 
 
 def test_plain_python_shapes_are_written_as_the_tables_they_stand_for(dispatch_yaml: Path, tmp_path: Path) -> None:
-    """A dict, a positional sequence and a bare label range all come back as tidy frames."""
+    """A dict, a positional sequence and a bare label range all come back as tidy tables."""
     sources = {
         'p_max': dict(zip(DISPATCH_GENERATORS, DISPATCH_P_MAX, strict=True)),
         'cost': list(DISPATCH_COST),
@@ -320,7 +320,7 @@ def test_a_directory_that_already_holds_something_is_refused(
     ],
 )
 def test_a_lowered_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_frame_inputs) -> None:
-    """Lowering has no inverse, so a Program is refused at the door, before anything is built."""
+    """Compiling has no inverse, so a Program is refused at the door, before anything is built."""
     with pytest.raises(sps.errors.SpecsolveError, match='compiled Program is not a spec this takes'):
         verb(sps.check(dispatch_yaml), dispatch_frame_inputs)
 
@@ -573,14 +573,14 @@ def test_a_parameter_passed_in_another_column_order_is_catalogued_as_its_tidy_ta
 
 
 def _held_files(archive: Path) -> set[str]:
-    """Every source, and every frame of the answer, as its path inside *archive*: a file, or a sweep's directory."""
+    """Every source, and every table of the answer, as its path inside *archive*: a file, or a sweep's directory."""
     held = [*(archive / 'sources').glob('*.parquet')]
     held += [entry for kind in KINDS for entry in (archive / ANSWER_DIR / kind).glob('*')]
     return {entry.relative_to(archive).as_posix() for entry in held}
 
 
 def _columns_of(held: Path) -> set[str]:
-    """The columns of a frame's file, or of the first slice's where a sweep holds a directory of them."""
+    """The columns of a table's file, or of the first slice's where a sweep holds a directory of them."""
     return set(pl.read_parquet_schema(min(held.glob('*.parquet')) if held.is_dir() else held))
 
 
@@ -595,7 +595,7 @@ def _columns_of(held: Path) -> set[str]:
 def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     north: float, sweep: bool, answered: bool, tmp_path: Path
 ) -> None:
-    """The catalog listed what the spec declares, so an infeasible solve's catalog named frames it has no file for."""
+    """The catalog listed what the spec declares, so an infeasible solve's catalog named tables it has no file for."""
     out, sources = tmp_path / 'case', _cataloged_sources(north)
     if sweep:
         load = pl.concat([sources['load'].with_columns(scenario=pl.lit(name)) for name in ('low', 'high')])
@@ -605,7 +605,7 @@ def test_every_archive_catalogs_the_files_it_holds_and_no_other(
     catalog = pl.read_parquet(out / 'catalog.parquet')
     held = _held_files(out)
 
-    assert any(path.startswith(f'{ANSWER_DIR}/') for path in held) == answered, 'the case leaves the frames it says'
+    assert any(path.startswith(f'{ANSWER_DIR}/') for path in held) == answered, 'the case leaves the tables it says'
     assert set(catalog['name']) == {path.split('/')[-1].removesuffix('.parquet') for path in held}, (
         'the catalog names what the archive holds a file for, and nothing it does not'
     )
@@ -648,7 +648,7 @@ def test_every_parquet_file_an_archive_holds_carries_the_run(sweep: bool, tmp_pa
 
 
 def _labels_of(held: Path) -> set[str]:
-    """The columns of a frame's file that hold labels: neither the value nor one specsolve adds."""
+    """The columns of a table's file that hold labels: neither the value nor one specsolve adds."""
     return {column for column in _columns_of(held) if column != 'value' and not column.startswith('specsolve_')}
 
 
@@ -694,13 +694,13 @@ def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_writt
 
 
 def test_a_rolling_horizon_catalogs_its_windows_and_what_each_owns(tmp_path: Path) -> None:
-    """Each window's frames and the table of what each window owns are listed with the dimension their columns hold."""
+    """Each window's tables and the table of what each window owns are listed with the dimension their columns hold."""
     _rolling(tmp_path)
     out = _unpacked(tmp_path / 'roll.zip', tmp_path / 'roll')
     catalog = pl.read_parquet(out / 'catalog.parquet')
 
     assert catalog.filter(path='answer/primal/soc', column='snapshot_start')['dim'].to_list() == ['snapshot'], (
-        'the key a window frame carries is where the window started, a label of the dimension the axis cut'
+        'the key a window table carries is where the window started, a label of the dimension the axis cut'
     )
     owned = catalog.filter(path='answer/owned.parquet').select('column', 'dim').rows()
     assert owned == [('snapshot', 'snapshot'), ('snapshot_start', 'snapshot')], (
@@ -715,7 +715,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
     sps.solve(dispatch_yaml, dispatch_frame_inputs, archive=tmp_path / 'case')
     taken = sps.load_archive(tmp_path / 'case').metrics
 
-    assert isinstance(taken, Metrics), 'the row comes back as the value its columns declare, not a frame of one'
+    assert isinstance(taken, Metrics), 'the row comes back as the value its columns declare, not a table of one'
     assert Metrics._fields == (
         'columns',
         'rows',
@@ -883,10 +883,10 @@ def test_every_table_an_archive_holds_says_which_run_it_came_from(
         table.relative_to(tmp_path / 'out').as_posix(): pl.read_parquet(table)[RUN].unique().to_list()
         for table in tables
     } == {table.relative_to(tmp_path / 'out').as_posix(): ['nightly-2026-09-10'] for table in tables}, (
-        'every table carries the archive name, sources and answer frames alike'
+        'every table carries the archive name, sources and answer tables alike'
     )
     answer = case.sweep if isinstance(case, sps.types.SweepArchive) else case.result
-    assert answer.primal('p').equals(live), 'a frame read back is the frame the solve returned'
+    assert answer.primal('p').equals(live), 'a table read back is the table the solve returned'
     assert all(RUN not in frame.columns for frame in case.sources.values()), 'and a source read back is the table given'
 
 
@@ -1143,7 +1143,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_says_so_off_its_archive(
     suffix: str,
     tmp_path: Path,
 ) -> None:
-    """Every window infeasible, so none writes a frame, and `per_window=True` says so as the live sweep does."""
+    """Every window infeasible, so none writes a table, and `per_window=True` says so as the live sweep does."""
     sources = horizon_sources(12)
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
     out = tmp_path / f'roll{suffix}'
@@ -1302,7 +1302,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
     assert saved.metrics.drop(RUN).equals(runs.metrics.drop(RUN)), 'and the metrics are the slices own'
     assert saved.metrics[RUN].equals(saved.records[RUN]), 'naming the run they came from as the record does'
-    assert stamped == [], 'no frame the save writes carries the run, what each window owns included'
+    assert stamped == [], 'no table the save writes carries the run, what each window owns included'
 
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
@@ -1375,7 +1375,7 @@ def test_a_sweep_carries_the_spec_it_answered_once(dispatch_yaml: Path, dispatch
 def test_saving_an_answer_twice_leaves_only_the_second(
     dispatch_yaml: Path, dispatch_frame_inputs, tmp_path: Path
 ) -> None:
-    """A directory holds one answer, so the first one's frames do not survive."""
+    """A directory holds one answer, so the first one's tables do not survive."""
     renamed = raw_of(dispatch_yaml)
     renamed['variables']['q'] = renamed['variables'].pop('p')
     renamed['constraints']['power_balance']['expression'] = 'sum(q, over=generator) == load'
@@ -1721,7 +1721,7 @@ def test_a_written_archive_leaves_no_staging_beside_it(dispatch_yaml: Path, disp
 # ---------------------------------------------------------------------------
 
 
-#: A quantity `examples/dispatch.yaml` never names, so no saved frame carries it.
+#: A quantity `examples/dispatch.yaml` never names, so no saved table carries it.
 _UNDECLARED = 'sum(p * cost, over=generator)'
 
 

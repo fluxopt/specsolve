@@ -97,7 +97,7 @@ def test_a_merged_spec_solves_to_the_cost_a_hand_computes():
                 'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
             },
             "'on'",
-            id='a-mask-another-file-declares',
+            id='a-condition-another-file-declares',
         ),
     ],
 )

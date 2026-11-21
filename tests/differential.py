@@ -129,8 +129,8 @@ def at_a_point(
     No solver runs. Each variable takes a seeded value at every coordinate it
     exists at, the linopy lane reads it as ``.solution`` and the relational
     lane through ``Model._evaluator``, so ``read(expression)`` values the
-    expression on both and returns the relational frame once the two are the
-    same frame: the same coordinates, the same values to ``RTOL``.
+    expression on both and returns the relational table once the two are the
+    same table: the same coordinates, the same values to ``RTOL``.
 
     That is the claim :func:`differential` cannot make. An objective only sees
     a row that binds, and a coefficient only a column that moves; a read at a
@@ -156,12 +156,12 @@ def at_a_point(
 
 
 def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
-    """Set a seeded value on every variable of *m* where it exists, and return the same point as frames.
+    """Set a seeded value on every variable of *m* where it exists, and return the same point as tables.
 
     A value on the quarter grid in ``[-2, 2]``, never zero: a failure prints
     short numbers, and a zero only arises where an expression makes one, which
-    is the case a quotient has to answer. The masked coordinates stay NaN, as a
-    solve leaves them, and have no row in the frame, as a saved solution has
+    is the case a quotient has to answer. The absent coordinates stay NaN, as a
+    solve leaves them, and have no row in the table, as a saved solution has
     none. Marking *m* solved is what lets the lane's ``.solution`` be read.
     """
     rng = np.random.default_rng(1203)
@@ -178,7 +178,7 @@ def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
 
 
 def _frame(values: xr.DataArray) -> pl.DataFrame:
-    """A linopy-lane value as the relational lane's ``(dims…, value)`` frame, with no row where it is absent."""
+    """A linopy-lane value as the relational lane's ``(dims…, value)`` table, with no row where it is absent."""
     if not values.dims:
         return pl.DataFrame({'value': [float(values)]}).filter(pl.col('value').is_not_nan())
     table = values.rename('value').to_dataframe().reset_index()[[*values.dims, 'value']]
@@ -186,9 +186,9 @@ def _frame(values: xr.DataArray) -> pl.DataFrame:
 
 
 def by_coordinate(frame: pl.DataFrame) -> dict[tuple[str, ...], float]:
-    """*frame*'s values keyed by coordinate, dims sorted by name and labels as text.
+    """*frame*'s values keyed by coordinate, dimensions sorted by name and labels as text.
 
-    The lanes order a result's dims differently and type an ``int`` label
+    The lanes order a result's dimensions differently and type an ``int`` label
     differently, and neither is a difference in the value.
     """
     dims = sorted(c for c in frame.columns if c != 'value')

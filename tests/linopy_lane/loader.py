@@ -1,4 +1,4 @@
-"""The crossing into pandas and xarray: the door's frames as this lane's arrays.
+"""The crossing into pandas and xarray: the door's tables as this lane's arrays.
 
 The language's relation is a table over any number of dimensions, keyed by
 any number of its columns. What this lane builds of it is the **single-valued
@@ -74,7 +74,7 @@ def _relation_shape_message(what: str) -> str:
 def _partitioning(
     program: program.Program,
 ) -> Iterator[program.Translate | program.WindowSum | program.DimensionPosition]:
-    """Every node that groups by a relation: an operator in an expression, and a ``position(by=)`` in a mask."""
+    """Every node that groups by a relation: an operator in an expression, and a ``position(by=)`` in a condition."""
     bodies = (*program.roots, *(e.expression for e in program.expressions.values()))
     for node in _program.walk(*bodies):
         if isinstance(node, (_program.Translate, _program.WindowSum)) and node.partition is not None:
@@ -87,7 +87,7 @@ def _partitioning(
 
 
 def _positions(mask: program.Mask | None) -> Iterator[program.DimensionPosition]:
-    """The grouped positions one mask tests, or nothing."""
+    """The grouped positions one condition tests, or nothing."""
     if mask is None:
         return
     for atom in mask.atoms:
@@ -130,7 +130,7 @@ def _refuse_a_missing_row(
 ) -> None:
     """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
 
-    The first in the order of the labels' product, read off the tidy frames
+    The first in the order of the labels' product, read off the tidy tables
     with the relational lane's own joins, so both lanes name one coordinate.
     """
     if not columns:
@@ -199,7 +199,7 @@ def load_parameters(
     """Every declared parameter as the dataset this lane builds against, its ``missing:`` applied.
 
     *tidy* is :func:`~specsolve._sources.tidy_sources`' output — one checked
-    ``(dims…, value)`` frame per parameter — so what is left is the crossing
+    ``(dims…, value)`` table per parameter — so what is left is the crossing
     into xarray, and what a missing row reads as. A value fills it; ``absent``
     and ``neutral`` leave it NaN, which each position reads in its own way
     (:mod:`~tests.linopy_lane.absence`); a ``bool`` short of a row reads false
@@ -210,7 +210,7 @@ def load_parameters(
 
     Raises:
         DataError: A parameter that refuses a missing row has none at some
-            coordinate of its dims.
+            coordinate of its dimensions.
     """
     arrays: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
@@ -267,9 +267,9 @@ def _fill(pdef: program.Parameter, flag: bool) -> Any:
 
 
 def _from_tidy(frame: pl.DataFrame, dims: Sequence[str]) -> xr.DataArray:
-    """A tidy ``(dims…, value)`` frame as an array.
+    """A tidy ``(dims…, value)`` table as an array.
 
-    A dims-less value keeps the dtype it arrived with, as a column does — a
+    A value with no dimensions keeps the dtype it arrived with, as a column does — a
     ``bool`` cast to ``0.0`` would read as *defined* under a bare ``where``.
     """
     if not dims:

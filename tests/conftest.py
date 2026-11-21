@@ -142,7 +142,7 @@ def solve_written_file(path: Path | str) -> float:
 
 
 def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
-    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dim.
+    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dimension.
 
     One ``primal`` call: two separate calls are not promised to line up.
     """
@@ -254,7 +254,7 @@ def dispatch_inputs():
 
 @pytest.fixture
 def dispatch_frame_inputs():
-    """The same data as tidy frames — the shape the engine documents."""
+    """The same data as tidy tables — the shape the engine documents."""
     generators = list(DISPATCH_GENERATORS)
     return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
@@ -289,7 +289,7 @@ def commitment_inputs():
 
 
 # ---------------------------------------------------------------------------
-# the law fixture: one model, one masked dimension
+# the law fixture: one model, one partly absent variable
 # ---------------------------------------------------------------------------
 
 #: The two dimensions every expression in the law and sweep tests is written over.
@@ -297,7 +297,7 @@ LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}}
 
 
 def law_data() -> dict[str, Any]:
-    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient."""
+    """``gate`` leaves ``y`` absent at ``f=b``; ``w`` is a dense coefficient."""
     import pandas as pd
 
     return {
@@ -336,9 +336,9 @@ def law_spec(
 
 
 def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
-    """The probe behind the shift and window edge cases, over one masked operand.
+    """The probe behind the shift and window edge cases, over one partly absent operand.
 
-    ``level`` is masked where ``usable`` says so (unmasked under
+    ``level`` is absent where ``usable`` says so (present everywhere under
     ``masked=False``), and ``take`` is capped only by *expression*'s row. The
     1000x penalty on ``level`` makes "row dropped" and "row built and binding"
     separable from the objective alone. ``grouped`` adds ``season_of``.
@@ -403,7 +403,7 @@ def recomputed_row_values(engine, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
-    built frames and the primal alone. Scattered rather than ``reduceat``-ed: a
+    built tables and the primal alone. Scattered rather than ``reduceat``-ed: a
     purely quadratic row owns no linear entries, and ``reduceat`` repeats the
     previous row on an empty span.
     """
@@ -468,7 +468,7 @@ QP_SOURCES = {
     'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
 }
 
-#: Maximisation and an objective constant, the two things a sink states outside the frames.
+#: Maximisation and an objective constant, the two things a sink states outside the tables.
 MAX = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},

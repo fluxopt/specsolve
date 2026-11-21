@@ -1,7 +1,7 @@
-"""A declaration that holds no row is not compiled, and the model is the one without it.
+"""An entry that holds no row is not compiled, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
-most declarations span a dimension without a label or a `where` that admits
+most entries span a dimension without a label or a `where` that admits
 nothing. Compiling one costs every query its plan needs and builds nothing.
 """
 
@@ -47,7 +47,7 @@ SOURCES = {
 
 
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
-    """Which constraints were compiled, which variables had their bounds compiled, which dims were labelled by a query, and which an assumption was read over."""
+    """Which constraints were compiled, which variables had their bounds compiled, which dimensions were labelled by a query, and which an assumption was read over."""
     seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'labelled': set(), 'assumption': set()}
     expression, bounds, frame, masked = (
         compiler_module.Compiler.expression,
@@ -88,7 +88,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('constraint', 'admits_nothing', id='a-constraint-whose-where-admits-no-row'),
         pytest.param('variable', 'y', id='a-variable-over-a-dimension-without-a-label'),
         pytest.param(
-            'labelled', ('e',), id='a-declaration-over-a-dimension-without-a-label-is-labelled-without-a-query'
+            'labelled', ('e',), id='an-entry-over-a-dimension-without-a-label-is-labelled-without-a-query'
         ),
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
@@ -113,7 +113,7 @@ def test_a_model_with_declarations_that_hold_no_row_is_the_model_without_them(tm
     sps.write(SPEC, SOURCES, tmp_path / 'with.lp')
     sps.write(without, SOURCES, tmp_path / 'without.lp')
     assert (tmp_path / 'with.lp').read_text() == (tmp_path / 'without.lp').read_text(), (
-        'a declaration without a row changed the written model'
+        'an entry without a row changed the written model'
     )
     assert sps.solve(SPEC, SOURCES).objective == pytest.approx(2.0), 'each x is capped at 1 by `live` alone'
 
@@ -136,7 +136,7 @@ SPARSE_SOURCES = {
 
 
 def test_a_constraint_without_a_where_is_labelled_only_inside_its_restrictions(monkeypatch):
-    """A sparse absence narrows such a constraint, and labelling it unrestricted first would hold the full product of its dims."""
+    """A sparse absence narrows such a constraint, and labelling it unrestricted first would hold the full product of its dimensions."""
     frame, unrestricted = labels.frame, []
 
     def spied_frame(scope, dims, where, label, start, restrictions=()):
@@ -221,7 +221,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
 
 
 #: `flag` has no row and `cap` none above 3, so a `where` that needs either admits
-#: nothing; each is over `g` alone, a sixth of the product a declaration over
+#: nothing; each is over `g` alone, a sixth of the product an entry over
 #: `g` and `t` spans. `e` has no label, so a count along it is 0.
 TABLED_SPEC = {
     'dimensions': {'g': {}, 't': {}, 'e': {}},

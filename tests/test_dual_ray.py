@@ -84,7 +84,7 @@ def test_a_ray_spans_the_constraint_it_names(solver_name: str) -> None:
     """One weight per row, laid out over the constraint's own coordinates — ``dual``'s shape."""
     answer = certified(solver_name, ASKED[solver_name])
     ray = answer.dual_ray('demand')
-    assert ray.columns == ['snapshot', 'value'], 'a ray is tidy over the constraint dims, like every other reader'
+    assert ray.columns == ['snapshot', 'value'], 'a ray is tidy over the dimensions of the constraint, like every other reader'
     assert ray['snapshot'].to_list() == [0, 1], 'rows come back in label order'
     answer.close()
 

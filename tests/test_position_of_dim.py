@@ -3,7 +3,7 @@
 A seeding clause that names a label (``snapshot == 0``) is correct only while
 the instance starts at zero: relabel the horizon and the clause matches
 nothing, so the row it was to seed is never written. Both lanes read the
-position off the coordinate order they hold — the dim table's ``ord``
+position off the coordinate order they hold — the dimension table's ``ord``
 relationally, the master index on the linopy side — so every case below checks
 differentially that the two orders agree.
 """
@@ -163,7 +163,7 @@ def _relational(sources):
 
 @pytest.mark.parametrize('position', [3, -4], ids=['past-the-end', 'past-the-start'])
 def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, position):
-    """Not an empty mask: seeding no row is exactly what the construct prevents.
+    """Not a condition that holds nowhere: seeding no row is exactly what the construct prevents.
 
     Three snapshots, so positions 0..2 and -1..-3 exist and nothing else. Both
     lanes have to say so — a lane that quietly matched nothing would put the
@@ -186,7 +186,7 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
 def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
     """Counting along an axis the constraint does not range over is a frame error.
 
-    `position(dim)` yields an integer, so the ordinary dim-algebra rule every
+    `position(dim)` yields an integer, so the ordinary dimension-algebra rule every
     where-comparison meets is the one that speaks.
     """
     spec = SPEC.replace(
@@ -244,7 +244,7 @@ objective:
 def _grouped_sources():
     """One mapping both lanes take, the relation arriving as a column of the index.
 
-    Arrow tables rather than pandas: a partial relation read out of a pandas frame
+    Arrow tables rather than pandas: a partial relation read out of a pandas table
     arrives as ``float64`` beside an ``i64`` target, which is an attaching question
     of its own and not the one under test here.
     """
@@ -259,9 +259,9 @@ def _grouped_sources():
 def _masked(where: str) -> list[int]:
     """The snapshots *where* selects, agreed by both lanes.
 
-    Read off the primal rather than the plan: minimising a positive price holds
+    Read off the primal rather than the program: minimising a positive price holds
     `soc` at zero everywhere the row was not built, so what comes back non-zero
-    is exactly the mask.
+    is exactly where the condition holds.
     """
     with differential(MASK.replace('WHERE', where), _grouped_sources()) as run:
         rows = run.result.primal('soc').filter(pl.col('value') > 1e-9)
@@ -317,7 +317,7 @@ def test_a_coordinate_in_no_group_has_no_boundary(where):
 
 
 def test_a_group_shorter_than_the_position_is_an_error_at_bind(tmp_path):
-    """Not a mask that is false there: one short period would go unseeded.
+    """Not a condition that is false there: one short period would go unseeded.
 
     Position 2 exists in the three-snapshot period and not in the two-snapshot
     one, which is precisely the failure grouping makes easy to write and

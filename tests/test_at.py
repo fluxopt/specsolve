@@ -1,6 +1,6 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
-`sum` walks a relation from the fine dim into the coarse one; `at` walks it
+`sum` walks a relation from the fine dimension into the coarse one; `at` walks it
 back out. `examples/multi_period.yaml` is ragged — four snapshots in 2030
 against two in 2050 — and its capacity bound reads a per-period variable at
 every snapshot.
@@ -328,7 +328,7 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
         assert run.engine.diagnostics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
 
 
-#: The same shape with a total relation; `level` is masked away at `c2`.
+#: The same shape with a total relation; `level` is absent at `c2`.
 MASKED = DANGLING | {
     'parameters': {'usable': {'dims': ['component']}},
     'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
@@ -336,7 +336,7 @@ MASKED = DANGLING | {
 
 
 def test_at_over_a_masked_variable_takes_the_row_with_it():
-    """A pullback carries the mask under it, not only the relation's own gaps (#968)."""
+    """A pullback carries the condition under it, not only the relation's own gaps (#968)."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -346,7 +346,7 @@ def test_at_over_a_masked_variable_takes_the_row_with_it():
         assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
 
 
-#: A pullback's absence is keyed by the fine dim alone; `u` is a second dim the shift edge spans.
+#: A pullback's absence is keyed by the fine dimension alone; `u` is a second dimension the shift edge spans.
 DANGLING_SHIFTED = {
     'dimensions': {
         'flow': {'dtype': 'str'},
@@ -376,7 +376,7 @@ DANGLING_SHIFTED = {
 
 
 def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
-    """The shift edge places itself over dims the pullback's presence omits.
+    """The shift edge places itself over dimensions the pullback's presence omits.
 
     An absence that arrived before the shift is not the edge, so it is not
     filled, and f3 keeps no row at either t (#987).

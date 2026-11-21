@@ -1,4 +1,4 @@
-"""How a frame is materialised: joins in the order specsolve wrote them, a coordinate product in label order."""
+"""How a table is materialised: joins in the order specsolve wrote them, a coordinate product in label order."""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml,
 
 
 def _build_wide() -> None:
-    """A constraint over dims no variable spans: four labels on each of two dims reach 8 columns and 16 rows."""
+    """A constraint over dimensions no variable spans: four labels on each of two dimensions reach 8 columns and 16 rows."""
     labels = ['p', 'q', 'r', 's']
     sps.build(
         {
@@ -160,7 +160,7 @@ def test_the_reach_against_the_limit_decides_the_build_engine(
 ):
     """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses; at it, memory.
 
-    A constraint over dims no variable spans counts too: its 16 rows reach past
+    A constraint over dimensions no variable spans counts too: its 16 rows reach past
     a limit of 15 where its 8 columns do not.
     """
     monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)

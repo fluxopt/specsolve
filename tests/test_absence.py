@@ -41,7 +41,7 @@ BROADCAST_MASK_SPEC = {
 
 
 def _grid(dims, labels, values):
-    """The full product of *labels* as a tidy frame, one row per coordinate."""
+    """The full product of *labels* as a tidy table, one row per coordinate."""
     frame = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
     return frame.assign(value=values)
 
@@ -111,9 +111,9 @@ def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
 
 
 def test_a_where_is_the_escape_from_the_constant_side_check():
-    """Masking the coordinate answers the question, so it is not refused.
+    """Leaving the coordinate absent answers the question, so it is not refused.
 
-    The check is keyed to the rows a declaration builds, not to the coordinate
+    The check is keyed to the rows an entry builds, not to the coordinate
     product.
     """
     masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': 'c'})
@@ -148,7 +148,7 @@ def test_a_sparse_coefficient_beside_a_constant_term_is_still_a_zero():
 
 
 #: `south` is a load-only bus: both generators sit on `north`, so the group
-#: behind `south`'s constant side has no members at all.
+#: behind `south`'s constant side has no labels at all.
 GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
     'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
@@ -174,9 +174,9 @@ def _grouped_constant_sources(capacity=('g1', 'g2')):
 
 
 def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
-    """A group with no members holds the empty sum, which is a value.
+    """A group with no labels holds the empty sum, which is a value.
 
-    `capacity` covers every generator it has, and a group with no members
+    `capacity` covers every generator it has, and a group with no labels
     contributes nothing.
     """
     with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
@@ -186,7 +186,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
 
-#: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
+#: The same with a dimension the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int', 'ordered': True}},
@@ -238,7 +238,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
 
 
 def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
-    """A combination of two groups that no member sits at holds the empty sum."""
+    """A combination of two groups that no label sits at holds the empty sum."""
     sources = {
         'bus': ['north', 'south'],
         'technology': ['wind', 'solar'],
@@ -258,7 +258,7 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
 
 
 def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
-    """A group short of a member's value sums the members it has, when the parameter is `neutral`.
+    """A group short of a label's value sums the labels it has, when the parameter is `neutral`.
 
     Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
@@ -286,9 +286,9 @@ ABSENT_VARIABLE_SPEC = {
 def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     """Absence propagates into the comparison; it does not zero the term.
 
-    With ``size`` masked out, ``x - relmax * size <= 0`` drops its row rather
+    With ``size`` absent, ``x - relmax * size <= 0`` drops its row rather
     than building ``x <= 0`` (linopy v1 §6, §12), so ``x`` at ``f=b`` is bounded
-    only by its own declaration.
+    only by its own entry.
     """
     data = {
         'f': ['a', 'b'],
@@ -391,7 +391,7 @@ def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
 
 
 def test_a_mask_survives_a_broadcast_into_a_reduction():
-    """A mask keeps its own dims through a product that widens them (#345)."""
+    """A condition keeps its own dimensions through a product that widens them (#345)."""
     data = {
         'node': ['n1', 'n2'],
         'tech': ['t1', 't2'],

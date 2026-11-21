@@ -94,7 +94,7 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
 
 
 def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
-    """close() releases the activity frames with the primal and dual ones."""
+    """close() releases the activity tables with the primal and dual ones."""
     data = dispatch_frame_inputs
     with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         pass

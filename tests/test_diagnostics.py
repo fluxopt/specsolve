@@ -108,7 +108,7 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         built = model.diagnostics().seconds
         assert set(built) == {'attach', 'build'}, (
-            'a model only built has spent time attaching sources and building frames, nowhere else'
+            'a model only built has spent time attaching sources and building tables, nowhere else'
         )
         assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
 
@@ -153,7 +153,7 @@ SCALING_SOURCES = {
 
 
 def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
-    """The spread of the matrix, per declaration, in magnitudes rather than signed extremes."""
+    """The spread of the matrix, per entry, in magnitudes rather than signed extremes."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         spread = model.diagnostics().coefficient_range
 
@@ -203,7 +203,7 @@ BOUNDS_SOURCES = {
 
 
 def test_the_bound_range_names_the_variable_whose_bounds_are_the_outlier():
-    """The bound range, per declaration, on a model whose matrix is clean."""
+    """The bound range, per entry, on a model whose matrix is clean."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
@@ -224,7 +224,7 @@ def test_a_bound_of_zero_or_infinity_is_not_a_magnitude():
 
 
 def test_the_rhs_range_is_read_per_block_like_the_coefficients():
-    """The fourth range a solver prints, and the last one answerable per declaration."""
+    """The fourth range a solver prints, and the last one answerable per entry."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics().rhs_range
 
@@ -258,7 +258,7 @@ def test_a_model_with_no_objective_has_no_objective_range():
     assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
 
 
-#: A coefficient short of its dims, and a bound that is not.
+#: A coefficient short of its dimensions, and a bound that is not.
 SPARSE_SOURCE = {
     'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g'], 'missing': 'neutral'}},
@@ -282,7 +282,7 @@ def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
         short = model.diagnostics().sparse_parameters
 
     assert short.to_dicts() == [{'parameter': 'avail', 'coordinates': 6, 'rows': 3, 'missing': 3}], (
-        'the complete parameter is not a row here — an empty frame is the useful answer for a dense model'
+        'the complete parameter is not a row here — an empty table is the useful answer for a dense model'
     )
 
 
@@ -296,7 +296,7 @@ def test_a_model_whose_parameters_all_span_their_dims_reports_none():
 
 
 def test_the_sparsity_report_survives_the_model_being_released():
-    """Summarised at attach, so it outlives the frames."""
+    """Summarised at attach, so it outlives the tables."""
     with sps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()
@@ -341,7 +341,7 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
 
 
 def test_the_coefficient_range_survives_the_model_being_released():
-    """Read off each share as it is built, so it outlives the frames it came from."""
+    """Read off each share as it is built, so it outlives the tables it came from."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()

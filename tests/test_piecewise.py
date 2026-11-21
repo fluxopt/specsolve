@@ -1,7 +1,7 @@
 """piecewise costs: the λ-formulation block, and the epigraph that needs none.
 
 The ``piecewise:`` expansion runs before either backend, so both lanes receive
-identical affine declarations. Nonconvex correctness is checked by the linked
+identical affine entries. Nonconvex correctness is checked by the linked
 primals lying on the curve, against a numpy interpolation; the ``convex:`` flag
 produces the hull instead. The last section writes convex piecewise as
 epigraph constraints: ordinary affine YAML with no ``piecewise:`` block.
@@ -129,13 +129,13 @@ def test_activity_gates_the_curve_off(nonconvex_inputs):
 
 
 def _of(frame, generator):
-    """One generator's breakpoint values, in order — the tidy-frame `xs`."""
+    """One generator's breakpoint values, in order — the tidy-table `xs`."""
     return frame.loc[frame['generator'] == generator, 'value'].to_numpy()
 
 
 def test_breakpoints_may_vary_along_another_dim():
     """examples/piecewise.yaml: convex per-generator curves (breakpoints vary
-    along the generator dim — the thing flat breakpoint lists can't do).
+    along the generator dimension — the thing flat breakpoint lists can't do).
 
     Each generator gets an increasing marginal cost of a different shape, and
     each one's cost has to sit on its own curve: the hull is exact here,
@@ -261,9 +261,9 @@ def test_the_adjacency_row_survives_at_the_first_breakpoint(nonconvex_inputs):
 
 
 def test_both_lanes_check_the_declarations_a_formulation_emits(tmp_path):
-    """A stray dim is named on the link that carries it, on both lanes.
+    """A stray dimension is named on the link that carries it, on both lanes.
 
-    A values parameter carrying a dim the links do not is a stray dim in
+    A values parameter carrying a dimension the links do not is a stray dimension in
     generated math — one row per zone where the file reads as one per
     snapshot. The refusal names the link, not a generated constraint the
     author never wrote.
@@ -335,7 +335,7 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
-    """`tidy_sources` is the streaming lane's only door for data, so the guard
+    """`tidy_sources` is the relational lane's only door for data, so the guard
     has to live behind it too — not only in the linopy loader."""
     data = nonconvex_inputs
     schema = schema_of(CONVEX_SPEC)
@@ -395,7 +395,7 @@ def test_a_breakpoint_dimension_with_no_index_keeps_its_own_message(nonconvex_in
 def test_the_linopy_lane_reads_the_curve_in_the_index_order(nonconvex_inputs, tmp_path):
     """The linopy loader lays the values out first, so the guard walks the dimension's order.
 
-    The shuffled curve binds and the backwards index is refused; the streaming
+    The shuffled curve is attached and the backwards index is refused; the relational
     lane owes the same two answers.
     """
     path = tmp_path / 'convex.yaml'
@@ -579,7 +579,7 @@ A_AND_SHORT_B = {
 
 @pytest.fixture
 def short_curve_inputs():
-    """B's rows stop at its second breakpoint, and the mask says so."""
+    """B's rows stop at its second breakpoint, and the condition says so."""
     present = {(g, k): ((g, k) in A_AND_SHORT_B['x']) for g in ('A', 'B') for k in range(3)}
     return {
         'generator': ['A', 'B'],
@@ -594,9 +594,9 @@ def short_curve_inputs():
 
 @pytest.mark.parametrize('method', ['adjacency', 'convex', 'lp'])
 def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path):
-    """Whatever the mask reaches has to reach it on both lanes (hard rule 3).
+    """Whatever the condition reaches has to reach it on both lanes (hard rule 3).
 
-    `lp` is the one whose rows the mask reaches directly, and the one whose
+    `lp` is the one whose rows the condition reaches directly, and the one whose
     domain rows sit on each curve's own first and last breakpoint rather than
     the axis'.
     """
@@ -617,7 +617,7 @@ def test_both_lanes_agree_on_a_masked_curve(short_curve_inputs, method, tmp_path
 
 @pytest.mark.parametrize('method', ['adjacency', 'sos2', 'convex', 'lp'])
 def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve_inputs, method):
-    """Every method reads the mask, and two of them have no other way to take a short curve.
+    """Every method reads the condition, and two of them have no other way to take a short curve.
 
     `convex` and `lp` require strictly increasing breakpoints, so they refuse
     the padding that serves `adjacency` and `sos2`.
@@ -632,7 +632,7 @@ def test_a_masked_curve_reaches_the_optimum_its_own_points_put_it_at(short_curve
 
 
 def test_the_mask_is_smaller_than_padding_the_curve_out(short_curve_inputs):
-    """What the mask buys: the padded breakpoint costs a weight and a binary."""
+    """What the condition buys: the padded breakpoint costs a weight and a binary."""
     padded = {k: v for k, v in short_curve_inputs.items() if k != 'bp_present'}
     padded['bp_x'] = curve_frame({**A_AND_SHORT_B['x'], ('B', 2): 20.0})
     padded['bp_y'] = curve_frame({**A_AND_SHORT_B['y'], ('B', 2): 130.0})
@@ -647,13 +647,13 @@ def test_the_mask_is_smaller_than_padding_the_curve_out(short_curve_inputs):
         grown = padded_model.diagnostics()
         assert padded_model.solve('highs').objective == pytest.approx(155.0), 'the same answer, larger'
 
-    assert masked.columns < grown.columns, 'a masked breakpoint declares no weight and no segment binary'
+    assert masked.columns < grown.columns, 'an absent breakpoint declares no weight and no segment binary'
 
 
 def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
-    """The mask is on the declarations, and the binaries are half of what it saves.
+    """The condition is on the entries, and the binaries are half of what it saves.
 
-    The answer alone cannot see this: an unmasked binary at a breakpoint no
+    The answer alone cannot see this: a binary the condition keeps at a breakpoint no
     weight reaches is slack the solver never uses, so the objective is right
     either way and the MILP is bigger for nothing.
     """
@@ -671,7 +671,7 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): True, ('B', 1): False, ('B', 2): True},
             'must mark a consecutive run',
-            id='a-gap-in-the-mask',
+            id='a-gap-in-the-condition',
         ),
         pytest.param(
             {('A', 0): True, ('A', 1): True, ('A', 2): True, ('B', 0): False, ('B', 1): False, ('B', 2): False},
@@ -681,14 +681,14 @@ def test_a_masked_breakpoint_declares_no_segment_binary(short_curve_inputs):
     ],
 )
 def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
-    """The emitted rows read the mask as a length, so a gap builds a different curve.
+    """The emitted rows read the condition as a length, so a gap builds a different curve.
 
     The chord joins a breakpoint to the one before it and the upper domain row
-    is written where the mask stops; across a gap both are wrong, and neither
+    is written where the condition stops; across a gap both are wrong, and neither
     is wrong in a way the answer shows.
 
-    Both curves are supplied whole, so the shape of the mask is the only thing
-    left to refuse: a curve short of a row the mask admits is the other
+    Both curves are supplied whole, so the shape of the condition is the only thing
+    left to refuse: a curve short of a row the condition admits is the other
     refusal, and it would fire first.
     """
     whole = {
@@ -703,7 +703,7 @@ def test_a_mask_with_a_gap_in_it_is_refused(short_curve_inputs, present, match):
 
 
 def test_values_missing_where_the_mask_says_present_are_still_refused(short_curve_inputs):
-    """#1105's guard follows the mask rather than the whole product."""
+    """#1105's guard follows the condition rather than the whole product."""
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     data = {**short_curve_inputs, 'bp_x': curve_frame(thin)}
     schema = schema_of(raw_of(SHORT_CURVE))
@@ -715,7 +715,7 @@ def test_values_missing_where_the_mask_says_present_are_still_refused(short_curv
 def test_the_hole_message_offers_the_mask_to_a_block_that_has_none(short_curve_inputs):
     """A ragged curve meets this message first, so it is where `points:` is discovered.
 
-    With a mask already declared the same advice would be wrong — the reader
+    With a condition already declared the same advice would be wrong — the reader
     said how far the curve runs and the values disagree — so the way out is
     named against what the block has.
     """
@@ -748,7 +748,7 @@ _ONE_DIM_CURVE = {
 def _nominated_mask_spec():
     """`NONCONVEX_YAML` with its length named as one of its own breakpoints.
 
-    `points: bp_x` masks the weights by where `bp_x` has a row, which is what
+    `points: bp_x` narrows the weights to where `bp_x` has a row, which is what
     a bare parameter name means in any `where`.
     """
     return override(
@@ -764,7 +764,7 @@ def _nominated_mask_spec():
 def test_a_curve_masked_by_its_own_breakpoints_asks_for_nothing_extra():
     """`points:` naming a values parameter declares no second name to attach.
 
-    The block masks the weights by a parameter the file already wrote, so what
+    The block narrows the weights by a parameter the file already wrote, so what
     the caller attaches is exactly what the file declares and the curve still
     solves.
     """
@@ -774,10 +774,10 @@ def test_a_curve_masked_by_its_own_breakpoints_asks_for_nothing_extra():
         "the file's own parameters and dimensions, and nothing a block invented"
     )
     assert sorted(tidy_sources(program, _ONE_DIM_CURVE)) == ['bp', 'bp_x', 'bp_y', 'load', 'snapshot'], (
-        'and the door gives back one frame per name it takes'
+        'and the door gives back one table per name it takes'
     )
     assert sps.solve(expanded(_nominated_mask_spec()), _ONE_DIM_CURVE).objective == pytest.approx(95.0), (
-        'and the curve still binds and solves, masked by the rows of its own breakpoints'
+        'and the data still attaches and the curve solves, narrowed to the rows of its own breakpoints'
     )
 
 
@@ -787,7 +787,7 @@ def test_values_the_mask_leaves_out_are_left_alone(short_curve_inputs):
     data = {**short_curve_inputs, 'bp_x': curve_frame(spare)}
 
     assert sps.solve(expanded(raw_of(SHORT_CURVE)), data).objective == pytest.approx(155.0), (
-        'the masked row is not read'
+        'the row the condition leaves out is not read'
     )
 
 
@@ -797,7 +797,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     to 1 — what a block with no `activity:` at all gets (#1158).
 
     The convexity row is ``sum(lam, over=bp) == (activity)`` and absence does
-    not spread out of a reduction, so a masked gate that took the *row* with it
+    not spread out of a reduction, so an absent gate that took the *row* with it
     would relax the curve silently: 900.00 where the answer is 1050.00, on a
     curve with a no-load intercept.
     """

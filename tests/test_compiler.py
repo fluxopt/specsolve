@@ -1,20 +1,20 @@
-"""The compiler is lazy: a plan node goes in and a query comes out, no row read.
+"""The compiler is lazy: a program node goes in and a query comes out, no row read.
 
 This is the only place query shape is asserted. Every property here can
 regress while every model still solves to the right answer:
 
 - ``AGGREGATE`` absent from ``Sum``, through a relation or not; duplicates collapse once,
   in the terminal ``SUM(coeff) GROUP BY row, col`` at assembly.
-- ``OVER`` absent from a translation, which joins the dim table twice instead.
+- ``OVER`` absent from a translation, which joins the dimension table twice instead.
 - the modulo appearing only when a translation wraps.
-- a dimension comparison *filtering* a column the frame already carries rather
+- a dimension comparison *filtering* a column the table already carries rather
   than joining to find it, and a constant bound costing no join at all.
-- ``SEMI JOIN`` present for a mask that reads some of the frame's dims and
+- ``SEMI JOIN`` present for a condition that reads some of the table's dimensions and
   absent for one that reads them all.
-- ``INNER`` rather than ``LEFT`` for a name the mask is certain of, and ``LEFT``
+- ``INNER`` rather than ``LEFT`` for a name the condition is certain of, and ``LEFT``
   again once that name sits under an ``Or``.
 
-The frames are empty frames with the right schemas: a schema is all it takes
+The tables are empty LazyFrames with the right schemas: a schema is all it takes
 to compile. The assertions are about shape, not exact text.
 """
 
@@ -171,7 +171,7 @@ def test_a_quadratic_product_compiled_as_affine_is_an_invariant_not_a_refusal():
 
 
 # ---------------------------------------------------------------------------
-# shape operators — each rewrites exactly one dim column
+# shape operators — each rewrites exactly one dimension column
 # ---------------------------------------------------------------------------
 
 
@@ -187,7 +187,7 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
 def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     """`p * sum(load, over=snapshot)` holds one row per slot of `p`.
 
-    A sum leaves one row per summand for assembly to add up. Joined to `p` as
+    A sum leaves one row per term for assembly to add up. Joined to `p` as
     it was, each of those rows repeated every term, so the product held one row
     per slot and snapshot, and a year of hourly snapshots ran out of memory.
     """
@@ -213,7 +213,7 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
 
 
 def masked_compiler() -> Compiler:
-    """A compiler over two masked variables, since a restriction only crosses between terms."""
+    """A compiler over two variables with a condition, since a restriction only crosses between terms."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -234,7 +234,7 @@ def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
     Restricting a term by its own coordinates returns the rows it was
-    given, so a lone masked term costs no join.
+    given, so a lone term with a condition costs no join.
     """
     both = masked_compiler().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
@@ -293,7 +293,7 @@ def test_a_shape_operator_along_a_dim_the_expression_lacks_is_refused():
 
 
 # ---------------------------------------------------------------------------
-# predicates
+# conditions
 # ---------------------------------------------------------------------------
 
 
@@ -324,7 +324,7 @@ def test_a_name_the_mask_is_certain_of_is_inner_joined():
 
 
 def test_the_same_predicate_under_an_or_is_left_joined_again():
-    """Under an ``Or`` a missing value can make the mask true, so no row is dropped early."""
+    """Under an ``Or`` a missing value can make the condition true, so no row is dropped early."""
     where = program.Mask(
         program.Or(
             program.ParameterDefined('available', ('generator',)),
@@ -363,7 +363,7 @@ def test_what_a_bare_name_asks_is_decided_by_its_declaration():
 
 
 # ---------------------------------------------------------------------------
-# frames and bounds
+# tables and bounds
 # ---------------------------------------------------------------------------
 
 
@@ -378,7 +378,7 @@ def test_an_unmasked_frame_has_nothing_to_filter():
 
 
 def test_a_mask_reading_part_of_the_frame_restricts_by_semi_join():
-    """The predicate is evaluated over the product of the dims it reads, and the full product semi-joined."""
+    """The condition is evaluated over the product of the dimensions it reads, and the full product semi-joined."""
     frame = masked(
         compiler().scope,
         ('snapshot', 'generator'),
@@ -422,7 +422,7 @@ def test_a_side_the_program_leaves_open_is_an_infinite_column():
 def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     """`edge=0` over a constant leaves a row, not a gap.
 
-    The presence branch counts a filled slot as present, so the frame has a
+    The presence branch counts a filled slot as present, so the table has a
     row for it. Over a term there is nothing to write: the vacated slot
     contributes no term.
     """

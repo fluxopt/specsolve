@@ -248,7 +248,7 @@ def test_a_variable_nothing_declares_is_a_key_error() -> None:
 def test_the_frame_is_tidy_over_the_variable_dims() -> None:
     with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
         frame = answer.reduced_cost('p')
-    assert frame.columns == ['g', 'value'], 'the primal frame shape: the dims, then the value'
+    assert frame.columns == ['g', 'value'], 'the primal table shape: the dimensions, then the value'
     assert frame['g'].to_list() == G, 'rows come back in label order'
     assert np.isfinite(frame['value'].to_numpy()).all()
 

@@ -61,7 +61,7 @@ from tests.oracle import linopy, pd, specsolve_linopy, transport_linopy_objectiv
 def dispatch_data():
     """The spec's dispatch instance, with one generator retired to `p_max = 0`.
 
-    That row is what the model's `where` masks out.
+    That row is what the model's `where` leaves absent.
     """
     rng = np.random.default_rng(7)
     n_s, n_g = 40, 6
@@ -135,9 +135,9 @@ RHS_SPEC = {
 }
 
 
-#: The smallest string-dim model: `x` bounded by `cap` over `node`, forced to
+#: The smallest string-dimension model: `x` bounded by `cap` over `node`, forced to
 #: it by `k`, minimized. The string-dimension tests below each override one
-#: declaration of it.
+#: entry of it.
 NODE_CAP_SPEC = {
     'dimensions': {'node': {'dtype': 'str'}},
     'parameters': {'cap': {'dims': ['node']}},
@@ -159,8 +159,8 @@ LABEL_SPEC = {
 _CAP = pl.DataFrame({'f': ['a', 'b'], 'value': [5.0, 5.0]})
 
 
-#: A constant term beside a linear one, under each operator that acts along a dim the
-#: constant does not carry. `check` accepts every one, lowering passes it,
+#: A constant term beside a linear one, under each operator that acts along a dimension the
+#: constant does not carry. `check` accepts every one, compiling passes it,
 #: and the linopy lane builds and solves it — so the file is sayable and only this
 #: lane is short (#1137).
 CONSTANT_BESIDE_A_TERM = {
@@ -171,7 +171,7 @@ CONSTANT_BESIDE_A_TERM = {
 }
 
 
-#: Every operator that acts along a dim, with the objective the linopy lane
+#: Every operator that acts along a dimension, with the objective the linopy lane
 #: reaches from the file *as written* — which is the number the rewrite owes.
 CONSTANT_BESIDE_A_TERM_CASES = [
     ('sum(x * k + d, over=t) >= load', 8.0, 'sum-over'),
@@ -276,7 +276,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `Engine.build` takes a *program* and the frames
+    Below the front door: `Engine.build` takes a *program* and the tables
     a built model reads, which is the same shape `tidy_sources` hands over — an
     index of labels, and each map as its own two-column relation.
     """
@@ -321,8 +321,8 @@ class TestTwoModelsRoundTrip:
 
             primal = result.to_pandas('p')
             n_active = int((gens['p_max'] > 0).sum())
-            assert len(primal) == n_active * len(load), 'a masked variable row is absent, not zero'
-            assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coords'
+            assert len(primal) == n_active * len(load), 'a variable row the condition leaves out is absent, not zero'
+            assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coordinates'
             balance = primal.groupby('snapshot')['value'].sum()
             expected = load.set_index('snapshot')['value']
             assert np.allclose(balance.sort_index(), expected.sort_index()), 'dispatch meets load in every snapshot'
@@ -382,7 +382,7 @@ class TestWhatBindRefusesAndWhatItTakes:
         missing row of a parameter that does not declare `missing:`, so the
         only way to a null bound is a `missing: neutral` parameter with no row
         for a coordinate the variable has a column at. The count is asserted because it is what the message
-        exists to carry: it is read off the two bound columns before the frame
+        exists to carry: it is read off the two bound columns before the table
         that carries them is filtered, and a probe that looked at one of them
         would report every model as sound.
         """
@@ -399,11 +399,11 @@ class TestWhatBindRefusesAndWhatItTakes:
 
     @pytest.mark.parametrize('rows', [2, 0])
     def test_a_dimensionless_parameter_must_be_one_row(self, rows):
-        """No dims means one value broadcast everywhere, so a second row is refused (#166).
+        """No dimensions means one value broadcast everywhere, so a second row is refused (#166).
 
         A dimensionless parameter is broadcast by joining on nothing, which is
         right for one row and a silent row multiplication for two — duplicate
-        columns for one variable in a bound, duplicate mask rows in a where.
+        columns for one variable in a bound, duplicate condition rows in a where.
         """
         data = {'s': pl.DataFrame({'value': [1.0] * rows}, schema={'value': pl.Float64})}
         with pytest.raises(DataError, match=f"parameter 's' .* its source has {rows} rows"):
@@ -416,10 +416,10 @@ class TestWhatBindRefusesAndWhatItTakes:
             assert result.objective == pytest.approx(20.0), 'x == 1 at both coordinates of i, times s'
 
     def test_a_dimension_named_n_is_still_a_legal_dimension(self):
-        """No check may claim a legal dim name for a column of its own.
+        """No check may claim a legal dimension name for a column of its own.
 
-        The duplicate-row check counts rows beside the dims it grouped by, so its
-        count column must not collide with a dim named `n`.
+        The duplicate-row check counts rows beside the dimensions it grouped by, so its
+        count column must not collide with a dimension named `n`.
         """
         spec = {
             'dimensions': {'n': {'dtype': 'int'}},
@@ -464,10 +464,10 @@ class TestWhatBindRefusesAndWhatItTakes:
         assert (result.save(odd / 'solution') / 'primal' / 'p.parquet').exists()
 
     def test_a_dictionary_encoded_source_column_binds_like_a_plain_one(self):
-        """A `Categorical` dim column is a source encoding, not a different model.
+        """A `Categorical` dimension column is a source encoding, not a different model.
 
         Each writer's dictionary is its own, and polars will not join dictionaries
-        that disagree, so attaching re-encodes every dim column into the one
+        that disagree, so attaching re-encodes every dimension column into the one
         dictionary the dimension declares.
         """
         encoded = pl.DataFrame({'node': ['a', 'b'], 'value': [3.0, 4.0]}).with_columns(
@@ -514,20 +514,20 @@ TWO_BAD_COORDS_SPEC = {
 
 
 class TestTheLabelSpace:
-    """Which rows exist, and in what order — decided by the declaration, never the data.
+    """Which rows exist, and in what order — decided by the entry, never the data.
 
-    The shared claim is that order is a property of the *model*: a mask does not
+    The shared claim is that order is a property of the *model*: a condition does not
     reorder what it keeps, a string dimension keeps its declared order rather
     than a bytewise one, and a label the dimension does not have is a stranger
-    rather than a new member. A lane that read order off the rows would pass
+    rather than a new label. A lane that read order off the rows would pass
     every objective assertion in this file and fail here.
     """
 
     def test_a_masked_variable_is_labelled_in_declaration_order(self):
         """A label is the solver's own column index, so its order is the contract.
 
-        Labels are dense ``0..n-1`` over the coordinates the mask leaves, assigned
-        row-major on the dims' declared ordinals. An off-by-one here is a different
+        Labels are dense ``0..n-1`` over the coordinates the condition leaves, assigned
+        row-major on the dimensions' declared ordinals. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
         """
@@ -585,11 +585,11 @@ class TestTheLabelSpace:
         assert list(labelled.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
-        """A string dim is an ``Enum`` over its labels in declaration order for the
+        """A string dimension is an ``Enum`` over its labels in entry order for the
         whole build — and plain ``String`` the moment it is handed back.
 
         A caller joins the result against their own data, which an ``Enum``
-        refuses. Declaration order survives the cast because it is the row order,
+        refuses. Entry order survives the cast because it is the row order,
         and `to_pandas` puts the ordered categories back for the bridge out.
         """
         cap = pl.DataFrame({'node': ['a', 'b', 'c'], 'value': [1.0, 2.0, 3.0]})
@@ -601,7 +601,7 @@ class TestTheLabelSpace:
 
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
         assert primal['node'].to_list() == ['c', 'a', 'b'], 'read-back follows label order, not source order'
-        assert primal.join(cap, on='node').height == 3, "the caller's own frame is String, and it joins"
+        assert primal.join(cap, on='node').height == 3, "the caller's own table is String, and it joins"
 
     @pytest.mark.parametrize(
         'labels',
@@ -631,12 +631,12 @@ class TestTheLabelSpace:
         with sps.solve(spec, data) as result:
             x = by_coord(result, 'x', 't')
 
-        assert list(x) == labels, 'read-back follows declaration order'
+        assert list(x) == labels, 'read-back follows entry order'
         for label, bound in cap.items():
             assert x[label] == pytest.approx(bound), f'x at t={label} is held by the cap of t={label}, no other'
 
     def test_a_where_naming_an_undeclared_label_masks_nothing_in(self):
-        """A quoted label the dimension does not carry masks everything out (the
+        """A quoted label the dimension does not carry leaves everything absent (the
         where-string rules); the comparison is in String space, since the Enum
         would refuse the stranger."""
         spec = override(NODE_CAP_SPEC, **{'constraints.k.where': "node == 'zzz'"})
@@ -644,19 +644,19 @@ class TestTheLabelSpace:
 
         with sps.build(spec, {'node': ['a', 'b'], 'cap': cap}) as model:
             assert model._engine._model.handoff.rows.height == 0, (
-                'the mask holds nowhere, so no constraint row is built'
+                'the condition holds nowhere, so no constraint row is built'
             )
             assert model.solve().objective == pytest.approx(0.0)
 
     def test_a_mask_that_removes_nothing_labels_exactly_like_no_mask(self, dispatch_data):
         """A vacuous `where` must not shift a single solver index.
 
-        Labels are the solver's own column numbers, so "the mask removed nothing"
-        and "there was no mask" have to produce identical frames rather than merely
+        Labels are the solver's own column numbers, so "the condition removed nothing"
+        and "there was no condition" have to produce identical tables rather than merely
         the same row count.
         """
         gens, load = dispatch_data
-        gens = gens.assign(p_max=gens['p_max'].where(gens['p_max'] > 0, 1.0))  # nothing left to mask out
+        gens = gens.assign(p_max=gens['p_max'].where(gens['p_max'] > 0, 1.0))  # the condition leaves nothing absent
 
         labels = []
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
@@ -668,12 +668,12 @@ class TestTheLabelSpace:
         assert labels[0].equals(labels[1])
 
     def test_a_mask_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
-        """`not` and `or` select rows the mask's own join must not have dropped.
+        """`not` and `or` select rows the condition's own join must not have dropped.
 
-        A mask's parameters are joined for, and under a plain conjunction that join
+        A condition's parameters are joined for, and under a plain conjunction that join
         can be an inner one: a coordinate the parameter has no row for fails the
-        conjunct anyway, so keeping it only widens the frame the filter then
-        narrows. Under `not` or `or` a missing value is what makes the mask *true*,
+        conjunct anyway, so keeping it only widens the table the filter then
+        narrows. Under `not` or `or` a missing value is what makes the condition *true*,
         and an inner join would have thrown the row away before the filter could
         say so.
         """
@@ -709,11 +709,11 @@ class TestTheLabelSpace:
         """What reading a solve back by position rests on.
 
         A solver vector is positional in the same index the labels are, so a
-        declaration's share of it is a slice — but only if its labels are a dense
+        entry's share of it is a slice — but only if its labels are a dense
         run and the runs tile the whole index. Both are how `labels.frame` numbers
-        a declaration, and neither is visible from the frames: a block
+        an entry, and neither is visible from the tables: a block
         that started one late would report a neighbour's numbers under this
-        declaration's coordinates, with nothing out of range and nothing null.
+        entry's coordinates, with nothing out of range and nothing null.
         """
         spec = {
             'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'str'}},
@@ -740,7 +740,7 @@ class TestTheLabelSpace:
                 at = 0
                 for name in names:
                     start, height = held[name].start, held[name].height
-                    assert start == at, f'{name} does not start where the previous declaration ended'
+                    assert start == at, f'{name} does not start where the previous entry ended'
                     labels = held[name].frame.select(label).collect().to_series()
                     assert sorted(labels) == list(range(start, start + height)), f'{name} is not a dense run'
                     at += height
@@ -754,7 +754,7 @@ class TestTheLabelSpace:
         separate namespaces, so the model is legal and the read-back has to tell
         the two apart. `pad` exists to push the variable's block off the
         constraint's: sharing a start, the wrong block returns plausible numbers
-        from the wrong declaration rather than a length error.
+        from the wrong entry rather than a length error.
         """
         spec = {
             'dimensions': {'i': {'dtype': 'int'}},
@@ -851,9 +851,9 @@ class TestTheLabelSpace:
     def test_an_empty_index_keeps_the_dimension_s_declared_dtype(self, declared, dtype, grown):
         """polars infers `Null` from no labels, and a `Null` key joins nothing.
 
-        A dimension whose members a caller appends to between solves starts empty —
+        A dimension whose labels a caller appends to between solves starts empty —
         a Benders cut set is the motivating case — and the parameter attached to it
-        carries the right dtype from the first call. Only the declaration knows
+        carries the right dtype from the first call. Only the entry knows
         what the column should be, and it always answers: the default `dtype`
         (`str`) carries the same weight as a declared one.
         """
@@ -873,8 +873,8 @@ class TestTheLabelSpace:
     def test_two_solutions_over_different_members_concatenate(self):
         """An `Enum` column will not concatenate against different categories.
 
-        A sweep holds one frame per slice and joins them on read, so slices that
-        attached different members of a dimension still have to concatenate.
+        A sweep holds one table per slice and joins them on read, so slices that
+        attached different labels of a dimension still have to concatenate.
         """
         frames = []
         for members in (['a', 'b'], ['a', 'c']):
@@ -980,7 +980,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         `x + 2 * x` is two linear terms landing on one solver column, so the
         assembly has to add them. Its coefficient must be 3, and the row must hold
         one entry for that column rather than two — a solver handed the same
-        column twice in one row is entitled to reject the model.
+        column twice in one row is entitled to refuse the model.
         """
         spec = override(RHS_SPEC, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
@@ -1092,10 +1092,10 @@ class TestWhatReachesTheSolverAsAnEntry:
         assert _objective_table(Spec(**base).program, sources) == (expected, 2)
 
     def test_the_objective_aggregate_survives_a_reduction_that_hides_extra_rows(self):
-        """A term's dims can match the variable's while its rows do not.
+        """A term's dimensions can match the variable's while its rows do not.
 
         `sum(q * price, over=generator)` with `q` indexed by snapshot alone reduces
-        to dims `('snapshot',)` — exactly `q`'s declaration — but `_sum_term`
+        to dimensions `('snapshot',)` — exactly `q`'s entry — but `_sum_term`
         *projects*, so the term still carries one row per generator. Those rows
         all name one column, and `obj` must hold their sum: the LP file would
         quietly re-sum |generator| rows, while `cols` joined to `obj` in the HiGHS
@@ -1155,7 +1155,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
             tables = model._engine._model.handoff
-            assert tables.obj.height == 1, 'the zero-cost column reached the objective frame'
+            assert tables.obj.height == 1, 'the zero-cost column reached the objective table'
             assert list(tables.obj['coeff']) == [5.0]
 
     def test_infinite_bounds_survive_the_handoff(self, dispatch_data):
@@ -1187,7 +1187,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             assert rate['sized'] == pytest.approx(40.0, rel=RTOL), 'free to 50, so the envelope is 0.8 * 50'
 
 
-#: Two dims on purpose (see the test below): a single-dim label frame is a scan
+#: Two dimensions on purpose (see the test below): a single-dimension label table is a scan
 #: and cannot come out of order.
 POSITIONAL_COLS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'str'}},
@@ -1199,7 +1199,7 @@ POSITIONAL_COLS_SPEC = {
 
 
 #: A bound parameter dense over the whole variable product — a profile per
-#: node, per hour. `p`'s upper bound spans exactly `p`'s dims, so alignment
+#: node, per hour. `p`'s upper bound spans exactly `p`'s dimensions, so alignment
 #: is positional rather than a join (compiler `_aligned_bound`).
 DENSE_BOUND_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'n': {'dtype': 'str'}},
@@ -1249,7 +1249,7 @@ def _aligned_for(spec, data, monkeypatch):
 
 
 #: One dimension, so the oracle can take it: the linopy loader wants a
-#: `pd.Series` for a 1-D parameter and refuses a polars frame for a 2-D one.
+#: `pd.Series` for a 1-D parameter and refuses a polars table for a 2-D one.
 FLAT_SPEC = {
     'dimensions': {'n': {'dtype': 'str'}},
     'parameters': {'avail': {'dims': ['n']}, 'cost': {'dims': ['n']}},
@@ -1303,7 +1303,7 @@ class TestThePositionalHandoff:
         """A wrong length is a different model's answer, not a short one.
 
         Reading a solution back is positional. A short vector leaves the trailing
-        declarations reading past the end; a long one leaves every declaration
+        entries reading past the end; a long one leaves every entry
         reading the right slice of the wrong vector. Neither is recoverable, so
         both are refused where the solver hands them over — not where they are
         read: the objective comes straight from the solver, so a `Result` built on
@@ -1333,12 +1333,12 @@ class TestThePositionalHandoff:
         """A solution is positional, so there is nothing to key it by.
 
         Solver output is indexed by the solver's own index, which *is* our label —
-        so a ``(label, value)`` frame carries an ``arange`` beside every value that
+        so a ``(label, value)`` table carries an ``arange`` beside every value that
         the read-back never reads, 8 bytes a column for as long as the result is
         held.
 
         Read off the hand-off rather than off the `Result`, which lays these
-        vectors into its frames and keeps no second copy of them.
+        vectors into its tables and keeps no second copy of them.
         """
         with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
             assert model.solve(solver_name=solver_name).is_ok
@@ -1347,7 +1347,7 @@ class TestThePositionalHandoff:
             tables = engine._model.handoff
             answer = engine._solver.run(tables)
             for values, count in ((answer.primal, tables.column_count), (answer.dual, tables.row_count)):
-                assert isinstance(values, pl.Series), 'a frame here is an index column nothing reads'
+                assert isinstance(values, pl.Series), 'a table here is an index column nothing reads'
                 assert values.name == 'value'
                 assert len(values) == count, 'the read-back slices it positionally, so it spans the model'
 
@@ -1415,7 +1415,7 @@ class TestThePositionalHandoff:
         """Two solvers, two spellings of infinity, one model — and it survives both.
 
         `cols` has no `col` column: it is one row per column in label order, so the
-        vectors a solver sink is handed are *views* of the frame rather than the
+        vectors a solver sink is handed are *views* of the table rather than the
         scatter's fresh arrays. Replacing an infinity in place through one would
         rewrite the built model to suit whichever solver asked last, and the second
         ask would read bounds the first had already edited.
@@ -1428,23 +1428,23 @@ class TestThePositionalHandoff:
             second_ub = tables.dense_columns(1e100).ub
 
             assert ub_after_first == tables.cols['ub'].to_list(), 'the projection edited the model'
-            assert all(v == float('inf') for v in tables.cols['ub'].to_list()), 'the frame lost its infinities'
+            assert all(v == float('inf') for v in tables.cols['ub'].to_list()), 'the table lost its infinities'
             assert list(second_ub) == [1e100, 1e100], "the second solver got the first solver's infinity"
             assert list(first) == [0.0, 0.0]
 
     @pytest.mark.parametrize('where', [None, 'cap > 0'])
     def test_cols_is_positional_so_a_row_index_is_its_solver_column(self, where):
-        """Every row of `cols` sits at its own label, masked or not.
+        """Every row of `cols` sits at its own label, with a `where` or without.
 
         `cols` carries no `col`: it is one row per column in label order, so a
         row's position *is* the solver's index. Both arithmetic label paths get
         that order from the emission order of a **cross join**, which is a property
         of polars rather than of this package — so it is checked here against the
-        label frame, which knows the answer independently.
+        label table, which knows the answer independently.
 
-        Two dims on purpose: one dim is a scan and cannot be out of order, so a
-        single-dim model would pass whatever the product did. Bounds are distinct
-        per coordinate for the same reason — a frame permuted by a mask, a join, or
+        Two dimensions on purpose: one dimension is a scan and cannot be out of order, so a
+        single-dimension model would pass whatever the product did. Bounds are distinct
+        per coordinate for the same reason — a table permuted by a condition, a join, or
         a change in someone else's engine still has the right *multiset* of bounds
         and the wrong row for every one of them.
         """
@@ -1468,9 +1468,9 @@ class TestThePositionalHandoff:
     def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined(self, monkeypatch):
         """The shape xarray gets for free: position *is* the coordinate.
 
-        `avail` spans exactly `p`'s dims and has a row per coordinate, so the
-        label frame and the parameter describe the same product — and the label
-        frame is in label order by construction. Sorting the parameter by the
+        `avail` spans exactly `p`'s dimensions and has a row per coordinate, so the
+        label table and the parameter describe the same product — and the label
+        table is in label order by construction. Sorting the parameter by the
         dimension ordinals reproduces that order, so the value column is attached
         rather than joined, which on `profiled/l` is most of a 0.58 s join.
 
@@ -1506,7 +1506,7 @@ class TestThePositionalHandoff:
     def test_a_mask_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
         """Both ways position stops meaning the coordinate, refused by the gate.
 
-        A `where` makes the label frame a subset of the product, and a parameter
+        A `where` makes the label table a subset of the product, and a parameter
         with a missing row makes the *parameter* one — either way the two sides no
         longer line up row for row, and attaching would pair a coordinate with
         another coordinate's bound. Neither is a shape the join cannot handle, so
@@ -1524,7 +1524,7 @@ class TestThePositionalHandoff:
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
     """Data for the model above, carrying only what that model declares.
 
-    The variable is absent at ``t = 2``, so a masked reduction counts two slots
+    The variable is absent at ``t = 2``, so a reduction over it counts two slots
     and not three — which is the whole reason cardinality cannot stand in for
     the count.
     """
@@ -1568,7 +1568,7 @@ def _constant_beside_a_term(expression: str, *, over_the_dim: bool = False) -> d
     }
 
 
-#: A constant beside a **masked** term, under every operator that moves or
+#: A constant beside a term **absent** at one slot, under every operator that moves or
 #: reduces along a dimension. The variable is absent at ``t = 2`` and the
 #: constant is not, so each operator has to decide whether the constant survives
 #: that slot; the powers of ten make a disagreement name the slot it kept.
@@ -1619,7 +1619,7 @@ class TestWhereTheLanesDifferByDesign:
         `LanguageError` here says the file is unsayable, which is false twice over:
         `check` passes with no data, and the linopy oracle builds the model and
         reaches *answer*. What is true is that this lane cannot represent a constant
-        term with no rows for the dim the operator acts along, so the refusal is
+        term with no rows for the dimension the operator acts along, so the refusal is
         a `SpecsolveError` that names the rewrite.
         """
         spec = _constant_beside_a_term(expression)
@@ -1638,7 +1638,7 @@ class TestWhereTheLanesDifferByDesign:
     def test_the_rewrite_the_lane_gap_names_reaches_the_answer(self, expression, answer):
         """The rewrite the refusal names reaches the linopy lane's answer.
 
-        Declaring the constant over the dim gives the term the rows this lane
+        Declaring the constant over the dimension gives the term the rows this lane
         needs, and the number it then reaches is the one the linopy lane reaches from
         the unrewritten file.
         """
@@ -1650,7 +1650,7 @@ class TestWhereTheLanesDifferByDesign:
 
     @pytest.mark.parametrize('expression', ABSENT_SLOT_CASES)
     def test_a_constant_at_an_absent_slot_reads_the_same_on_both_lanes(self, expression):
-        """#1142: every operator that moves along a dim drops the constant with the term.
+        """#1142: every operator that moves along a dimension drops the constant with the term.
 
         Differential rather than a pinned number, because the question is not what
         the answer is but whether the two lanes give the same one — and the linopy
@@ -1668,7 +1668,7 @@ class TestWhereTheLanesDifferByDesign:
 
 
 # ---------------------------------------------------------------------------
-# attaching an index to a dim: by name where there is one, by position otherwise
+# attaching an index to a dimension: by name where there is one, by position otherwise
 # ---------------------------------------------------------------------------
 
 NETWORK = {
@@ -1683,7 +1683,7 @@ CAPS = {('n1', 'n1'): 1.0, ('n2', 'n1'): 5.0, ('n1', 'n2'): 500.0, ('n2', 'n2'):
 
 
 def _tidy_cap(names):
-    """`cap` keyed by (from_bus, to_bus), read back off the normalised frame.
+    """`cap` keyed by (from_bus, to_bus), read back off the normalised table.
 
     The columns come back by name — which is the point: a transposition shows
     up as swapped values rather than hiding in the order they were written.
@@ -1699,7 +1699,7 @@ def _tidy_cap(names):
 
 
 def test_a_named_column_attaches_by_name_not_position():
-    """Two dims over the same label space make a transposed source type-check
+    """Two dimensions over the same label space make a transposed source type-check
     and cover every coordinate, so nothing downstream can catch it. Attaching by
     name is what makes the transposition visible instead.
     """
@@ -1708,7 +1708,7 @@ def test_a_named_column_attaches_by_name_not_position():
 
 
 def test_a_column_name_outside_the_declared_dims_is_an_error():
-    """Refused by attaching, which asks it of a parquet path as well as a frame.
+    """Refused by attaching, which asks it of a parquet path as well as a table.
 
     ``tidy_sources`` only ever sees the in-memory half, so asking there too
     would be a second wording of one defect covering fewer sources.

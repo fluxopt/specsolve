@@ -110,7 +110,7 @@ def test_highs_numbers_a_continuous_column_zero_and_an_integer_one():
 def test_cols_vtype_is_an_enum_over_every_declared_domain(commitment_run):
     """``cols.vtype`` is an Enum, and its members are ``program.VariableDomain``.
 
-    An Enum rejects a value outside it, so a fourth domain added to the plan
+    An Enum refuses a value outside it, so a fourth domain added to the program
     and not reaching the column fails where the column is built.
     """
     vtype = commitment_run.engine._model.handoff.cols.schema['vtype']

@@ -7,7 +7,7 @@ single-valued map — two columns, one of them the key — is one shape of it:
 - **a key of several columns** reads the map *under a condition* the row
   carries, so the join carries the rest of the key through;
 - **several value columns** land one walk on a product of dimensions;
-- **a bare relation** fans a member out to every target it is related to;
+- **a bare relation** fans a label out to every target it is related to;
 - **a partition by a conditioned map** groups a shift, a window or a position
   by the value at the rest of the key, so a neighbour is a neighbour inside
   *this generator's* season;
@@ -174,7 +174,7 @@ def test_a_walk_onto_a_dimension_the_operand_carries_is_refused_and_names_the_re
     """A walk brings the dimension it lands on, so the operand may not already carry it.
 
     Inside the operator, `load[bus]` and a walk onto `bus` read as a product
-    over every (generator, bus) pair masked back down to the pairs the map
+    over every (generator, bus) pair narrowed back down to the pairs the map
     agrees with — which is the same answer as multiplying outside, reached by a
     spelling that hides what the call adds.
     """
@@ -241,7 +241,7 @@ def test_a_sum_through_a_bare_relation_counts_a_member_in_every_group_it_is_rela
 
 
 def test_a_constant_summed_through_a_bare_relation_reads_zero_where_nothing_reaches(tmp_path):
-    """The weights land on every bus a member reaches, and an unreached bus gets the empty sum."""
+    """The weights land on every bus a label reaches, and an unreached bus gets the empty sum."""
     spec = _bare_spec()
     spec['variables']['x'] = {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}}
     spec['constraints']['under'] = {

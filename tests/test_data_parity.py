@@ -194,7 +194,7 @@ def test_a_hole_is_named_where_it_sits_rather_than_as_a_divisor(spec_path: Path)
         pytest.param(float('nan'), id='a-scalar'),
         pytest.param([1.0, float('nan')], id='a-sequence'),
         pytest.param({'a': 1.0, 'b': None}, id='a-dict'),
-        pytest.param(_tidy(f=['a', 'b'], value=[1.0, None]), id='a-tidy-frame'),
+        pytest.param(_tidy(f=['a', 'b'], value=[1.0, None]), id='a-tidy-table'),
     ],
 )
 def test_a_hole_is_refused_in_every_shape_a_source_arrives_in(spec_path: Path, holed: Any):
@@ -236,7 +236,7 @@ def _position_sources(lead: Any) -> dict[str, Any]:
 
 
 def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tmp_path: Path):
-    """An `int` declaration takes an integer column, which has no fraction to hold."""
+    """A parameter declared `int` takes an integer column, which has no fraction to hold."""
     path = _written(tmp_path, POSITION_SPEC)
 
     both_lanes_refuse(path, _position_sources(1.5), match="declared 'int'")
@@ -245,7 +245,7 @@ def test_an_int_declaration_takes_no_float_column_so_a_fraction_cannot_arrive(tm
 
 
 def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
-    """An integer column serves a `float` declaration: the one widening."""
+    """An integer column serves a parameter declared `float`: the one widening."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'cost': {'dims': ['g'], 'dtype': 'float'}},
@@ -257,7 +257,7 @@ def test_whole_numbers_serve_a_float_declaration(tmp_path: Path):
     integral = {'g': ['a', 'b'], 'cost': _tidy(g=['a', 'b'], value=[1, 2])}
 
     with sps.solve(path, integral) as run:
-        assert run.is_ok, 'an integer column serves a float declaration'
+        assert run.is_ok, 'an integer column serves a parameter declared float'
     assert specsolve_linopy.build(path, integral) is not None, 'and does so on both lanes'
 
 
@@ -280,13 +280,13 @@ FLAG_SPEC = {
     ],
 )
 def test_a_flag_masks_by_its_declaration_rather_than_by_its_storage(tmp_path: Path, spelling: str, column: Any):
-    """A column that is not what it declares does not attach, so a 1/0 flag cannot mask nothing."""
+    """A column that is not what it declares does not attach, so a 1/0 flag cannot leave every row standing."""
     path = _written(tmp_path, FLAG_SPEC)
     sources = {'g': ['a', 'b'], 'active': column}
 
     if spelling == 'boolean':
         with sps.solve(path, sources) as run:
-            assert run.objective == pytest.approx(1.0), 'the inactive column is masked away'
+            assert run.objective == pytest.approx(1.0), 'the inactive generator is left absent'
         return
     both_lanes_refuse(path, sources, match="declared 'bool'")
 
@@ -390,7 +390,7 @@ def test_a_relation_a_label_holds_twice_is_refused_before_it_can_drop_a_row(tmp_
     holed = {**_P_MAX, **_INDEX, 'gen_bus': _tidy(g=['w', 'w', 's'], b=[None, 'n', 'n'])}
 
     with sps.solve(path, clean) as run:
-        assert run.objective == pytest.approx(3.0), 'both members are on the bus, and the bus caps them'
+        assert run.objective == pytest.approx(3.0), 'both generators are on the bus, and the bus caps them'
     built = specsolve_linopy.build(path, clean)
     built.solve(solver_name='highs', output_flag=False)
     assert float(built.objective.value) == pytest.approx(3.0), 'and the linopy lane agrees where the index is clean'
@@ -454,8 +454,8 @@ def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lan
         'day_of': _tidy(g=['w', 's'], d=[days[0], days[0]]),
     }
     with differential(_written(tmp_path, spec), sources) as run:
-        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
-        assert run.result.dual('k')['d'].to_list() == days[:1], 'the day with members comes back as the date it was'
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both generators under it, on both lanes'
+        assert run.result.dual('k')['d'].to_list() == days[:1], 'the day with generators comes back as the date it was'
 
 
 def _spelled(spelling: str, columns: dict[str, list[Any]], path: Path) -> Any:
@@ -489,7 +489,7 @@ _SPELLINGS = {
 def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_path, index, column):
     """A relation's values and a parameter's labels are labels of the dimension, canonicalised as those are.
 
-    Both members map to the same day, so that day's cap binds them together.
+    Both generators map to the same day, so that day's cap binds them together.
     A date and a midnight datetime are one instant, whichever spells the index
     and whichever the columns (#1630). A date was compared with a datetime and
     matched nothing, so it was refused as not a label of its dimension; and the
@@ -505,7 +505,7 @@ def test_a_relation_into_a_temporal_dimension_is_one_instant_on_both_lanes(tmp_p
         'day_of': _spelled(column, {'g': ['w', 's'], 'd': [days[0], days[0]]}, tmp_path / 'day_of.parquet'),
     }
     with differential(_written(tmp_path, TEMPORAL_RELATION_SPEC), sources) as run:
-        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both members under it, on both lanes'
+        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both generators under it, on both lanes'
 
 
 def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_path):
@@ -522,17 +522,17 @@ def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_p
 
 
 def test_a_multi_indexed_series_is_refused_on_both_lanes(tmp_path):
-    """A MultiIndex restates the declared dims and can contradict them, so it is refused."""
+    """A MultiIndex restates the declared dimensions and can contradict them, so it is refused."""
     path = _written(tmp_path, RELATION_SPEC)
     deep = pd.MultiIndex.from_tuples([('w', 0), ('s', 0)], names=['g', 'k'])
     sources = {'p_max': pd.Series([5.0, 5.0], index=deep), **_INDEX, **_MAP}
 
     sentence = both_lanes_refuse(path, sources, match='MultiIndex is not a source')
-    assert "['g', 'value']" in sentence, 'and it names the tidy frame the caller should pass'
+    assert "['g', 'value']" in sentence, 'and it names the tidy table the caller should pass'
 
 
 def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_path):
-    """A Series is one level deep, so a declaration of two dims is refused as for a dict.
+    """A Series is one level deep, so a parameter over two dimensions is refused as for a dict.
 
     The index is unnamed: a named one attaches by its own name and is reported
     as a missing column.
@@ -547,7 +547,7 @@ def test_a_series_shallower_than_the_declared_dims_is_refused_on_both_lanes(tmp_
     sources = {'p_max': pd.Series([5.0, 5.0], index=pd.Index(['w', 's']))}
 
     sentence = both_lanes_refuse(path, sources, match='runs along one dimension')
-    assert "['g', 'b', 'value']" in sentence, 'and it names the table that carries both dims'
+    assert "['g', 'b', 'value']" in sentence, 'and it names the table that carries both dimensions'
 
 
 def test_a_source_key_the_model_does_not_declare_is_refused_on_both_lanes(tmp_path):

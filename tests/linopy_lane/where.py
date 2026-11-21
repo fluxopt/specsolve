@@ -1,6 +1,6 @@
-"""A ``where:`` predicate as a boolean array over the coordinates it masks.
+"""A ``where:`` condition as a boolean array over the coordinates it keeps.
 
-The other half of what a declaration says: ``builder.py`` builds the thing,
+The other half of what an entry says: ``builder.py`` builds the thing,
 this decides where it exists. A :class:`~mathspec.program.Condition` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes. Both lanes read the same node kinds, and
@@ -44,10 +44,10 @@ _PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
 
 @dataclass(frozen=True)
 class EvaluationContext:
-    """Everything evaluating a plan needs beyond the node: the data, the axes, the model, the relations, the program.
+    """Everything evaluating a program node needs beyond the node: the data, the axes, the model, the relations, the program.
 
     ``relations`` carries one array per value column, keyed by its relation's
-    name and its own, over the dimensions the key names — what a predicate on a
+    name and its own, over the dimensions the key names — what a condition on a
     relation and a grouped operator both read instead of the parameter dataset.
     """
 
@@ -56,7 +56,7 @@ class EvaluationContext:
     model: linopy.Model
     relations: Mapping[tuple[str, str], xr.DataArray]
     program: program.Program
-    #: Whether *model* is solved and the plan is read at its solution — a
+    #: Whether *model* is solved and the program is read at its solution — a
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
@@ -75,9 +75,9 @@ class EvaluationContext:
 
 
 def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.DataArray:
-    """Evaluate a lowered mask against a parameter dataset.
+    """Evaluate a compiled condition against a parameter dataset.
 
-    Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
+    Always a boolean DataArray. The case with no condition comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
     """
     if mask is None:
@@ -87,10 +87,10 @@ def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.Data
 
 
 def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
-    """One predicate node as a boolean DataArray.
+    """One condition node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
-    masked-out coordinate is absent (:func:`absence.present`), and a
+    coordinate outside its ``where:`` is absent (:func:`absence.present`), and a
     comparison over NaN comes back false.
 
     **A null relation value is excluded explicitly rather than by ``fillna``.**
@@ -205,9 +205,9 @@ def _value(side: program.Expression, ctx: EvaluationContext) -> xr.DataArray:
 def _joined(node: program.JoinedCondition, ctx: EvaluationContext) -> xr.DataArray:
     """Where the operand holds at the coordinate the relation's row reads, for each row of the relation.
 
-    The expression ``at`` answers, so the predicate is read through the relation
+    The expression ``at`` answers, so the condition is read through the relation
     as an array is. A coordinate the relation has no row for reads the
-    absence ``at`` leaves there, which is false in a mask.
+    absence ``at`` leaves there, which is false in a condition.
     """
     # in-function: the builder imports this module
     from tests.linopy_lane.builder import _walked_arrays
@@ -223,7 +223,7 @@ def _joined(node: program.JoinedCondition, ctx: EvaluationContext) -> xr.DataArr
 def _along(arr: xr.DataArray, dimension: str, master_coords: Mapping[str, pd.Index]) -> xr.DataArray:
     """*arr* carrying *dimension*, broadcast over its labels where it does not.
 
-    A predicate reading none of the dimension's own data answers the same at
+    A condition reading none of the dimension's own data answers the same at
     every coordinate of it, and counting or shifting along an axis the array
     has never seen would otherwise drop the reduction the node *is*.
     """
@@ -231,7 +231,7 @@ def _along(arr: xr.DataArray, dimension: str, master_coords: Mapping[str, pd.Ind
 
 
 def _defined(arr: xr.DataArray, dtype: str) -> xr.DataArray:
-    """What a bare parameter name in a ``where`` asks: the declaration picks the reading.
+    """What a bare parameter name in a ``where`` asks: the entry picks the reading.
 
     A ``bool`` is its own answer — a slot the data has no row for is false,
     the array having widened to float to hold the NaN — a ``str`` is defined
@@ -296,7 +296,7 @@ def bound_relation(name: str, column: str, relations: Mapping[tuple[str, str], x
 
 
 def as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
-    """Convert an evaluated where mask to linopy's ``mask=`` argument.
+    """Convert an evaluated ``where:`` condition to linopy's ``mask=`` argument.
 
     linopy expects ``None`` for "no mask"; a 0-d True mask means exactly
     that. Everything else (including 0-d False) passes through.

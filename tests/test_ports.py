@@ -1,6 +1,6 @@
 """Referenced models, checked against an optimum that did not come from specsolve.
 
-The differential harness compares two lanes consuming the same resolved AST, so
+The differential harness compares two lanes reading the same resolved program, so
 a shared misreading passes it; this corpus is the net for that class. Each
 expected objective was published with the model, produced by somebody else's
 code, or reached by a hand-written formulation on another modelling stack.
@@ -36,8 +36,8 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
 
 def test_port_is_inside_the_language(port: dict[str, Any]) -> None:
     """Compiles with no data attached, so a language regression fails separately
-    from a semantics one: this breaks when lowering stops accepting the model,
-    the test above when it lowers and misses the number."""
+    from a semantics one: this breaks when compiling stops accepting the model,
+    the test above when it compiles and misses the number."""
     sps.check(expanded(port['spec']))
 
 
