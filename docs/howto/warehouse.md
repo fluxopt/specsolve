@@ -85,8 +85,9 @@ p = pl.concat([pl.read_parquet(file) for file in held], how='diagonal')
 ```
 
 **A rolling horizon's files hold every row each window solved.** Where the
-windows look ahead, `answer/horizon.parquet` lists the rows each window owns:
-join on `specsolve_run`, the key and the windowed dimension to keep those.
+windows look ahead, `answer/horizon.parquet` lists the rows of each window's
+horizon: join on `specsolve_run`, the key and the windowed dimension to keep
+those.
 
 Every column has a type that parquet readers agree on
 ([the rule](../reference/data.md#column-types-in-an-archive)).

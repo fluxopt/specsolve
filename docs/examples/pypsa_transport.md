@@ -220,7 +220,7 @@ capital cost, ramp limits, storage cycling and KVL, so a mismatch would
 implicate five features at once. Each feature is therefore switched off in
 PyPSA and reproduced in its own model: **a transport model** (this one) ·
 [ramp limits](pypsa_ramp.md) · [storage](pypsa_storage.md) ·
-[a cyclic horizon](pypsa_cyclic_storage.md) · [KVL](pypsa_kvl.md).
+[cyclic storage](pypsa_cyclic_storage.md) · [KVL](pypsa_kvl.md).
 
 **This model hit the ceiling once.** PyPSA's `p_min_pu = -1` is a bound of
 `-rating`, an expression `bounds:` cannot take. It ships as a `neg_rating`

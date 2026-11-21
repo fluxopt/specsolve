@@ -1,6 +1,6 @@
 """sum_back: a trailing window whose width is data, through both backends.
 
-A minimum up time, a rolling emissions budget, a delivery horizon: the width
+A minimum up time, a rolling emissions budget, a delivery window: the width
 is a column in the source data.
 """
 

@@ -19,7 +19,7 @@ import pytest
 
 import specsolve as sps
 from specsolve._outputs import OUTPUT_KINDS, OUTPUTS
-from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, span_sources, scenario_sources
+from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, scenario_sources, span_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -277,7 +277,7 @@ def test_a_spill_solved_with_the_same_outputs_resumes(tmp_path: Path) -> None:
 
 
 def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path: Path) -> None:
-    """Each snapshot carries the activity of the window that owns it, and ``per_window`` reads every window."""
+    """Each snapshot carries the activity of the window whose horizon holds it; ``per_window`` reads every window."""
     sweep = sps.solve_over(
         WINDOW,
         span_sources(12),

@@ -1,4 +1,4 @@
-# PyPSA energy totals — a bound across the whole horizon
+# PyPSA energy totals — a bound across every snapshot
 
 A generator's dispatch reduced over every snapshot and bounded: a contracted delivery, a reservoir's season.
 
@@ -18,7 +18,7 @@ free to balance. Both bounds bind, and they bind in opposite directions.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon and bounded — a contracted delivery on one, a reservoir's season on another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
+PyPSA energy-total bounds: a generator's dispatch reduced over every snapshot and bounded — a contracted delivery on one, a reservoir's season on another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
 
 #### Sets
 
@@ -35,8 +35,8 @@ PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon
 | $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
-| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over the whole horizon, for the generators that owe one |
+| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over every snapshot, for the generators that have such a limit |
+| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over every snapshot, for the generators that owe one |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
@@ -88,8 +88,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```yaml
     description: >-
-      PyPSA energy-total bounds: a generator's dispatch reduced over the whole
-      horizon and bounded — a contracted delivery on one, a reservoir's season on
+      PyPSA energy-total bounds: a generator's dispatch reduced over every
+      snapshot and bounded — a contracted delivery on one, a reservoir's season on
       another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
 
     dimensions:
@@ -122,13 +122,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         dims: [generator]
       e_sum_max:
         description: >-
-          most energy a generator may deliver over the whole horizon, for the
+          most energy a generator may deliver over every snapshot, for the
           generators that have such a limit
         dims: [generator]
         missing: absent
       e_sum_min:
         description: >-
-          least energy a generator must deliver over the whole horizon, for the
+          least energy a generator must deliver over every snapshot, for the
           generators that owe one
         dims: [generator]
         missing: absent
@@ -153,14 +153,14 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
       energy_cap:
         description: >-
           a generator with a ceiling on total energy delivers no more than it over
-          the horizon — the weighting is what makes the sum an energy rather than a
+          every snapshot — the weighting is what makes the sum an energy rather than a
           count of snapshots
         dims: [generator]
         where: e_sum_max
         expression: sum(p * weighting, over=snapshot) <= e_sum_max
 
       energy_floor:
-        description: a generator that owes a total delivers at least it over the horizon
+        description: a generator that owes a total delivers at least it over every snapshot
         dims: [generator]
         where: e_sum_min
         expression: sum(p * weighting, over=snapshot) >= e_sum_min

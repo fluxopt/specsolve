@@ -38,7 +38,7 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period — the discount that makes a 2040 decision comparable with a 2030 one |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
@@ -126,7 +126,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         dims: [snapshot]
       period_weight:
         description: >-
-          what one period's costs are worth at the horizon's start — the discount
+          what one period's costs are worth at the start of the first period — the discount
           that makes a 2040 decision comparable with a 2030 one
         dims: [period]
       opex:

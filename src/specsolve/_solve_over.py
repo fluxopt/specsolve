@@ -360,8 +360,8 @@ def _check_the_carry(
 ) -> None:
     """Refuse a carry with no seed, one that keeps the dimension an [`EachWindow`][] cuts, or one that collapses another.
 
-    Reads no source: the seed is a key of *first*, and the owned dimension is
-    the axis's own.
+    Reads no source: the seed is a key of *first*, and the windowed dimension
+    is the axis's own.
     """
     for parameter, rule in plan.items():
         if parameter not in first:
@@ -374,16 +374,16 @@ def _check_the_carry(
                 f'carry {parameter!r} <- {rule.variable!r} keeps {axis.dim!r}, the dimension the sweep windows, '
                 f'and no two windows hold the same labels: the rows one window solved are at labels the next '
                 f'does not have. Carry into a parameter that is not over {axis.dim!r}, which takes the row at '
-                f'the last label a window owns.'
+                f"a window's horizon end."
             )
         if rule.dropped is None:
             continue
         if isinstance(axis, EachWindow) and rule.dropped == axis.dim:
             continue
-        owned = f'this axis advances along {axis.dim!r}' if isinstance(axis, EachWindow) else 'this axis owns none'
+        advance = f'this axis advances along {axis.dim!r}' if isinstance(axis, EachWindow) else 'this axis advances along none'
         raise SpecsolveError(
-            f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {owned}: a carry hands '
-            f'on the last label a slice owns, so it can only collapse the dimension the sweep advances '
+            f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {advance}: a carry hands '
+            f"on the row at a slice's horizon end, so it can only collapse the dimension the sweep advances "
             f'along. Reduce {rule.dropped!r} in the YAML — a derived variable is where the oracle can see the '
             f'math — so that {parameter!r} and {rule.variable!r} are over the same dimensions.'
         )

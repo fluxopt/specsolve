@@ -1,6 +1,6 @@
 # seasons
 
-A store that cycles inside each season rather than across the horizon, with seasons of different lengths.
+A store that cycles inside each season rather than across the modelled period, with seasons of different lengths.
 
 ## The problem
 
@@ -12,7 +12,7 @@ soc == shift(soc, along=snapshot, offset=1, edge='wrap') + inflow - release
 ```
 
 On this instance that links snapshot 7 to snapshot 1 and makes the whole
-horizon one cycle: winter opens holding what summer left, and sells it at
+modelled period one cycle: winter opens holding what summer left, and sells it at
 winter's best price. That is a different model. It solves, and its objective
 is *higher*.
 
@@ -34,7 +34,7 @@ four snapshots and summer three here, and nothing in the file says so.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next.
+A store that cycles inside each season rather than across the modelled period, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next.
 
 #### Sets
 
@@ -101,7 +101,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```yaml
     description: >-
-      A store that cycles inside each season rather than across the horizon, with
+      A store that cycles inside each season rather than across the modelled period, with
       seasons of different lengths — one balance row says it, because the wrap is
       the season's own and no level is carried from one season into the next.
 

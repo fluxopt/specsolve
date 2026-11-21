@@ -9,7 +9,7 @@ variable. A `Line` is passive: around every independent cycle of the network,
 the reactance-weighted flows sum to zero.
 
 It builds on [the transport model](pypsa_transport.md) rather than on
-[cyclic storage](pypsa_cyclic_storage.md). Ramps, storage and a closed horizon
+[cyclic storage](pypsa_cyclic_storage.md). Ramps, storage and a closed cycle
 couple snapshots in time; a voltage law couples buses in space. Stacking the
 two would leave a mismatch ambiguous about which caused it.
 

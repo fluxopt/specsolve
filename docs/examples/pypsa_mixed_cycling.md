@@ -1,7 +1,7 @@
 # pypsa_mixed_cycling
 
 PyPSA's `cyclic_state_of_charge` is a per-unit flag, so one network runs both
-regimes at once: a unit that must end each horizon where it began, beside one
+regimes at once: a unit that must end the modelled period where it began, beside one
 handed a level it may simply spend.
 
 ## The problem
@@ -38,7 +38,7 @@ writes the row instead.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
+PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end the modelled period where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
 
 #### Sets
 
@@ -53,7 +53,7 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit closes its own horizon. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
+| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit ends the modelled period where it began. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of generation |
 | $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — how fast a storage unit may charge or discharge |
@@ -145,7 +145,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```yaml
     description: >-
       PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
-      network runs both regimes at once: a unit that must end each horizon where it
+      network runs both regimes at once: a unit that must end the modelled period where it
       began, beside one handed a level it may simply spend. The two are one rule
       under complementary masks, and the seeded unit's boundary row is what a cyclic
       one does not have. Optimum 4800.0, from PyPSA itself.
@@ -178,7 +178,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     parameters:
       cyclic:
         description: >-
-          whether a unit closes its own horizon. PyPSA's flag, and the one column
+          whether a unit ends the modelled period where it began. PyPSA's flag, and the one column
           that decides which of the two balance rules a unit obeys
         dims: [storage]
         dtype: bool
@@ -241,8 +241,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
       energy_balance_cyclic:
         description: >-
-          a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-          from its last and it ends every horizon where it began
+          a cyclic unit's level wraps at the last snapshot, so its first snapshot inherits
+          from its last and it ends the modelled period where it began
         dims: [snapshot, storage]
         where: "cyclic"
         expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + p_store - p_dispatch

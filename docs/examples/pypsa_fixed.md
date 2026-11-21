@@ -33,7 +33,7 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$, `absent` where the data has no row — the capacity a generator is to hold, for the generators whose capacity is already decided |
 | $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
@@ -129,7 +129,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         description: most capacity that may stand at a generator once built
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       marginal_cost:
         description: cost of one unit of output

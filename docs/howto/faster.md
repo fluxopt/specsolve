@@ -108,8 +108,8 @@ third on. To get prices for the integer answer instead, see
 
 ## Solve in windows
 
-Solve a long horizon one window at a time. Each window stays the same size,
-however long the horizon is:
+Solve a long run of snapshots one window at a time. Each window stays the
+same size, however many snapshots there are:
 
 ```python
 sweep = sps.solve_over(
@@ -122,7 +122,7 @@ sweep = sps.solve_over(
 A window cannot see past its end, so the schedule costs more than one solve.
 A lookahead buys that back, and makes each window larger. The windows run one
 after the other, because each one starts where the one before stopped.
-[A horizon too large for one solve](../sweep.md) shows both.
+[A model too large for one solve](../sweep.md) shows both.
 
 ## Decompose
 

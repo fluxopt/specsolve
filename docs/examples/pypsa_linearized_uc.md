@@ -239,7 +239,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
         Nothing here says the model is relaxed: ``committable=True`` is the same
         switch the integer model uses, and the mode is chosen at ``optimize`` time.
-        Both ``*_time_before`` are 0, so no status is pinned by a prior horizon.
+        Both ``*_time_before`` are 0, so no status is pinned from before the first snapshot.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])

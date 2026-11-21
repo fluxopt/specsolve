@@ -47,7 +47,7 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
 | $`\mathrm{big\_m}`$ | `big_m` over $`\mathcal{G}`$, `absent` where the data has no row — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
 
 #### Variables
@@ -152,7 +152,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         description: cost of one unit of output
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       load:
         description: demand to be met

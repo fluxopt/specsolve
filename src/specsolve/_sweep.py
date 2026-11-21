@@ -315,7 +315,7 @@ class Sweep:
     [`Result`][specsolve._result.Result]'s readers, same names and
     shapes, and each returns **the answer** by default. An [`EachWindow`][]
     sweep is read over the dimension it sliced: each coordinate comes from
-    the window that owns it, and the lookahead rows are dropped. An
+    the window whose horizon holds it, and the lookahead rows are dropped. An
     [`EachLabel`][] sweep is keyed by slice, the key
     prepended, each slice being a whole answer. Nothing is combined across
     slices.
@@ -547,8 +547,8 @@ class Sweep:
 
         [`primal`][]'s shape and arguments. A slice whose model had an
         integer variable contributes no duals. In the answer of an EachWindow
-        sweep each coordinate carries the price of the window that owns it,
-        never a blend of several.
+        sweep each coordinate carries the price of the window whose horizon
+        holds it, never a blend of several.
 
         Raises:
             SpecsolveError: No slice produced duals for *name* — the message says
@@ -561,7 +561,8 @@ class Sweep:
 
         [`primal`][]'s shape and arguments, and carried only where the sweep
         was asked for it with ``outputs={'activity'}``. In the answer of an
-        EachWindow sweep each coordinate carries the window that owns it.
+        EachWindow sweep each coordinate carries the window whose horizon
+        holds it.
 
         Raises:
             SpecsolveError: The sweep was not asked for its activity, or as
@@ -642,7 +643,8 @@ class Sweep:
         value being a previous slice's answer rather than stored data.
 
         In an EachWindow sweep's answer each coordinate carries the value of
-        the window that owns it, so a sum does not double-count the lookahead.
+        the window whose horizon holds it, so a sum does not double-count the
+        lookahead.
 
         Args:
             expression: A declared name, an expression string, or the ``cases:``
@@ -904,7 +906,7 @@ def load_sweep(directory: str | Path) -> Sweep:
     Every slice's tables are in memory when this returns, so the sweep owes
     *directory* nothing afterwards; a sweep larger than memory is
     [`scan_sweep`][] instead. The readers return the answer, the manifest
-    carrying what each window owns.
+    carrying each window's horizon.
 
     Returns:
         The sweep, keyed as it was solved.

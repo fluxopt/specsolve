@@ -51,7 +51,7 @@ which states the math and checks it before any data exists.
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same model. specsolve checks
   each window against how the model couples before it runs.
-  [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
+  [A model too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All
   58 rungs match PyPSA's objective, and 36 match its duals row for row.

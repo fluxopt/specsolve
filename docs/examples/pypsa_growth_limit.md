@@ -44,7 +44,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
@@ -170,7 +170,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         description: demand to be met
         dims: [snapshot]
       period_weight:
-        description: what one period's costs are worth at the horizon's start
+        description: what one period's costs are worth at the start of the first period
         dims: [period]
       opex:
         description: cost of one unit of output

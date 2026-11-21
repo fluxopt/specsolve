@@ -34,7 +34,7 @@ same model as math.
 | [piecewise conversion](piecewise_conversion.md) | Heat and power from converters whose flows share one curve each, where how many flows a converter has is data. |
 | [monthly budget](monthly_budget.md) | A cap on what each technology may generate in each calendar month, with the months read off the timestamps. |
 | [multi-period](multi_period.md) | Capacity decided once per investment period, binding at every snapshot inside it — and the periods need not be the same size. |
-| [seasons](seasons.md) | A store that cycles inside each season rather than across the horizon, with seasons of different lengths. |
+| [seasons](seasons.md) | A store that cycles inside each season rather than across the modelled period, with seasons of different lengths. |
 | [reserves](reserves.md) | Energy and reserve co-optimization on a two-bus grid: offers are (generator, market, tranche) triples, reserve zones overlap, and one line dangles. |
 
 ### PyPSA examples
@@ -58,7 +58,7 @@ same model as math.
 | [fixed by data](pypsa_fixed.md) | A row of data that is present pins its variable; a row that is absent leaves it free. |
 | [spillage](pypsa_spill.md) | A hydro unit takes inflow it did not choose, and spills what neither turbine nor reservoir can absorb. |
 | [the Store component](pypsa_store.md) | The component every sector-coupled PyPSA model uses for hydrogen, heat and gas. |
-| [mixed cycling](pypsa_mixed_cycling.md) | PyPSA's `cyclic_state_of_charge` is a per-unit flag, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. |
+| [mixed cycling](pypsa_mixed_cycling.md) | PyPSA's `cyclic_state_of_charge` is a per-unit flag, so one network runs both regimes at once: a unit that must end the modelled period where it began, beside one handed a level it may simply spend. |
 | [link delay](pypsa_link_delay.md) | A shipment is the input shifted along time: withdrawn at one snapshot, delivered at another, derated on the way. |
 | [multi-period investment](pypsa_multi_period.md) | A build year and a lifetime decide which rows an asset appears in, and each period's costs carry its own discount. |
 | [committable and extendable](pypsa_committable_extendable.md) | A minimum output that is a share of a capacity still being decided: two variables multiplied, and one constant to take them apart. |

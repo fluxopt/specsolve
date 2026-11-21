@@ -120,7 +120,7 @@ SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
 #: A saved sweep's manifest, its keys as their own type, and the coordinates
-#: each window owns.
+#: of each window's horizon.
 MANIFEST_FILE = 'sweep.json'
 KEYS_FILE = 'keys.parquet'
 HORIZON_FILE = 'horizon.parquet'

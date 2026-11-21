@@ -212,7 +212,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
       start_up_initial:
         description: >-
           the first snapshot has no predecessor, and PyPSA's default is that the
-          unit was already up before the horizon — so the start-up row is slackened
+          unit was already up before the first snapshot — so the start-up row is slackened
           here and never binds
         dims: [snapshot, generator]
         where: "position(snapshot) == 0"
@@ -230,7 +230,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
       shut_down_initial:
         description: >-
           the mirror of the start-up row, and not slackened: a unit that begins the
-          horizon off is charged for the shut-down, which is PyPSA's asymmetry and
+          first snapshot off is charged for the shut-down, which is PyPSA's asymmetry and
           worth 50 on this instance
         dims: [snapshot, generator]
         where: "position(snapshot) == 0"
@@ -287,9 +287,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
     ```
 
 **The first snapshot is not like the others.** PyPSA's default is that a unit
-was already up before the horizon began. The start-up row is slackened to
+was already up before the first snapshot. The start-up row is slackened to
 `>= -1` there and never binds, while the shut-down row still charges a unit
-that begins the horizon off. `peak` begins off, so the instance pays a
+that begins the first snapshot off. `peak` begins off, so the instance pays a
 shut-down it never visibly performs. That asymmetry is PyPSA's, and it is
 worth 50 here.
 

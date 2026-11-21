@@ -245,7 +245,7 @@ class Diagnostics:
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
     #: the solver: one emptied of all its terms, and one a propagated absence
     #: deleted. Empty where every declared row was built. A recurrence's first
-    #: coordinate counts, so a ``shift`` against the horizon's edge reports
+    #: coordinate counts, so a ``shift`` against the edge of its dimension reports
     #: here, as the boundary rather than a fault.
     omissions: pl.DataFrame
 

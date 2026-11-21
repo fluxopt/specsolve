@@ -1,7 +1,7 @@
 """``position(dim)`` — a boundary named by where a row sits, not by the label there.
 
 A seeding clause that names a label (``snapshot == 0``) is correct only while
-the instance starts at zero: relabel the horizon and the clause matches
+the instance starts at zero: relabel the snapshots and the clause matches
 nothing, so the row it was to seed is never written. Both lanes read the
 position off the coordinate order they hold — the dimension table's ``ord``
 relationally, the master index on the linopy side — so every case below checks
@@ -23,13 +23,13 @@ from tests.differential import RTOL, differential
 from tests.oracle import pd
 
 SPEC = """
-description: a storage level carried across a horizon, seeded at its first position
+description: a storage level carried into the modelled period, seeded at its first position
 
 dimensions:
   snapshot: {dtype: int, description: dispatch periods in order, ordered: true}
 
 parameters:
-  soc_initial: {dims: [], description: the level carried in from before the horizon}
+  soc_initial: {dims: [], description: the level carried in from before the first snapshot}
   inflow: {dims: [snapshot], description: energy arriving in each period}
   price: {dims: [snapshot], description: what a unit of output earns}
 
@@ -80,10 +80,10 @@ def _inputs(snapshots=SNAPSHOTS):
 # ---------------------------------------------------------------------------
 
 
-def test_a_boundary_survives_the_horizon_being_relabelled():
-    """The optimum, hand-derived, on a horizon that starts at 4.
+def test_a_boundary_survives_the_snapshots_being_relabelled():
+    """The optimum, hand-derived, on snapshots that start at 4.
 
-    35 units of energy exist across the horizon and no more — 20 carried in,
+    35 units of energy exist across the modelled period and no more — 20 carried in,
     5 arriving in each of three periods — and the price rises, so everything
     is held back and released in the last period. Revenue is 35·3.
 
@@ -100,7 +100,7 @@ def test_a_boundary_survives_the_horizon_being_relabelled():
 
 
 def test_the_label_that_happens_to_be_first_is_not_the_rule():
-    """The same model with the horizon at 0..2 gives the same answer.
+    """The same model with the snapshots at 0..2 gives the same answer.
 
     Which is the claim: the clause names the position, so relabelling the dimension
     moves the boundary with it rather than silently seeding nothing.
@@ -111,7 +111,7 @@ def test_the_label_that_happens_to_be_first_is_not_the_rule():
 
 
 def test_the_hardcoded_label_is_what_this_replaces():
-    """A clause naming the label seeds no row on the relabelled horizon, and solves (#707).
+    """A clause naming the label seeds no row on the relabelled snapshots, and solves (#707).
 
     The seeding clause matches nothing, the recurrence's own first row is
     dropped because the level it shifts from does not exist, and the first
@@ -271,7 +271,7 @@ def _selected(where: str) -> list[int]:
 def test_each_group_is_seeded_at_its_own_first_position():
     """The whole point: one boundary per group, not one for the axis."""
     assert _selected('position(snapshot, within=period_of[period]) == 0') == [10, 20], (
-        "each period's first snapshot, not just the horizon's"
+        "each period's first snapshot, not just the first of all"
     )
     assert _selected('position(snapshot) == 0') == [10], 'and the ungrouped spelling still names one'
 
@@ -452,7 +452,7 @@ def _partitioned(edge: str) -> str:
 
 
 def test_a_bare_partitioned_shift_vacates_each_group_s_first():
-    """Two rows drop, one per season — not one for the horizon.
+    """Two rows drop, one per season — not one for the whole axis.
 
     Bare, the vacated position is absent and takes its row with it, and with
     `by=` the position vacated is each *season's* first rather than the axis's.
@@ -462,7 +462,7 @@ def test_a_bare_partitioned_shift_vacates_each_group_s_first():
         assert run.result.is_ok, 'both lanes reach the same answer with two rows missing from it'
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
         omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
-    assert omitted['season_balance'] == 2, 'one row per season, not one for the horizon'
+    assert omitted['season_balance'] == 2, 'one row per season, not one for the whole axis'
 
 
 def test_a_filled_partitioned_edge_builds_every_row():
@@ -476,13 +476,13 @@ def test_a_filled_partitioned_edge_builds_every_row():
 
 
 def test_the_axis_wrap_is_a_different_model():
-    """The same balance wrapped over the horizon leaks across the boundary.
+    """The same balance wrapped over the whole axis leaks across the boundary.
 
     Without `by=`, winter opens on summer's closing level, which is feasible,
     higher, and wrong.
     """
     with differential(_partitioned("edge='wrap'"), _seasons_sources()) as run:
-        assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the horizon as one cycle, worth 6 more to winter'
+        assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the whole axis as one cycle, worth 6 more to winter'
         held = by_coord(run.result, 'soc', 'snapshot')
     assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
 

@@ -98,13 +98,13 @@ def schedule_cost(sweep: sps.types.Sweep) -> float:
 
 def test_a_rolling_horizon_pays_for_what_its_windows_cannot_see() -> None:
     """Three-hour windows over a four-hour day: lookahead lets a window keep charge for the next one."""
-    horizon = sources('storage', three_days()) | {'snapshot': range(12)}
-    full = sps.solve(SPECS['storage'], horizon)
+    span = sources('storage', three_days()) | {'snapshot': range(12)}
+    full = sps.solve(SPECS['storage'], span)
     costs = []
     for lookahead in (0, 1, 3):
         sweep = sps.solve_over(
             SPECS['storage'],
-            horizon,
+            span,
             sps.EachWindow('snapshot', steps=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
         )
         assert sweep.primal('soc')['snapshot'].to_list() == list(range(12)), 'the windows cover every hour exactly once'

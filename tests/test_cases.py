@@ -214,7 +214,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
             [False, True],
             [1.0, 0.0],
             4890.0,
-            'boundary: peak was off before the horizon, so it may start at first_step 55',
+            'boundary: peak was off before the first snapshot, so it may start at first_step 55',
             id='peak starts cold',
         ),
         pytest.param(

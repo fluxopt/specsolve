@@ -43,7 +43,7 @@ STORES = ['battery', 'pumped']
 #: in the model.
 DISPATCH = DISPATCH_SPEC
 
-#: Storage over a window's *own* labels, with the handover split out by a `where` on a dimension
+#: Storage over a window's *own* labels, with the initial condition split out by a `where` on a dimension
 #: literal. `soc_step` carries no `edge=`, so its vacated row drops and the
 #: narrowed `soc_open` supplies it from a carried parameter.
 WINDOW = {
@@ -84,7 +84,7 @@ WINDOW = {
 #: rides along.
 #:
 #: `charge` and `discharge` are capped well below a window's worth so a store
-#: cannot empty itself before the handover; otherwise every window ends at zero and
+#: cannot empty itself before its horizon end; otherwise every window ends at zero and
 #: carrying the state is indistinguishable from not carrying it.
 MULTI_STORE = {
     'dimensions': {
@@ -166,7 +166,7 @@ def _draw(base: dict, scenario: str, snapshots: int = 4) -> pl.DataFrame:
 
 
 def multi_store_sources() -> dict[str, object]:
-    """Two stores, each with a real starting level worth handing across a handover."""
+    """Two stores, each with a real starting level worth handing on at a horizon end."""
     return {
         **span_sources(12),
         'storage': pl.DataFrame({'storage': STORES}),
@@ -207,7 +207,7 @@ def coordinate_sources(coordinates: list, load: float = 5.0) -> dict[str, object
 
 
 #: Window geometries whose *tail* differs: a final window of one, a final
-#: window of ``steps``, a horizon shorter than a single window, and a tail that
+#: window of ``steps``, a windowed dimension shorter than a single window, and a tail that
 #: divides exactly.
 GEOMETRIES = [
     pytest.param(periods, steps, lookahead, id=f'n{periods}-s{steps}-la{lookahead}')
@@ -469,7 +469,7 @@ def test_a_slice_that_reached_no_objective_does_not_poison_the_sweep():
 # ---------------------------------------------------------------------------
 
 
-def test_a_rolling_horizon_carries_state_across_the_seam():
+def test_a_rolling_horizon_carries_state_on_from_each_horizon_end():
     """Three contiguous windows, the store's level handed forward.
 
     `soc_initial` is updated per window from the previous window's last `soc`,
@@ -519,12 +519,12 @@ def test_a_window_geometry_covers_every_coordinate_exactly_once(periods, steps, 
 
 
 @pytest.mark.parametrize(('periods', 'steps', 'lookahead'), GEOMETRIES)
-def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
-    """The coordinate a carry hands on is the last one the window owns.
+def test_a_carry_finds_the_horizon_end_in_every_geometry(periods, steps, lookahead):
+    """The coordinate a carry hands on is the window's horizon end.
 
-    A non-final window owns exactly ``steps``; a final one owns whatever is
-    left, which can be one. Both are in range by construction, because a
-    window owns rows it solved.
+    A non-final window's horizon is exactly ``steps`` labels; a final one's is
+    whatever is left, which can be one. Both are in range by construction,
+    because a window's horizon is rows it solved.
     """
     runs = sps.solve_over(
         WINDOW,
@@ -532,12 +532,12 @@ def test_a_carry_finds_the_seam_in_every_geometry(periods, steps, lookahead):
         sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     assert runs.primal('soc')['snapshot'].to_list() == list(range(periods)), (
-        'the handover is in range for every geometry, so the sweep completes'
+        'the horizon end is in range for every geometry, so the sweep completes'
     )
 
 
 def test_stitch_keeps_the_whole_of_the_final_short_window():
-    """A tail window holds at most `steps`, so the owning rule keeps all of it.
+    """A tail window holds at most `steps`, so its horizon is all of it.
 
     12 coordinates kept 5 at a time leaves a final window of two.
     """
@@ -576,7 +576,7 @@ def test_per_window_is_refused_on_a_sweep_that_was_not_cut_into_windows(read, sw
 
 
 def test_duals_stitch_the_same_way_primals_do(overlapping):
-    """A window's price at a coordinate is the owning window's, not a blend.
+    """A price at a coordinate is the one of the window whose horizon holds it, not a blend.
 
     What has to be undone is a property of the *axis*, so a dual stitches as a
     primal does.
@@ -592,7 +592,7 @@ def test_duals_stitch_the_same_way_primals_do(overlapping):
 def test_per_window_keeps_every_row_the_answer_drops(overlapping):
     """The answer drops the lookahead rows; `per_window=True` is where they are still read."""
     runs = overlapping
-    assert runs.primal('soc').height == 12, 'the answer holds only the rows each window owns'
+    assert runs.primal('soc').height == 12, "the answer holds only the rows of each window's horizon"
     assert runs.primal('soc', per_window=True).height == 21, 'per window keeps every row every window solved'
     assert runs.records.join(runs.primal('soc', per_window=True), on=runs.key_name).height == 21, (
         'per window is keyed by the same column as `objective`, so the two still join'
@@ -625,7 +625,7 @@ def priced() -> sweep_module.Sweep:
     )
 
 
-def test_a_stitched_expression_prices_only_the_rows_a_window_owns(priced):
+def test_a_stitched_expression_prices_only_the_rows_of_each_horizon(priced):
     """The answer of an expression drops the lookahead double-count.
 
     The oracle is the answer's dispatch priced by hand. The per-window sum
@@ -713,7 +713,7 @@ COORDINATE_TYPES = [
 def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     """The only requirement on a windowed dimension is that it is orderable.
 
-    The handover's `where: "position(snapshot) == 0"` counts within the window, so
+    The initial condition's `where: "position(snapshot) == 0"` counts within the window, so
     it matches each window's first label whatever the labels are.
     """
     runs = sps.solve_over(WINDOW, coordinate_sources(coordinates), sps.EachWindow('snapshot', steps=2, lookahead=0))
@@ -830,7 +830,7 @@ def test_the_window_geometry_is_checked_at_construction(geometry, expected):
 
 
 #: Window blocks that are not all the same size. Between them: a telescoping
-#: horizon that coarsens, one that refines, months of unequal length, and a
+#: sequence that coarsens, one that refines, months of unequal length, and a
 #: sequence overshooting the axis so its tail blocks have nothing to cover.
 BLOCKS = [
     pytest.param([1, 2, 3, 6], id='coarsening'),
@@ -883,8 +883,8 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     """A probe, because no solved sweep can tell `min(block, left)` from `block`.
 
     Only the *last* block can overshoot, and its carry is never read, so
-    trimming it changes no answer. It keeps what a window owns true, which the
-    stitch and the handover both read.
+    trimming it changes no answer. It keeps each window's horizon true, which the
+    stitch and the carry both read.
     """
     axis = sps.EachWindow('snapshot', steps=steps, lookahead=0)
 
@@ -892,10 +892,10 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(steps, 
     assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
 
     slices, stitch = axis._slice(as_program(WINDOW), span_sources(periods), 'snapshot_start')
-    owned = stitch.horizon.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
-    assert owned == expected, 'which is what each slice records owning'
+    horizons = stitch.horizon.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
+    assert horizons == expected, 'which is what each slice records as its horizon'
     for current in slices:
-        assert current.horizon_end in current.sources['snapshot'], 'no window owns a label it does not hold'
+        assert current.horizon_end in current.sources['snapshot'], 'no horizon end is a label its window does not hold'
 
 
 def test_a_block_list_that_stops_short_of_the_axis_is_refused():
@@ -935,12 +935,12 @@ def test_the_lookahead_the_model_needs_is_one_number_whatever_the_blocks():
 
 
 def test_a_short_tail_window_carries_off_its_own_last_row():
-    """A final window owns fewer rows than ``steps``, and its handover is its own last.
+    """A final window's horizon is shorter than ``steps``, and its horizon end is its own last row.
 
     12 coordinates kept 5 at a time leaves a final window of two, which
     holds no fifth row. Nothing reads the last slice's carry, so the value is
     never computed — but a window short of ``steps`` in the *middle* of a sweep
-    cannot happen, which is what makes the owned count always in range.
+    cannot happen, which is what keeps every horizon end in range.
     """
     runs = sps.solve_over(
         WINDOW,
@@ -989,12 +989,12 @@ def test_a_carry_collapses_one_dimension_and_every_other_rides_along():
     )
 
 
-def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
-    """Under overlap the two differ, and only the owned one is the state at the handover.
+def test_the_carried_row_is_the_horizon_end_and_not_the_last_one_solved():
+    """Under overlap the two differ, and only the horizon end holds the state to hand on.
 
-    At `length=6, step=3` a window solves six rows, 0..5 from its start, and owns 0..2. The lookahead
-    rows 3..5 are solved against a horizon that ends at 5, so the store empties
-    into them; the next window recomputes those coordinates from its own
+    At `length=6, step=3` a window solves six rows, 0..5 from its start, and its horizon is 0..2. The lookahead
+    rows 3..5 are solved against a window that ends at 5, so the store empties
+    into them; the next window recomputes those coordinates as its own
     horizon. Handing row 5 forward would seed it with a level that was never
     going to happen.
 
@@ -1014,13 +1014,13 @@ def test_the_carried_row_is_the_last_one_owned_and_not_the_last_one_solved():
 
     for start in (0, 3, 6):
         assert at('soc', start, 2) != pytest.approx(at('soc', start, 5), abs=1e-6), (
-            'the owned row and the last solved row must differ, or this test cannot tell them apart'
+            'the horizon end and the last solved row must differ, or this test cannot tell them apart'
         )
 
     for previous, start in ((0, 3), (3, 6), (6, 9)):
         opened = at('soc', start, 0) - at('charge', start, 0) * 0.9 + at('discharge', start, 0)
         assert opened == pytest.approx(at('soc', previous, 2), abs=1e-6), (
-            'the window opens on the last row the previous one owned'
+            "the window opens on the previous one's horizon end"
         )
         assert opened != pytest.approx(at('soc', previous, 5), abs=1e-6), (
             'and not on the last row it solved, which is lookahead the next window recomputes'
@@ -1082,7 +1082,7 @@ UNSOUND_CARRIES = [
     ),
     pytest.param(
         WINDOW, span_sources, sps.EachLabel('scenario'), {'soc_initial': 'soc'},
-        r"collapses 'snapshot', and this axis owns none", 'Reduce',
+        r"collapses 'snapshot', and this axis advances along none", 'Reduce',
         id='a-label-sweep-collapsing-a-dimension-it-does-not-advance-along',
     ),
     pytest.param(
@@ -1098,8 +1098,8 @@ UNSOUND_CARRIES = [
 def test_a_carry_that_cannot_line_up_says_so_before_anything_solves(spec, sources, axis, carry, expected, names):
     """Every one of these is answerable from the two entries and the axis alone.
 
-    The axis decides the last two: the coordinate handed on is the last one a
-    slice owns, so only the dimension the axis advances along can be the one a
+    The axis decides the last two: the coordinate handed on is a slice's
+    horizon end, so only the dimension the axis advances along can be the one a
     carry collapses. Any other and there is no coordinate to choose without
     doing the model's arithmetic here.
     """
@@ -1114,7 +1114,7 @@ BY_THE_HOUR = override(WINDOW, **{'dimensions.snapshot': {'dtype': 'datetime', '
 
 
 def _dated_sources(labels: list[datetime.datetime], load_labels: pl.Series) -> dict[str, object]:
-    """The horizon over *labels*, its load keyed by *load_labels*."""
+    """The full span over *labels*, its load keyed by *load_labels*."""
     sources = span_sources(len(labels))
     return {
         **sources,
@@ -1947,7 +1947,7 @@ def _window_with(constraint: dict, **parameters: dict) -> dict:
     )
 
 
-def test_a_window_over_a_horizon_budget_is_refused_with_the_change_that_would_lift_it():
+def test_a_budget_over_the_whole_windowed_dimension_is_refused_with_the_change_that_would_lift_it():
     spec = _window_with({'dims': [], 'expression': 'sum(discharge, over=snapshot) <= 100'})
     with pytest.raises(sps.errors.SpecsolveError, match=r"constraint 'extra': sums over snapshot") as refused:
         sps.solve_over(spec, span_sources(8), WINDOW_AXIS)
@@ -2021,7 +2021,7 @@ def test_a_reach_a_relation_decides_is_refused_with_the_relation_named():
 
 
 def test_a_position_counts_within_each_window_and_nothing_warns():
-    """`position(snapshot) == 0` is each window's first row, which is how a handover is written."""
+    """`position(snapshot) == 0` is each window's first row, which is how an initial condition is written."""
     spec = _window_with({'dims': ['snapshot'], 'where': 'position(snapshot) == 0', 'expression': 'soc <= 50'})
     with warnings.catch_warnings():
         warnings.simplefilter('error')
@@ -2924,7 +2924,7 @@ def test_a_window_cuts_what_the_spec_declares_over_the_dimension_and_nothing_els
     assert runs.primal('p')['generator'].unique().sort().to_list() == sorted(GENERATORS), 'every window has both'
 
 
-def test_one_window_over_the_whole_horizon_is_the_single_solve():
+def test_one_window_over_the_whole_windowed_dimension_is_the_single_solve():
     """A window takes the spec and the sources a single solve takes, so one window of everything is that solve."""
     sources = span_sources(12)
     whole = sps.solve(WINDOW, sources)

@@ -799,7 +799,7 @@ def test_a_bare_shift_over_data_is_refused_rather_than_filled():
     with pytest.raises(LanguageError) as exc:
         sps.check(spec)
     assert 'edge=0' in str(exc.value), 'the refusal must name the escape hatch'
-    assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic horizon'
+    assert "edge='wrap'" in str(exc.value), 'and the policy for a genuinely cyclic dimension'
 
 
 @pytest.mark.parametrize(

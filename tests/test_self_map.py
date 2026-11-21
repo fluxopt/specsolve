@@ -19,7 +19,7 @@ SPEC = """
 description: each snapshot priced at the snapshot that represents it
 
 dimensions:
-  snapshot: {dtype: int, description: a step of the horizon, ordered: true}
+  snapshot: {dtype: int, description: a step in time, ordered: true}
 
 relations:
   rep_of:

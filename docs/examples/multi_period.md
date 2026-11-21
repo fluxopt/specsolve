@@ -177,7 +177,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     objective:
       sense: minimize
-      description: weighted operating cost over the horizon, plus what the capacity costs to hold
+      description: weighted operating cost over every snapshot, plus what the capacity costs to hold
       expression: sum(p * opex * weight) + sum(p_nom * capex)
     ```
 

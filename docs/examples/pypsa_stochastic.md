@@ -52,7 +52,7 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 |---|---|
 | $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 
 #### Variables
@@ -132,7 +132,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         description: demand to be met, and the one thing that differs between futures
         dims: [scenario, snapshot]
       capex:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       opex:
         description: cost of one unit of output

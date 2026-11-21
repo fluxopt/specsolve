@@ -693,8 +693,8 @@ def test_a_query_the_catalog_drives_reads_every_file_of_a_sweep_archive_as_writt
     )
 
 
-def test_a_rolling_horizon_catalogs_its_windows_and_what_each_owns(tmp_path: Path) -> None:
-    """Each window's tables and the table of what each window owns are listed with the dimension their columns hold."""
+def test_a_rolling_horizon_catalogs_its_windows_and_their_horizons(tmp_path: Path) -> None:
+    """Each window's tables and the table of each window's horizon are listed with the dimension their columns hold."""
     _rolling(tmp_path)
     out = _unpacked(tmp_path / 'roll.zip', tmp_path / 'roll')
     catalog = pl.read_parquet(out / 'catalog.parquet')
@@ -702,9 +702,9 @@ def test_a_rolling_horizon_catalogs_its_windows_and_what_each_owns(tmp_path: Pat
     assert catalog.filter(path='answer/primal/soc', column='snapshot_start')['dim'].to_list() == ['snapshot'], (
         'the key a window table carries is where the window started, a label of the dimension the axis cut'
     )
-    owned = catalog.filter(path='answer/horizon.parquet').select('column', 'dim').rows()
-    assert owned == [('snapshot', 'snapshot'), ('snapshot_start', 'snapshot')], (
-        'what each window owns maps the window to labels of the windowed dimension'
+    horizons = catalog.filter(path='answer/horizon.parquet').select('column', 'dim').rows()
+    assert horizons == [('snapshot', 'snapshot'), ('snapshot_start', 'snapshot')], (
+        "each window's horizon maps the window to labels of the windowed dimension"
     )
 
 
@@ -1005,7 +1005,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
 
 #: The overlapping rolling horizon every archive test below solves.
 ROLLING = sps.EachWindow('snapshot', steps=4, lookahead=2)
-#: The same horizon, each window handing its last state of charge to the next.
+#: The same rolling horizon, each window handing the state of charge at its horizon end to the next.
 CARRIED = replace(ROLLING, carry={'soc_initial': 'soc'})
 
 
@@ -1159,7 +1159,7 @@ def test_a_rolling_horizon_whose_windows_wrote_nothing_says_so_off_its_archive(
 
 
 def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the_stamp(tmp_path: Path) -> None:
-    """The windows, their keys and what each window owns all carry the run on disk, and no reader returns it."""
+    """The windows, their keys and their horizons all carry the run on disk, and no reader returns it."""
     out = tmp_path / 'nightly-2026-09-10.zip'
     runs = sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=out)
     loaded = sps.load_archive(out, tmp_path / 'out').sweep
@@ -1171,14 +1171,14 @@ def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the
     }
     kept = {'answer/horizon.parquet', 'answer/keys.parquet', 'answer/primal/soc/000000.parquet'}
 
-    assert kept <= stamps.keys(), 'the windows, their keys and what each window owns are all archived'
+    assert kept <= stamps.keys(), 'the windows, their keys and their horizons are all archived'
     assert stamps == {table: ['nightly-2026-09-10'] for table in stamps}, 'and every one of them carries the run'
     assert loaded.primal('soc').equals(runs.primal('soc')), 'the answer read whole is the live one'
     assert scanned.scan('soc').collect().equals(runs.primal('soc')), 'and read off disk'
     assert loaded.primal('soc', per_window=True).equals(runs.primal('soc', per_window=True)), 'per window too'
     assert scanned.scan('soc', per_window=True).collect().equals(runs.primal('soc', per_window=True))
     assert loaded.evaluate('soc').equals(runs.primal('soc')), (
-        'an expression valued per window off the archive is stitched through what each window owns, stamp left out'
+        "an expression valued per window off the archive is stitched through each window's horizon, stamp left out"
     )
 
 
@@ -1302,7 +1302,7 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
     assert saved.primal(name).equals(runs.primal(name)), 'the answer comes back'
     assert saved.metrics.drop(RUN).equals(runs.metrics.drop(RUN)), 'and the metrics are the slices own'
     assert saved.metrics[RUN].equals(saved.records[RUN]), 'naming the run they came from as the record does'
-    assert stamped == [], 'no table the save writes carries the run, what each window owns included'
+    assert stamped == [], "no table the save writes carries the run, the windows' horizons included"
 
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:

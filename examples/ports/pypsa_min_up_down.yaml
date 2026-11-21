@@ -80,7 +80,7 @@ constraints:
   start_up:
     description: >-
       a unit whose status rises entering this snapshot pays for a start. Every
-      unit begins the horizon off, which is the 0 the first snapshot reads where
+      unit is off before the first snapshot, which is the 0 the first snapshot reads where
       it has no predecessor
     dims: [snapshot, generator]
     expression: start_up - status + shift(status, along=snapshot, offset=1, edge=0) >= 0

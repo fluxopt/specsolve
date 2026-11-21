@@ -41,9 +41,9 @@ CARRY = 'carry'
 class Slice(NamedTuple):
     """One slice of a sweep: the key, the sources that build it, and where it ends.
 
-    ``horizon_end`` is the last label of the windowed dimension this slice owns, the
-    ones after it being lookahead, or ``None`` where the axis windows nothing;
-    a ``carry`` hands on the row there.
+    ``horizon_end`` is the last label of this slice's horizon, the labels after
+    it being lookahead, or ``None`` where the axis windows nothing. A ``carry``
+    hands on the row there.
     """
 
     key: Label
@@ -58,8 +58,8 @@ class Slice(NamedTuple):
 class Stitch:
     """The way from a windowed sweep's tables to its answer over the dimension it cut.
 
-    ``owned`` is ``(key, dim)`` for the labels each window owns; the lookahead
-    rows are not in it.
+    ``horizon`` is ``(key, dim)`` for the labels of each window's horizon. The
+    lookahead rows are not in it.
     """
 
     dim: str
@@ -68,7 +68,7 @@ class Stitch:
     def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
         """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
 
-        A table with no [`dim`][] column is over no label a window owns.
+        A table with no [`dim`][] column is over no label of a window's horizon.
         """
         if self.dim in frame.collect_schema().names():
             return None
@@ -188,8 +188,8 @@ class EachWindow:
 
     Each window keeps ``steps`` labels and sees ``lookahead`` beyond them, so
     a ``lookahead`` above zero is overlap. An ``int`` keeps the same number
-    every window; a sequence keeps those numbers in order, for a telescoping
-    horizon or a month at a time. Both count labels in label order, not
+    every window; a sequence keeps those numbers in order, for horizons that
+    grow window by window or a month at a time. Both count labels in label order, not
     values, so datetimes, strings and gapped integers all work.
 
     A rule for a window's first row is written ``position(dim) == 0``: a
@@ -206,8 +206,8 @@ class EachWindow:
 
     ``carry={parameter: variable}`` chains the windows in order: each window's
     answer is copied into the next window's data. Where the two are over
-    different dimensions, the dropped one is *dim*, and the row at the last
-    label the window owns is handed on. The first window takes the parameter
+    different dimensions, the dropped one is *dim*, and the row at the
+    window's horizon end is handed on. The first window takes the parameter
     from the sources as its seed.
 
     ``per_window=True`` reads each window under the key column, named
@@ -294,7 +294,7 @@ class EachWindow:
             )
 
     def _slice(self, program: Program, sources: Mapping[str, Source], key_name: str) -> tuple[list[Slice], Stitch]:
-        """One slice per window, keyed by its first label; the [`Stitch`][] records what each owns."""
+        """One slice per window, keyed by its first label; the [`Stitch`][] records each window's horizon."""
         labels = dimension_labels(program, sources, self.dim).to_list()
         tables = _tables_over(program, sources, self.dim, labels)
         out: list[Slice] = []
@@ -314,9 +314,9 @@ class EachWindow:
         return out, Stitch(self.dim, pl.DataFrame(horizons))
 
     def _blocks(self, total: int) -> list[int]:
-        """How many labels each window owns, in order, summing to exactly *total*.
+        """How many labels each window's horizon has, in order, summing to exactly *total*.
 
-        An ``int`` repeats, the last window owning what is left. A sequence that
+        An ``int`` repeats, the last window's horizon taking what is left. A sequence that
         stops short of the axis is refused.
         """
         if isinstance(self.steps, int):
@@ -384,8 +384,8 @@ class CarryRule:
     ) -> pl.DataFrame:
         """What this rule hands the next slice, read out of one slice's primals.
 
-        The row handed on is the one at *horizon_end*, the last label the slice owns,
-        never a lookahead row.
+        The row handed on is the one at *horizon_end*, the last label of the
+        slice's horizon, never a lookahead row.
         """
         frame = frames[self.variable]
         if self.dropped is None:
@@ -395,7 +395,7 @@ class CarryRule:
         if picked.is_empty():
             raise SpecsolveError(
                 f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
-                f'{self.variable!r} at {self.dropped} == {horizon_end!r}, the last label it owns, so there is no '
+                f'{self.variable!r} at {self.dropped} == {horizon_end!r}, its horizon end, so there is no '
                 f'value there to hand forward.'
             )
         return picked

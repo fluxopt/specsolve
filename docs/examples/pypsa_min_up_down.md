@@ -223,7 +223,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
       start_up:
         description: >-
           a unit whose status rises entering this snapshot pays for a start. Every
-          unit begins the horizon off, which is the 0 the first snapshot reads where
+          unit is off before the first snapshot, which is the 0 the first snapshot reads where
           it has no predecessor
         dims: [snapshot, generator]
         expression: start_up - status + shift(status, along=snapshot, offset=1, edge=0) >= 0
@@ -320,11 +320,11 @@ dropping the row, so no `edge=` argument appears.
 `up_time_before` defaults to 1 in PyPSA, meaning the unit was already running.
 That default emits a further block pinning the status on for the rest of its
 minimum up time. That is a second feature, and this model is about the
-windows, so both `*_time_before` values are 0. Every unit therefore begins the
-horizon off, and the first snapshot's transition rows mirror the ones
+windows, so both `*_time_before` values are 0. Every unit is therefore off before
+the first snapshot, and the first snapshot's transition rows mirror the ones
 [unit commitment](pypsa_unit_commitment.md) ports. A unit committed in the
-first snapshot pays for a start and nothing for a stop. A unit that began the
-horizon running pays for no start and is charged if it goes down.
+first snapshot pays for a start and nothing for a stop. A unit that was
+running before the first snapshot pays for no start and is charged if it goes down.
 
 ## What it exercises
 

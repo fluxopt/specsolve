@@ -47,7 +47,7 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 |---|---|
 | $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{alpha}`$ | `alpha` (scalar) — where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
 | $`\mathrm{omega}`$ | `omega` (scalar) — how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
@@ -66,7 +66,7 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{operating\_cost}`$ | `operating_cost` over $`\mathcal{S}`$ — what one future costs to run, over the whole horizon |
+| $`\mathit{operating\_cost}`$ | `operating_cost` over $`\mathcal{S}`$ — what one future costs to run, over every snapshot |
 
 #### Variable domains
 
@@ -176,7 +176,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         description: demand to be met, and the one thing that differs between futures
         dims: [scenario, snapshot]
       capex:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       opex:
         description: cost of one unit of output
@@ -224,7 +224,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     expressions:
       operating_cost:
-        description: what one future costs to run, over the whole horizon
+        description: what one future costs to run, over every snapshot
         expression: sum(sum(p * opex, over=generator), over=snapshot)
 
     constraints:

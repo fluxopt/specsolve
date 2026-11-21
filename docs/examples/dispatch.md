@@ -109,7 +109,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     objective:
       sense: minimize
-      description: total cost of generation over the horizon
+      description: total cost of generation over every snapshot
       expression: sum(p * cost)
     ```
 
