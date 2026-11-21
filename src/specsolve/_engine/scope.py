@@ -108,15 +108,16 @@ class Scope:
         refused, naming *subject*. A left join of a parameter over no dims keeps
         every row of *frame*, reading null where the parameter has no row, which a
         cross join with its empty table would not. A parameter with a row at
-        every coordinate is read at each row's [`position`][Scope.position]
-        instead, which is what a left or an inner join of it finds, unless
-        *by_position* is false.
+        every coordinate, and enough of them to be
+        [worth reading][specsolve._engine.dense.worth_reading], is read at
+        each row's [`position`][Scope.position] instead, which is what a left
+        or an inner join of it finds, unless *by_position* is false.
         """
         declaration = self.program.parameters[param]
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
-        reads = by_position and how in ('left', 'inner') and dense.covers(self, param)
+        reads = by_position and how in ('left', 'inner') and dense.worth_reading(self, param)
         position = self.position(declaration.dims) if reads else None
         if position is not None:
             return frame.with_columns(pl.lit(dense.column(self, param)).gather(position).alias(alias))

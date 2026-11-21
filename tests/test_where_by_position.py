@@ -21,7 +21,14 @@ from .test_positional_terms import nothing_by_position
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.usefixtures('terms_by_position')
+pytestmark = pytest.mark.usefixtures('terms_by_position', 'read_from_the_first_row')
+
+
+@pytest.fixture
+def read_from_the_first_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tables here hold a few dozen rows, far under the size from which a read by position pays."""
+    monkeypatch.setattr(dense, 'READ_BY_POSITION_FROM', 0)
+
 
 LABELS = list(range(12))
 PAIR = ['p', 'q']
@@ -154,3 +161,11 @@ def test_a_table_out_of_order_is_read_by_position_at_the_right_rows(
     out_of_order, _ = _written(spec, reversed_rows, tmp_path / 'reversed.lp', monkeypatch)
     assert read == ['both', 'size'], f'{read} were read by position, not both parameters of the where'
     assert out_of_order == in_order, "the order of a table's rows changed the rows its where keeps"
+
+
+def test_a_table_too_small_to_be_worth_reading_is_joined(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`on` spans 12 coordinates: reading its column costs a query of its own, which the join it saves does not repay."""
+    monkeypatch.setattr(dense, 'READ_BY_POSITION_FROM', 13)
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i', 'j'], 'where': 'on and both', 'expression': 'x <= 5'}}}
+    _, read = _written(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
+    assert read == ['both'], f'{read} were read by position, and only `both` spans 13 coordinates or more'

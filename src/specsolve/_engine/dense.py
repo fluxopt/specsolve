@@ -42,6 +42,11 @@ if TYPE_CHECKING:
     #: A term's values at coordinates: one each, or one number that stands at all of them.
     type Values = Callable[[At], Floats | float]
 
+#: The fewest coordinates a parameter spans for a ``where`` or a bound to read
+#: it by position. The read is a query of its own, where a join rides in one
+#: that runs anyway, and under this many rows it costs more than the join.
+READ_BY_POSITION_FROM = 100_000
+
 #: The most coordinates a masked variable's dims may span per column it has,
 #: for its columns to be held by position: an integer per coordinate.
 CELLS_PER_COLUMN = 16
@@ -139,6 +144,12 @@ def covers(scope: Scope, name: str) -> bool:
     """
     dims = scope.program.parameters[name].dims
     return scope.data.parameter_rows.get(name) == math.prod(scope.data.cardinality[d] for d in dims)
+
+
+def worth_reading(scope: Scope, name: str) -> bool:
+    """Whether parameter *name* [`covers`][] its dims and spans [`READ_BY_POSITION_FROM`][] coordinates or more."""
+    dims = scope.program.parameters[name].dims
+    return covers(scope, name) and math.prod(scope.data.cardinality[d] for d in dims) >= READ_BY_POSITION_FROM
 
 
 def column(scope: Scope, name: str) -> pl.Series:
