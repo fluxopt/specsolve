@@ -19,6 +19,7 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope, join_on
+from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
@@ -193,7 +194,7 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if self._over_nothing(v.dims):
+        if rowless(v, self.attached):
             labelled = labels.nothing(self.scope, v.dims, 'var_label')
         else:
             labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
@@ -269,7 +270,7 @@ class Assembly:
         never meets the full product of its dims.
         """
         start = self.n_rows
-        if self._over_nothing(c.dims):
+        if rowless(c, self.attached):
             return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
         admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
@@ -336,10 +337,6 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
-
-    def _over_nothing(self, dims: tuple[str, ...]) -> bool:
-        """Whether a declaration over *dims* spans a dimension without a label, so it holds nothing whatever its data."""
-        return any(not self.attached.cardinality[d] for d in dims)
 
     def _without_a_row(
         self, name: str, labelled: pl.DataFrame, start: int
