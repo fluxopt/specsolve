@@ -1,7 +1,7 @@
 """A variable times a sum of parameters is the model the distributed product writes, built once.
 
 `x * (a - b)` pairs `x` with each of `a` and `-b`, and the matrix summed the two
-copies back. The compiler adds the parameters up first where that sum is the
+copies back. The query builder adds the parameters up first where that sum is the
 same coefficient, so a piecewise chord row costs one term per variable.
 """
 
@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, compiler
+from specsolve._engine import assembly, queries
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -75,7 +75,7 @@ def test_a_folded_coefficient_writes_the_model_the_distributed_product_writes(
     monkeypatch, tmp_path: Path, constraint: dict
 ) -> None:
     folded = _written(constraint, tmp_path / 'folded.lp')
-    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
+    monkeypatch.setattr(queries, '_one_coefficient', lambda terms: terms)
     distributed = _written(constraint, tmp_path / 'distributed.lp')
     assert folded == distributed, 'adding the parameters up first changed the written model'
 
@@ -138,7 +138,7 @@ def test_a_factor_with_a_constant_beside_its_variable_builds_as_distributed(
     """
     spec = {**SPEC, 'expressions': {**SPEC['expressions'], **expressions}, 'constraints': {'row': constraint}}
     folded = _outcome(spec, tmp_path / 'folded.lp')
-    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
+    monkeypatch.setattr(queries, '_one_coefficient', lambda terms: terms)
     distributed = _outcome(spec, tmp_path / 'distributed.lp')
     assert folded == distributed, 'folding beside a constant changed what the build does'
 
@@ -153,7 +153,7 @@ def test_a_quadratic_times_a_folded_sum_writes_the_model_the_distributed_product
         'objective': {'sense': 'minimize', 'expression': 'sum(x * x * (a - b))'},
     }
     sps.write(spec, SOURCES, tmp_path / 'folded.lp')
-    monkeypatch.setattr(compiler, '_one_coefficient', lambda terms: terms)
+    monkeypatch.setattr(queries, '_one_coefficient', lambda terms: terms)
     sps.write(spec, SOURCES, tmp_path / 'distributed.lp')
     folded, distributed = ((tmp_path / f'{n}.lp').read_text() for n in ('folded', 'distributed'))
     assert folded == distributed, 'adding the parameters up first changed the quadratic objective'

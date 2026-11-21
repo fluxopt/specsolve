@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from specsolve._engine.assembly import BuiltModel
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._engine.compiler import Compiler
+    from specsolve._engine.queries import QueryBuilder
     from specsolve._sinks.handoff import Handoff
     from specsolve._sinks.solver import Basis, InfeasibleSubsystemIndices
 
@@ -305,18 +305,18 @@ def _aligned(
 
 
 def expressions(
-    compiler: Compiler,
+    builder: QueryBuilder,
     named: Mapping[str, program.NamedExpression],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
 ) -> Expressions:
-    """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one compiler.
+    """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one builder.
 
-    Nothing compiles until a reader is called. Without *lower* there is no
+    No query is built until a reader is called. Without *lower* there is no
     spec as written to compile against, so an undeclared expression has no reader.
     """
 
     def reader(name: str, expression: program.Expression) -> Callable[[], pl.DataFrame]:
-        return lambda: expression_table(name, expression, compiler)
+        return lambda: expression_table(name, expression, builder)
 
     declared = {name: reader(name, e.expression) for name, e in named.items()}
     if lower is None:
@@ -324,13 +324,13 @@ def expressions(
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         name = written if isinstance(written, str) and written in named else 'the expression'
-        return expression_table(name, lower(written), compiler)
+        return expression_table(name, lower(written), builder)
 
     return Expressions(declared, evaluate)
 
 
-def expression_table(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:
-    """Named expression *expr* evaluated at the solve *compiler* holds — ``(dims…, value)``.
+def expression_table(name: str, expr: program.Expression, builder: QueryBuilder) -> pl.DataFrame:
+    """Named expression *expr* evaluated at the solve *builder* holds — ``(dims…, value)``.
 
     It answers as a constraint over the same expression would: a coordinate a
     parameter does not cover contributes zero, and one where a variable is
@@ -344,9 +344,9 @@ def expression_table(name: str, expr: program.Expression, compiler: Compiler) ->
         SpecsolveError: The expression reads a dual and the solve left none.
     """
     context = f"named expression '{name}'"
-    terms = compiler.expression(expr, context, reported=True).constant
-    dims = compiler.scope.spanned(terms)
-    carrier = indices.table(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    terms = builder.expression(expr, context, reported=True).constant
+    dims = builder.scope.spanned(terms)
+    carrier = indices.table(builder.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
 
     coverage.refuse_null_constants(
         [_holed(carrier, terms), *(p.table.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],
@@ -355,10 +355,10 @@ def expression_table(name: str, expr: program.Expression, compiler: Compiler) ->
         reported_divisor_message,
     )
 
-    added = compiler.summed_onto(terms, carrier, absent='zero')
+    added = builder.summed_onto(terms, carrier, absent='zero')
     out = added.select(_EXPRESSION_ROW, *dims, pl.col(CONSTANT).alias(VALUE)).pipe(collected)
     ordered = indices.in_position_order(out, _EXPRESSION_ROW).drop(_EXPRESSION_ROW)
-    return _as_strings(ordered, compiler.scope.data, dims)
+    return _as_strings(ordered, builder.scope.data, dims)
 
 
 def _holed(carrier: pl.LazyFrame, terms: Sequence[Term]) -> pl.LazyFrame:

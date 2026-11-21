@@ -2210,7 +2210,7 @@ def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
         AB_ROOT,
         AB_ROOT,
         rounds=1,
-        focus='specsolve._engine.compiler:Compiler._aligned_bound',
+        focus='specsolve._engine.queries:QueryBuilder._aligned_bound',
     )
     assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
     assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'

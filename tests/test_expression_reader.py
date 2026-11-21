@@ -11,7 +11,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import _api as api
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.fixtures import override
 
@@ -371,28 +371,28 @@ def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
     )
 
 
-def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypatch):
-    compiled = []
-    original = Compiler.expression
+def test_a_build_queries_no_expression_and_a_read_queries_exactly_one(monkeypatch):
+    queried = []
+    original = QueryBuilder.expression
 
     def counting(self, expr, context, **kwargs):
-        compiled.append(context)
+        queried.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(Compiler, 'expression', counting)
+    monkeypatch.setattr(QueryBuilder, 'expression', counting)
     with sps.build(SPEC, sources()) as model:
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == [], 'a build compiles no named expression — fifty declared and none read must cost none'
-        assert len(compiled) == 2 * len(SPEC['constraints']) + 1, (
-            'a model declaring expressions compiles exactly what one without them compiles: '
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == [], 'a build queries no named expression — fifty declared and none read must cost none'
+        assert len(queried) == 2 * len(SPEC['constraints']) + 1, (
+            'a model declaring expressions queries exactly what one without them queries: '
             'each constraint side, and the objective'
         )
         outcome = model.solve()
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == [], 'a solve compiles none either — the readers it hands out are thunks'
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == [], 'a solve queries none either — the readers it hands out are thunks'
         outcome.evaluate('spend')
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == ["named expression 'spend'"], 'reading one expression compiles that one expression'
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == ["named expression 'spend'"], 'reading one expression queries that one expression'
 
 
 def test_a_closed_result_refuses_an_expression_read():

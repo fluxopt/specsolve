@@ -1,6 +1,6 @@
-"""The scope a query is compiled in: what each name stands for, and what a dimension means as a coordinate.
+"""The scope a query is built in: what each name stands for, and what a dimension means as a coordinate.
 
-``variables`` is the build's own dict, not a copy: a constraint compiled after
+``variables`` is the build's own dict, not a copy: a constraint queried after
 a variable is built has to see its table.
 """
 

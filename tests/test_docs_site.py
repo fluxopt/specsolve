@@ -186,7 +186,7 @@ def _gen_bus_lookup(program: Any) -> Any:
 def test_the_plan_table_names_every_expression_node():
     """`The program, node for node` is a copy of two dispatches, so something checks it.
 
-    The fan-in cell is read back off :func:`fan_in`, because the compiler acts
+    The fan-in cell is read back off :func:`fan_in`, because the query builder acts
     on that column.
     """
     from mathspec import program
@@ -230,7 +230,7 @@ def test_the_plan_table_names_every_expression_node():
     )
     shown = {name: cell.strip() for name, cell in rows.items()}
     declared = {name: fan_in(node) for name, node in nodes.items()}
-    assert shown == declared, f'the table calls these {shown}, the compiler answers {declared}'
+    assert shown == declared, f'the table calls these {shown}, the query builder answers {declared}'
 
 
 #: A ``:::`` entry, which mkdocstrings renders from the named object's docstring.

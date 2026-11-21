@@ -40,8 +40,8 @@ from mathspec.spec import Spec
 
 import specsolve as sps
 from specsolve._engine.assembly import _sorted
-from specsolve._engine.compiler import Compiler
 from specsolve._engine.engine import Engine
+from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
@@ -1061,8 +1061,8 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(spec, sources) as model:
             program = Spec(**spec).program
             built = model._engine._model
-            compiler = Compiler(Scope(built.program, built.attached, built.variables))
-            terms = compiler.expression(next(iter(program.constraints.values())).lhs, 'test').linear
+            builder = QueryBuilder(Scope(built.program, built.attached, built.variables))
+            terms = builder.expression(next(iter(program.constraints.values())).lhs, 'test').linear
             assert len(terms) == 2
 
             tables = model._engine._model.handoff
@@ -1201,7 +1201,7 @@ POSITIONAL_COLS_SPEC = {
 
 #: A bound parameter dense over the whole variable product — a profile per
 #: node, per hour. `p`'s upper bound spans exactly `p`'s dimensions, so alignment
-#: is positional rather than a join (compiler `_aligned_bound`).
+#: is positional rather than a join (`QueryBuilder._aligned_bound`).
 DENSE_BOUND_SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'n': {'dtype': 'str'}},
     'parameters': {'avail': {'dims': ['t', 'n']}, 'cost': {'dims': ['n']}},
@@ -1232,9 +1232,9 @@ FLAT_LABELS = {'n': ['a', 'b', 'c']}
 
 def _aligned_for(spec, data, monkeypatch):
     """Which bound parameters took the positional path building *spec*."""
-    from specsolve._engine import compiler as compiler_module
+    from specsolve._engine import queries as queries_module
 
-    real = compiler_module.Compiler._aligned_bound
+    real = queries_module.QueryBuilder._aligned_bound
     seen = {}
 
     def spy(self, table, param, v, alias):
@@ -1242,7 +1242,7 @@ def _aligned_for(spec, data, monkeypatch):
         seen[param] = out is not None
         return out
 
-    monkeypatch.setattr(compiler_module.Compiler, '_aligned_bound', spy)
+    monkeypatch.setattr(queries_module.QueryBuilder, '_aligned_bound', spy)
     # the decision is recorded while the plan is built, before it runs
     with contextlib.suppress(SpecsolveError):
         sps.build(spec, data).close()

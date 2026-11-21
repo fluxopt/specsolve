@@ -618,14 +618,14 @@ beside the rung's data.
 `n008` and `n128` with a `where:` on every declaration, and nothing else
 changed: same units, same snapshots, same parquet, one keyword apart. They are
 there because *how many declarations carry a mask* is an axis of its own — the
-engine compiles a predicate and decides a semi-join per masked declaration,
-before it pays anything per row — and no other case reaches past two. The mask
-is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly positive), so the pair
-builds the identical model and the difference is the price of the `where:`
-alone, with no row-count change mixed into it. The density sweep answers the
-other half of the question, how much a mask *keeps*, and cannot answer this
-one: the mask that isolates the per-declaration cost is the one that keeps
-everything.
+engine builds the query for a predicate and decides a semi-join per masked
+declaration, before it pays anything per row — and no other case reaches past
+two. The mask is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly
+positive), so the pair builds the identical model and the difference is the
+price of the `where:` alone, with no row-count change mixed into it. The density
+sweep answers the other half of the question, how much a mask *keeps*, and
+cannot answer this one: the mask that isolates the per-declaration cost is the
+one that keeps everything.
 
 **A third pairing prices declarations that hold no row.** `n008e` is `n008`
 plus 60 declarations of each kind that holds no row in PyPSA's spec: a variable
@@ -848,7 +848,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve._engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._engine.queries:QueryBuilder._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```

@@ -57,7 +57,7 @@ It is also the axis that survives the two lanes — a behaviour spans both, whil
 a module is on one side of the fence or the other.
 
 A module-shaped file is the exception and earns it by being about the module as
-such: `test_compiler.py`, `test_schema.py`, and `test_relational.py`, which is
+such: `test_queries.py`, `test_schema.py`, and `test_relational.py`, which is
 matrix assembly and the solver hand-off rather than a language construct.
 
 The failure mode is a file that grows into everything that had no other home.

@@ -160,7 +160,7 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
 
     Returns:
         The value, ``(dims…, value)`` over the expression's own dimensions. Only
-        this expression is compiled.
+        this expression's query is built.
 
     Raises:
         LanguageError: A construct outside the language, or a name

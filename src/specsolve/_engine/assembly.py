@@ -17,7 +17,7 @@ from mathspec import program
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, absence_restrictions
@@ -107,7 +107,7 @@ class Assembly:
         self.variables: dict[str, indices.Indexed] = {}
         self.constraints: dict[str, indices.Indexed] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.compiler = Compiler(self.scope)
+        self.builder = QueryBuilder(self.scope)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
@@ -208,7 +208,7 @@ class Assembly:
         if v.domain != 'continuous':
             lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.compiler.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
+            bounds = self.builder.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
             bounded = indices.in_position_order(bounds.pipe(collected), COL)
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
@@ -267,7 +267,7 @@ class Assembly:
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
         indexed block narrows to the rows that survived. A constraint whose
-        ``where`` admits no row is not compiled. One without a ``where`` is
+        ``where`` admits no row has no query built. One without a ``where`` is
         indexed only once its restrictions are known, so a sparse absence
         never meets the full product of its dimensions.
         """
@@ -278,8 +278,8 @@ class Assembly:
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
-        lhs = self.compiler.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
-        rhs = self.compiler.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
+        lhs = self.builder.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
+        rhs = self.builder.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
         linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
@@ -343,10 +343,10 @@ class Assembly:
     def _without_a_row(
         self, name: str, indexed: pl.DataFrame, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
-        """A constraint that holds no row, left uncompiled.
+        """A constraint that holds no row, with no query built for its terms.
 
-        Its terms could only narrow its rows further, so compiling them would
-        change nothing but the cost: each query a compile plans costs a fixed
+        Its terms could only narrow its rows further, so querying them would
+        change nothing but the cost: each query planned costs a fixed
         time that an entry without a row never earns back.
         """
         self.constraints[name] = indices.Indexed(indexed.lazy(), start, 0)
@@ -428,21 +428,21 @@ class Assembly:
         """
         if o is None:
             return None
-        comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True)
+        terms = self.builder.expression(o.expression, 'objective', admits_quadratic=True)
         coverage.refuse_null_constants(
-            [p.table for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
+            [p.table for p in terms.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )
-        for p in comp.constant:
+        for p in terms.constant:
             assert not p.dims, (
                 f'objective constant term has dimensions {list(p.dims)} — the language refuses a '
                 f'variable-free term of an objective that carries any'
             )
             self.obj_const += p.table.select(pl.col(CONSTANT).sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
-        self.quad = self._objective_quadratic(comp.quadratic, o.expression)
-        if not comp.linear:
+        self.quad = self._objective_quadratic(terms.quadratic, o.expression)
+        if not terms.linear:
             return None
-        tables = [p.table.select(pl.col(COL).cast(_DTYPES[COL]).alias(COL), pl.col(COEFF)) for p in comp.linear]
+        tables = [p.table.select(pl.col(COL).cast(_DTYPES[COL]).alias(COL), pl.col(COEFF)) for p in terms.linear]
         stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, (COL,), ordered=False, space=self.n_cols)
