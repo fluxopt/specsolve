@@ -1,4 +1,4 @@
-"""What a caller's ``sources`` become: the frames the engine reads by name.
+"""What a caller's ``sources`` become: the tables the engine reads by name.
 
 The door ([`tidy_sources`][specsolve._sources.tidy_sources]) has already read and checked
 every source; this shapes each and encodes the string dimensions.
@@ -35,7 +35,7 @@ class AttachedSources:
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
-    cached frame heights.
+    cached table heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
     ``first`` is its ordinal. ``seconds`` is how long attaching took, for the
@@ -57,10 +57,10 @@ class AttachedSources:
 
 
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
-    """Shape the door's frames into what *program* is written against.
+    """Shape the door's tables into what *program* is written against.
 
-    A dimension's ``Enum`` is built from its labels, then every frame that
-    carries the dimension is re-encoded against it. Each frame is read
+    A dimension's ``Enum`` is built from its labels, then every table that
+    carries the dimension is re-encoded against it. Each table is read
     [`in_memory`][], since every read holds one table whole.
 
     Raises:
@@ -194,7 +194,7 @@ def _ordinal_frame(d: str, index: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:
-    """Dim columns as plain strings, so a writer's own dictionary cannot block the cast into an ``Enum``."""
+    """Dimension columns as plain strings, so a writer's own dictionary cannot block the cast into an ``Enum``."""
     categorical = [d for d, dtype in frame.schema.items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
     if not categorical:
         return frame

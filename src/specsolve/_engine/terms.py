@@ -3,7 +3,7 @@
 Column conventions:
 
 ===================  ==========================================
-frame                columns
+table                columns
 ===================  ==========================================
 linear term          ``dims…``, ``var_label``, ``coeff``
 quadratic term       ``dims…``, ``var_label``, ``var_label_2``, ``coeff``
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 #: unrepresentable as a declared name.
 _RHS = '__rhs value__'
 
-#: The one column of a scalar presence frame: polars holds no frame with rows and no columns.
+#: The one column of a scalar presence table: polars holds no table with rows and no columns.
 PRESENT = '__present__'
 
 
@@ -43,11 +43,11 @@ class Presence:
     """Where the *variable* under a term exists, and what keys it.
 
     Not which rows the term's frame has: a neutral parameter's missing rows
-    are a zero coefficient, a masked variable's are absence, and the frame
-    cannot tell them apart.
+    are a zero coefficient, those a variable's condition leaves out are
+    absence, and the frame cannot tell them apart.
 
     ``keyed_by`` is ``None`` where the frame is keyed by the term's own
-    dims, an implied key that stays right as downstream operators rewrite
+    dimensions, an implied key that stays right as downstream operators rewrite
     them. A shift or window edge states a narrower one.
     """
 
@@ -74,7 +74,7 @@ Kind = Literal['linear', 'quadratic', 'constant']
 
 @dataclass(frozen=True)
 class Term:
-    """One additive term of a compiled expression, over its own dims."""
+    """One additive term of a compiled expression, over its own dimensions."""
 
     dims: tuple[str, ...]
     frame: pl.LazyFrame
@@ -90,7 +90,7 @@ class Term:
     """The region of a `Cases` this term covers by construction, or ``None``.
 
     The coverage check asks its question only there. A product carries the
-    conjunction, and a reduction that drops a dim the region reads drops the
+    conjunction, and a reduction that drops a dimension the region reads drops the
     region ([`region_over`][]).
     """
 
@@ -107,25 +107,26 @@ class Term:
 
     @property
     def carried(self) -> list[str]:
-        """The non-dim columns a projection has to keep."""
+        """The non-dimension columns a projection has to keep."""
         return carried_columns(self.kind)
 
 
 def refuse_a_term_without_the_dims(p: Term, dims: list[str], context: str, operator: str) -> NoReturn:
     """Refuse a term an operator cannot act on, in the right class.
 
-    A constant term lacking the dims is valid YAML this engine cannot build, so
-    it is a `SpecsolveError`; a linear term is repeated along every dim an
-    operator reads before the operator runs ([`spread_term`][]), so one here
-    is a malformed plan. *operator* is the spelling the user wrote.
+    A constant term lacking the dimensions is valid YAML this engine cannot
+    build, so it is a `SpecsolveError`; a linear term is repeated along every
+    dimension an operator reads before the operator runs ([`spread_term`][]),
+    so one here is a malformed program. *operator* is the spelling the user
+    wrote.
     """
     if p.kind == 'constant':
         raise SpecsolveError(
             f'in {context}: {operator} acts along {dims}, which a constant term of the expression '
             f'does not carry, and specsolve cannot build that. A constant term compiles to its own '
-            f'frame, so a term with no rows for {dims} has no slots for the operator to act on — '
-            f'and under a mask, which slots those are is known only to the rows. Declare the parameter '
-            f'over {dims} and supply it there: the model is the same and the number is unchanged.'
+            f'table, so a term with no rows for {dims} has no slots for the operator to act on — '
+            f'and under a condition, which slots those are is known only to the rows. Declare the '
+            f'parameter over {dims} and supply it there: the model is the same and the number is unchanged.'
         )
     msg = f'in {context}: {operator} along {dims}, which the expression does not span'
     raise AssertionError(msg)
@@ -135,7 +136,7 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
     """*p* repeated at every label of each of *dims* it lacks, the same value at each.
 
     Its presences leave with their keys spelled out, since the implied key,
-    the term's dims, now names columns their frames do not hold.
+    the term's dimensions, now names columns their tables do not hold.
     """
     missing = [d for d in dims if d not in p.dims]
     if not missing:
@@ -155,7 +156,7 @@ def value_column(kind: Kind) -> str:
 
 
 def carried_columns(kind: Kind) -> list[str]:
-    """The non-dim columns a projection of this kind of term has to keep."""
+    """The non-dimension columns a projection of this kind of term has to keep."""
     return [*_LABELS[kind], value_column(kind)]
 
 
@@ -176,7 +177,7 @@ def constant_scalar(p: Term) -> pl.LazyFrame:
 
 
 def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
-    """The presence frames a constraint's rows — or a read's — have to be contained in.
+    """The presence tables a constraint's rows — or a read's — have to be contained in.
 
     Each leaves with its key spelled out, since labelling cannot know the term it came from.
     """
@@ -188,7 +189,7 @@ FanIn = Literal['one-to-one', 'many-to-one', 'one-to-many']
 
 
 def acted_along(expression: program.Sum | program.WindowSum) -> tuple[str, ...]:
-    """The dims a node that is not one-to-one sums along, a join's axis by the dimension it runs over."""
+    """The dimensions a node that is not one-to-one sums along, a join's axis by the dimension it runs over."""
     if isinstance(expression, program.Sum):
         return tuple(axis.dimension for axis in expression.over)
     return (expression.along,)
@@ -232,8 +233,8 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
 
     Needed before a node that is not one-to-one ([`fan_in`][]): the row-level
     intersection at assembly cannot say which input slots behind a row survived.
-    A term lacking a dim a restriction is keyed by is first repeated along
-    it, never along a dim in *along*, which the operator refuses itself
+    A term lacking a dimension a restriction is keyed by is first repeated
+    along it, never along a dimension in *along*, which the operator refuses itself
     ([`refuse_a_term_without_the_dims`][]). A term is never restricted
     by its own presence: its rows are inside it by construction.
     """
@@ -265,7 +266,7 @@ def map_terms(
 ) -> CompiledExpression:
     """Apply *rewrite* to every term, keeping the kinds apart.
 
-    A rewrite sees one term at a time; a node needing them together is global and refused at lowering.
+    A rewrite sees one term at a time; a node needing them together is global and refused at load.
     """
     return CompiledExpression(
         tuple(rewrite(p) for p in compiled.linear),
@@ -291,25 +292,25 @@ def negate(p: Term) -> Term:
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
-    """*a*'s frame joined to *right*, *b*'s frame with its value renamed, and the dims out, *a*'s first.
+    """*a*'s frame joined to *right*, *b*'s frame with its value renamed, and the dimensions out, *a*'s first.
 
-    The join is on the dims the two share, so *b* broadcasts over the rest.
+    The join is on the dimensions the two share, so *b* broadcasts over the rest.
     """
     joined = join_on(a.frame, right, [d for d in a.dims if d in b.dims], how)
     return joined, a.dims + tuple(d for d in b.dims if d not in a.dims)
 
 
 def _keyed(p: Term) -> tuple[Presence, ...]:
-    """*p*'s presences with their keys spelled out, before a product gives them a term over more dims.
+    """*p*'s presences with their keys spelled out, before a product gives them a term over more dimensions.
 
-    An implied key is the term's own dims, and the product's are a superset,
+    An implied key is the term's own dimensions, and the product's are a superset,
     so carried over unspelled it would name columns the frame does not hold.
     """
     return tuple(Presence(x.frame, x.keys(p.dims)) for x in p.presences)
 
 
 def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
-    """``a * c`` (or ``a / c``) where *c* is a constant term, broadcast over the dims not shared.
+    """``a * c`` (or ``a / c``) where *c* is a constant term, broadcast over the dimensions not shared.
 
     The right-hand value is renamed first: a suffix collision on ``cval`` would
     multiply a column by itself. A divide joins left, so a coordinate the

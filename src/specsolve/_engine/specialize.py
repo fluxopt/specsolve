@@ -1,7 +1,7 @@
-"""What the data decides about a program before a declaration is built.
+"""What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once. What it
-settles there, before any query of a declaration's own, is answered here, and
+settles there, before any query of an entry's own, is answered here, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out. Every such decision lives in this module, so a build's
 shortcuts are one list rather than a check in each place that takes one.

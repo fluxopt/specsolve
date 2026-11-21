@@ -1,7 +1,7 @@
-"""One build: every declaration into rows of the model frames a sink drains.
+"""One build: every entry into rows of the model tables a sink drains.
 
-The variable and constraint label frames fill during a build, because a
-declaration built later reads what earlier ones produced.
+The variable and constraint label tables fill during a build, because an
+entry built later reads what earlier ones produced.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 #: The most columns or rows a model may reach for its build to collect in memory.
 IN_MEMORY_REACH = 250_000
 
-#: The frames a sink reads, as schemas.
+#: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = ('col', 'coeff')
 _QUAD = ('col_l', 'col_r', 'coeff')
@@ -45,7 +45,7 @@ _QMATRIX = ('row', 'col_l', 'col_r', 'coeff')
 _SOS = ('set', 'type', 'col', 'weight')
 
 #: The dtype of each of those columns. ``col``, ``set`` and ``weight`` are the
-#: solver's ``Int32``; a label stays ``Int64``, a position in the pre-mask
+#: solver's ``Int32``; a label stays ``Int64``, a position in the full
 #: coordinate product, which can pass 2^31.
 _DTYPES = {
     'col': pl.Int32, 'row': pl.Int64,
@@ -60,13 +60,13 @@ _DTYPES = {
 class Measured:
     """What one build measured about itself, and a rebuild replaces wholesale.
 
-    It outlives ``close()``, so it holds counts and small frames, never a read
+    It outlives ``close()``, so it holds counts and small tables, never a read
     of the model. Most of it is written as measured, so a build that raises
     still reports what it got to.
     """
 
     #: ``name -> (coordinates, rows)`` for each parameter attached short of the
-    #: coordinates its dims reach.
+    #: coordinates its dimensions reach.
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
@@ -90,7 +90,7 @@ class BuiltModel:
     program: program.Program
     attached: AttachedSources
     #: One [`Labelled`][specsolve._engine.labels.Labelled] per
-    #: declaration, one map per label space: a variable and a constraint may share a name.
+    #: entry, one map per label space: a variable and a constraint may share a name.
     variables: dict[str, labels.Labelled]
     constraints: dict[str, labels.Labelled]
     handoff: sinks.Handoff
@@ -116,7 +116,7 @@ class Assembly:
         self.obj_sense: ObjectiveSense | None = None
 
     def run(self) -> BuiltModel:
-        """Build every declaration, then freeze what they produced.
+        """Build every entry, then freeze what they produced.
 
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
@@ -157,7 +157,7 @@ class Assembly:
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
 
-        A constraint over dims no variable spans has more rows than there are
+        A constraint over dimensions no variable spans has more rows than there are
         columns, so the rows count too.
         """
         cardinality = self.attached.cardinality
@@ -181,11 +181,11 @@ class Assembly:
         return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
 
     # ------------------------------------------------------------------
-    # declarations
+    # entries
     # ------------------------------------------------------------------
 
     def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
-        """One variable's labelled frame, and its share of ``cols``.
+        """One variable's labelled table, and its share of ``cols``.
 
         The share leaves in label order: ``cols`` carries no ``col``, so a row's
         position is its solver column index. The bounds are collected in memory:
@@ -220,12 +220,13 @@ class Assembly:
         return cols
 
     def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
-        """One declaration's sets as ``(set, type, col, weight)``, over *v*.
+        """One entry's sets as ``(set, type, col, weight)``, over *v*.
 
         A set and a weight are the two halves of a coordinate's row-major
-        position, split at the ``along`` dim; a masked variable renumbers the
-        sets densely. The stream leaves grouped by set and ascending in weight,
-        so a sink reads a set's edges off the neighbouring row.
+        position, split at the ``along`` dimension; a variable with a condition
+        renumbers the sets densely. The stream leaves grouped by set and
+        ascending in weight, so a sink reads a set's edges off the neighbouring
+        row.
         """
         held = self.variables[s.variable]
         cardinality = self.scope.data.cardinality
@@ -267,7 +268,7 @@ class Assembly:
         labelled block narrows to the rows that survived. A constraint whose
         ``where`` admits no row is not compiled. One without a ``where`` is
         labelled only once its restrictions are known, so a sparse absence
-        never meets the full product of its dims.
+        never meets the full product of its dimensions.
         """
         start = self.n_rows
         if rowless(c, self.attached):
@@ -345,7 +346,7 @@ class Assembly:
 
         Its terms could only narrow its rows further, so compiling them would
         change nothing but the cost: each query a compile plans costs a fixed
-        time that a declaration without a row never earns back.
+        time that an entry without a row never earns back.
         """
         self.constraints[name] = labels.Labelled(labelled.lazy(), start, 0)
         return _stack([], _ROWS), None, None
@@ -434,7 +435,7 @@ class Assembly:
         )
         for p in comp.constant:
             assert not p.dims, (
-                f'objective constant term has dims {list(p.dims)} — the language refuses a '
+                f'objective constant term has dimensions {list(p.dims)} — the language refuses a '
                 f'variable-free term of an objective that carries any'
             )
             self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
@@ -631,7 +632,7 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
 
 
 def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
-    """Concatenate *frames*, or an empty frame of *columns* when there are none."""
+    """Concatenate *frames*, or an empty table of *columns* when there are none."""
     if frames:
         return pl.concat(frames)
     return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})

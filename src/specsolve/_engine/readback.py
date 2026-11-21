@@ -1,4 +1,4 @@
-"""Reading a built model back: one constraint row, a solve's frames, a named expression."""
+"""Reading a built model back: one constraint row, a solve's tables, a named expression."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
 
     Raises:
         KeyError: No constraint of that name.
-        SpecsolveError: A coordinate the declaration cannot name, or one it built
+        SpecsolveError: A coordinate the entry cannot name, or one it built
             no row at.
     """
     if name not in model.constraints:
@@ -59,7 +59,7 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
 
 
 def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -> InfeasibleSubsystem:
-    """*found*'s solver indices as the declarations and coordinates that built them.
+    """*found*'s solver indices as the entries and coordinates that built them.
 
     A row carries its sense and right-hand side, a bound its side and value,
     read off the hand-off the solver was given.
@@ -90,9 +90,9 @@ def _members(
     label: str,
     carried: Sequence[str],
 ) -> dict[str, pl.DataFrame]:
-    """``(dims…, *carried)`` per declaration owning a label in *found*, in declaration and label order.
+    """``(dims…, *carried)`` per entry owning a label in *found*, in entry and label order.
 
-    A declaration owns a contiguous run of labels, so its share is a range test.
+    An entry owns a contiguous run of labels, so its share is a range test.
     """
     found = found.with_columns(pl.col(label).cast(pl.Int64))
     out = {}
@@ -112,13 +112,13 @@ def _members(
 
 
 def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> tuple[int, dict[str, object]]:
-    """The global row index constraint *name* built at *coordinate*, and that coordinate in dim order."""
+    """The global row index constraint *name* built at *coordinate*, and that coordinate in dimension order."""
     dims = model.program.constraints[name].dims
     if set(coordinate) != set(dims):
         raise SpecsolveError(
             f"constraint '{name}' is declared over {list(dims)}, and a row is read at all of them "
-            f'— got {sorted(coordinate)}. A row is one coordinate: name every dim once, and no dim '
-            'the declaration does not have.'
+            f'— got {sorted(coordinate)}. A row is one coordinate: name every dimension once, and '
+            'no dimension the constraint does not have.'
         )
     frame = model.constraints[name].frame
     schema = frame.collect_schema()
@@ -127,7 +127,7 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
     found = frame.filter(predicates).pipe(collected) if predicates else frame.pipe(collected)
     if not found.height:
         raise SpecsolveError(
-            f"constraint '{name}' built no row at {ordered}. Either a `where` masked the "
+            f"constraint '{name}' built no row at {ordered}. Either a `where` left the "
             'coordinate out, every term it had was absent, or the labels are not ones the '
             'dimension holds — and which of those it is, is what diagnostics() reports as an '
             'omission.'
@@ -152,10 +152,10 @@ def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
 def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
     """``(variable, coordinate, coefficient)`` for one row's matrix entries, in the entries' order.
 
-    Each declaration owns a contiguous run of column indices, so a term's
-    variable is a range test and its place in that frame is a positional take.
+    Each entry owns a contiguous run of column indices, so a term's variable
+    is a range test and its place in that table is a positional take.
     ``coordinate`` is one string because one row's terms may span variables
-    with different dims.
+    with different dimensions.
     """
     wanted = entries['col'].to_numpy()
     named = []
@@ -190,9 +190,9 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
 def laid_out(
     attached: AttachedSources, held: labels.Labelled, dims: tuple[str, ...], values: pl.Series
 ) -> pl.LazyFrame:
-    """One declaration's coordinates in label order, beside its share of *values*.
+    """One entry's coordinates in label order, beside its share of *values*.
 
-    Dim columns leave as ``String`` ([`_as_strings`][]).
+    Dimension columns leave as ``String`` ([`_as_strings`][]).
     """
     return _as_strings(held.valued(dims, values), attached, dims)
 
@@ -251,7 +251,7 @@ def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
 def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
     """*frame* with those of *dims* that attaching encoded as ``Enum`` cast back to ``String``.
 
-    A caller joins a dim column against its own data, and polars refuses
+    A caller joins a dimension column against its own data, and polars refuses
     ``Enum`` against ``String``.
     """
     return frame.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
@@ -263,14 +263,14 @@ def reordered(
     declared: Mapping[str, program.Variable | program.Constraint],
     frames: Mapping[str, pl.DataFrame],
 ) -> pl.Series:
-    """A saved solution's value frames back as the positional vector — the inverse of [`laid_out`][].
+    """A saved solution's value tables back as the positional vector — the inverse of [`laid_out`][].
 
     A rebuild over the same spec and sources numbers the labels identically
     (docs/development/architecture.md, "The relational lane").
 
     Raises:
-        SpecsolveError: A declaration whose saved frame misses a coordinate the
-            rebuilt model holds — the frame is not this model's answer.
+        SpecsolveError: An entry whose saved table misses a coordinate the
+            rebuilt model holds — the table is not this model's answer.
     """
     in_start_order = sorted((held.start, name) for name, held in registry.items())
     aligned = [
@@ -282,16 +282,16 @@ def reordered(
 def _aligned(
     attached: AttachedSources, name: str, held: labels.Labelled, dims: tuple[str, ...], stored: pl.DataFrame | None
 ) -> pl.Series:
-    """One declaration's saved values in its label order — its slice of the vector.
+    """One entry's saved values in its label order — its slice of the vector.
 
-    A declaration the rebuild masks away entirely has an empty slice, so a
+    An entry the rebuild leaves wholly absent has an empty slice, so a
     missing *stored* is no error there.
     """
     if held.height == 0:
         return pl.Series(_SOLUTION, [], dtype=pl.Float64)
     if stored is None:
         raise SpecsolveError(
-            f"the saved answer holds no '{name}' frame, but this model builds it, so it is not this model's "
+            f"the saved answer holds no '{name}' table, but this model builds it, so it is not this model's "
             f'answer. Re-solve rather than read.'
         )
     if not dims:
@@ -300,7 +300,7 @@ def _aligned(
     joined = order.join(stored, on=list(dims), how='left').sort(_LABEL_ORDER)
     if joined[VALUE].null_count():
         raise SpecsolveError(
-            f"the saved answer's '{name}' frame does not cover every coordinate this model builds, so it "
+            f"the saved answer's '{name}' table does not cover every coordinate this model builds, so it "
             f'is not an answer to this model. Re-solve rather than read.'
         )
     return joined[VALUE].rename(_SOLUTION)
@@ -314,7 +314,7 @@ def expressions(
     """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one compiler.
 
     Nothing compiles until a reader is called. Without *lower* there is no
-    spec as written to lower against, so an undeclared expression has no reader.
+    spec as written to compile against, so an undeclared expression has no reader.
     """
 
     def reader(name: str, expression: program.Expression) -> Callable[[], pl.DataFrame]:
@@ -338,7 +338,7 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     parameter does not cover contributes zero, and one where a variable is
     absent has no row, or a zero under ``missing: neutral``. A quotient has no row
     where its divisor is absent or zero. A variable-free expression is one row.
-    Dims come in declaration order, rows in label order.
+    Dimensions come in entry order, rows in label order.
 
     Raises:
         DataError: A divisor parameter with no row where the expression
@@ -392,7 +392,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     A coordinate both builds hold keeps its status. A column only this build
     holds starts nonbasic at a bound, and a row only this build holds starts
     basic, which is how a row gained between two builds enters without moving
-    the vertex. A declaration whose dims changed is new. The result is then
+    the vertex. An entry whose dimensions changed is new. The result is then
     [`_counted`][] to one basic entry per row, which is what a solver needs to
     take it, and [`settled`][specsolve._sinks.solver.settled]
     on this build's bounds.
@@ -413,10 +413,10 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
 
 
 def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.ndarray:
-    """A value per column from *values*, ``(dims…, value)`` frames per variable, laid onto this build by coordinate.
+    """A value per column from *values*, ``(dims…, value)`` tables per variable, laid onto this build by coordinate.
 
     NaN where *values* gives none: a variable it does not name, a coordinate
-    it lacks, a declaration whose dims changed.
+    it lacks, an entry whose dimensions changed.
 
     Raises:
         SpecsolveError: No value lands at a coordinate this build holds.
@@ -435,7 +435,7 @@ def _refuse_nothing_placed(placed: int) -> None:
     if not placed:
         raise SpecsolveError(
             'start= gives no value at any coordinate this model holds, so it would start nothing. Name the '
-            'declarations as the spec declares them, and their coordinates as the readers return them.'
+            'entries as the spec declares them, and their coordinates as the readers return them.'
         )
 
 
@@ -447,11 +447,11 @@ def _place(
     previous: Mapping[str, pl.LazyFrame],
     value: pl.Expr,
 ) -> int:
-    """*value* off each frame of *previous*, written into *into* at the label of the same coordinate in *held*; how many landed.
+    """*value* off each table of *previous*, written into *into* at the label of the same coordinate in *held*; how many landed.
 
-    The join casts every dim to a string on both sides, so a table typed
+    The join casts every dimension to a string on both sides, so a table typed
     otherwise than the read-back still matches: ``3`` and ``'3'`` are one
-    label. A frame whose columns are not its declaration's dims and ``value``
+    label. A table whose columns are not its entry's dimensions and ``value``
     is skipped, as is a coordinate only one side holds.
     """
     import numpy as np

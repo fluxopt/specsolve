@@ -1,4 +1,4 @@
-"""Dense solver indices for a masked coordinate product.
+"""Dense solver indices for a coordinate product narrowed by a condition.
 
 ``var_label`` is the solver's column index and ``row`` its row index, so two
 builds of one model must agree on every label (docs/development/architecture.md,
@@ -27,22 +27,22 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Labelled:
-    """One declaration's labelled frame, and the contiguous run of labels it owns."""
+    """One entry's labelled table, and the contiguous run of labels it owns."""
 
     frame: pl.LazyFrame
     start: int
     height: int
 
     def share(self, values: pl.Series) -> pl.Series:
-        """This declaration's share of a solver vector — a slice, never a join."""
+        """This entry's share of a solver vector — a slice, never a join."""
         return values.slice(self.start, self.height)
 
     def valued(self, dims: tuple[str, ...], values: pl.Series) -> pl.LazyFrame:
         """``(dims…, values.name)``: each coordinate beside its [`share`][] of *values*, in label order.
 
         Projected after the share is attached, never ``select(*dims)`` first:
-        with no dims that keeps no column, and polars gives a frame with no
-        columns no rows, so a scalar's one value would be lost. A share of the
+        with no dimensions that keeps no column, and polars gives a table with
+        no columns no rows, so a scalar's one value would be lost. A share of the
         wrong length raises rather than padding with nulls.
         """
         return self.frame.with_columns(self.share(values)).select(*dims, values.name)
@@ -56,9 +56,9 @@ def frame(
     start: int,
     restrictions: Sequence[Presence] = (),
 ) -> pl.DataFrame:
-    """The masked coord product of *dims* with a dense *label* from *start*.
+    """The coordinate product of *dims* narrowed by *where*, with a dense *label* from *start*.
 
-    A label is row-major over the dims' declared ordinals, so it is the
+    A label is row-major over the dimensions' declared ordinals, so it is the
     solver's own index with no remapping. *restrictions* are the
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
@@ -66,7 +66,7 @@ def frame(
 
     Returns:
         ``(dims…, label)`` in that column order and in label order; the next
-        free label is ``start`` plus its height. With no dims it is
+        free label is ``start`` plus its height. With no dimensions it is
         ``([`UNIT`][], label)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
@@ -99,7 +99,7 @@ def frame(
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], label: str) -> pl.DataFrame:
-    """[`frame`][]'s answer over dims one of which has no label, read without a query: no row, in its columns and dtypes."""
+    """[`frame`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
     schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
     return pl.DataFrame(schema=schema | {label: pl.Int64})
 
@@ -112,7 +112,7 @@ def _factored(
     label: str,
     start: int,
 ) -> pl.DataFrame | None:
-    """Labels for a mask that reads none of the first *free* dims.
+    """Labels for a condition that reads none of the first *free* dimensions.
 
     The survivors are the full head product against one surviving suffix set,
     so only the suffix is ranked, and the label is the number the counted path
@@ -143,9 +143,9 @@ def _factored(
 
 
 def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
-    """How many leading dims the mask does not read; 0 when it reads the first dim or none.
+    """How many leading dimensions the condition does not read; 0 when it reads the first dimension or none.
 
-    Only a prefix leaves the survivors contiguous in declaration order.
+    Only a prefix leaves the survivors contiguous in row-major order.
     """
     free = 0
     while free < len(dims) and dims[free] not in touched:
@@ -154,12 +154,12 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
 
 
 def _row_major(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
-    """[`Scope.row_major`][] over a product frame, which carries its ordinals."""
+    """[`Scope.row_major`][] over a product table, which carries its ordinals."""
     return scope.row_major(dims, lambda d: pl.col(ordinal(d)))
 
 
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:
-    """The frame ordered by *position*, sorted only when the engine emitted another order."""
+    """The table ordered by *position*, sorted only when the engine emitted another order."""
     if materialised.get_column(position).is_sorted():
         return materialised
     return materialised.sort(position)
