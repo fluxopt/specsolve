@@ -169,7 +169,7 @@ def _regions_folded(e: program.Expression, tests: Mapping[program.Condition, boo
 
 
 def _rebuilt(e: program.Expression, f: Callable[[program.Expression], program.Expression]) -> program.Expression:
-    """*e* with *f* applied to each sub-expression [`children`][mathspec.program.children] names, the rest kept."""
+    """*e* with *f* applied to each sub-expression ``mathspec.program.children`` names, the rest kept."""
     if isinstance(e, program.Constant | program.ParameterReference | program.VariableReference | program.Dual):
         return e
     if isinstance(e, program.Add | program.Multiply):
