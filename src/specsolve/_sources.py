@@ -72,20 +72,40 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 
 
 def tidied_and_attached(
-    program: Program, data: Mapping[str, Source]
+    program: Program,
+    data: Mapping[str, Source],
+    previous: Mapping[str, pl.LazyFrame] | None = None,
+    changed: Collection[str] = (),
 ) -> tuple[dict[str, pl.LazyFrame], AttachedSources | None]:
     """[`tidy_sources`][], and the attach its assumptions were read against, so a build attaches once.
 
     The attach is ``None`` where the assumptions attached nothing, and a build
-    attaches itself.
+    attaches itself. *previous* is what this returned before *data* replaced
+    the sources named *changed*: a parameter that replacement leaves alone is
+    taken from it, neither read nor checked again ([`_kept`][]). Dimensions,
+    relations and the assumptions are read and checked every time.
     """
     refuse_unknown_sources(program, data)
-    sources = _read(program, data)
+    sources = _read(program, data, _kept(program, previous or {}, changed))
     return sources, validate_assumptions(program, sources)
 
 
+def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Collection[str]) -> dict[str, pl.LazyFrame]:
+    """The parameters of *previous* that a change of the sources named *changed* leaves as the door checked them.
+
+    A parameter's checks read its own source and the index of each of its
+    dims, a positional source included, so it is kept only where none of
+    them is in *changed*.
+    """
+    return {
+        name: previous[name]
+        for name, p in program.parameters.items()
+        if name in previous and name not in changed and not set(p.dims) & set(changed)
+    }
+
+
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
     [`validate_assumptions`][] runs
@@ -93,7 +113,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     dimensions on the default engine.
     """
     _check_relation_sources(program, data)
-    data = _read_paths_at_once(program, data)
+    data = _read_paths_at_once(program, {name: source for name, source in data.items() if name not in kept})
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
@@ -107,12 +127,14 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     _check_relations_hold_labels(program, relations, sources)
     sources |= relations
 
-    for pname, pdef in program.parameters.items():
+    read = {name: p for name, p in program.parameters.items() if name not in kept}
+    for pname, pdef in read.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
-    for pname, pdef in program.parameters.items():
+    for pname, pdef in read.items():
         sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+    sources |= kept
 
     for dname in program.dimensions:
         if dname not in sources:

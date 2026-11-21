@@ -44,7 +44,7 @@ from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from mathspec.program import Expression, Program
 
@@ -206,16 +206,20 @@ class Model:
         """
         return lower_expression(self._spec, written)
 
-    def _fill(self) -> None:
+    def _fill(self, changed: Collection[str] = ()) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.
 
         What the build read is kept for an archive: a one-shot iterator is
-        spent by then, and a path may have been rewritten.
+        spent by then, and a path may have been rewritten. A parameter that the
+        sources named *changed* leave alone is taken as the last build read it.
+        A failure forgets what was read, so the next update reads every source
+        again, the refused one included.
         """
         try:
-            self._tidied, attached = tidied_and_attached(self._program, self._sources)
+            self._tidied, attached = tidied_and_attached(self._program, self._sources, self._tidied, changed)
             self._engine.build(self._program, self._tidied, attached)
         except BaseException:
+            self._tidied = {}
             self._engine.close()
             raise
 
@@ -252,7 +256,7 @@ class Model:
         """
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
-        self._fill()
+        self._fill(sources.keys())
         return self
 
     def solve(
