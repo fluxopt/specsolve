@@ -277,8 +277,7 @@ The names the code uses for its own parts. The names a caller meets are in
 : The tidy tables as every query reads them: a dimension as `(val, ord)`, a
   label column as an `Enum` in declared order. They also hold each test of a
   `where` or a `cases:` region that the data decides at every coordinate,
-  read once for the assumptions and the build both, and the parameters the
-  objective multiplies a variable by that are zero everywhere.
+  read once for the assumptions and the build both.
 
 **Term**, **presence** and **region**
 : One additive term of a compiled expression, over its own dims: linear,

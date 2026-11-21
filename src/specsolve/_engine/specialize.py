@@ -1,9 +1,8 @@
 """What the data decides about a program before a declaration is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
-same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][])
-and every price in the objective that is zero ([`zero_parameters`][]). What
-that read settles is answered here: the program a build compiles is
+same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][]).
+What that read settles is answered here: the program a build compiles is
 [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out ([`rowless`][]). Every such decision lives in this module, so
@@ -17,17 +16,15 @@ import math
 from dataclasses import replace
 from typing import TYPE_CHECKING, assert_never
 
-import polars as pl
 from mathspec import program
 from mathspec.program import walk
 
 from specsolve._collect import collected_all, in_memory
 from specsolve._engine.predicates import counted_over_nothing, passing
 from specsolve._engine.scope import Scope
-from specsolve._names import VALUE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Mapping
 
     from specsolve._engine.attaching import AttachedSources
 
@@ -79,23 +76,6 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
     return out
 
 
-def zero_parameters(lowered: program.Program, attached: AttachedSources) -> frozenset[str]:
-    """The parameters the objective multiplies a variable by that are zero at every row they have.
-
-    Asked of the objective alone, named expressions read through, since there
-    a zero term adds nothing, where in a constraint it would still keep its
-    row. Any value ``missing:`` fills counts. One batch, in memory.
-    """
-    if lowered.objective is None:
-        return frozenset()
-    names = sorted(
-        {n for e in walk(lowered.objective.expression) if isinstance(e, program.Multiply) for n in _prices(e)}
-    )
-    with in_memory():
-        found = collected_all(attached.parameters[n].select((pl.col(VALUE) != 0).any()) for n in names)
-    return frozenset(n for n, nonzero in zip(names, found, strict=True) if not nonzero.item())
-
-
 def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
     """*lowered* with each ``where`` and ``cases:`` region it builds rows from folded over the tests *attached* settled.
 
@@ -106,9 +86,7 @@ def specialized(lowered: program.Program, attached: AttachedSources) -> program.
     false is dropped from its ``cases:``, and one left alone holding true
     stands for its ``cases:``: a build places a term on its rows by the
     term's own dims, and a sum spreads a term along what it sums, so the
-    region's dims are not needed to place it. The objective, which a build
-    only sums, also loses each product of a variable and a parameter zero at
-    every row it has; a constraint keeps it, and with it its row.
+    region's dims are not needed to place it.
 
     The program a build keeps is this one, so readback reads the
     declarations it built. Assumptions keep their ``where`` as written, since
@@ -116,8 +94,8 @@ def specialized(lowered: program.Program, attached: AttachedSources) -> program.
     stay as written too: a read takes its dims from its terms, and a region
     may be the only one over a dim.
     """
-    tests, zero = attached.settled, attached.zero
-    if not tests and not zero:
+    tests = attached.settled
+    if not tests:
         return lowered
 
     def where(declaration: program.Variable | program.Constraint) -> program.Mask | None:
@@ -137,7 +115,7 @@ def specialized(lowered: program.Program, attached: AttachedSources) -> program.
         for n, c in lowered.constraints.items()
     }
     o = lowered.objective
-    objective = None if o is None else replace(o, expression=_priced(_regions_folded(o.expression, tests), zero))
+    objective = None if o is None else replace(o, expression=_regions_folded(o.expression, tests))
     return replace(lowered, variables=variables, constraints=constraints, objective=objective)
 
 
@@ -207,43 +185,3 @@ def _rebuilt(e: program.Expression, f: Callable[[program.Expression], program.Ex
     if isinstance(e, program.Cases):
         return replace(e, regions=tuple(replace(r, value=f(r.value)) for r in e.regions))
     assert_never(e)
-
-
-def _prices(e: program.Multiply) -> Iterator[str]:
-    """The parameters *e* multiplies straight onto a factor that carries a variable."""
-    for f, g in ((e.left, e.right), (e.right, e.left)):
-        if isinstance(f, program.ParameterReference) and program.carries_variable(g):
-            yield f.name
-
-
-def _priced(e: program.Expression, zero: frozenset[str]) -> program.Expression:
-    """An objective *e* less each product priced by a parameter in *zero*, the literal zero where nothing is left."""
-    kept = _less_zero_prices(e, zero)
-    return program.Constant(0.0, dims=()) if kept is None else kept
-
-
-def _less_zero_prices(e: program.Expression, zero: frozenset[str]) -> program.Expression | None:
-    """*e* less each product priced by a parameter in *zero*; ``None`` where nothing is left.
-
-    Nothing times anything is nothing, and so is every node over it, but two:
-    a sum of two keeps the other side, and a ``cases:`` its other regions.
-    """
-    if isinstance(e, program.Multiply) and not zero.isdisjoint(_prices(e)):
-        return None
-    if isinstance(e, program.Add):
-        left, right = _less_zero_prices(e.left, zero), _less_zero_prices(e.right, zero)
-        if left is None or right is None:
-            return left if right is None else right
-        return replace(e, left=left, right=right)
-    if isinstance(e, program.Cases):
-        regions = tuple(replace(r, value=v) for r in e.regions if (v := _less_zero_prices(r.value, zero)) is not None)
-        return replace(e, regions=regions) if regions else None
-    emptied = []
-
-    def kept(child: program.Expression) -> program.Expression:
-        out = _less_zero_prices(child, zero)
-        emptied.append(out is None)
-        return child if out is None else out
-
-    rebuilt = _rebuilt(e, kept)
-    return None if any(emptied) else rebuilt
