@@ -41,7 +41,8 @@ flowchart TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
+            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
+            SPECIALIZE --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
@@ -165,9 +166,9 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 
 ## The relational lane
 
-**The spine is one module per box**: `attaching.py`, `compiler.py`,
-`assembly.py`, `_sinks/`, and `engine.py`, which runs the lifecycle. `scope.py`
-sits under them all.
+**The spine is one module per box**: `attaching.py`, `specialize.py`,
+`compiler.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
+lifecycle. `scope.py` sits under them all.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
 leaves no model.
@@ -222,6 +223,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
+| `_engine/specialize.py` | what the data decides before a declaration is built |
 | `_engine/assembly.py` | one build: every declaration into the model tables |
 | `_engine/coverage.py` | is the data there where a declaration reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by label |
