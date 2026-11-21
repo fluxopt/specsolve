@@ -700,12 +700,12 @@ def _check_one_row_per_coordinate(
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
             raise DataError(
-                f"{kind} '{name}' has label(s) in dimension '{d}' that are not coordinates "
+                f"{kind} '{name}' has label(s) in dimension '{d}' that are not labels "
                 f'of it: {shown}{more}.\n'
                 f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-                f'A missing row means no value there, but a label that is not a coordinate is a '
+                f'A missing row means no value there, but a label the dimension does not have is a '
                 f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-                f'as absent. Fix the label, or declare it as a coordinate.'
+                f'as absent. Fix the label, or add it to the labels of {d}.'
             )
 
     if not answers['#duplicated']:

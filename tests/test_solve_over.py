@@ -2942,7 +2942,7 @@ def test_a_label_the_index_lacks_is_refused_under_windows_as_for_a_single_solve(
     """
     sources = horizon_sources(8)
     sources['load'] = pl.concat([sources['load'], pl.DataFrame({'snapshot': [99], 'value': [1.0]})])
-    with pytest.raises(sps.errors.DataError, match=r"label\(s\) in dimension 'snapshot' that are not coordinates"):
+    with pytest.raises(sps.errors.DataError, match=r"label\(s\) in dimension 'snapshot' that are not labels"):
         sps.solve_over(WINDOW, sources, WINDOW_AXIS)
 
 

@@ -247,7 +247,7 @@ class TestLoadParameters:
                 {'g': {'dtype': 'str'}},
                 {'p': {'dims': ['g']}},
                 {'g': ['a', 'b'], 'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
-                'that are not coordinates',
+                'that are not labels',
                 id='unknown-coordinate',
             ),
         ],

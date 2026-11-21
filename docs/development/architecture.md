@@ -125,7 +125,7 @@ the dependency claims.*
    API to construct a spec, hand in a program, or populate a registry
    ([the Python surface](#the-python-surface)).
 
-## The plan, node for node
+## The program, node for node
 
 **The program is the vocabulary both lanes speak.** The table gives what the file
 writes and what the relational query does with it. The oracle's call is in
