@@ -7,9 +7,9 @@ Each ref is checked out with ``git worktree add --detach``; nothing is
 installed. Each round starts one worker process per side, with that checkout's
 ``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
 alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
-measurement is a fresh process instead, and the verdict is on its peak
-resident memory. The first round also saves what each side produced: the built
-model's numbers, or a solve's status and objective. Where the two differ beyond
+measurement is a fresh process that runs the operation once, and the verdict is
+on its peak resident memory. The first round also saves what each side
+produced: the built model's numbers, or a solve's status and objective. Where the two differ beyond
 the last bits, the cell *differs* and fails however fast it is. Where floats
 differ only within ``LAST_BITS``, the sums ran in another order: the cell keeps
 its verdict, marked *last bits*.
@@ -135,10 +135,12 @@ def _git(*args: str) -> str:
 class Worker:
     """A worker process measuring cells against the ``specsolve`` in *tree*, until closed."""
 
-    def __init__(self, tree: Path, *, op: str, focus: str | None) -> None:
+    def __init__(self, tree: Path, *, op: str, focus: str | None, memory: bool = False) -> None:
         command = [sys.executable, '-m', 'bench.ab.worker', '--tree', str(tree), '--op', op]
         if focus:
             command += ['--focus', focus]
+        if memory:
+            command += ['--memory']
         env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(tree / 'src'), str(ROOT)])}
         self.stderr = tempfile.TemporaryFile(mode='w+')  # noqa: SIM115 — closed in close(), with the process
         self.process = subprocess.Popen(
@@ -190,7 +192,8 @@ def compare(
     Each round starts one fresh worker per side and runs every cell in it, so
     what a process brings to its timings falls in one round and the rounds stay
     independent, as the sign test needs. With *memory*, every measurement gets
-    a fresh process instead, and the verdict is on its peak resident memory.
+    a fresh process instead, which runs the cell once, and the verdict is on
+    its peak resident memory.
     """
     trees = {'base': base, 'head': head}
     rows = {c: Row(c, metric='peak_mb' if memory else 'seconds') for c in cells}
@@ -259,10 +262,11 @@ def _ask(
 ) -> dict[str, Any]:
     """One measurement on *side*: in its worker for the round, or in a process of its own where there is none.
 
-    A worker that died on a cell is replaced, so the cells after it are still measured.
+    A process of its own is a memory run's, and runs the cell once. A worker
+    that died on a cell is replaced, so the cells after it are still measured.
     """
     if side not in workers:
-        own = Worker(trees[side], op=op, focus=focus)
+        own = Worker(trees[side], op=op, focus=focus, memory=True)
         try:
             return own.ask(cell_id, fingerprint=fingerprint)
         finally:
@@ -311,7 +315,7 @@ def main() -> None:
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')
     parser.add_argument(
-        '--memory', action='store_true', help='the verdict on peak memory, a fresh process per measurement'
+        '--memory', action='store_true', help='the verdict on peak memory, a fresh process and one run per measurement'
     )
     parser.add_argument('-k', dest='select', help='only the cells whose id contains this')
     parser.add_argument('--out', type=Path)
@@ -346,7 +350,7 @@ def _run(args: argparse.Namespace) -> None:
     after = os.getloadavg()
 
     if args.memory:
-        counted = f'the peak resident memory of a fresh process that ran `sps.{args.op}` twice'
+        counted = f'the peak resident memory of a fresh process that ran `sps.{args.op}` once'
     elif args.focus:
         counted = f'`{args.focus}`, summed over its calls, warm, a fresh process per side per round'
     else:
