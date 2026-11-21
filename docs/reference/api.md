@@ -213,7 +213,8 @@ refused** by every function. The prefix is reserved for the columns specsolve ad
 such as `specsolve_run`. The rule covers dimensions, relations and their
 columns, parameters, variables, constraints, named expressions, `sos:` sets and
 assumptions. A `key_name=` with the prefix is refused too, and so is a
-dimension called `value`.
+dimension called `value`, `row`, `coeff`, `cval`, `ord`, `var_label` or
+`var_label_2`: those are the columns specsolve builds a model in.
 
 ```
 variable 'Specsolve_p' starts with 'specsolve_', which is reserved in any

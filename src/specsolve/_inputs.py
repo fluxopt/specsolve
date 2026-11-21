@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from mathspec import to_spec
 from mathspec.program import Program
 
-from specsolve._names import refuse_reserved, refuse_value
+from specsolve._names import refuse_build_column, refuse_reserved, refuse_value
 from specsolve.errors import LanguageError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -113,7 +113,7 @@ def _case_collision(program: Program) -> str | None:
 
 
 def _refuse_reserved_names(program: Program) -> None:
-    """Refuse a declaration whose name starts with ``specsolve_``, and a dimension called ``value``, in any letter case."""
+    """Refuse a declaration whose name starts with ``specsolve_``, and a dimension named like a column specsolve writes."""
     named = (
         *((f"dimension '{name}'", name) for name in program.dimensions),
         *((f"relation '{name}'", name) for name in program.relations),
@@ -133,6 +133,7 @@ def _refuse_reserved_names(program: Program) -> None:
         refuse_reserved(name, which)
     for name in program.dimensions:
         refuse_value(name, f"dimension '{name}'")
+        refuse_build_column(name, f"dimension '{name}'")
 
 
 def lowered(spec: SpecLike) -> Program:
@@ -145,8 +146,9 @@ def lowered(spec: SpecLike) -> Program:
             ``piecewise:`` block still to be written out, or a fragment that
             reads a name under ``given:``.
         SpecsolveError: Two declarations of one namespace whose names differ only
-            by case, a name that starts with ``specsolve_``, or a dimension
-            called ``value``, in any letter case.
+            by case, a name that starts with ``specsolve_``, a dimension
+            called ``value`` in any letter case, or a dimension named like a
+            column the build writes beside it, such as ``row``.
     """
     program = as_spec(spec).program
     if program.given:

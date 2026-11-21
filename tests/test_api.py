@@ -504,6 +504,87 @@ def test_a_dimension_named_value_is_refused_at_load(name):
         sps.check(spec)
 
 
+@pytest.mark.parametrize('name', ['row', 'coeff', 'cval', 'ord', 'var_label', 'var_label_2'], ids=str)
+def test_a_dimension_named_like_a_build_column_is_refused_at_load(name):
+    """The engine's tables carry these columns beside a dimension's own.
+
+    A dimension of the same name was a second column of that name, and the
+    build died inside polars with a ``DuplicateError`` naming neither the
+    dimension nor the rename.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^dimension '{name}' has the name of a column specsolve"):
+        sps.check(spec)
+
+
+def _engine_column_names() -> list[str]:
+    """Every name the engine and the sinks hand polars as a column, read off their source."""
+    import ast
+    import re
+    from pathlib import Path
+
+    package = Path(sps.__file__).parent
+    calls = {'col', 'alias', 'rename', 'select', 'with_columns', 'with_row_index', 'drop', 'sort', 'join', 'group_by'}
+    names = set()
+    for path in [*(package / '_engine').rglob('*.py'), *(package / '_sinks').rglob('*.py')]:
+        for node in ast.walk(ast.parse(path.read_text())):
+            name = getattr(node.func, 'attr', getattr(node.func, 'id', '')) if isinstance(node, ast.Call) else ''
+            if name in calls:
+                for argument in [*node.args, *(k.value for k in node.keywords)]:
+                    names |= {
+                        c.value
+                        for c in ast.walk(argument)
+                        if isinstance(c, ast.Constant) and isinstance(c.value, str)
+                        if re.fullmatch(r'[a-z][a-z0-9_]*', c.value)
+                    }
+    return sorted(names)
+
+
+@pytest.mark.parametrize('name', _engine_column_names(), ids=str)
+def test_a_dimension_named_like_any_engine_column_builds_or_is_refused_at_load(name):
+    """A column added to the engine later is caught here, rather than by the first model whose dimension takes it.
+
+    The model reads the dimension through a ``where:``, a sum, a relation, a
+    shift and a quadratic objective, so each walk that joins on it runs.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}, 'b': {'dtype': 'str'}},
+        'relations': {'gb': {'key': 'g', 'values': 'b'}},
+        'parameters': {'c': {'dims': [name]}, 'w': {'dims': [name, 'g']}},
+        'variables': {
+            'x': {'dims': [name, 'g'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'w > 0'},
+            'z': {'dims': [name], 'bounds': {'lower': 0, 'upper': 5}},
+        },
+        'constraints': {
+            'k': {'dims': [name], 'expression': 'sum(x, over=g) <= c'},
+            'r': {'dims': [name], 'expression': f'z - shift(z, along={name}, offset=1, edge=0) <= 1'},
+            'm': {'dims': [name, 'b'], 'expression': 'sum(x, over=g, by=gb[b]) <= 2'},
+        },
+        'objective': {'sense': 'minimize', 'expression': 'sum(-x * w) + sum(z * z) - sum(z)'},
+    }
+    try:
+        sps.check(spec)
+    except sps.errors.SpecsolveError:
+        return
+    sources = {
+        name: [0, 1, 2],
+        'g': ['a', 'h'],
+        'b': ['n'],
+        'gb': pl.DataFrame({'g': ['a', 'h'], 'b': ['n', 'n']}),
+        'c': pl.DataFrame({name: [0, 1, 2], 'value': [1.0, 0.5, 2.0]}),
+        'w': pl.DataFrame({name: [0, 0, 1, 1, 2, 2], 'g': ['a', 'h'] * 3, 'value': [1.0, 2.0, 0.0, 1.0, 0.0, 3.0]}),
+    }
+    with sps.solve(spec, sources) as result:
+        assert result.objective == pytest.approx(-6.25), 'the same optimum whatever the dimension is called'
+        assert result.dual('r').height == 3, 'and the shifted row reads back once per label'
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
