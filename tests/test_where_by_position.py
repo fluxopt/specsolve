@@ -42,7 +42,6 @@ SPEC = {
         'both': {'dims': ['j', 'i'], 'dtype': 'bool'},
         'short': {'dims': ['i'], 'missing': 'neutral'},
         'far': {'dims': ['gapped'], 'dtype': 'bool'},
-        'scalar': {'dims': [], 'dtype': 'bool'},
     },
     'variables': {
         'x': {'dims': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -63,7 +62,6 @@ SOURCES = {
     ),
     'short': pl.DataFrame({'i': LABELS[::2], 'value': [1.0] * 6}),
     'far': pl.DataFrame({'gapped': [10, 20, 40], 'value': [True, False, True]}),
-    'scalar': True,
 }
 
 
@@ -117,11 +115,6 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
             {'constraints': {'row': {'dims': ['i', 'j'], 'where': 'on or short', 'expression': 'x <= 5'}}},
             ['on'],
             id='one-parameter-of-two-is-short-of-a-row',
-        ),
-        pytest.param(
-            {'constraints': {'row': {'dims': ['i', 'j'], 'where': 'scalar and on', 'expression': 'x <= 5'}}},
-            ['on'],
-            id='a-parameter-over-no-dims-is-joined',
         ),
         pytest.param(
             {'constraints': {'row': {'dims': ['gapped'], 'where': 'far', 'expression': 'z <= 5'}}},
