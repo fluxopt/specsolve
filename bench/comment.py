@@ -178,9 +178,9 @@ def hosts(pr: Side, base: Side) -> list[str]:
     one type they moved within 9% while specsolve moved 1.24x to 1.75x
     (#2168), so a different machine makes every specsolve factor below suspect.
     """
-    ours, theirs = {report.machine(r) for r in pr.runs}, {report.machine(r) for r in base.runs}
-    if not ours or not theirs or ours == theirs:
+    if all(report.same_machine(a, b) for a in pr.runs for b in base.runs):
         return []
+    ours, theirs = {report.machine(r) for r in pr.runs}, {report.machine(r) for r in base.runs}
     return [
         f'⚠️ **The two runs were taken on different machines** — this run on {"; ".join(sorted(ours))}, '
         f'the committed one on {"; ".join(sorted(theirs))}. specsolve can move by the machine alone, '

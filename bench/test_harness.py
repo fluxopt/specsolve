@@ -1153,10 +1153,62 @@ def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request:
     assert {'mathspec', 'polars-runtime-32'} <= set(machine_info['versions']), (  # type: ignore[arg-type]
         'the two dependencies the result files could not vouch for are fingerprinted'
     )
-    if Path('/proc/cpuinfo').exists():
-        assert {'model name', 'microcode', 'cpu MHz', 'siblings', 'cpu cores'} <= set(host), (
-            'the fields that tell two hosts apart are kept, the core layout among them'
-        )
+
+
+_X86_CPUINFO = """processor\t: 0
+vendor_id\t: AuthenticAMD
+cpu family\t: 25
+model\t\t: 1
+model name\t: AMD EPYC-Milan Processor
+stepping\t: 1
+microcode\t: 0x1000065
+cpu MHz\t\t: 2396.398
+siblings\t: 8
+cpu cores\t: 8
+
+processor\t: 1
+model name\t: the second processor, which is not read
+"""
+
+_ARM64_CPUINFO = """processor\t: 0
+BogoMIPS\t: 50.00
+Features\t: fp asimd evtstrm aes pmull sha1 sha2 crc32
+CPU implementer\t: 0x41
+CPU architecture: 8
+CPU variant\t: 0x3
+CPU part\t: 0xd0c
+CPU revision\t: 1
+"""
+
+
+@pytest.mark.parametrize(
+    ('cpuinfo', 'expected'),
+    [
+        pytest.param(
+            _X86_CPUINFO,
+            {
+                'model name': 'AMD EPYC-Milan Processor',
+                'cpu family': '25',
+                'model': '1',
+                'stepping': '1',
+                'microcode': '0x1000065',
+                'cpu MHz': '2396.398',
+                'siblings': '8',
+                'cpu cores': '8',
+            },
+            id='x86-first-processor-only',
+        ),
+        pytest.param(_ARM64_CPUINFO, {}, id='arm64-writes-none-of-them'),
+    ],
+)
+def test_the_host_reads_its_processor_fields_from_cpuinfo(
+    tmp_path: Path, cpuinfo: str, expected: dict[str, str]
+) -> None:
+    (tmp_path / 'cpuinfo').write_text(cpuinfo)
+    (tmp_path / 'meminfo').write_text('MemTotal:       32864564 kB\nMemFree:        1 kB\n')
+    host = harness._host(tmp_path / 'cpuinfo', tmp_path / 'meminfo')
+    assert {k: v for k, v in host.items() if k in harness.CPUINFO} == expected, 'exactly the first processor fields'
+    assert host['memory_kb'] == 32864564
 
 
 @pytest.mark.parametrize(
@@ -1172,6 +1224,12 @@ def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request:
             id='core-layout',
         ),
         pytest.param({}, {}, False, id='a-file-from-before-the-host-was-recorded'),
+        pytest.param(
+            {'clock_hz': 2_396_398_000, 'host': {'microcode': '0xa0011d5', 'cpu cores': '8', 'siblings': '8'}},
+            {'clock_hz': 2_400_000_000},
+            False,
+            id='a-new-file-against-one-from-before',
+        ),
     ],
 )
 def test_the_comment_warns_when_the_two_runs_were_taken_on_different_machines(
@@ -1182,6 +1240,12 @@ def test_the_comment_warns_when_the_two_runs_were_taken_on_different_machines(
     base = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **theirs}], [], [])
     lines = comment.hosts(pr, base)
     assert bool(lines) is warned, f'a warning exactly where the machines differ, got {lines}'
+
+
+def test_half_a_core_layout_is_left_out_rather_than_raising() -> None:
+    """A `.jsonl` run record is taken verbatim, so it can carry one of the two layout fields."""
+    run = {**_run('AMD EPYC-Milan Processor', 8), 'host': {'siblings': '8'}}
+    assert report.machine(run) == 'AMD EPYC-Milan Processor, 8 cores (Linux 6.8.0)'
 
 
 def test_the_clock_reads_back_from_a_pytest_benchmark_file(tmp_path: Path) -> None:

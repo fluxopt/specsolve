@@ -284,22 +284,23 @@ def pytest_benchmark_update_machine_info(config: pytest.Config, machine_info: di
     machine_info['host'] = _host()
 
 
-def _host() -> dict[str, Any]:
+def _host(cpuinfo: Path = Path('/proc/cpuinfo'), meminfo: Path = Path('/proc/meminfo')) -> dict[str, Any]:
     """The first processor's `CPUINFO` fields, the memory and polars' thread count, from what this machine says.
 
     A cloud server type is not one machine: two of them measured the same
     code with specsolve 1.24x to 1.75x apart and linopy within 9% (#2168),
     and the processor's clock and microcode are what told them apart. A field
-    the platform does not have is left out.
+    the platform does not have is left out: an arm64 kernel writes none of
+    `CPUINFO`.
     """
     host: dict[str, Any] = {}
     with contextlib.suppress(OSError):
-        for line in Path('/proc/cpuinfo').read_text().split('\n\n')[0].splitlines():
+        for line in cpuinfo.read_text().split('\n\n')[0].splitlines():
             key, _, value = line.partition(':')
             if key.strip() in CPUINFO:
                 host[key.strip()] = value.strip()
     with contextlib.suppress(OSError):
-        for line in Path('/proc/meminfo').read_text().splitlines():
+        for line in meminfo.read_text().splitlines():
             if line.startswith('MemTotal:'):
                 host['memory_kb'] = int(line.split()[1])
     with contextlib.suppress(ImportError):
