@@ -68,8 +68,9 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : The data you attach: a `dict` from each declared name to a table, and from
   each dimension to its labels ([the data contract](data.md)).
 
-**Index**
-: A dimension's labels in order, each once
+**Label**
+: One member of a dimension, such as `wind` in `generator`. A dimension's
+  labels arrive in `sources` under its name, in order, each once
   ([where coordinates come from](data.md#where-coordinates-come-from)).
 
 **Coordinate**
