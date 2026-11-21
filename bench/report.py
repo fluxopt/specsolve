@@ -60,10 +60,16 @@ _SPREAD_NOTE = (
 
 
 def machine(run: Row) -> str:
-    """One run's box, as the string two runs are compared by; every key is optional."""
+    """One run's box, as the string two runs are compared by; every key is optional.
+
+    The clock is rounded to 0.1 GHz, so one host reading 2.3964 GHz and 2.4000
+    GHz is one machine, and a host at 2.2 GHz is another.
+    """
     cores = f', {run["cores"]} cores' if run.get('cores') else ''
+    clock = f' at {run["clock_hz"] / 1e9:.1f} GHz' if run.get('clock_hz') else ''
+    microcode = (run.get('host') or {}).get('microcode')
     where = (run.get('platform') or '?').strip() or '?'
-    return f'{run.get("cpu") or "?"}{cores} ({where})'
+    return f'{run.get("cpu") or "?"}{cores}{clock}{f", microcode {microcode}" if microcode else ""} ({where})'
 
 
 def provenance(runs: list[Row]) -> str:
