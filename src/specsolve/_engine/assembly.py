@@ -18,7 +18,7 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere, settled
+from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
@@ -511,20 +511,17 @@ def declares_quadratic(c: program.Constraint) -> bool:
 
 
 def _with_wheres_settled(lowered: program.Program, attached: AttachedSources) -> program.Program:
-    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles.
+    """*lowered* with each variable's and constraint's ``where`` folded over the tests *attached* settled.
 
-    Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
-    not once per declaration. A ``where`` that folds to true is dropped, so
-    the declaration takes the path of one without a ``where``: dense labels,
-    and terms placed on their rows without a join. One that folds to false
-    is kept as that literal, and the declaration is skipped with no further
-    read. The program the model keeps is this one, so readback reads the
-    declarations it built. The tests read one parameter's table whole, so
-    they run on the in-memory engine whatever the model's size.
+    No test is read here: attaching read each once for the whole program
+    ([`AttachedSources`][specsolve._engine.attaching.AttachedSources]). A
+    ``where`` that folds to true is dropped, so the declaration takes the
+    path of one without a ``where``: dense labels, and terms placed on their
+    rows without a join. One that folds to false is kept as that literal,
+    and the declaration is skipped with no further read. The program the
+    model keeps is this one, so readback reads the declarations it built.
     """
-    declared = [*lowered.variables.values(), *lowered.constraints.values()]
-    with in_memory():
-        tests = settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+    tests = attached.settled
 
     def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
         out = {}

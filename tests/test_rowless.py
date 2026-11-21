@@ -339,6 +339,27 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
 
 
+def test_a_test_the_assumptions_and_the_build_share_is_read_once(monkeypatch):
+    """The assumptions and the declarations fold their `where` over one read of each test, made at attach.
+
+    Each read its own before, so a model gated on `cap > 2` in both read `cap`'s table twice.
+    """
+    reads, real = [], predicates._passing
+
+    def counted(scope, atom):
+        reads.append(atom)
+        return real(scope, atom)
+
+    monkeypatch.setattr(predicates, '_passing', counted)
+    spec = {
+        **TABLED_SPEC,
+        'constraints': {'probe': {'dims': ['g', 't'], 'where': 'cap > 2', 'expression': 'x >= 0'}},
+        'assumptions': {'positive': {'holds': 'cap > 0', 'where': 'cap > 2'}},
+    }
+    sps.build(spec, TABLED_SOURCES).close()
+    assert len(reads) == 1, f'`cap > 2` was read {len(reads)} times for one build'
+
+
 def test_a_build_with_assumptions_reports_the_time_its_attach_took():
     """The assumptions attach the sources before the engine runs, and the engine timed only an attach of its own.
 
