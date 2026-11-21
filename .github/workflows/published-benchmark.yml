@@ -42,7 +42,7 @@ jobs:
           SSH_KEY: ${{ vars.BENCH_SSH_KEY }}
         run: |
           if hcloud server describe "$BOX" >/dev/null 2>&1; then
-            hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
+            timeout 150 hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
             hcloud server delete "$BOX"
           fi
           hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" \
@@ -162,7 +162,7 @@ jobs:
           BOX: ${{ vars.BENCH_RUNNER }}
         run: |
           if hcloud server describe "$BOX" >/dev/null 2>&1; then
-            hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
+            timeout 150 hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
             for attempt in 1 2 3; do
               hcloud server delete "$BOX" && break
               echo "delete failed, retry $attempt"; sleep 15
