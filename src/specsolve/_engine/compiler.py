@@ -24,9 +24,9 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
-from specsolve._engine import dense
+from specsolve._engine import positional
 from specsolve._engine.attaching import refuse_a_negative_window
-from specsolve._engine.dense import Dense
+from specsolve._engine.positional import Positional
 from specsolve._engine.predicates import (
     Carrier,
     compile_predicate,
@@ -99,9 +99,9 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _held(values: dense.Values | None, frame: pl.LazyFrame) -> pl.LazyFrame | Dense:
+def _held(values: positional.Values | None, frame: pl.LazyFrame) -> pl.LazyFrame | Positional:
     """A constant leaf's body: held by position where *values* reads it there, *frame* otherwise."""
-    return frame if values is None else Dense(values, lambda: frame)
+    return frame if values is None else Positional(values, lambda: frame)
 
 
 def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
@@ -184,9 +184,9 @@ class Compiler:
         declaration = self.scope.program.parameters[param]
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
-        if not dense.covers(self.scope, param):
+        if not positional.covers(self.scope, param):
             return None
-        return frame.with_columns(dense.values(self.scope, param).alias(alias))
+        return frame.with_columns(positional.values(self.scope, param).alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -386,7 +386,9 @@ class Compiler:
         def ev(e: program.Expression) -> CompiledExpression:
             if isinstance(e, program.Constant):
                 frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
-                return CompiledExpression((), (Term((), _held(dense.constant(float(e.value)), frame), 'constant'),))
+                return CompiledExpression(
+                    (), (Term((), _held(positional.constant(float(e.value)), frame), 'constant'),)
+                )
             if isinstance(e, program.ParameterReference):
                 return CompiledExpression((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
@@ -463,7 +465,7 @@ class Compiler:
         frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
         present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
-        take = None if presences else dense.parameter(self.scope, name)
+        take = None if presences else positional.parameter(self.scope, name)
         return Term(dims, _held(take, frame), 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
@@ -475,14 +477,16 @@ class Compiler:
         presences = self._variable_presences(name, dims)
         return Term(dims, self._variable_body(name, frame, presences), 'linear', presences=presences)
 
-    def _variable_body(self, name: str, frame: pl.LazyFrame, presences: tuple[Presence, ...]) -> pl.LazyFrame | Dense:
+    def _variable_body(
+        self, name: str, frame: pl.LazyFrame, presences: tuple[Presence, ...]
+    ) -> pl.LazyFrame | Positional:
         """A variable's body at unit coefficient: held by position where its columns are, *frame* otherwise."""
-        columns = dense.variable(self.scope, name)
+        columns = positional.variable(self.scope, name)
         if columns is None:
             return frame
         held = self.scope.variables[name]
         absent = presences[0] if presences else None
-        return Dense(dense.unit, lambda: frame, columns, held.start + held.height - 1, absent)
+        return Positional(positional.unit, lambda: frame, columns, held.start + held.height - 1, absent)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""

@@ -108,7 +108,7 @@ def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], label: str, start: int
     )
 
 
-def at(scope: Scope, dims: tuple[str, ...], positions: pl.Series, label: str, start: int) -> pl.DataFrame:
+def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, label: str, start: int) -> pl.DataFrame:
     """[`frame`][]'s answer for the coordinates at *positions* in the product of *dims*, ascending, numbered from *start*.
 
     Each label is read off its dimension at the coordinate's ordinal, so the

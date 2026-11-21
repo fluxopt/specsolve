@@ -35,7 +35,7 @@ from tests.fixtures import (  # noqa: F401
 from tools import constructs
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -99,7 +99,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='read and write every file through pyarrow, as specsolve does where polars has no parquet',
     )
     parser.addoption(
-        '--terms-by-join',
+        '--by-join',
         action='store_true',
         default=False,
         help='read nothing by position, so the joins build every model the suite holds',
@@ -112,16 +112,22 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--terms-by-join``, nothing is read by position."""
+    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--by-join``, nothing is read by position."""
     if config.getoption('--parquet-via-pyarrow'):
         from specsolve import _parquet as parquet
 
         parquet._polars_has_parquet = cache(lambda: False)
-    if config.getoption('--terms-by-join'):
-        from specsolve._engine import dense
+    if config.getoption('--by-join'):
+        nothing_by_position()
 
-        dense.constant = dense.variable = lambda *args: None
-        dense.covers = lambda *args: False
+
+def nothing_by_position(put: Callable[[object, str, object], None] = setattr) -> None:
+    """Every read by position switched off. *put* sets an attribute: a test passes ``monkeypatch.setattr`` to have it undone."""
+    from specsolve._engine import positional
+
+    put(positional, 'constant', lambda *args: None)
+    put(positional, 'variable', lambda *args: None)
+    put(positional, 'covers', lambda *args: False)
 
 
 @pytest.fixture
@@ -132,10 +138,10 @@ def polars_parquet(request: pytest.FixtureRequest) -> None:
 
 
 @pytest.fixture
-def terms_by_position(request: pytest.FixtureRequest) -> None:
-    """Skip where ``--terms-by-join`` takes away the reading by position this test is about."""
-    if request.config.getoption('--terms-by-join'):
-        pytest.skip('--terms-by-join reads nothing by position, which this test is about')
+def read_by_position(request: pytest.FixtureRequest) -> None:
+    """Skip where ``--by-join`` takes away the reading by position this test is about."""
+    if request.config.getoption('--by-join'):
+        pytest.skip('--by-join reads nothing by position, which this test is about')
 
 
 # ---------------------------------------------------------------------------

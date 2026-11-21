@@ -177,7 +177,7 @@ leaves no model.
 constant term. A mask is a missing row, and broadcasting is a join.
 
 **A term over data with a row at every coordinate is also held by position**
-(`dense.py`). A coordinate's row-major position is then the key, and an
+(`positional.py`). A coordinate's row-major position is then the key, and an
 alignment is an index rather than a join. Such a term still carries its tidy
 frame, so an operator with no positional arm reads the frame and the term is a
 frame from there on. Negation, a product with a constant term, a constraint's
@@ -234,7 +234,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/predicates.py` | a `where:` mask as a boolean query |
 | `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
-| `_engine/dense.py` | a term held by position: a value at every coordinate of its dims, read by index |
+| `_engine/positional.py` | data read by position instead of joined, where it has a value at every coordinate of its dims |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |

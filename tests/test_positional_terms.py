@@ -1,7 +1,7 @@
 """A constraint whose terms are read by position is the model the joins build.
 
 Where a parameter has a row at every coordinate and a variable a column at
-most of them, a term is held by position (`_engine/dense.py`) and a constraint
+most of them, a term is held by position (`_engine/positional.py`) and a constraint
 places it on its rows by index. Each case here is built both ways and the
 written models compared, and each says which way the constraint was placed.
 """
@@ -15,12 +15,13 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, coverage, dense
+from specsolve._engine import assembly, coverage, positional
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Presence, Term
 from specsolve.errors import DataError, SpecsolveError
+from tests.conftest import nothing_by_position
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,7 +50,7 @@ SPEC = {
 }
 
 #: `i` has 40 labels so that `rare`, true at one coordinate of 80, leaves a
-#: variable masked by it past `dense.CELLS_PER_COLUMN` coordinates per column.
+#: variable masked by it past `positional.CELLS_PER_COLUMN` coordinates per column.
 LABELS = list(range(40))
 PAIR = ['p', 'q']
 SOURCES = {
@@ -69,7 +70,7 @@ SOURCES = {
 
 BY_POSITION, BY_JOIN = 'position', 'join'
 
-pytestmark = pytest.mark.usefixtures('terms_by_position')
+pytestmark = pytest.mark.usefixtures('read_by_position')
 
 
 def _built(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, list[str]]:
@@ -93,17 +94,10 @@ def _built(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatc
     return path.read_text(), placed
 
 
-def nothing_by_position(patched: pytest.MonkeyPatch) -> None:
-    """Every read by position switched off, as ``--terms-by-join`` switches it off for the suite."""
-    patched.setattr(dense, 'constant', lambda *args: None)
-    patched.setattr(dense, 'variable', lambda *args: None)
-    patched.setattr(dense, 'covers', lambda *args: False)
-
-
 def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """The model as the join path writes it, no leaf being held by position."""
     with monkeypatch.context() as patched:
-        nothing_by_position(patched)
+        nothing_by_position(patched.setattr)
         text, placed = _built(spec, sources, path, monkeypatch)
     assert BY_POSITION not in placed, 'with no leaf held by position, no constraint is placed by it'
     return text
@@ -292,7 +286,7 @@ def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: py
     for label, by_join in (('by position', False), ('by join', True)):
         with monkeypatch.context() as patched:
             if by_join:
-                nothing_by_position(patched)
+                nothing_by_position(patched.setattr)
             with sps.build(spec, SOURCES) as model:
                 omissions = model.diagnostics().omissions.to_dicts()
         counts[label] = {r['constraint']: r['rows_not_built'] for r in omissions}
@@ -318,7 +312,7 @@ def test_rows_labelled_from_their_positions_read_back_at_the_coordinates_the_joi
     for label, by_join in (('by position', False), ('by join', True)):
         with monkeypatch.context() as patched:
             if by_join:
-                nothing_by_position(patched)
+                nothing_by_position(patched.setattr)
             result = sps.solve(spec, SOURCES, outputs={'activity'})
         read[label] = (result.dual('row'), result.activity('row'))
     for by_position, by_join in zip(read['by position'], read['by join'], strict=True):
@@ -331,7 +325,7 @@ def test_a_coefficient_that_is_not_finite_is_refused_by_position_as_by_join(monk
     with pytest.raises(DataError, match="constraint 'row'") as by_position:
         sps.build(spec, sources)
     with monkeypatch.context() as patched:
-        nothing_by_position(patched)
+        nothing_by_position(patched.setattr)
         with pytest.raises(DataError, match="constraint 'row'") as by_join:
             sps.build(spec, sources)
     assert str(by_position.value) == str(by_join.value)
@@ -356,10 +350,10 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
         consecutive={'i': 0},
         given={},
     )
-    values = dense.parameter(Scope(program, data, {}), 'a')
+    values = positional.parameter(Scope(program, data, {}), 'a')
     assert values is not None, 'a table of three rows over three labels is taken for whole'
     with pytest.raises(SpecsolveError, match='does not cover'):
-        values(dense.At(('i',), {'i': 3}))
+        values(positional.Coordinates(('i',), {'i': 3}))
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:

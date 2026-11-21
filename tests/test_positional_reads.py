@@ -14,20 +14,19 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import dense
-
-from .test_positional_terms import nothing_by_position
+from specsolve._engine import positional
+from tests.conftest import nothing_by_position
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.usefixtures('terms_by_position', 'read_from_the_first_row')
+pytestmark = pytest.mark.usefixtures('read_by_position', 'read_from_the_first_row')
 
 
 @pytest.fixture
 def read_from_the_first_row(monkeypatch: pytest.MonkeyPatch) -> None:
     """The tables here hold a few dozen rows, far under the size from which a read by position pays."""
-    monkeypatch.setattr(dense, 'READ_BY_POSITION_FROM', 0)
+    monkeypatch.setattr(positional, 'READ_BY_POSITION_FROM', 0)
 
 
 LABELS = list(range(12))
@@ -68,21 +67,21 @@ SOURCES = {
 def _written(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[str, list[str]]:
     """The model as written, and the parameters read by position on the way, each once, sorted."""
     read: set[str] = set()
-    column = dense.column
+    column = positional.column
 
     def spied(scope, name: str) -> pl.Series:
         read.add(name)
         return column(scope, name)
 
     with monkeypatch.context() as patched:
-        patched.setattr(dense, 'column', spied)
+        patched.setattr(positional, 'column', spied)
         sps.write(spec, sources, path)
     return path.read_text(), sorted(read)
 
 
 def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     with monkeypatch.context() as patched:
-        nothing_by_position(patched)
+        nothing_by_position(patched.setattr)
         text, read = _written(spec, sources, path, monkeypatch)
     assert not read, 'with every read by position switched off, no parameter is read by it'
     return text
@@ -158,7 +157,7 @@ def test_a_table_out_of_order_is_read_by_position_at_the_right_rows(
 
 def test_a_table_too_small_to_be_worth_reading_is_joined(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """`on` spans 12 coordinates: reading its column costs a query of its own, which the join it saves does not repay."""
-    monkeypatch.setattr(dense, 'READ_BY_POSITION_FROM', 13)
+    monkeypatch.setattr(positional, 'READ_BY_POSITION_FROM', 13)
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i', 'j'], 'where': 'on and both', 'expression': 'x <= 5'}}}
     _, read = _written(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
     assert read == ['both'], f'{read} were read by position, and only `both` spans 13 coordinates or more'

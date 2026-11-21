@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Literal, NoReturn, assert_never
 import polars as pl
 from mathspec import program
 
-from specsolve._engine import dense
-from specsolve._engine.dense import Dense
+from specsolve._engine import positional
+from specsolve._engine.positional import Positional
 from specsolve._engine.scope import join_on
 from specsolve.errors import SpecsolveError
 
@@ -79,7 +79,7 @@ class Term:
     """One additive term of a compiled expression, over its own dims."""
 
     dims: tuple[str, ...]
-    body: pl.LazyFrame | Dense
+    body: pl.LazyFrame | Positional
     kind: Kind
 
     presences: tuple[Presence, ...] = ()
@@ -105,7 +105,7 @@ class Term:
     @property
     def frame(self) -> pl.LazyFrame:
         """The term as the join path reads it, whichever way it is held."""
-        return self.body.frame if isinstance(self.body, Dense) else self.body
+        return self.body.frame if isinstance(self.body, Positional) else self.body
 
     @property
     def value_column(self) -> str:
@@ -297,7 +297,7 @@ def negate(p: Term) -> Term:
     def tidy() -> pl.LazyFrame:
         return p.frame.with_columns(-pl.col(p.value_column))
 
-    return replace(p, body=dense.negated(p.body, tidy) if isinstance(p.body, Dense) else tidy())
+    return replace(p, body=positional.negated(p.body, tidy) if isinstance(p.body, Positional) else tidy())
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
@@ -316,7 +316,7 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
     so carried over unspelled it would name columns the frame does not hold.
     One already spelled out travels as the object it is, which is how a body
     held by position knows the presence is still its own
-    ([`Dense.stands_for`][specsolve._engine.dense.Dense.stands_for]).
+    ([`Positional.stands_for`][specsolve._engine.positional.Positional.stands_for]).
     """
     return tuple(x if x.keyed_by is not None else Presence(x.frame, p.dims) for x in p.presences)
 
@@ -344,9 +344,9 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
         out = value_column(kind)
         return joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
 
-    body: pl.LazyFrame | Dense
-    if not divide and isinstance(a.body, Dense) and isinstance(c.body, Dense):
-        body = dense.product(a.body, c.body, tidy)
+    body: pl.LazyFrame | Positional
+    if not divide and isinstance(a.body, Positional) and isinstance(c.body, Positional):
+        body = positional.product(a.body, c.body, tidy)
     else:
         body = tidy()
     if kind != 'constant':

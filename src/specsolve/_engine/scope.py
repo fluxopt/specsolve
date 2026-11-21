@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._engine import dense
+from specsolve._engine import positional
 from specsolve._names import VALUE
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ class Scope:
     variables: Mapping[str, Labelled]
     #: Each condition test the data settles at every coordinate, true or false, read once for the build.
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
-    #: Each column read by position, by what it holds and its name; [`dense`][specsolve._engine.dense] fills it.
+    #: Each column read by position, by what it holds and its name; [`positional`][specsolve._engine.positional] fills it.
     by_position: dict[tuple[str, str], pl.Series] = field(default_factory=dict)
     #: Whether each parameter asked about is zero at every row it has.
     _zero: dict[str, bool] = field(default_factory=dict)
@@ -108,7 +108,7 @@ class Scope:
         every row of *frame*, reading null where the parameter has no row, which a
         cross join with its empty table would not. A parameter with a row at
         every coordinate, and enough of them to be
-        [worth reading][specsolve._engine.dense.worth_reading], is read at
+        [worth reading][specsolve._engine.positional.worth_reading], is read at
         each row's [`position`][Scope.position] instead, which is what a left
         or an inner join of it finds, unless *by_position* is false.
         """
@@ -116,10 +116,10 @@ class Scope:
         assert not set(declaration.dims) - set(frame_dims), (
             f'{subject} has dims outside the frame dims {list(frame_dims)}'
         )
-        reads = by_position and how in ('left', 'inner') and dense.worth_reading(self, param)
+        reads = by_position and how in ('left', 'inner') and positional.worth_reading(self, param)
         position = self.position(declaration.dims) if reads else None
         if position is not None:
-            return frame.with_columns(pl.lit(dense.column(self, param)).gather(position).alias(alias))
+            return frame.with_columns(pl.lit(positional.column(self, param)).gather(position).alias(alias))
         table = self.data.parameters[param].rename({VALUE: alias})
         if not declaration.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})

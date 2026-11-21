@@ -34,10 +34,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2137](https://github.com/fluxopt/specsolve/pull/2137))
 - perf(engine): a variable times a parameter that is zero everywhere adds no term to the objective ([#2139](https://github.com/fluxopt/specsolve/pull/2139))
 - perf(engine): a constraint with a where reads it once when a parameter of its expression is absent at some rows ([#2141](https://github.com/fluxopt/specsolve/pull/2141))
-- perf(engine): a constraint whose terms have a value at every coordinate places them by position rather than by a join ([#2140](https://github.com/fluxopt/specsolve/pull/2140))
-- perf(engine): a constraint whose right-hand side has a value at every coordinate reads it by position rather than by a join ([#2142](https://github.com/fluxopt/specsolve/pull/2142))
-- perf(engine): a where or a bound over a large parameter with a row at every coordinate reads it by position rather than by a join ([#2146](https://github.com/fluxopt/specsolve/pull/2146))
-- refactor(engine): a build reads positions on polars' own threads and memory rather than through numpy ([#2149](https://github.com/fluxopt/specsolve/pull/2149))
+- perf(engine): a constraint, a where or a bound over data with a value at every coordinate reads it by position rather than by a join ([#2149](https://github.com/fluxopt/specsolve/pull/2149))
 
 ## 0.11.2 (2026-11-19)
 

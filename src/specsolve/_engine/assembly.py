@@ -16,9 +16,9 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
-from specsolve._engine import coverage, dense, labels
+from specsolve._engine import coverage, labels, positional
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.dense import Dense
+from specsolve._engine.positional import Positional
 from specsolve._engine.predicates import holds_nowhere
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.terms import Term, absence_restrictions
@@ -226,10 +226,10 @@ class Assembly:
             cells = math.prod(self.attached.cardinality[d] for d in dims)
             return pl.int_range(cells, dtype=pl.Int64, eager=True)
         position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
-        return labelled.select(position.alias(dense.POSITION), 'row').get_column(dense.POSITION)
+        return labelled.select(position.alias(positional.POSITION), 'row').get_column(positional.POSITION)
 
     def _placed_by_position(
-        self, linear: list[tuple[Dense, float]], dims: tuple[str, ...], labelled: pl.DataFrame | None, start: int
+        self, linear: list[tuple[Positional, float]], dims: tuple[str, ...], labelled: pl.DataFrame | None, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.Series]:
         """[`_placed_by_join`][]'s entries for terms held by position, the labelled rows they keep, and their positions.
 
@@ -240,20 +240,20 @@ class Assembly:
         of *dims*. Where the terms then drop some, the rows are labelled from
         the coordinates kept and the whole product is never a frame.
         """
-        positions, kept, entries = dense.placed(
-            linear, self._positions(dims, labelled), dense.At(dims, self.attached.cardinality)
+        positions, kept, entries = positional.placed(
+            linear, self._positions(dims, labelled), positional.Coordinates(dims, self.attached.cardinality)
         )
         if labelled is None and kept is None:
             labelled = labels.frame(self.scope, dims, None, 'row', start)
         elif labelled is None:
-            labelled = labels.at(self.scope, dims, positions, 'row', start)
+            labelled = labels.from_positions(self.scope, dims, positions, 'row', start)
         elif kept is not None:
             labelled = labels.renumbered(labelled.filter(kept), dims, 'row', start)
         return entries.select((pl.col('index') + start).alias('row'), 'col', 'coeff'), labelled, positions
 
     def _sides_by_position(
         self,
-        constant: list[tuple[Dense, float]],
+        constant: list[tuple[Positional, float]],
         c: program.Constraint,
         labelled: pl.DataFrame,
         positions: pl.Series | None,
@@ -265,11 +265,11 @@ class Assembly:
         at each, so no row is owed one and there is no coverage to check.
         """
         positions = self._positions(c.dims, labelled) if positions is None else positions
-        total = dense.summed(constant, dense.At(c.dims, self.attached.cardinality))
+        total = positional.summed(constant, positional.Coordinates(c.dims, self.attached.cardinality))
         sides = {
             'row': labelled.get_column('row'),
             'sense': pl.repeat(c.sense, labelled.height, dtype=_DTYPES['sense'], eager=True),
-            'rhs': pl.DataFrame({dense.POSITION: positions}).with_columns(total.alias('rhs')).get_column('rhs'),
+            'rhs': pl.DataFrame({positional.POSITION: positions}).with_columns(total.alias('rhs')).get_column('rhs'),
         }
         return pl.DataFrame(sides, schema={column: _DTYPES[column] for column in _ROWS})
 
@@ -375,7 +375,7 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         by_position = [
-            (p.body, sign) for p, sign in linear if isinstance(p.body, Dense) and p.body.stands_for(p.presences)
+            (p.body, sign) for p, sign in linear if isinstance(p.body, Positional) and p.body.stands_for(p.presences)
         ]
         positional = bool(linear) and len(by_position) == len(linear)
         restrictions = absence_restrictions(
@@ -407,7 +407,7 @@ class Assembly:
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        sides = [(p.body, sign) for p, sign in constant if isinstance(p.body, Dense)]
+        sides = [(p.body, sign) for p, sign in constant if isinstance(p.body, Positional)]
         if len(sides) == len(constant):
             rows = self._sides_by_position(sides, c, labelled, positions)
         else:
