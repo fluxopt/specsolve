@@ -112,8 +112,8 @@ def _check_bounds_are_defined(name: str, vdef: program.Variable, ctx: Evaluation
     owed = [ctx.dataset[p].isnull() for p in sorted(program.parameters_of(*stated)) if not ctx.absent(p)]
     if not owed:
         return
-    frame = xr.DataArray(True).expand_dims({d: ctx.master_coords[d] for d in vdef.dims})
-    missing = int((functools.reduce(operator.or_, owed) & frame & mask).sum())
+    table = xr.DataArray(True).expand_dims({d: ctx.master_coords[d] for d in vdef.dims})
+    missing = int((functools.reduce(operator.or_, owed) & table & mask).sum())
     if missing:
         raise DataError(null_bounds_message(name, missing))
 

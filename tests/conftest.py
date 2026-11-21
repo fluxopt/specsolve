@@ -147,10 +147,10 @@ def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
 
     One ``primal`` call: two separate calls are not promised to line up.
     """
-    frame = result.primal(name)
-    columns = [frame[dim] for dim in dims]
+    table = result.primal(name)
+    columns = [table[dim] for dim in dims]
     keys = columns[0] if len(dims) == 1 else zip(*columns, strict=True)
-    return dict(zip(keys, frame['value'], strict=True))
+    return dict(zip(keys, table['value'], strict=True))
 
 
 # ---------------------------------------------------------------------------

@@ -18,9 +18,9 @@ from mathspec.program import Parameter
 
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected, collected_all, in_memory
-from specsolve._frames import as_frame, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
+from specsolve._tables import as_table, is_dense_array, is_multi_indexed
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
+        sources[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
         sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
 
@@ -138,7 +138,7 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
     for name, source in data.items():
         if (
             isinstance(source, (str, Path))
-            and (table := as_frame(source)) is not None
+            and (table := as_table(source)) is not None
             and set(wanted[name]) <= set(table.collect_schema().names())
         ):
             scans[name] = table.select(wanted[name])
@@ -208,8 +208,8 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
         DataError: A table with no column named after the dimension, labels
             no table can be made of, a null label, or a label held twice.
     """
-    given = as_frame(source, (dim,))
-    table = given if given is not None else _labels_frame(dim, source, dtype)
+    given = as_table(source, (dim,))
+    table = given if given is not None else _labels_from_sequence(dim, source, dtype)
     available = table.collect_schema().names()
     if dim not in available:
         raise DataError(
@@ -275,7 +275,7 @@ _DECLARED: dict[str, pl.DataType] = {
 }
 
 
-def _labels_frame(dim: str, values: Source, dtype: str) -> pl.LazyFrame:
+def _labels_from_sequence(dim: str, values: Source, dtype: str) -> pl.LazyFrame:
     """A one-column labels table from a plain sequence of labels.
 
     An empty table takes the dimension's declared dtype: polars infers
@@ -325,12 +325,12 @@ def _refuse_a_relation_on_the_labels(program: Program, dim: str, source: Source)
             )
 
 
-def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
-    """*frame* with its datetime columns in microseconds, so a join or a membership test never meets two units.
+def in_microseconds(table: pl.DataFrame, owner: str, midnight: Collection[str] = ()) -> pl.DataFrame:
+    """*table* with its datetime columns in microseconds, so a join or a membership test never meets two units.
 
     Args:
-        frame: The table whose datetime columns are cast.
-        owner: What carried *frame*, as a refusal names it.
+        table: The table whose datetime columns are cast.
+        owner: What carried *table*, as a refusal names it.
         midnight: The columns whose dates are labels of a datetime dimension.
             A date there becomes the microsecond its day starts on, the same
             instant.
@@ -338,15 +338,15 @@ def in_microseconds(frame: pl.DataFrame, owner: str, midnight: Collection[str] =
     Raises:
         DataError: A label with a part below one microsecond, which the cast would drop.
     """
-    for column, dtype in frame.schema.items():
+    for column, dtype in table.schema.items():
         if isinstance(dtype, pl.Datetime) and dtype.time_unit == 'ns':
-            finer = frame[column].filter(frame[column].to_physical() % 1000 != 0)
+            finer = table[column].filter(table[column].to_physical() % 1000 != 0)
             if finer.len():
                 raise DataError(
                     f"{owner} holds '{column}' label(s) finer than a microsecond, such as {finer.cast(pl.String)[0]}. "
                     f"Round them before attaching: polars .dt.round('1us'), pandas .dt.round('us')."
                 )
-    return frame.with_columns(
+    return table.with_columns(
         cs.datetime().dt.cast_time_unit('us'), (cs.by_name(midnight) & cs.date()).cast(pl.Datetime('us'))
     )
 
@@ -387,7 +387,7 @@ def _unsupplied_relation_message(name: str, relation: Relation) -> str:
 
 def _column_names(source: Source, dim: str) -> frozenset[str]:
     """What a supplied labels table carries, or nothing where it is a bare label sequence."""
-    table = as_frame(source, (dim,))
+    table = as_table(source, (dim,))
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
@@ -440,7 +440,7 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
             carrying a null, or holding a row twice.
     """
     roles = list(relation.roles)
-    table = as_frame(source, tuple(roles))
+    table = as_table(source, tuple(roles))
     if table is None:
         raise DataError(
             f"relation '{name}': cannot adapt {type(source).__name__} to a table — pass any "
@@ -496,7 +496,7 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
 # ---------------------------------------------------------------------------
 
 
-def parameter_frame(
+def parameter_table(
     name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy table, whatever shape it took.
@@ -518,7 +518,7 @@ def parameter_frame(
             f"second claim about what '{name}' is over. Pass a tidy table carrying {[*p.dims, VALUE]} — "
             f'series.reset_index() is the whole change.'
         )
-    table = as_frame(obj, p.dims)
+    table = as_table(obj, p.dims)
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
 
 
@@ -535,7 +535,7 @@ def read_values(
         DataError: A table a parameter over the same dimensions would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, parameter_frame(name, declared, obj, labels, kind), labels, kind)
+    return _checked_parameter(name, declared, parameter_table(name, declared, obj, labels, kind), labels, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -553,7 +553,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
         least = min(map(float, obj), default=None)  # pyrefly: ignore[bad-argument-type]  — a parameter's sequence holds numbers; a label sequence is a dimension's
     else:
         least = (
-            parameter_frame(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
+            parameter_table(name, program.parameters[name], obj, {}).select(pl.col(VALUE).min()).pipe(collected).item()
         )
     return 0 if least is None else int(least)
 
@@ -614,10 +614,10 @@ def _broadcast(
     name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str
 ) -> pl.LazyFrame:
     """One number over every coordinate of *dims*."""
-    frame = pl.LazyFrame({'__one__': [0]})
+    table = pl.LazyFrame({'__one__': [0]})
     for dim in dims:
-        frame = frame.join(pl.LazyFrame({dim: _labels(name, dim, sources, kind)}), how='cross')
-    return frame.drop('__one__').with_columns(value.alias(VALUE))
+        table = table.join(pl.LazyFrame({dim: _labels(name, dim, sources, kind)}), how='cross')
+    return table.drop('__one__').with_columns(value.alias(VALUE))
 
 
 def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str) -> list[Label]:
@@ -661,17 +661,17 @@ def _checked_parameter(
             f'(need dimensions {list(p.dims)} plus {VALUE!r}; has {available}). Rename them to '
             f'the declared dimensions, or drop the index names to attach positionally.'
         )
-    frame = in_microseconds(
+    checked = in_microseconds(
         table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
     )
-    _check_one_row_per_coordinate(name, p, frame, sources, kind)
-    _check_values_are_present(name, p, frame, kind)
-    _check_value_dtype(name, p, frame, kind)
-    return frame.lazy()
+    _check_one_row_per_coordinate(name, p, checked, sources, kind)
+    _check_values_are_present(name, p, checked, kind)
+    _check_value_dtype(name, p, checked, kind)
+    return checked.lazy()
 
 
 def _check_one_row_per_coordinate(
-    name: str, p: Parameter, frame: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str, p: Parameter, table: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
 ) -> None:
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
 
@@ -679,10 +679,10 @@ def _check_one_row_per_coordinate(
     still missing is refused once every source is in.
     """
     if not p.dims:
-        if frame.height > 1 or (frame.height == 0 and p.missing == 'refused'):
+        if table.height > 1 or (table.height == 0 and p.missing == 'refused'):
             raise DataError(
                 f"{kind} '{name}' is declared with no dimensions, which means one value "
-                f'broadcast everywhere — but its source has {frame.height} rows. '
+                f'broadcast everywhere — but its source has {table.height} rows. '
                 f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
                 f'`missing:` to say what no row means.'
             )
@@ -690,15 +690,15 @@ def _check_one_row_per_coordinate(
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
     for d, labels in known.items():
-        _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
-    answers = frame.select(
+        _check_same_clock(f"{kind} '{name}'", d, d, table.schema[d], labels.dtype)
+    answers = table.select(
         pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
         *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
     ).row(0, named=True)
 
     for d, labels in known.items():
         if not answers[f'#known {d}']:
-            strangers = frame.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
+            strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
             raise DataError(
@@ -712,7 +712,7 @@ def _check_one_row_per_coordinate(
 
     if not answers['#duplicated']:
         return
-    duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
+    duplicated = table.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
         f'{coordinate_text({d: row[d] for d in p.dims})} ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
@@ -729,14 +729,14 @@ def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
     return pl.col(dim).is_in(labels.implode()).fill_null(False)
 
 
-def _check_values_are_present(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
+def _check_values_are_present(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read."""
     value = pl.col(VALUE)
-    holed = value.is_null() | value.is_nan() if frame.schema[VALUE].is_float() else value.is_null()
-    holes = int(frame.select(holed.sum()).item())
+    holed = value.is_null() | value.is_nan() if table.schema[VALUE].is_float() else value.is_null()
+    holes = int(table.select(holed.sum()).item())
     if not holes:
         return
-    shown = coordinates_text(p.dims, frame.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
+    shown = coordinates_text(p.dims, table.filter(holed).select(p.dims).head(3).rows()) if p.dims else ''
     at = f': {shown}' if shown else ''
     raise DataError(
         f"{kind} '{name}' carries {holes} row(s) with no value — null or NaN{at}. "
@@ -768,13 +768,13 @@ def declared_dtype_of(column: pl.DataType) -> str | None:
     return next((name for name, types in _COLUMNS.items() if column in types), None)
 
 
-def _check_value_dtype(name: str, p: Parameter, frame: pl.DataFrame, kind: str) -> None:
+def _check_value_dtype(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the entry claims.
 
     Asked after the holes, so a column of nothing but nulls — which polars
     types ``Null`` — is told it has no values rather than the wrong kind.
     """
-    column = frame.schema[VALUE]
+    column = table.schema[VALUE]
     if column in ACCEPTED_VALUE_TYPES[p.dtype]:
         return
     arrived = declared_dtype_of(column) or str(column)

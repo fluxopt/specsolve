@@ -747,10 +747,10 @@ def test_the_lane_refuses_an_expression_against_a_compiled_program(yaml_file):
 
 def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """One `sources` mapping of polars tables and a parquet path reaches either lane unchanged (#60)."""
-    frames = dispatch_table_inputs
+    tables = dispatch_table_inputs
     path = tmp_path / 'load.parquet'
-    frames['load'].write_parquet(path)
-    sources = {**frames, 'load': path}
+    tables['load'].write_parquet(path)
+    sources = {**tables, 'load': path}
 
     with differential(dispatch_yaml, sources) as run:
         assert run.result.primal('p').height, 'the relational lane built no rows'

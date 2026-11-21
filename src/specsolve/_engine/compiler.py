@@ -66,7 +66,7 @@ def _totalled(p: Term) -> pl.LazyFrame:
     A null term of a sum is a divisor's hole, so the total keeps it for the refusal.
     """
     total = pl.when(pl.col(CONSTANT).is_null().any()).then(None).otherwise(pl.col(CONSTANT).sum()).alias(CONSTANT)
-    return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
+    return p.table.group_by(p.dims).agg(total) if p.dims else p.table.select(total)
 
 
 def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
@@ -85,7 +85,7 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     dims = terms[0].dims
     if any(set(p.dims) != set(dims) or p.presences for p in terms):
         return terms
-    stacked = Term(dims, pl.concat([p.frame.select(*dims, CONSTANT) for p in terms]), 'constant')
+    stacked = Term(dims, pl.concat([p.table.select(*dims, CONSTANT) for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
@@ -97,8 +97,8 @@ def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
     a select of literals alone is length 1, so an absent scalar would come back present.
     """
     if dims:
-        return held.frame.select(*dims)
-    return held.frame.select(pl.col(index).alias(PRESENT))
+        return held.table.select(*dims)
+    return held.table.select(pl.col(index).alias(PRESENT))
 
 
 @dataclass(frozen=True)
@@ -130,9 +130,9 @@ class Compiler:
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, frame: pl.LazyFrame, variable: str, v: program.Variable) -> pl.LazyFrame:
-        """*frame* with ``lb``/``ub`` columns for the variable *variable* declares as *v*."""
-        carrier = Carrier(frame)
+    def bounds(self, table: pl.LazyFrame, variable: str, v: program.Variable) -> pl.LazyFrame:
+        """*table* with ``lb``/``ub`` columns for the variable *variable* declares as *v*."""
+        carrier = Carrier(table)
 
         def attach_bound(f: pl.LazyFrame, alias: str, name: str) -> pl.LazyFrame:
             aligned = self._aligned_bound(f, name, v, alias)
@@ -155,10 +155,10 @@ class Compiler:
             raise AssertionError(msg)
 
         lower, upper = bound(v.lower, -math.inf), bound(v.upper, math.inf)
-        return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
+        return carrier.table.with_columns(lower.alias('lb'), upper.alias('ub'))
 
-    def _aligned_bound(self, frame: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
-        """*frame* with *param* attached by position, or ``None`` to join.
+    def _aligned_bound(self, table: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
+        """*table* with *param* attached by position, or ``None`` to join.
 
         Position lines up only for a dense parameter over the dimensions of a
         variable without a condition, in order. Height stands in for density because
@@ -169,13 +169,13 @@ class Compiler:
             return None
 
         expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
-        table = self.scope.data.parameters[param]
-        if table.select(pl.len()).pipe(collected).item() != expected:
+        values = self.scope.data.parameters[param]
+        if values.select(pl.len()).pipe(collected).item() != expected:
             return None
 
         position = self.scope.row_major(v.dims, self.scope.ordinal_of)
-        pairs = table.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
-        return frame.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
+        pairs = values.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
+        return table.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -301,10 +301,10 @@ class Compiler:
                 keys = tuple(dict.fromkeys((*have, *on)))
                 complement = narrowed(self.scope, on, ~r.when)
                 if not keys:
-                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
+                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.table, complement)]
                     return Presence(pl.concat(marks).unique(), keys)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
-                widened = [self.scope.widen(x.frame, have, keys), self.scope.widen(elsewhere, on, keys)]
+                widened = [self.scope.widen(x.table, have, keys), self.scope.widen(elsewhere, on, keys)]
                 return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
 
             def kept(p: Term) -> Term:
@@ -315,16 +315,16 @@ class Compiler:
                 filters by its own constant instead.
                 """
                 if truth is None:
-                    carrier, condition = compile_condition(self.scope, p.frame, r.when, p.dims)
-                    frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
+                    carrier, condition = compile_condition(self.scope, p.table, r.when, p.dims)
+                    table = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                    return replace(p, frame=frame, presences=presences, region=both_regions(p.region, r.when))
+                    return replace(p, table=table, presences=presences, region=both_regions(p.region, r.when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
-                frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)
+                table = join_on(p.table, truth, shared, 'inner').select(*out_dims, *p.carried)
                 presences = tuple(relaxed(x, p.dims) for x in p.presences)
                 return replace(
-                    p, dims=out_dims, frame=frame, presences=presences, region=both_regions(p.region, r.when)
+                    p, dims=out_dims, table=table, presences=presences, region=both_regions(p.region, r.when)
                 )
 
             return map_terms(ev(r.value), kept)
@@ -345,8 +345,8 @@ class Compiler:
 
         def ev(e: program.Expression) -> CompiledExpression:
             if isinstance(e, program.Constant):
-                frame = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
-                return CompiledExpression((), (Term((), frame, 'constant'),))
+                table = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
+                return CompiledExpression((), (Term((), table, 'constant'),))
             if isinstance(e, program.ParameterReference):
                 return CompiledExpression((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
@@ -413,16 +413,16 @@ class Compiler:
     def _parameter_term(self, name: str) -> Term:
         """A parameter as a constant term, keyed by its declared dimensions, present only at its rows under ``missing: absent``."""
         dims = self.scope.program.parameters[name].dims
-        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
-        present = frame.select(*dims) if dims else frame.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
+        table = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
+        present = table.select(*dims) if dims else table.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
-        return Term(dims, frame, 'constant', presences=presences, parameters=frozenset({name}))
+        return Term(dims, table, 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
         dims = self.scope.program.variables[name].dims
-        frame = self.scope.variables[name].frame.select(*dims, COL, pl.lit(1.0, dtype=pl.Float64).alias(COEFF))
-        return Term(dims, frame, 'linear', presences=self._variable_presences(name, dims))
+        table = self.scope.variables[name].table.select(*dims, COL, pl.lit(1.0, dtype=pl.Float64).alias(COEFF))
+        return Term(dims, table, 'linear', presences=self._variable_presences(name, dims))
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
@@ -440,7 +440,7 @@ class Compiler:
         held, entry = self.scope.variables[name], self.scope.program.variables[name]
         dims = entry.dims
         keys = dims or (UNIT,)
-        rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias(CONSTANT))
+        rows = held.table.select(*keys).with_columns(held.share(self.solution.primal).alias(CONSTANT))
         if entry.where is not None and entry.missing == 'neutral':
             everywhere = narrowed(self.scope, dims, None).select(*keys)
             rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col(CONSTANT).fill_null(0.0))
@@ -458,8 +458,8 @@ class Compiler:
             assert solution.no_duals is not None, 'a solve without duals says why'
             raise SpecsolveError(solution.no_duals)
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
-        frame = held.valued(dims, solution.dual.alias(CONSTANT))
-        return Term(dims, frame, 'constant', presences=(Presence(_presence(held, dims, ROW), dims),))
+        table = held.valued(dims, solution.dual.alias(CONSTANT))
+        return Term(dims, table, 'constant', presences=(Presence(_presence(held, dims, ROW), dims),))
 
     def _read_divisor(self, divisor: Term) -> Term:
         """*divisor* absent wherever it is zero, which is how a reported quotient reads a zero divisor.
@@ -469,7 +469,7 @@ class Compiler:
         the divisor has: a divisor parameter short of a row stays a null for
         the refusal to find.
         """
-        zeros = divisor.frame.filter(pl.col(CONSTANT) == 0)
+        zeros = divisor.table.filter(pl.col(CONSTANT) == 0)
         if divisor.dims:
             present = narrowed(self.scope, divisor.dims, None).select(*divisor.dims)
             present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
@@ -488,7 +488,7 @@ class Compiler:
         """
         if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
             return compiled
-        return replace(compiled, constant=tuple(replace(p, frame=_totalled(p)) for p in compiled.constant))
+        return replace(compiled, constant=tuple(replace(p, table=_totalled(p)) for p in compiled.constant))
 
     def _added_up(
         self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
@@ -515,7 +515,7 @@ class Compiler:
         if len(terms) == 1 and terms[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return compiled
-            return CompiledExpression((), (replace(terms[0], frame=_totalled(terms[0])),))
+            return CompiledExpression((), (replace(terms[0], table=_totalled(terms[0])),))
         dims, restrictions = self.scope.spanned(terms), absence_restrictions(terms)
         carrier = narrowed(self.scope, dims, None)
         for restriction in restrictions:
@@ -579,8 +579,8 @@ class Compiler:
         if missing:
             refuse_a_term_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
-        frame = p.frame.select(*keep, *p.carried)
-        return self._empty_sums(Term(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
+        table = p.table.select(*keep, *p.carried)
+        return self._empty_sums(Term(keep, table, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
     def _group_term(self, p: Term, columns: program.JoinColumns, context: str) -> Term:
         """Relabel the dimensions the join drops to the ones it adds, through its relation.
@@ -610,12 +610,12 @@ class Compiler:
             return p
         if not p.dims:
             zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
-            return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
+            return replace(p, table=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
         first = self.scope.data.dimensions[p.dims[0]].select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
-        empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
+        empty = universe.join(p.table.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
-        return replace(p, frame=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
+        return replace(p, table=pl.concat([p.table.select(*p.dims, *p.carried), zeros]))
 
     def _at_term(self, p: Term, a: program.JoinColumns, context: str) -> Term:
         """Spread the dropped dimensions back out over the added ones — the adjoint of a group.
@@ -652,7 +652,7 @@ class Compiler:
                 return Presence(presence.restrict(reachable, keys), fine)
             carries_targets = all(i in keys for i in a.joined_dims)
             source, keys = (
-                (presence.frame, keys) if carries_targets else (self.scope.widen(presence.frame, keys, p.dims), p.dims)
+                (presence.table, keys) if carries_targets else (self.scope.widen(presence.table, keys, p.dims), p.dims)
             )
             return Presence(*walk_join(source, table, a, keys))
 
@@ -660,8 +660,8 @@ class Compiler:
 
     def _remap_term(self, p: Term, columns: program.JoinColumns) -> Term:
         """Trade the dimensions *columns* drops for the ones it adds, through its relation."""
-        frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
-        return Term(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+        table, dims = walk_join(p.table, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
+        return Term(dims, table, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
 
 
 def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:

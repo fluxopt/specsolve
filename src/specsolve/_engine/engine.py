@@ -330,7 +330,7 @@ class Engine:
         return Result(
             _status=answer.status,
             _objective=answer.objective,
-            _frames={
+            _tables={
                 'primal': primals,
                 'dual': duals,
                 **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},

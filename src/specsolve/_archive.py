@@ -256,17 +256,17 @@ def _attach_readers(answer: Result, spec: SpecLike, sources: Mapping[str, Source
     """
     if not answer.has_primal:
         return answer
-    frames = answer._readable('primal', 'the solution')
-    dual_frames = answer._readable('dual', 'the duals')
+    tables = answer._readable('primal', 'the solution')
+    dual_tables = answer._readable('dual', 'the duals')
     no_duals = answer._no_duals
     built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         if not built:
-            primals = {name: frame.pipe(collected) for name, frame in frames.items()}
+            primals = {name: table.pipe(collected) for name, table in tables.items()}
             duals = (
-                {name: frame.pipe(collected) for name, frame in dual_frames.items()}
-                if no_duals is None and dual_frames
+                {name: table.pipe(collected) for name, table in dual_tables.items()}
+                if no_duals is None and dual_tables
                 else None
             )
             built.append(build(spec, sources)._evaluator(primals, duals, no_duals))
@@ -299,14 +299,14 @@ def _per_slice(
     wherever a ``where`` reads the carried parameter.
     """
     program = as_program(spec)
-    solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
+    solved = {key: tables for _, key, tables in sweep._tables_by_slice(('primal', 'dual'))}
     slices, _ = axis._slice(program, sources, sweep.key_name)
     for current in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
-        frames = solved.get(current.key, {})
-        if not frames.get('primal'):
+        tables = solved.get(current.key, {})
+        if not tables.get('primal'):
             continue
         model = build(spec, current.sources)
-        yield current.key, model._evaluator(frames['primal'], frames['dual'] or None, sweep._no_duals)
+        yield current.key, model._evaluator(tables['primal'], tables['dual'] or None, sweep._no_duals)
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

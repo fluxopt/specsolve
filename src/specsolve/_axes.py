@@ -21,9 +21,9 @@ import polars.selectors as cs
 from mathspec.errors import did_you_mean
 
 from specsolve._collect import collected
-from specsolve._frames import as_frame
 from specsolve._names import VALUE
-from specsolve._sources import declared_dtype_of, dimension_labels, in_microseconds, least_value, parameter_frame
+from specsolve._sources import declared_dtype_of, dimension_labels, in_microseconds, least_value, parameter_table
+from specsolve._tables import as_table
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -65,12 +65,12 @@ class Stitch:
     dim: str
     horizon: pl.DataFrame
 
-    def unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
-        """Why *frame* has no answer over [`dim`][], or ``None`` where it has one.
+    def unstitchable(self, table: pl.DataFrame | pl.LazyFrame) -> str | None:
+        """Why *table* has no answer over [`dim`][], or ``None`` where it has one.
 
         A table with no [`dim`][] column is over no label of a window's horizon.
         """
-        if self.dim in frame.collect_schema().names():
+        if self.dim in table.collect_schema().names():
             return None
         return (
             f'this has no answer over {self.dim!r}: the quantity is not over the windowed dimension, so '
@@ -79,18 +79,18 @@ class Stitch:
             f'{self.dim!r} and aggregate its answer.'
         )
 
-    def restore[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F, key_name: str) -> F:
-        """*frame* without its key and its lookahead rows, sorted on the dimension the axis cut; lazy in, lazy out.
+    def restore[F: (pl.DataFrame, pl.LazyFrame)](self, table: F, key_name: str) -> F:
+        """*table* without its key and its lookahead rows, sorted on the dimension the axis cut; lazy in, lazy out.
 
         Raises:
-            SpecsolveError: *frame* is [`unstitchable`][].
+            SpecsolveError: *table* is [`unstitchable`][].
         """
-        if why := self.unstitchable(frame):
+        if why := self.unstitchable(table):
             raise SpecsolveError(why)
-        rest = [column for column in frame.collect_schema().names() if column not in (key_name, self.dim, VALUE)]
-        kept = frame.lazy().join(self.horizon.lazy(), on=[key_name, self.dim], how='semi')
+        rest = [column for column in table.collect_schema().names() if column not in (key_name, self.dim, VALUE)]
+        kept = table.lazy().join(self.horizon.lazy(), on=[key_name, self.dim], how='semi')
         stitched = kept.drop(key_name).sort(self.dim, *rest)
-        return stitched if isinstance(frame, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
+        return stitched if isinstance(table, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
 def bulleted(entries: Mapping[str, str]) -> str:
@@ -152,7 +152,7 @@ class EachLabel:
                 f'model does not have; EachWindow cuts one it does, and keeps it.'
             )
         for dim in program.dimensions:
-            table = as_frame(sources[dim]) if dim in sources else None
+            table = as_table(sources[dim]) if dim in sources else None
             if table is None or self.dim not in table.collect_schema().names():
                 continue
             raise DataError(
@@ -383,18 +383,18 @@ class CarryRule:
         return cls(variable, dropped[0] if dropped else None)
 
     def value_from(
-        self, frames: Mapping[str, pl.DataFrame], parameter: str, key: Label, horizon_end: Label | None
+        self, tables: Mapping[str, pl.DataFrame], parameter: str, key: Label, horizon_end: Label | None
     ) -> pl.DataFrame:
         """What this rule hands the next slice, read out of one slice's primals.
 
         The row handed on is the one at *horizon_end*, the last label of the
         slice's horizon, never a lookahead row.
         """
-        frame = frames[self.variable]
+        table = tables[self.variable]
         if self.dropped is None:
-            return frame
+            return table
         assert horizon_end is not None, 'a carry that drops a dimension is refused unless the axis windows it'
-        picked = frame.filter(pl.col(self.dropped) == horizon_end).drop(self.dropped)
+        picked = table.filter(pl.col(self.dropped) == horizon_end).drop(self.dropped)
         if picked.is_empty():
             raise SpecsolveError(
                 f'carry {parameter!r} <- {self.variable!r} has nothing to copy: slice {key!r} built no '
@@ -511,10 +511,10 @@ def _tables_over(
     found: dict[str, tuple[pl.LazyFrame, tuple[str, ...], str]] = {}
     for name, parameter in program.parameters.items():
         if dim in parameter.dims and name in sources and not isinstance(sources[name], (bool, int, float)):
-            found[name] = (parameter_frame(name, parameter, sources[name], listed), (dim,), 'parameter')
+            found[name] = (parameter_table(name, parameter, sources[name], listed), (dim,), 'parameter')
     for name, relation in program.relations.items():
         columns = tuple(role for role, over in relation.columns if over == dim)
-        if columns and name in sources and (table := as_frame(sources[name], relation.roles)) is not None:
+        if columns and name in sources and (table := as_table(sources[name], relation.roles)) is not None:
             found[name] = (table, columns, 'relation')
     out = {}
     for name, (table, columns, kind) in found.items():
@@ -555,7 +555,7 @@ def _in_microseconds(table: pl.LazyFrame, columns: Sequence[str]) -> pl.LazyFram
 
 def sources_with_column(sources: Mapping[str, Source], dim: str) -> dict[str, pl.LazyFrame]:
     """The sources that carry a column called *dim*, by name; an [`EachLabel`][] sweep and its archive both cut these."""
-    tables = {name: table for name, obj in sources.items() if (table := as_frame(obj)) is not None}
+    tables = {name: table for name, obj in sources.items() if (table := as_table(obj)) is not None}
     return {name: table for name, table in tables.items() if dim in table.collect_schema().names()}
 
 

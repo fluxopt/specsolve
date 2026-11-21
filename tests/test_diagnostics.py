@@ -240,8 +240,8 @@ def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
-    def ratio(frame):
-        return frame.select((pl.col('largest') / pl.col('smallest')).max()).item()
+    def ratio(table):
+        return table.select((pl.col('largest') / pl.col('smallest')).max()).item()
 
     assert ratio(seen.coefficient_range) == 1.0, 'every coefficient in this model is 1'
     assert ratio(seen.bound_range) == pytest.approx(2e7), 'the bounds are the fault, and only this field says so'

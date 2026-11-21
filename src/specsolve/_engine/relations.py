@@ -69,13 +69,13 @@ def landed(mapping: pl.LazyFrame, columns: program.JoinColumns) -> pl.LazyFrame:
 
 
 def walk_join(
-    frame: pl.LazyFrame,
+    table: pl.LazyFrame,
     mapping: pl.LazyFrame,
     columns: program.JoinColumns,
     have: Sequence[str],
     carried: Sequence[str] = (),
 ) -> tuple[pl.LazyFrame, tuple[str, ...]]:
-    """*frame* traded through *mapping*: one inner equi-join, and the dimensions the result is over.
+    """*table* traded through *mapping*: one inner equi-join, and the dimensions the result is over.
 
     The result keeps *have* less the dropped dimensions, gains the added ones, and
     keeps *carried*. A self-map drops and adds one dimension, so the two are
@@ -83,7 +83,7 @@ def walk_join(
     """
     gained = columns.added_dims
     keep = [d for d in have if d not in columns.dropped_dims]
-    traded = frame.join(mapping, on=list(columns.joined_dims), how='inner').select(
+    traded = table.join(mapping, on=list(columns.joined_dims), how='inner').select(
         *keep, *(pl.col(landing(d)).alias(d) for d in gained), *carried
     )
     return traded, (*keep, *gained)

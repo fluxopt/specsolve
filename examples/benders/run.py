@@ -65,7 +65,7 @@ def slice_for(spec, **extra):
     models says which slice it means.
     """
     known = {**spec.parameters, **spec.dimensions}
-    return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
+    return {name: table for name, table in {**SOURCES, **extra}.items() if name in known}
 
 
 EMPTY = {

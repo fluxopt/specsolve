@@ -128,9 +128,9 @@ def test_activity_gates_the_curve_off(nonconvex_inputs):
             assert cost[s] == pytest.approx(expected, abs=1e-6)
 
 
-def _of(frame, generator):
+def _of(table, generator):
     """One generator's breakpoint values, in order — the tidy-table `xs`."""
-    return frame.loc[frame['generator'] == generator, 'value'].to_numpy()
+    return table.loc[table['generator'] == generator, 'value'].to_numpy()
 
 
 def test_breakpoints_may_vary_along_another_dim():

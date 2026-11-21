@@ -70,7 +70,7 @@ class Scope:
         Each cross join keeps its left side's order, then its right's, so the
         product arrives row-major, which is index order, on either engine; the
         streaming engine otherwise picks which side it buffers from the
-        tables' sizes, and the order with it. [`indices.frame`][] verifies it.
+        tables' sizes, and the order with it. [`indices.table`][] verifies it.
         The empty product is one real row carrying only [`UNIT`][], so a
         ``where`` on a scalar entry has a row to filter.
         """
@@ -84,28 +84,28 @@ class Scope:
 
     def parameter_join(
         self,
-        frame: pl.LazyFrame,
+        table: pl.LazyFrame,
         param: str,
-        frame_dims: tuple[str, ...],
+        table_dims: tuple[str, ...],
         alias: str,
         subject: str,
         how: JoinStrategy = 'left',
         maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
-        """Join *param* onto *frame*, its value column renamed to *alias*.
+        """Join *param* onto *table*, its value column renamed to *alias*.
 
-        A parameter over a dimension *frame* lacks would be reduced over it, so
+        A parameter over a dimension *table* lacks would be reduced over it, so
         that is refused, naming *subject*. A left join of a parameter over no
-        dimensions keeps every row of *frame*, reading null where the parameter
+        dimensions keeps every row of *table*, reading null where the parameter
         has no row, which a cross join with its empty table would not.
         """
         entry = self.program.parameters[param]
-        assert not set(entry.dims) - set(frame_dims), f'{subject} has dimensions outside {list(frame_dims)}'
-        table = self.data.parameters[param].rename({VALUE: alias})
+        assert not set(entry.dims) - set(table_dims), f'{subject} has dimensions outside {list(table_dims)}'
+        values = self.data.parameters[param].rename({VALUE: alias})
         if not entry.dims and how == 'left':
-            null = pl.LazyFrame({alias: [None]}, schema={alias: table.collect_schema()[alias]})
-            table = pl.concat([table, null]).head(1)
-        return join_on(frame, table, entry.dims, how, maintain_order)
+            null = pl.LazyFrame({alias: [None]}, schema={alias: values.collect_schema()[alias]})
+            values = pl.concat([values, null]).head(1)
+        return join_on(table, values, entry.dims, how, maintain_order)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
@@ -141,11 +141,11 @@ class Scope:
         """
         return self.spread(presence, [d for d in want if d not in have]).select(*want)
 
-    def spread(self, frame: pl.LazyFrame, dims: Iterable[str]) -> pl.LazyFrame:
-        """*frame* repeated at every label of each of *dims*, which it does not carry."""
+    def spread(self, table: pl.LazyFrame, dims: Iterable[str]) -> pl.LazyFrame:
+        """*table* repeated at every label of each of *dims*, which it does not carry."""
         for d in dims:
-            frame = frame.join(self.data.dimensions[d].select(pl.col(LABEL).alias(d)), how='cross')
-        return frame
+            table = table.join(self.data.dimensions[d].select(pl.col(LABEL).alias(d)), how='cross')
+        return table
 
     def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:
         """The dimensions *terms* carry between them, in the order the file declares them."""

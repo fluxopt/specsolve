@@ -93,7 +93,7 @@ def test_two_rows_that_conflict_with_no_bound_between_them(solver_name: str) -> 
     with sps.build(TWO_ROWS, TWO_ROWS_SOURCES) as model:
         model.solve(solver_name)
         found = model.infeasible_subsystem()
-    assert {name: frame.to_dicts() for name, frame in found.constraints.items()} == {
+    assert {name: table.to_dicts() for name, table in found.constraints.items()} == {
         'demand': [{'snapshot': 0, 'sense': '>=', 'rhs': 3.0}],
         'limit': [{'snapshot': 0, 'sense': '<=', 'rhs': 1.0}],
     }, 'snapshot 0 asks at least 3 and at most 1; snapshot 1 is slack'

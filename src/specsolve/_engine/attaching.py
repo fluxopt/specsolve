@@ -69,7 +69,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     """
     started = perf_counter()
     with in_memory():
-        dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
+        dimensions = {d: _ordinal_table(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
         parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
@@ -81,11 +81,11 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         if casts:
             relations[name] = relations[name].with_columns(casts)
     for name, p in program.parameters.items():
-        frame = _plain_strings(parameters[name], p.dims)
+        table = _plain_strings(parameters[name], p.dims)
         casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
         if p.dtype == 'float':
             casts.append(pl.col(VALUE).cast(pl.Float64))
-        parameters[name] = frame.with_columns(casts) if casts else frame
+        parameters[name] = table.with_columns(casts) if casts else table
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
@@ -100,10 +100,10 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         if p.missing == 'refused':
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
             continue
-        frame = parameters[name]
-        if frame.height < math.prod(dimensions[d].height for d in p.dims):
-            given[name] = frame.select(*p.dims).lazy()
-            parameters[name] = _filled(frame, p.dims, p.missing, dimensions)
+        table = parameters[name]
+        if table.height < math.prod(dimensions[d].height for d in p.dims):
+            given[name] = table.select(*p.dims).lazy()
+            parameters[name] = _filled(table, p.dims, p.missing, dimensions)
 
     return AttachedSources(
         parameters={name: f.lazy() for name, f in parameters.items()},
@@ -132,10 +132,10 @@ def _product(
     columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.LazyFrame:
     """Every combination of the labels of the dimension under each of *columns*, one column per name."""
-    frames = [dimensions[dim(column)].lazy().select(pl.col(LABEL).alias(column)) for column in columns]
-    product = frames[0]
-    for frame in frames[1:]:
-        product = product.join(frame, how='cross', maintain_order='left_right')
+    tables = [dimensions[dim(column)].lazy().select(pl.col(LABEL).alias(column)) for column in columns]
+    product = tables[0]
+    for table in tables[1:]:
+        product = product.join(table, how='cross', maintain_order='left_right')
     return product
 
 
@@ -163,20 +163,20 @@ def _refuse_a_missing_row(
 
 
 def _filled(
-    frame: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
+    table: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.DataFrame:
-    """*frame* with a row at every coordinate of *dims*, *value* where the data has none.
+    """*table* with a row at every coordinate of *dims*, *value* where the data has none.
 
     The rows come back in label order, so a sum over them adds its terms in
     the same order at every build.
     """
     if not dims:
-        return frame if frame.height else pl.DataFrame({VALUE: [value]}, schema={VALUE: frame.schema[VALUE]})
+        return table if table.height else pl.DataFrame({VALUE: [value]}, schema={VALUE: table.schema[VALUE]})
     product = _product(dims, lambda d: d, dimensions)
-    filled = product.join(frame.lazy(), on=list(dims), how='left', maintain_order='left').with_columns(
+    filled = product.join(table.lazy(), on=list(dims), how='left', maintain_order='left').with_columns(
         pl.col(VALUE).fill_null(value)
     )
-    return filled.select(*dims, pl.col(VALUE).cast(frame.schema[VALUE])).pipe(collected)
+    return filled.select(*dims, pl.col(VALUE).cast(table.schema[VALUE])).pipe(collected)
 
 
 def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
@@ -188,14 +188,14 @@ def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
     return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
 
 
-def _ordinal_frame(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
+def _ordinal_table(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
     """A dimension's ``(val, ord)`` from its labels, a label's ordinal being its row."""
     return labels.with_row_index(POSITION).select(pl.col(d).alias(LABEL), pl.col(POSITION).cast(pl.Int64))
 
 
-def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:
+def _plain_strings(table: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:
     """Dimension columns as plain strings, so a writer's own dictionary cannot block the cast into an ``Enum``."""
-    categorical = [d for d, dtype in frame.schema.items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
+    categorical = [d for d, dtype in table.schema.items() if d in dims and dtype in (pl.Categorical, pl.Enum)]
     if not categorical:
-        return frame
-    return frame.with_columns(pl.col(d).cast(pl.String) for d in categorical)
+        return table
+    return table.with_columns(pl.col(d).cast(pl.String) for d in categorical)

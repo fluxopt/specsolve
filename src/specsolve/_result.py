@@ -21,7 +21,7 @@ from specsolve._answer_layout import (
     read_outputs,
     read_reasons,
     read_spec,
-    saved_frames,
+    saved_tables,
     write_format,
     write_reasons,
     write_spec,
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter
+    from specsolve._answer_layout import TableWriter
     from specsolve._status import SolveStatus
 
 
@@ -64,7 +64,7 @@ _NEEDS_THE_EXTRA = (
 )
 
 
-def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
+def tidy_to_pandas(table: pl.DataFrame) -> pd.DataFrame:
     """A tidy polars table as pandas, column by column.
 
     Raises:
@@ -75,10 +75,10 @@ def tidy_to_pandas(frame: pl.DataFrame) -> pd.DataFrame:
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(_NEEDS_THE_EXTRA.format(module='pandas')) from exc
 
-    return pd.DataFrame({column: frame[column].to_numpy() for column in frame.columns})
+    return pd.DataFrame({column: table[column].to_numpy() for column in table.columns})
 
 
-def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
+def tidy_to_dataarray(table: pd.DataFrame, name: str) -> xr.DataArray:
     """A tidy table as an ``xarray.DataArray``, labelled by its non-``value`` columns.
 
     A scalar entry has none and comes back 0-dimensional.
@@ -89,10 +89,10 @@ def tidy_to_dataarray(frame: pd.DataFrame, name: str) -> xr.DataArray:
     if importlib.util.find_spec('xarray') is None:
         raise ModuleNotFoundError(_NEEDS_THE_EXTRA.format(module='xarray'))
 
-    dims = [column for column in frame.columns if column != VALUE]
+    dims = [column for column in table.columns if column != VALUE]
     if not dims:
-        return frame[VALUE].to_xarray().rename(name)
-    return frame.set_index(dims).to_xarray()[VALUE].rename(name)
+        return table[VALUE].to_xarray().rename(name)
+    return table.set_index(dims).to_xarray()[VALUE].rename(name)
 
 
 def tidy_to_dataset(names: Sequence[str], one: Callable[[str], xr.DataArray]) -> xr.Dataset:
@@ -210,15 +210,15 @@ class InfeasibleSubsystem:
     def __str__(self) -> str:
         """``balance[snapshot=1] == 200``, then ``p[snapshot=1, tech=gas] <= 100 (upper bound)``."""
         lines = [
-            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} {member["sense"]} {_number(member["rhs"])}'
-            for name, frame in self.constraints.items()
-            for member in frame.iter_rows(named=True)
+            f'{_named_at(name, {d: member[d] for d in table.columns[:-2]})} {member["sense"]} {_number(member["rhs"])}'
+            for name, table in self.constraints.items()
+            for member in table.iter_rows(named=True)
         ]
         lines += [
-            f'{_named_at(name, {d: member[d] for d in frame.columns[:-2]})} '
+            f'{_named_at(name, {d: member[d] for d in table.columns[:-2]})} '
             f'{_BOUND_SENSE[member["bound"]]} {_number(member["value"])} ({member["bound"]} bound)'
-            for name, frame in self.bounds.items()
-            for member in frame.iter_rows(named=True)
+            for name, table in self.bounds.items()
+            for member in table.iter_rows(named=True)
         ]
         return '\n'.join(lines)
 
@@ -315,11 +315,11 @@ class Diagnostics:
         )
 
 
-def _named(frames: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
+def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
     try:
-        return frames[name]
+        return tables[name]
     except KeyError:
-        raise KeyError(unknown_name_message(kind, name, frames)) from None
+        raise KeyError(unknown_name_message(kind, name, tables)) from None
 
 
 @dataclass(frozen=True)
@@ -366,17 +366,17 @@ class Result:
 
     _status: SolveStatus
     _objective: float
-    #: ``{kind: {name: frame}}``: one ``(dims…, value)`` table per entry,
+    #: ``{kind: {name: table}}``: one ``(dims…, value)`` table per entry,
     #: lazy and in index order, under ``primal``, ``dual`` and each of the
     #: [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS] the solve asked
     #: for. Its keys are what this answer carries; a kind of which the solve
     #: left nothing maps to nothing. ``None`` after [`close`][], which is what
     #: "closed" means.
-    _frames: Mapping[str, Mapping[str, pl.LazyFrame]] | None
+    _tables: Mapping[str, Mapping[str, pl.LazyFrame]] | None
     #: What [`evaluate`][] reads through. ``None`` after [`close`][].
     _expressions: Expressions | None = field(default_factory=Expressions)
     #: Why there are no duals, when a solve that left values still has none.
-    #: ``None`` whenever [`_frames`][] holds them.
+    #: ``None`` whenever [`_tables`][] holds them.
     _no_duals: str | None = None
     #: One ``(dims…, value)`` table per constraint, laid out exactly as the
     #: duals, carrying the certificate an infeasible solve left.
@@ -469,18 +469,18 @@ class Result:
 
     def _unclosed(self, what: str) -> Mapping[str, Mapping[str, pl.LazyFrame]]:
         """Every table held, by kind, or why nothing here can be read: this result was closed."""
-        if self._frames is None:
+        if self._tables is None:
             raise SpecsolveError(
                 f'cannot read {what}: this result was closed, and closing releases its values and its '
                 f'hold on the coordinates they lay out over. Tables already read stay valid — they are '
                 f'their own data — so read what you need before close(), or drop the `with` and close '
                 f'when you are done.'
             )
-        return self._frames
+        return self._tables
 
     def _readable(self, kind: str, what: str) -> Mapping[str, pl.LazyFrame]:
         """The tables of *kind*, one this answer carries, or why they cannot be read — closed first, then the status."""
-        frames = self._unclosed(what)[kind]
+        tables = self._unclosed(what)[kind]
         if not self._status.is_readable:
             wording = f' ({self._status.solver_wording})' if self._status.solver_wording else ''
             raise NoSolutionError(
@@ -490,7 +490,7 @@ class Result:
                 f'hands back a full-length vector of zeros either way and it is '
                 f'indistinguishable from an answer.'
             )
-        return frames
+        return tables
 
     def primal(self, name: str) -> pl.DataFrame:
         """The tidy solution of variable *name* — ``(dims…, value)``.
@@ -503,8 +503,8 @@ class Result:
             SpecsolveError: This result was closed.
             KeyError: No variable is called *name*.
         """
-        frames = self._readable('primal', f"the primal of '{name}'")
-        return _named(frames, name, 'variable').pipe(collected)
+        tables = self._readable('primal', f"the primal of '{name}'")
+        return _named(tables, name, 'variable').pipe(collected)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -527,10 +527,10 @@ class Result:
                 them.
             KeyError: No constraint is called *name*.
         """
-        frames = self._readable('dual', f"the dual of '{name}'")
+        tables = self._readable('dual', f"the dual of '{name}'")
         if self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        return _named(frames, name, 'constraint').pipe(collected)
+        return _named(tables, name, 'constraint').pipe(collected)
 
     def reduced_cost(self, name: str) -> pl.DataFrame:
         """Reduced costs of variable *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -663,8 +663,8 @@ class Result:
         """
         given = {'primal': self._readable('primal', 'the values to start from')}
         for kind in BASES:
-            if frames := self._unclosed('the basis to start from').get(kind):
-                given[kind] = frames
+            if tables := self._unclosed('the basis to start from').get(kind):
+                given[kind] = tables
         return given
 
     def _output(self, kind: str, name: str) -> pl.DataFrame:
@@ -682,12 +682,12 @@ class Result:
         what = f"the {kind.replace('_', ' ')} of '{name}'"
         if kind not in self._unclosed(what):
             raise SpecsolveError(not_requested_message(kind, name))
-        frames = self._readable(kind, what)
+        tables = self._readable(kind, what)
         if kind in PRICED and self._no_duals is not None:
             raise SpecsolveError(self._no_duals)
-        if kind in BASES and not frames:
+        if kind in BASES and not tables:
             raise SpecsolveError(NO_BASIS)
-        return frames
+        return tables
 
     def evaluate(self, expression: str | Mapping[str, object]) -> pl.DataFrame:
         """The value of *expression* at this solution — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -720,7 +720,7 @@ class Result:
         assert self._expressions is not None, 'close() releases the expression readers together with the tables'
         return self._expressions
 
-    def _frame(self, name: str, kind: str) -> pl.DataFrame:
+    def _table(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
         kind = checked_kind(kind)
         if kind in OUTPUT_KINDS:
@@ -739,10 +739,10 @@ class Result:
         if checked_kind(kind) == 'primal':
             return tuple(self._readable('primal', 'the solution'))
         if kind == 'dual':
-            frames = self._readable('dual', 'the duals')
+            tables = self._readable('dual', 'the duals')
             if self._no_duals is not None:
                 raise SpecsolveError(self._no_duals)
-            return tuple(frames)
+            return tuple(tables)
         if kind in OUTPUT_KINDS:
             return tuple(self._carried(kind, 'anything'))
         self._readable('primal', 'the expressions')
@@ -756,7 +756,7 @@ class Result:
         [`Output`][specsolve.types.Output] the solve was asked for. Needs pandas, which specsolve does not install; the xarray
         bridges need xarray too.
         """
-        return tidy_to_pandas(self._frame(name, kind))
+        return tidy_to_pandas(self._table(name, kind))
 
     def to_dataarray(self, name: str, kind: str = 'primal') -> xr.DataArray:
         """One name's values as a labelled `xarray.DataArray`, [`to_pandas`][]'s arguments.
@@ -810,7 +810,7 @@ class Result:
         parquet.require('Result.save')
         return self._save(Path(directory), write_whole)
 
-    def _save(self, out: Path, write: FrameWriter) -> Path:
+    def _save(self, out: Path, write: TableWriter) -> Path:
         """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
         import polars as pl
 
@@ -824,15 +824,15 @@ class Result:
         write(pl.DataFrame([record._asdict()], schema_overrides=RECORD_SCHEMA), out / RECORD_FILE)
         if not self._status.is_readable:
             return out
-        held, no_expressions = self._all_frames()
-        for kind, frames in held.items():
-            for name, frame in frames.items():
-                write(frame, out / kind / f'{name}.parquet')
+        held, no_expressions = self._all_tables()
+        for kind, tables in held.items():
+            for name, table in tables.items():
+                write(table, out / kind / f'{name}.parquet')
         write_reasons(out, self._no_duals, {'expression': no_expressions}, write)
         return out
 
-    def _all_frames(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
-        """``{kind: {name: frame}}`` for every kind this answer carries, and why each expression left out is.
+    def _all_tables(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
+        """``{kind: {name: table}}`` for every kind this answer carries, and why each expression left out is.
 
         What [`save`][] writes and a sweep keeps of a slice. The declared
         expressions are evaluated now, under ``expression``, and one this data
@@ -857,7 +857,7 @@ class Result:
         Tables already read stay valid. The model and the solver are the
         [`Model`][specsolve._api.Model]'s to close.
         """
-        self._frames = self._expressions = self._dual_rays = None
+        self._tables = self._expressions = self._dual_rays = None
 
     def __enter__(self) -> Result:
         return self
@@ -937,14 +937,14 @@ def _answer_under(out: Path, *, eager: bool) -> Result:
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
-        name: (lambda frame=frame: frame.pipe(collected))
-        for name, frame in saved_frames(out / 'expression', eager=eager).items()
+        name: (lambda table=table: table.pipe(collected))
+        for name, table in saved_tables(out / 'expression', eager=eager).items()
     }
     expressions.update({name: _absent(why) for name, why in absent.get('expression', {}).items()})
     return Result(
         status,
         objective,
-        {kind: saved_frames(out / kind, eager=eager) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
+        {kind: saved_tables(out / kind, eager=eager) for kind in ('primal', 'dual', *kinds_of(read_outputs(out)))},
         Expressions(expressions),
         _no_duals=no_duals,
         _spec=read_spec(out),

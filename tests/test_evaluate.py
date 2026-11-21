@@ -58,9 +58,9 @@ def evaluate(expression: str | dict) -> pl.DataFrame:
 
 
 def test_a_scalar_expression_is_the_arithmetic_the_data_implies():
-    frame = evaluate('total_cost')
-    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dimensions is a single value row'
-    assert frame.item() == pytest.approx(635.0), 'sum(dispatch * cost) is 10·1 + 2·50 + 20·1 + 3·50 + 5·1 + 7·50 = 635'
+    table = evaluate('total_cost')
+    assert table.columns == ['value'] and table.height == 1, 'an expression with no dimensions is a single value row'
+    assert table.item() == pytest.approx(635.0), 'sum(dispatch * cost) is 10·1 + 2·50 + 20·1 + 3·50 + 5·1 + 7·50 = 635'
 
 
 def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
@@ -71,11 +71,11 @@ def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
 
 
 def test_a_grouped_sum_relabels_through_a_relation():
-    frame = evaluate('by_node').sort('snapshot', 'node')
-    assert frame.columns == ['snapshot', 'node', 'value'], (
+    table = evaluate('by_node').sort('snapshot', 'node')
+    assert table.columns == ['snapshot', 'node', 'value'], (
         'sum(over=generator, by=bus[node]) replaces generator with the node it maps to'
     )
-    got = {(s, n): v for s, n, v in frame.iter_rows()}
+    got = {(s, n): v for s, n, v in table.iter_rows()}
     assert got == pytest.approx(
         {(0, 'n1'): 10.0, (0, 'n2'): 2.0, (1, 'n1'): 20.0, (1, 'n2'): 3.0, (2, 'n1'): 5.0, (2, 'n2'): 7.0}
     ), 'each generator sits alone on its node, so the grouped value is its own dispatch'
@@ -90,8 +90,8 @@ def test_a_grouped_sum_relabels_through_a_relation():
     ],
 )
 def test_the_table_carries_exactly_the_dims_the_expression_survives_over(name, dims):
-    frame = evaluate(name)
-    assert set(frame.columns) - {'value'} == dims, (
+    table = evaluate(name)
+    assert set(table.columns) - {'value'} == dims, (
         'the returned table answers over the dimensions the expression still ranges over after its sums'
     )
 
@@ -158,8 +158,8 @@ def test_a_quotient_is_absent_where_its_divisor_is_zero():
     """With no solve the data is the only source of a zero, and the quotient has no row there; before #1775 it read `inf`."""
     spec = {**SPEC, 'parameters': {**SPEC['parameters'], 'weight': {'dims': ['generator']}}}
     data = sources() | {'weight': pl.DataFrame({'generator': GENERATORS, 'value': [2.0, 0.0]})}
-    frame = sps.evaluate(spec, data, 'cost / weight')
-    assert dict(zip(frame['generator'], frame['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
+    table = sps.evaluate(spec, data, 'cost / weight')
+    assert dict(zip(table['generator'], table['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
         'gas divides by zero, so it has no row'
     )
 

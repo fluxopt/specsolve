@@ -190,9 +190,9 @@ def test_the_bridges_read_an_output_through_its_reader(answered, tmp_path: Path)
 def test_a_sweep_carries_the_activity_it_was_asked_for(answered, tmp_path: Path) -> None:
     """Every slice's activity, keyed by slice, as each slice's own solve reads it."""
     answer = answered(ACTIVITY, tmp_path)
-    for scenario, frame in answer.activity('balance').partition_by('scenario', as_dict=True).items():
+    for scenario, table in answer.activity('balance').partition_by('scenario', as_dict=True).items():
         loads = scenario_sources()['load'].filter(pl.col('scenario') == scenario[0]).sort('snapshot')
-        assert frame.sort('snapshot')['value'].to_list() == pytest.approx(loads['value'].to_list()), (
+        assert table.sort('snapshot')['value'].to_list() == pytest.approx(loads['value'].to_list()), (
             f'the activity of slice {scenario[0]!r} is its own load'
         )
     assert answer.scan('balance', kind='activity').collect().height == 12, 'three scenarios of four snapshots'

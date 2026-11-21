@@ -422,7 +422,7 @@ def test_a_relation_compares_against_a_label_the_target_lacks():
     """
     spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
     with sps.build(spec, NETWORK_SOURCES) as model:
-        surviving = model._engine._model.variables['f'].frame.select(pl.len()).collect().item()
+        surviving = model._engine._model.variables['f'].table.select(pl.len()).collect().item()
     assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
 
 

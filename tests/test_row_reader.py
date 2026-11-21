@@ -240,7 +240,7 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
         tables = model._engine._model.handoff
         for name in ('commit', 'balance'):
             block = model._engine._model.constraints[name]
-            coordinates = block.frame.collect()
+            coordinates = block.table.collect()
             for offset in range(block.height):
                 at = block.start + offset
                 given = tables.matrix_block(at, at + 1)

@@ -52,21 +52,21 @@ class Presence:
     them. A shift or window edge states a narrower one.
     """
 
-    frame: pl.LazyFrame
+    table: pl.LazyFrame
     keyed_by: tuple[str, ...] | None = None
 
     def keys(self, term_dims: tuple[str, ...]) -> tuple[str, ...]:
         """The columns this presence restricts by, for a term over *term_dims*."""
         return self.keyed_by if self.keyed_by is not None else term_dims
 
-    def restrict(self, frame: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
-        """Keep only the rows of *frame* this presence admits.
+    def restrict(self, table: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+        """Keep only the rows of *table* this presence admits.
 
         With no key, every row survives a present scalar and none an absent one.
         """
         if on:
-            return frame.join(self.frame.select(list(on)), on=list(on), how='semi')
-        return frame.join(self.frame.select(PRESENT), how='cross').drop(PRESENT)
+            return table.join(self.table.select(list(on)), on=list(on), how='semi')
+        return table.join(self.table.select(PRESENT), how='cross').drop(PRESENT)
 
 
 #: What a term carries: one variable, a product of two, or none.
@@ -78,7 +78,7 @@ class Term:
     """One additive term of a compiled expression, over its own dimensions."""
 
     dims: tuple[str, ...]
-    frame: pl.LazyFrame
+    table: pl.LazyFrame
     kind: Kind
 
     presences: tuple[Presence, ...] = ()
@@ -143,8 +143,8 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
     if not missing:
         return p
     out = scope.in_dimension_order((*p.dims, *missing))
-    frame = scope.spread(p.frame, missing).select(*out, *p.carried)
-    return replace(p, dims=out, frame=frame, presences=_keyed(p))
+    table = scope.spread(p.table, missing).select(*out, *p.carried)
+    return replace(p, dims=out, table=table, presences=_keyed(p))
 
 
 #: The column-index columns each kind carries, in the order a projection keeps them.
@@ -177,8 +177,8 @@ class CompiledExpression:
 def constant_scalar(p: Term) -> pl.LazyFrame:
     """The constant term summed per coordinate: ``(dims…, CONSTANT)``."""
     if not p.dims:
-        return p.frame.select(pl.col(CONSTANT).sum())
-    return p.frame.group_by(p.dims).agg(pl.col(CONSTANT).sum())
+        return p.table.select(pl.col(CONSTANT).sum())
+    return p.table.group_by(p.dims).agg(pl.col(CONSTANT).sum())
 
 
 def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
@@ -186,7 +186,7 @@ def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
 
     Each leaves with its key spelled out, since indexing cannot know the term it came from.
     """
-    return [Presence(x.frame, x.keys(p.dims)) for p in terms for x in p.presences]
+    return [Presence(x.table, x.keys(p.dims)) for p in terms for x in p.presences]
 
 
 #: How a node's output rows relate to its input slots.
@@ -248,7 +248,7 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
         return compiled
 
     def restrict(p: Term) -> Term:
-        frame, dims = p.frame, p.dims
+        table, dims = p.table, p.dims
         for source, presence in absent:
             if source is p:
                 continue
@@ -258,9 +258,9 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
                 continue
             if missing:
                 dims = scope.in_dimension_order((*dims, *missing))
-                frame = scope.spread(frame, missing).select(*dims, *p.carried)
-            frame = presence.restrict(frame, on)
-        return p if frame is p.frame else replace(p, dims=dims, frame=frame)
+                table = scope.spread(table, missing).select(*dims, *p.carried)
+            table = presence.restrict(table, on)
+        return p if table is p.table else replace(p, dims=dims, table=table)
 
     return map_terms(compiled, restrict)
 
@@ -293,7 +293,7 @@ def region_over(region: program.Mask | None, dims: Sequence[str]) -> program.Mas
 
 
 def negate(p: Term) -> Term:
-    return replace(p, frame=p.frame.with_columns(-pl.col(p.value_column)))
+    return replace(p, table=p.table.with_columns(-pl.col(p.value_column)))
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
@@ -301,7 +301,7 @@ def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[p
 
     The join is on the dimensions the two share, so *b* broadcasts over the rest.
     """
-    joined = join_on(a.frame, right, [d for d in a.dims if d in b.dims], how)
+    joined = join_on(a.table, right, [d for d in a.dims if d in b.dims], how)
     return joined, a.dims + tuple(d for d in b.dims if d not in a.dims)
 
 
@@ -311,7 +311,7 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
     An implied key is the term's own dimensions, and the product's are a superset,
     so carried over unspelled it would name columns the table does not hold.
     """
-    return tuple(Presence(x.frame, x.keys(p.dims)) for x in p.presences)
+    return tuple(Presence(x.table, x.keys(p.dims)) for x in p.presences)
 
 
 def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
@@ -324,7 +324,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     quotient being absent too. The presences of both sides travel out: at a
     read *c* may be a variable at its primal.
     """
-    joined, out_dims = _paired(a, c, c.frame.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
+    joined, out_dims = _paired(a, c, c.table.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
     if divide:
         for presence in c.presences:
             joined = presence.restrict(joined, presence.keys(c.dims))
@@ -332,7 +332,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs
     out = value_column(kind)
-    frame = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
+    table = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
     if kind != 'constant':
         parameters = frozenset[str]()
     elif divide:
@@ -342,7 +342,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     return replace(
         a,
         dims=out_dims,
-        frame=frame,
+        table=table,
         kind=kind,
         presences=_keyed(a) + _keyed(c),
         region=both_regions(a.region, c.region),
@@ -356,13 +356,13 @@ def to_the_power(a: Term, b: Term) -> Term:
     An inner join, unlike divide's left: a null base or exponent would poison
     the coefficient it multiplies rather than report anything.
     """
-    joined, out_dims = _paired(a, b, b.frame.rename({CONSTANT: _RHS}), 'inner')
-    frame = joined.with_columns(pl.col(CONSTANT).pow(pl.col(_RHS)).alias(CONSTANT)).select(
+    joined, out_dims = _paired(a, b, b.table.rename({CONSTANT: _RHS}), 'inner')
+    table = joined.with_columns(pl.col(CONSTANT).pow(pl.col(_RHS)).alias(CONSTANT)).select(
         *out_dims, *carried_columns('constant')
     )
     return Term(
         out_dims,
-        frame,
+        table,
         'constant',
         presences=_keyed(a) + _keyed(b),
         region=both_regions(a.region, b.region),
@@ -378,8 +378,8 @@ def times_variable(a: Term, b: Term) -> Term:
     canonicalised later, once column indices exist
     ([`Assembly._build_objective`][specsolve._engine.assembly.Assembly._build_objective]).
     """
-    joined, out_dims = _paired(a, b, b.frame.rename({COL: COL_2, COEFF: _RHS}), 'inner')
-    frame = joined.with_columns((pl.col(COEFF) * pl.col(_RHS)).alias(COEFF)).select(
+    joined, out_dims = _paired(a, b, b.table.rename({COL: COL_2, COEFF: _RHS}), 'inner')
+    table = joined.with_columns((pl.col(COEFF) * pl.col(_RHS)).alias(COEFF)).select(
         *out_dims, *carried_columns('quadratic')
     )
-    return Term(out_dims, frame, 'quadratic', presences=_keyed(a) + _keyed(b), region=both_regions(a.region, b.region))
+    return Term(out_dims, table, 'quadratic', presences=_keyed(a) + _keyed(b), region=both_regions(a.region, b.region))

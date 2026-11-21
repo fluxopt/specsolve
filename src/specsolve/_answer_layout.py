@@ -177,11 +177,11 @@ def read_spec(directory: Path) -> Spec | None:
 
 #: How an answer's writer puts one table at one path: [`write_whole`][], or
 #: the writer an archive hands it.
-type FrameWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
+type TableWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
 
 
 def write_reasons(
-    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: FrameWriter
+    directory: Path, no_duals: str | None, absent: Mapping[str, Mapping[str, str]], write: TableWriter
 ) -> None:
     """``(kind, name, reason)`` for what a solve could not produce, or no file at all, written with *write*.
 
@@ -209,7 +209,7 @@ def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]
     return next((why for kind, name, why in rows if kind == 'dual' and not name), None), absent
 
 
-def saved_frames(under: Path, *, eager: bool) -> dict[str, pl.LazyFrame]:
+def saved_tables(under: Path, *, eager: bool) -> dict[str, pl.LazyFrame]:
     """Every ``<name>.parquet`` under *under*, keyed by name; empty where *under* does not exist.
 
     An archive's [`RUN`][] column is left on disk, so a table read out of one
@@ -228,9 +228,9 @@ def saved_frames(under: Path, *, eager: bool) -> dict[str, pl.LazyFrame]:
     }
 
 
-def write_whole(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-    """*frame* at *path*, arriving whole: written beside it and renamed into place."""
+def write_whole(table: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+    """*table* at *path*, arriving whole: written beside it and renamed into place."""
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + '.part')
-    parquet.write(frame, part)
+    parquet.write(table, part)
     part.replace(path)

@@ -125,8 +125,8 @@ def _tidy(dual: Any, dims: list[str], like: pl.DataFrame) -> pl.DataFrame:
     series = dual.to_series().dropna()
     keys = list(series.index)
     columns = {d: [k[i] if isinstance(k, tuple) else k for k in keys] for i, d in enumerate(dims)}
-    frame = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
-    return frame.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
+    table = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
+    return table.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
 
 
 def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:

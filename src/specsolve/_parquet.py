@@ -98,17 +98,17 @@ def scan(source: str | Path | Sequence[Path]) -> pl.LazyFrame:
     return pl.defer(lambda: read(source), schema=_schema(source))
 
 
-def write(frame: pl.DataFrame | pl.LazyFrame, target: Path | BinaryIO) -> None:
-    """*frame* at *target*; a lazy table is sunk where polars writes parquet, so it streams to disk."""
+def write(table: pl.DataFrame | pl.LazyFrame, target: Path | BinaryIO) -> None:
+    """*table* at *target*; a lazy table is sunk where polars writes parquet, so it streams to disk."""
     if require('writing parquet') == 'polars':
-        if isinstance(frame, pl.LazyFrame):
-            frame.sink_parquet(target, compression=COMPRESSION)
+        if isinstance(table, pl.LazyFrame):
+            table.sink_parquet(target, compression=COMPRESSION)
         else:
-            frame.write_parquet(target, compression=COMPRESSION)
+            table.write_parquet(target, compression=COMPRESSION)
         return
     import pyarrow.parquet as pq
 
-    whole = frame.pipe(collected) if isinstance(frame, pl.LazyFrame) else frame
+    whole = table.pipe(collected) if isinstance(table, pl.LazyFrame) else table
     pq.write_table(_to_arrow(whole), target, compression=COMPRESSION)
 
 
@@ -125,8 +125,8 @@ def _schema(source: Source) -> pl.Schema:
     return _from_arrow(pq.read_schema(given[0] if isinstance(given, list) else given).empty_table()).schema
 
 
-def _to_arrow(frame: pl.DataFrame) -> pa.Table:
-    """*frame* as an Arrow table whose string and binary views are plain large strings and binaries.
+def _to_arrow(table: pl.DataFrame) -> pa.Table:
+    """*table* as an Arrow table whose string and binary views are plain large strings and binaries.
 
     The views are cast on the pyarrow side. polars' own oldest IPC, which
     writes no views, panics on 32-bit WebAssembly for a string column
@@ -136,10 +136,10 @@ def _to_arrow(frame: pl.DataFrame) -> pa.Table:
     import pyarrow as pa
 
     buffer = io.BytesIO()
-    frame.write_ipc_stream(buffer)
-    table = pa.ipc.open_stream(buffer.getvalue()).read_all()
-    return table.cast(
-        pa.schema([field.with_type(_unviewed(field.type)) for field in table.schema], table.schema.metadata)
+    table.write_ipc_stream(buffer)
+    arrow = pa.ipc.open_stream(buffer.getvalue()).read_all()
+    return arrow.cast(
+        pa.schema([field.with_type(_unviewed(field.type)) for field in arrow.schema], arrow.schema.metadata)
     )
 
 

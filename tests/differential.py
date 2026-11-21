@@ -185,18 +185,18 @@ def _table(values: xr.DataArray) -> pl.DataFrame:
     return pl.from_pandas(table).filter(pl.col('value').is_not_nan())
 
 
-def by_coordinate(frame: pl.DataFrame) -> dict[tuple[str, ...], float]:
-    """*frame*'s values keyed by coordinate, dimensions sorted by name and labels as text.
+def by_coordinate(table: pl.DataFrame) -> dict[tuple[str, ...], float]:
+    """*table*'s values keyed by coordinate, dimensions sorted by name and labels as text.
 
     The lanes order a result's dimensions differently and type an ``int`` label
     differently, and neither is a difference in the value.
     """
-    dims = sorted(c for c in frame.columns if c != 'value')
-    return {tuple(str(label) for label in row[:-1]): row[-1] for row in frame.select(*dims, 'value').iter_rows()}
+    dims = sorted(c for c in table.columns if c != 'value')
+    return {tuple(str(label) for label in row[:-1]): row[-1] for row in table.select(*dims, 'value').iter_rows()}
 
 
 def _pointby_coordinate(point: Mapping[str, pl.DataFrame]) -> dict[str, dict[tuple[str, ...], float]]:
-    return {name: by_coordinate(frame) for name, frame in point.items()}
+    return {name: by_coordinate(table) for name, table in point.items()}
 
 
 def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:

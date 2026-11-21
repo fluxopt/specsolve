@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter
+    from specsolve._answer_layout import TableWriter
     from specsolve._inputs import Label
     from specsolve._outputs import Output
 
@@ -74,11 +74,11 @@ class SliceAnswer:
     record: Record
     #: This slice's row of [`Sweep.metrics`][].
     metrics: Metrics
-    #: ``{kind: {name: frame}}`` over [`KINDS`][specsolve._outputs.KINDS]:
+    #: ``{kind: {name: table}}`` over [`KINDS`][specsolve._outputs.KINDS]:
     #: every variable, every constraint's dual, every declared named
     #: expression evaluated at this slice's solution, and each output the
     #: sweep was asked for. A kind the slice produced nothing of is absent.
-    frames: dict[str, dict[str, pl.DataFrame]] = field(default_factory=dict)
+    tables: dict[str, dict[str, pl.DataFrame]] = field(default_factory=dict)
     #: Why this slice has no duals, when it has none.
     no_duals: str | None = None
     #: Per expression, why this slice could not evaluate it.
@@ -125,9 +125,9 @@ def _one_slice_per_text(keys: Sequence[Label]) -> None:
         )
 
 
-def with_key(frame: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -> pl.DataFrame:
-    """*frame* with the slice key prepended as *dtype*, the whole sweep's type rather than ``pl.lit``'s."""
-    return frame.select(pl.lit(key, dtype=dtype).alias(key_name), pl.all())
+def with_key(table: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -> pl.DataFrame:
+    """*table* with the slice key prepended as *dtype*, the whole sweep's type rather than ``pl.lit``'s."""
+    return table.select(pl.lit(key, dtype=dtype).alias(key_name), pl.all())
 
 
 def sweep_manifest(
@@ -161,11 +161,11 @@ class Spill:
     key_dtype: pl.DataType
     #: How each table is written, where an archive adds its run; ``None`` is
     #: [`write_whole`][specsolve._answer_layout.write_whole].
-    writer: FrameWriter | None = None
+    writer: TableWriter | None = None
 
-    def _write(self, frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-        """*frame* at *path*, through [`writer`][]."""
-        (self.writer or write_whole)(frame, path)
+    def _write(self, table: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        """*table* at *path*, through [`writer`][]."""
+        (self.writer or write_whole)(table, path)
 
     @classmethod
     def opened(
@@ -177,7 +177,7 @@ class Spill:
         stitch: Stitch | None,
         outputs: frozenset[Output],
         spec: Spec | None,
-        writer: FrameWriter | None = None,
+        writer: TableWriter | None = None,
     ) -> Spill:
         """The directory ready to take this sweep: stamped if it holds none, checked and never re-stamped if it does."""
         directory = Path(directory)
@@ -223,11 +223,11 @@ class Spill:
         self.write_tables(
             position,
             key,
-            answer.frames,
+            answer.tables,
             pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA),
             pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA),
         )
-        return replace(answer, frames={})
+        return replace(answer, tables={})
 
     def _keep_reasons(self, answer: SliceAnswer) -> None:
         """*answer*'s reasons for what it lacks, added to the sweep's on disk before its record lands.
@@ -249,19 +249,19 @@ class Spill:
         self,
         position: int,
         key: Label,
-        frames: Mapping[str, Mapping[str, pl.DataFrame]],
+        tables: Mapping[str, Mapping[str, pl.DataFrame]],
         record: pl.DataFrame,
         metrics: pl.DataFrame,
     ) -> None:
-        """One slice on disk: its *frames*, and its one row of *record* and of *metrics*.
+        """One slice on disk: its *tables*, and its one row of *record* and of *metrics*.
 
         The two rows are taken as tables, so a sweep saves what it holds
         without reading a value out. A UTC timestamp read out as a Python
         value needs a time zone database, and the browser has none.
         """
-        for kind, produced in frames.items():
-            for name, frame in produced.items():
-                self._write(with_key(frame, self.key_name, key, self.key_dtype), self._file(kind, position, name))
+        for kind, produced in tables.items():
+            for name, table in produced.items():
+                self._write(with_key(table, self.key_name, key, self.key_dtype), self._file(kind, position, name))
         self._write(metrics, self._file('metrics', position))
         self._write(record, self._file('record', position))
 
@@ -291,8 +291,8 @@ class Spill:
         found = {name: self._file(kind, position, name) for name in names}
         return {name: parquet.read(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
-    def frames(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
-        """``{kind: {name: frame}}``, every slice's table of a name as one, keyed and in slice order.
+    def tables(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
+        """``{kind: {name: table}}``, every slice's table of a name as one, keyed and in slice order.
 
         A kind or a name no slice wrote is absent. *eager* reads the files into
         memory now, rather than as a `polars.scan_parquet` collected at the
@@ -303,8 +303,8 @@ class Spill:
             under = self.directory / kind
             for named in sorted(under.iterdir()) if under.is_dir() else []:
                 files = sorted(named.glob('*.parquet'))
-                frame = parquet.read(files).lazy() if eager else parquet.scan(files)
-                out.setdefault(kind, {})[named.name] = frame.drop(RUN, strict=False)
+                table = parquet.read(files).lazy() if eager else parquet.scan(files)
+                out.setdefault(kind, {})[named.name] = table.drop(RUN, strict=False)
         return out
 
 
@@ -346,7 +346,7 @@ class Sweep:
     #: The spec every slice answered, as written; ``None`` only for a directory
     #: written without one.
     spec: Spec | None
-    #: ``{kind: {name: frame}}``, every slice's table of a name as one, keyed,
+    #: ``{kind: {name: table}}``, every slice's table of a name as one, keyed,
     #: in memory or scanned off disk; a kind no slice produced is absent.
     _slices: dict[str, dict[str, pl.LazyFrame]] = field(repr=False, default_factory=dict)
     _no_duals: str | None = field(repr=False, default=None)
@@ -385,7 +385,7 @@ class Sweep:
         keys: list[Label] = []
         rows: list[Record] = []
         taken: list[Metrics] = []
-        frames: defaultdict[str, defaultdict[str, list[pl.DataFrame]]] = defaultdict(lambda: defaultdict(list))
+        tables: defaultdict[str, defaultdict[str, list[pl.DataFrame]]] = defaultdict(lambda: defaultdict(list))
         no_duals: str | None = None
         no_expressions: dict[str, str] = {}
         with closing(answered) as stream:
@@ -397,18 +397,18 @@ class Sweep:
                 keys.append(key)
                 rows.append(named.record)
                 taken.append(named.metrics)
-                for kind, produced in answer.frames.items():
-                    for name, frame in produced.items():
-                        frames[kind][name].append(with_key(frame, key_name, key, key_dtype))
+                for kind, produced in answer.tables.items():
+                    for name, table in produced.items():
+                        tables[kind][name].append(with_key(table, key_name, key, key_dtype))
         keyed = pl.Series(key_name, keys, dtype=key_dtype)
         texts = [str(key) for key in keys]
         absent: dict[str, dict[str, str]] = {'expression': no_expressions} if no_expressions else {}
         if spill is not None:
-            slices = spill.frames(eager=False)
+            slices = spill.tables(eager=False)
             no_duals, absent = read_reasons(spill.directory)
         else:
             slices = {
-                kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in frames.items()
+                kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in tables.items()
             }
         return cls(
             key_name=key_name,
@@ -468,32 +468,32 @@ class Sweep:
         if per_window:
             self._check_per_window()
         held = self._slices.get(kind, {})
-        frame = held.get(name)
-        if frame is None:
+        table = held.get(name)
+        if table is None:
             absent = self._absent.get(kind, {}).get(name) or _whole_kind_absent(
                 kind, held, self._no_duals, self.records
             )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.records))
-        return self._answered(frame, per_window=per_window)
+        return self._answered(table, per_window=per_window)
 
-    def _answered[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F, *, per_window: bool) -> F:
-        """*frame*, as the slices produced it, read the way the caller asked.
+    def _answered[F: (pl.DataFrame, pl.LazyFrame)](self, table: F, *, per_window: bool) -> F:
+        """*table*, as the slices produced it, read the way the caller asked.
 
         [`EachWindow`][] stitches through its [`Stitch`][]. Any other axis, and
-        a read per window the caller has already checked, gets *frame* unchanged.
+        a read per window the caller has already checked, gets *table* unchanged.
         """
         if per_window or self._stitch is None:
-            return frame
-        return self._stitch.restore(frame, self.key_name)
+            return table
+        return self._stitch.restore(table, self.key_name)
 
-    def _unstitchable(self, frame: pl.DataFrame | pl.LazyFrame) -> str | None:
-        """Why *frame*, as the slices produced it, has no answer; ``None`` where it has one.
+    def _unstitchable(self, table: pl.DataFrame | pl.LazyFrame) -> str | None:
+        """Why *table*, as the slices produced it, has no answer; ``None`` where it has one.
 
         Only an EachWindow sweep stitches, so only its tables can lack an
         answer. The archive leaves out the file of a name this refuses, and
         [`to_dataset`][] leaves the name out, so the two agree.
         """
-        return None if self._stitch is None else self._stitch.unstitchable(frame)
+        return None if self._stitch is None else self._stitch.unstitchable(table)
 
     def scan(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> pl.LazyFrame:
         """One name's answer as a `polars.LazyFrame`: [`primal`][], [`dual`][], [`evaluate`][] or an output, not collected.
@@ -698,7 +698,7 @@ class Sweep:
             f'{_nothing_to_read(_LABELS["expression"], expression, self._expression_names(), self.records)} {no_model}'
         )
 
-    def _frame(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
+    def _table(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
         """*name* through the reader *kind* names."""
         kind = checked_kind(kind)
         if kind == 'expression':
@@ -711,7 +711,7 @@ class Sweep:
         The name is resolved before pandas is imported, so a sweep that never
         held *name* says so on any install.
         """
-        return tidy_to_pandas(self._frame(name, kind, per_window=per_window))
+        return tidy_to_pandas(self._table(name, kind, per_window=per_window))
 
     def to_dataarray(self, name: str, kind: str = 'primal', *, per_window: bool = False) -> xr.DataArray:
         """One name's answer as a `xarray.DataArray`; [`to_pandas`][]'s arguments.
@@ -767,7 +767,7 @@ class Sweep:
         parquet.require('Sweep.save')
         return self._save(Path(directory))
 
-    def _save(self, out: Path, write: FrameWriter | None = None) -> Path:
+    def _save(self, out: Path, write: TableWriter | None = None) -> Path:
         """[`save`][], each table written with *write*: an archive passes the writer that adds its run.
 
         A sweep whose slices lie on disk is copied file for file, so one too
@@ -776,7 +776,7 @@ class Sweep:
         on_disk = self._spill
         if on_disk is not None and on_disk.directory.resolve() == out.resolve():
             return out
-        by_slice = self._frames_by_slice() if on_disk is None else []
+        by_slice = self._tables_by_slice() if on_disk is None else []
         clear_the_answer(out)
         spill = Spill.opened(
             out,
@@ -793,14 +793,14 @@ class Sweep:
             spill.take(on_disk)
         records = self.records.select(Record._fields)
         metrics = self.metrics.select(Metrics._fields)
-        for position, key, frames in by_slice:
-            spill.write_tables(position, key, frames, records.slice(position, 1), metrics.slice(position, 1))
+        for position, key, tables in by_slice:
+            spill.write_tables(position, key, tables, records.slice(position, 1), metrics.slice(position, 1))
         return spill.directory
 
-    def _frames_by_slice(
+    def _tables_by_slice(
         self, kinds: Sequence[str] = KINDS
     ) -> list[tuple[int, Label, dict[str, dict[str, pl.DataFrame]]]]:
-        """``(position, key, {kind: {name: frame}})`` per slice over *kinds*, the key column dropped; a slice with no rows of a name lacks it."""
+        """``(position, key, {kind: {name: table}})`` per slice over *kinds*, the key column dropped; a slice with no rows of a name lacks it."""
         by_key = {kind: self._by_slice(kind) for kind in kinds}
         return [
             (
@@ -815,13 +815,13 @@ class Sweep:
         ]
 
     def _by_slice(self, kind: str) -> dict[str, dict[Label, pl.DataFrame]]:
-        """``{name: {slice key: frame}}`` for *kind*, the key column dropped; a slice with no rows is absent."""
+        """``{name: {slice key: table}}`` for *kind*, the key column dropped; a slice with no rows is absent."""
         key = self.key_name
         return {
             name: {
-                part[key][0]: part.drop(key) for part in frame.pipe(collected).partition_by(key, maintain_order=True)
+                part[key][0]: part.drop(key) for part in table.pipe(collected).partition_by(key, maintain_order=True)
             }
-            for name, frame in self._slices.get(kind, {}).items()
+            for name, table in self._slices.get(kind, {}).items()
         }
 
     def _names_held(self, kind: str, *, per_window: bool) -> tuple[str, ...]:
@@ -846,11 +846,11 @@ class Sweep:
         """Every name of *kind* there is an answer for, and why each name left out of the answer is."""
         left_out = dict(self._absent.get(kind, {}))
         held: dict[str, object] = {}
-        for name, frame in self._slices.get(kind, {}).items():
-            if not per_window and (why := self._unstitchable(frame)):
+        for name, table in self._slices.get(kind, {}).items():
+            if not per_window and (why := self._unstitchable(table)):
                 left_out[name] = why
             else:
-                held[name] = frame
+                held[name] = table
         return held, left_out
 
     def __len__(self) -> int:
@@ -918,7 +918,7 @@ def load_sweep(directory: str | Path) -> Sweep:
     under = Path(directory)
     opened = _opened_sweep(under)
     spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
-    return replace(opened, _slices=spill.frames(eager=True))
+    return replace(opened, _slices=spill.tables(eager=True))
 
 
 def scan_sweep(directory: str | Path) -> Sweep:
@@ -936,7 +936,7 @@ def scan_sweep(directory: str | Path) -> Sweep:
     under = Path(directory)
     opened = _opened_sweep(under)
     spill = Spill(under, opened.key_name, opened.records[opened.key_name].dtype)
-    return replace(opened, _slices=spill.frames(eager=False), _spill=spill)
+    return replace(opened, _slices=spill.tables(eager=False), _spill=spill)
 
 
 def _opened_sweep(under: Path) -> Sweep:

@@ -42,8 +42,8 @@ BROADCAST_CONDITION_SPEC = {
 
 def _grid(dims, labels, values):
     """The full product of *labels* as a tidy table, one row per coordinate."""
-    frame = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
-    return frame.assign(value=values)
+    table = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
+    return table.assign(value=values)
 
 
 SPARSE_COEFFICIENT_SPEC = {

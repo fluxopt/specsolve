@@ -40,8 +40,8 @@ def coordinate_text(coordinate: Mapping[str, object]) -> str:
     """One coordinate, ``dim: label`` in dimension order, as [`coordinate_expr`][] writes it."""
     if not coordinate:
         return ''
-    frame = pl.DataFrame([dict(coordinate)])
-    return frame.select(coordinate_expr(frame.schema)).item()
+    table = pl.DataFrame([dict(coordinate)])
+    return table.select(coordinate_expr(table.schema)).item()
 
 
 def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> str:

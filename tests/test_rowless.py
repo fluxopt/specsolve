@@ -50,10 +50,10 @@ SOURCES = {
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
     """Which constraints were compiled, which variables had their bounds compiled, which dimensions were indexed by a query, and which an assumption was read over."""
     seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'indexed': set(), 'assumption': set()}
-    expression, bounds, frame, narrowed = (
+    expression, bounds, table, narrowed = (
         compiler_module.Compiler.expression,
         compiler_module.Compiler.bounds,
-        indices.frame,
+        indices.table,
         _assumptions.narrowed,
     )
 
@@ -62,13 +62,13 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
             seen['constraint'].add(what.split("'")[1])
         return expression(self, e, what, **kwargs)
 
-    def spied_bounds(self, frame, name, v):
+    def spied_bounds(self, table, name, v):
         seen['variable'].add(name)
-        return bounds(self, frame, name, v)
+        return bounds(self, table, name, v)
 
-    def spied_frame(scope, dims, *args, **kwargs):
+    def spied_table(scope, dims, *args, **kwargs):
         seen['indexed'].add(tuple(dims))
-        return frame(scope, dims, *args, **kwargs)
+        return table(scope, dims, *args, **kwargs)
 
     def spied_narrowed(scope, dims, where):
         seen['assumption'].update(dims)
@@ -76,7 +76,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
 
     monkeypatch.setattr(compiler_module.Compiler, 'expression', spied_expression)
     monkeypatch.setattr(compiler_module.Compiler, 'bounds', spied_bounds)
-    monkeypatch.setattr(indices, 'frame', spied_frame)
+    monkeypatch.setattr(indices, 'table', spied_table)
     monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
     return seen
@@ -136,14 +136,14 @@ SPARSE_SOURCES = {
 
 def test_a_constraint_without_a_where_is_indexed_only_inside_its_restrictions(monkeypatch):
     """A sparse absence narrows such a constraint, and indexing it unrestricted first would hold the full product of its dimensions."""
-    frame, unrestricted = indices.frame, []
+    table, unrestricted = indices.table, []
 
-    def spied_frame(scope, dims, where, index, start, restrictions=()):
+    def spied_table(scope, dims, where, index, start, restrictions=()):
         if index == ROW and where is None and not restrictions:
             unrestricted.append(tuple(dims))
-        return frame(scope, dims, where, index, start, restrictions)
+        return table(scope, dims, where, index, start, restrictions)
 
-    monkeypatch.setattr(indices, 'frame', spied_frame)
+    monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
     assert not unrestricted, f'`capped` was indexed over its full product {unrestricted} before its restriction'
