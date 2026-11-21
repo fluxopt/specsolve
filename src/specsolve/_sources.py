@@ -704,10 +704,10 @@ def _check_one_row_per_coordinate(
     }
     for d, labels in known.items():
         _check_same_clock(f"{kind} '{name}'", d, d, frame.schema[d], labels.dtype)
-    answers = _key_answers(p.dims, frame, known)
+    index = _coordinate_index(p.dims, frame, known)
 
     for d, labels in known.items():
-        if not answers[f'#known {d}']:
+        if (index is None or index.null_count()) and not frame.select(_is_label(d, labels).all()).item():
             strangers = frame.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
@@ -720,7 +720,11 @@ def _check_one_row_per_coordinate(
                 f'as absent. Fix the label, or declare it as a coordinate.'
             )
 
-    if not answers['#duplicated']:
+    if index is None:
+        repeated = frame.select(pl.struct(p.dims).is_duplicated().any()).item()
+    else:
+        repeated = index.n_unique() < frame.height
+    if not repeated:
         return
     duplicated = frame.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
@@ -734,46 +738,26 @@ def _check_one_row_per_coordinate(
     )
 
 
-def _key_answers(dims: tuple[str, ...], frame: pl.DataFrame, known: Mapping[str, pl.Series]) -> dict[str, bool]:
-    """Whether *frame* holds a coordinate twice (``#duplicated``), and whether each known dim's labels are all real (``#known d``).
+def _coordinate_index(dims: tuple[str, ...], frame: pl.DataFrame, known: Mapping[str, pl.Series]) -> pl.Series | None:
+    """Each row's coordinate as one integer, its row-major index in the product of *dims*' labels.
 
-    Each row's position in the product of its dims' labels answers both at
-    once: a label outside its dimension has no position, and two rows for one
-    coordinate share one. Distinct positions are counted in one integer
-    column instead of hashing every key column, the check's cost on a dense
-    table. Where no position can be formed (a dimension whose
-    labels are not read yet, a column of another dtype than its labels, a
-    product past 63 bits), and in a table under 50,000 rows, where forming the
-    positions costs more than hashing, the columns are hashed as they are.
+    Null where a label is none of its dimension's. Two rows for one coordinate
+    share an index, so counting distinct indexes replaces hashing every key
+    column, which is the check's cost on a dense table. ``None`` where forming
+    it costs more than hashing (under 50,000 rows) or cannot be done: a
+    dimension whose labels are not read yet, a column of another dtype than its
+    labels, a product past 63 bits.
     """
-    position = _position(dims, frame, known) if frame.height >= 50_000 else None
-    if position is None:
-        return frame.select(
-            pl.struct(dims).is_duplicated().any().alias('#duplicated'),
-            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
-        ).row(0, named=True)
-    positions = frame.select(position.alias('#position')).to_series()
-    strays, distinct = positions.null_count(), positions.n_unique()
-    if strays:
-        return frame.select(
-            pl.lit(value=False).alias('#duplicated'),
-            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
-        ).row(0, named=True)
-    return {'#duplicated': distinct < frame.height, **{f'#known {d}': True for d in known}}
-
-
-def _position(dims: tuple[str, ...], frame: pl.DataFrame, known: Mapping[str, pl.Series]) -> pl.Expr | None:
-    """Each row's row-major position in the product of *dims*' labels, null where a label is none of them; ``None`` where it cannot be formed."""
-    if any(d not in known or frame.schema[d] != known[d].dtype for d in dims):
+    if frame.height < 50_000 or any(d not in known or frame.schema[d] != known[d].dtype for d in dims):
         return None
     if math.prod(known[d].len() for d in dims) >= 2**63:
         return None
-    position = pl.lit(0, dtype=pl.UInt64)
+    index = pl.lit(0, dtype=pl.UInt64)
     for d in dims:
         labels = known[d]
         ordinals = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, ordinals, default=None)
-    return position
+        index = index * labels.len() + pl.col(d).replace_strict(labels, ordinals, default=None)
+    return frame.select(index).to_series()
 
 
 def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
