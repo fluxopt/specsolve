@@ -26,7 +26,9 @@ for numbers in steps:
     result = model.update(numbers).solve()
 ```
 
-An `update` that moves a mask or adds a label builds and loads again.
+An `update` that moves a mask or adds a label builds and loads again. One
+that gives a linear constraint's coefficients new numbers at the coordinates
+they had keeps the solver loaded: it takes the new numbers in place.
 [Change it and solve again](../change.md) shows the loop and how to check
 that it stays loaded.
 
