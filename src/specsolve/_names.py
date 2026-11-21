@@ -1,16 +1,17 @@
 """The column names specsolve writes beside a spec's own, and the refusals that keep a spec from taking them.
 
-There are two rules, and they differ in shape and in reach. Every declared
+There are three rules, and they differ in shape and in reach. Every declared
 name is refused where it starts with [`RESERVED_PREFIX`][], which covers every
 column specsolve adds under it. A dimension alone is refused where it is
-[`VALUE`][], the one whole name, because only a dimension becomes a column
-beside it: a parameter or a variable called ``value`` is accepted.
-[`lowered`][specsolve._inputs.lowered] applies both, so
+[`VALUE`][], or one of [`BUILD_COLUMNS`][], because only a dimension becomes a
+column beside them: a parameter or a variable called ``value`` or ``row`` is
+accepted. [`lowered`][specsolve._inputs.lowered] applies all three, so
 [`check`][specsolve._api.check] and every other verb name the collision before
 any data is read.
 
-Every module that names one of these columns imports it from here. It imports
-nothing from the package but its errors, so every layer can import it.
+Every module that names [`RUN`][], [`POSITION`][] or [`VALUE`][] imports it from
+here. It imports nothing from the package but its errors, so every layer can
+import it.
 """
 
 from __future__ import annotations
@@ -60,4 +61,25 @@ def refuse_value(name: str, which: str) -> None:
             f'{which} has the name of the column {VALUE!r}, which holds the numbers beside the dimensions '
             f"in a parameter's table and in every frame an answer comes back as. Query engines read column "
             f'names without case, so the two columns would collide in any letter case. Rename it.'
+        )
+
+
+#: The columns the engine's own tables carry beside a dimension's while a model
+#: builds: the solver's row and column numbers, a coefficient, a constant and a
+#: label's ordinal. A dimension of one of these names would be a second column of
+#: the same name, so polars could not build the table.
+BUILD_COLUMNS = frozenset({'row', 'coeff', 'cval', 'ord', 'var_label', 'var_label_2'})
+
+
+def refuse_build_column(name: str, which: str) -> None:
+    """Refuse *name*, which *which* describes, where it is one of [`BUILD_COLUMNS`][].
+
+    Raises:
+        SpecsolveError: A name a column of the build would collide with.
+    """
+    if name in BUILD_COLUMNS:
+        raise SpecsolveError(
+            f'{which} has the name of a column specsolve builds the model in, beside the dimensions, '
+            f'so the two columns would collide. Rename it; {", ".join(map(repr, sorted(BUILD_COLUMNS)))} '
+            f'are taken.'
         )
