@@ -114,7 +114,7 @@ class Assembly:
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
         self.obj_sense: ObjectiveSense | None = None
-        self._empty = {}
+        self._rowless_frames = {}
 
     def run(self) -> BuiltModel:
         """Build every declaration, then freeze what they produced.
@@ -196,7 +196,7 @@ class Assembly:
         """
         start = self.n_cols
         if rowless(v, self.attached):
-            labelled = self._empty_labels(v.dims, 'var_label')
+            labelled = self._rowless_frame(v.dims, 'var_label')
         else:
             labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
         self.n_cols = start + labelled.height
@@ -272,7 +272,7 @@ class Assembly:
         """
         start = self.n_rows
         if rowless(c, self.attached):
-            return self._without_a_row(name, self._empty_labels(c.dims, 'row'), start)
+            return self._without_a_row(name, self._rowless_frame(c.dims, 'row'), start)
         admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
@@ -339,14 +339,15 @@ class Assembly:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
 
-    def _empty_labels(self, dims: tuple[str, ...], label: str) -> pl.DataFrame:
-        """The label frame of a declaration that holds no row, built once per dims and label column.
+    def _rowless_frame(self, dims: tuple[str, ...], label: str) -> pl.DataFrame:
+        """What a rowless declaration gets in place of its labels: its columns, no rows.
 
-        Building one is most of what such a declaration costs.
+        One per dims and label column, shared, since building it is most of what
+        such a declaration costs.
         """
-        if (dims, label) not in self._empty:
-            self._empty[dims, label] = labels.nothing(self.scope, dims, label)
-        return self._empty[dims, label]
+        if (dims, label) not in self._rowless_frames:
+            self._rowless_frames[dims, label] = labels.nothing(self.scope, dims, label)
+        return self._rowless_frames[dims, label]
 
     def _without_a_row(
         self, name: str, labelled: pl.DataFrame, start: int
