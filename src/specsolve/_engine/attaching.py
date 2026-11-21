@@ -41,7 +41,7 @@ class AttachedSources:
     ``first, first + 1, …`` in that order to ``first``, so that a label less
     ``first`` is its ordinal. ``settled`` is each test of a ``where`` that the
     data decides at every coordinate: ``True`` where it holds everywhere,
-    ``False`` where nowhere ([`settled`][specsolve._engine.predicates.settled]).
+    ``False`` where nowhere ([`settle`][]).
     ``seconds`` is how long attaching took, for the
     build these are handed to, which did not run the attach itself.
     """
