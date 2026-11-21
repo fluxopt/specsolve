@@ -101,15 +101,15 @@ def test_a_solve_not_asked_for_its_slack_names_the_output() -> None:
 # sweeps
 # ---------------------------------------------------------------------------
 
-#: The dispatch model of ``test_strategy``: ``balance`` is an equality, met at
+#: The dispatch model of ``test_solve_over``: ``balance`` is an equality, met at
 #: every snapshot, so its slack is zero in every scenario.
 SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
 
 
 def _swept(tmp_path: Path, how: str) -> Sweep:
-    from tests.test_strategy import DISPATCH, scenario_sources
+    from tests.test_solve_over import DISPATCH, scenario_sources
 
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -37,7 +38,8 @@ class AttachedSources:
     cached frame heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its ordinal.
+    ``first`` is its ordinal. ``seconds`` is how long attaching took, for the
+    build these are handed to, which did not run the attach itself.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
@@ -47,6 +49,7 @@ class AttachedSources:
     parameter_rows: Mapping[str, int]
     consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
+    seconds: float = 0.0
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
@@ -64,6 +67,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         DataError: A parameter or a relation that refuses a missing row has none
             at some coordinate.
     """
+    started = perf_counter()
     with in_memory():
         dimensions = {d: _ordinal_frame(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
@@ -109,6 +113,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         parameter_rows={name: f.height for name, f in parameters.items()},
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
+        seconds=perf_counter() - started,
     )
 
 

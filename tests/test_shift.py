@@ -694,6 +694,44 @@ def test_an_offset_may_differ_per_entity(edge: str):
         )
 
 
+def _absent_offset_spec(edge: str, mask: str | None) -> dict:
+    """``y <= shift(x, …)`` with an offset ``off`` that is ``missing: absent``, and ``x`` masked by *mask*."""
+    x: dict = {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}}
+    if mask is not None:
+        x['where'] = mask
+    return {
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'u': {'dtype': 'str'}},
+        'parameters': {'off': {'dims': ['u'], 'dtype': 'int', 'missing': 'absent'}},
+        'variables': {'x': x, 'y': {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'c': {'dims': ['t', 'u'], 'expression': f'y <= shift(x, along=t, offset=off, edge={edge})'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y) - sum(x)'},
+    }
+
+
+@pytest.mark.parametrize(
+    ('mask', 'rows', 'objective'),
+    [
+        pytest.param(None, 3, 30.0, id='bare-operand'),
+        pytest.param('t > 0', 2, 40.0, id='masked-operand'),
+    ],
+)
+@pytest.mark.parametrize('edge', [pytest.param('0', id='fill'), pytest.param("'wrap'", id='wrap')])
+def test_an_absent_offset_leaves_the_shift_absent(edge: str, mask: str | None, rows: int, objective: float):
+    """Where a per-entity offset has no row, the shift is absent, and so is the row (#2093).
+
+    ``off`` is absent at ``u=b``, so every ``y[t, b]`` is free and reaches its
+    bound of 10. The relational lane built ``y[t, b] <= 0`` there, an operand
+    with no presence of its own having none to lose, and the linopy lane read
+    the missing offset as 0 and built ``y[t, b] <= x[t, b]``. A masked ``x``
+    takes its presence through the shift, which the relational lane already
+    left absent at ``u=b``.
+    """
+    data = {'t': [0, 1, 2], 'u': ['a', 'b'], 'off': pd.Series({'a': 1}, index=pd.Index(['a'], name='u'))}
+    with differential(_absent_offset_spec(edge, mask), data) as run:
+        assert run.engine.diagnostics().rows == rows, 'only u=a builds rows, less any x the mask removes'
+        assert run.oracle == pytest.approx(objective), 'each y[t, b] is free, so u=b adds 30'
+
+
 def test_a_named_offset_must_say_what_the_vacated_positions_contribute():
     """The absent edge is refused for a named offset.
 

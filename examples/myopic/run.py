@@ -7,7 +7,7 @@ inheriting the fleet the last one left.
 
 One file, `pathway.yaml`, written for *a* period. The driver supplies which:
 
-    sps.solve_over(model, sources, sps.EachCoordinate('year', carry={'existing': 'total'}))
+    sps.solve_over(model, sources, sps.EachLabel('year', carry={'existing': 'total'}))
 
 The periods run in sorted order, which is the order the carry chains them in.
 `total` is over `(generator)` and so is `existing`, so the whole fleet vector
@@ -101,12 +101,12 @@ def main() -> None:
     sweep = sps.solve_over(
         MODEL,
         sources(),
-        sps.EachCoordinate('year', carry={'existing': 'total'}),
+        sps.EachLabel('year', carry={'existing': 'total'}),
     )
 
     print('myopic pathway — each period sees only itself, and inherits the last')
     print()
-    print(sweep.record.select('year', 'termination_condition', pl.col('objective').round(0)))
+    print(sweep.records.select('year', 'termination_condition', pl.col('objective').round(0)))
     print()
 
     fleet = sweep.primal('total').pivot('generator', index='year', values='value')

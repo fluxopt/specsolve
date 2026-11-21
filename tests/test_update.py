@@ -1005,17 +1005,17 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     ran before the cleanup that forgets the last build's tables, so the next
     update kept the `load` built before the attached one.
     """
-    import specsolve._api as api
+    import specsolve._sources as door
 
     load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
     cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = api.kept_parameters
+    choose = door._kept
 
     def interrupted(*args):
-        monkeypatch.setattr(api, 'kept_parameters', choose)
+        monkeypatch.setattr(door, '_kept', choose)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(api, 'kept_parameters', interrupted)
+    monkeypatch.setattr(door, '_kept', interrupted)
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})
@@ -1073,3 +1073,50 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         assert updated.objective == fresh.solve().objective, (
             'the pushed cost vector disagrees with the one a cold build hands over'
         )
+
+
+#: `cap` never exceeds 100, so `idle` holds no column and `unmet` no row; `floor`
+#: and `ceiling` feed only them, so moving their numbers refills without a build.
+IDLE = {
+    'dimensions': {'g': {}},
+    'parameters': {'cap': {'dims': ['g']}, 'floor': {'dims': ['g']}, 'ceiling': {'dims': ['g']}},
+    'variables': {
+        'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
+        'idle': {'dims': ['g'], 'where': 'cap > 100', 'bounds': {'lower': 0, 'upper': 'ceiling'}},
+    },
+    'constraints': {'unmet': {'dims': ['g'], 'where': 'cap > 100', 'expression': 'x >= floor'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+}
+
+
+def _idle_data(floor: float, ceiling: float) -> dict[str, object]:
+    labels = ['a', 'b']
+    return {
+        'g': labels,
+        'cap': pl.DataFrame({'g': labels, 'value': [2.0, 3.0]}),
+        'floor': pl.DataFrame({'g': labels, 'value': [floor] * 2}),
+        'ceiling': pl.DataFrame({'g': labels, 'value': [ceiling] * 2}),
+    }
+
+
+def test_a_refill_reads_nothing_for_a_declaration_without_a_label(monkeypatch):
+    """A variable or constraint that holds nothing has no share to splice, so the refill compiles none of it."""
+    from specsolve._engine import assembly as assembly_module
+
+    read: list[str] = []
+    compiled, columns = assembly_module.Assembly._compiled, assembly_module.Assembly._columns
+
+    def spied_compiled(self, name, *args, **kwargs):
+        read.append(name)
+        return compiled(self, name, *args, **kwargs)
+
+    def spied_columns(self, name, *args, **kwargs):
+        read.append(name)
+        return columns(self, name, *args, **kwargs)
+
+    with sps.build(IDLE, _idle_data(1.0, 5.0)) as model, sps.build(IDLE, _idle_data(0.5, 9.0)) as reference:
+        monkeypatch.setattr(assembly_module.Assembly, '_compiled', spied_compiled)
+        monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
+        model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
+        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
+    assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no label'

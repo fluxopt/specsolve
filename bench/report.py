@@ -229,16 +229,16 @@ def _at_rung(rows: dict[Key, Row], case: str, size: str, sink: str, arms: tuple[
 
 
 _DENSITY_RUNG = re.compile(r'd\d+$')
-_DECLARATION_RUNG = re.compile(r'n\d+m?$')
+_DECLARATION_RUNG = re.compile(r'n\d+[me]?$')
 #: Rungs that grow the model sideways — entity counts x N, snapshots fixed.
 _WIDTH_RUNG = re.compile(r'w\d+$')
 _SWEEPS = (_DENSITY_RUNG, _DECLARATION_RUNG, _WIDTH_RUNG)
 
 
 def _rung_value(size: str) -> str:
-    """The swept value a rung label carries; a trailing ``m`` prints as the masked twin."""
-    count = int(size[1:].removesuffix('m'))
-    return f'{count} masked' if size.endswith('m') else str(count)
+    """The swept value a rung label carries; a trailing ``m`` or ``e`` prints as the twin it is."""
+    count = int(size[1:].rstrip('me'))
+    return {'m': f'{count} masked', 'e': f'{count} + empty'}.get(size[-1], str(count))
 
 
 def _sweep_of(size: str) -> re.Pattern[str] | None:
@@ -526,7 +526,9 @@ def declarations(rows: dict[Key, Row]) -> str:
             'N declarations of pool/N units each, so total variables and rows are '
             'flat and only the declaration count moves. A `masked` row is the same '
             'rung with a `where:` on every declaration — the same model, so the '
-            'difference is what the mask costs per declaration.',
+            'difference is what the mask costs per declaration. A `+ empty` row adds '
+            "declarations that hold no row, as most of PyPSA's do — again the same "
+            'model, so the difference is what they cost.',
         ],
         second='declarations',
         newest_first=False,
