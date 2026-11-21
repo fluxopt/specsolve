@@ -7,7 +7,7 @@ declaration built later reads what earlier ones produced.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, get_args
 
 import numpy as np
@@ -18,16 +18,14 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere
 from specsolve._engine.scope import Scope, join_on
+from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -102,8 +100,7 @@ class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
-        """Start a build of *program* over *attached*, its ``where`` clauses settled first: [`_with_wheres_settled`][]."""
-        program = _with_wheres_settled(program, attached)
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.attached = attached
         self.measured = measured
@@ -198,7 +195,7 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if self._rowless(v.dims, v.where):
+        if rowless(v, self.attached):
             labelled = labels.nothing(self.scope, v.dims, 'var_label')
         else:
             labelled = labels.frame(self.scope, v.dims, v.where, 'var_label', start)
@@ -274,7 +271,7 @@ class Assembly:
         never meets the full product of its dims.
         """
         start = self.n_rows
-        if self._rowless(c.dims, c.where):
+        if rowless(c, self.attached):
             return self._without_a_row(name, labels.nothing(self.scope, c.dims, 'row'), start)
         admitted = None if c.where is None else labels.frame(self.scope, c.dims, c.where, 'row', start)
         if admitted is not None and not admitted.height:
@@ -341,14 +338,6 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
-
-    def _over_nothing(self, dims: tuple[str, ...]) -> bool:
-        """Whether a declaration over *dims* spans a dimension without a label, so it holds nothing whatever its data."""
-        return any(not self.attached.cardinality[d] for d in dims)
-
-    def _rowless(self, dims: tuple[str, ...], where: program.Mask | None) -> bool:
-        """Whether a declaration over *dims* holds no row, known without labelling it: [`_over_nothing`][], or a *where* the data settled false."""
-        return self._over_nothing(dims) or (where is not None and holds_nowhere(where))
 
     def _without_a_row(
         self, name: str, labelled: pl.DataFrame, start: int
@@ -499,35 +488,6 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
 def declares_quadratic(c: program.Constraint) -> bool:
     """Whether constraint *c* multiplies two variable-carrying operands, either side."""
     return program.is_quadratic(c.lhs) or program.is_quadratic(c.rhs)
-
-
-def _with_wheres_settled(lowered: program.Program, attached: AttachedSources) -> program.Program:
-    """*lowered* with each variable's and constraint's ``where`` folded over the tests *attached* settled.
-
-    No test is read here: attaching read each once for the whole program
-    ([`AttachedSources`][specsolve._engine.attaching.AttachedSources]). A
-    ``where`` that folds to true is dropped, so the declaration takes the
-    path of one without a ``where``: dense labels, and terms placed on their
-    rows without a join. One that folds to false is kept as that literal,
-    and the declaration is skipped with no further read. The program the
-    model keeps is this one, so readback reads the declarations it built.
-    """
-    tests = attached.settled
-
-    def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
-        out = {}
-        for name, declaration in declarations.items():
-            where = declaration.where
-            if where is None or not tests:
-                out[name] = declaration
-                continue
-            kept = folded(where, tests)
-            out[name] = replace(declaration, where=None if holds_everywhere(kept) else kept)
-        return out
-
-    if not tests:
-        return lowered
-    return replace(lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints))
 
 
 def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
