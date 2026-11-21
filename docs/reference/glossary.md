@@ -157,13 +157,21 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : An axis, such as `EachWindow`, says how the sources split. A slice is one
   set of sources, solved as one model, and its key names it in every table.
 
+**Window** · **horizon** · **lookahead**
+: `EachWindow` cuts the windowed dimension into windows. A window's horizon is
+  the labels it keeps in the answer, its first `steps`. Its lookahead is the
+  `lookahead` labels it solves beyond them and drops, which the next window
+  solves again. PyPSA's `horizon=` counts its overlap too, and `steps=` does
+  not.
+
+**horizon end**
+: The last label of a window's horizon. A carry reads the window's solution
+  there.
+
 **carry**
 : An axis's `carry={parameter: variable}` hands one slice's solution to the
-  next as data.
-
-**handover**
-: The last label of the windowed dimension that a window owns. A carry reads
-  the window's solution there and hands it to the next window as data.
+  next as data: the value at a window's horizon end becomes the next window's
+  initial condition.
 
 **held** · **spilled**
 : A held sweep keeps its answers in memory. A spilled one writes them to
@@ -193,6 +201,7 @@ word to write. A plural is refused with its word.
 | `streaming lane` | relational lane |
 | `sayable` | in the language |
 | `seam`, `surface`, `tax`, `closure` | the plain thing |
+| `handover`, `owned` | horizon end, the window's horizon |
 
 A dimension's labels are its labels, never its index: an index is a solver's
 position of a column or a row, or a pandas index.
