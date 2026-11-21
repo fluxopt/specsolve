@@ -19,9 +19,10 @@ jobs:
           BOX: ${{ vars.BENCH_RUNNER }}
           MAX_HOURS: '12'
         run: |
-          box=$(hcloud server describe "$BOX" -o format='{{.ID}} {{.Created}}' 2>/dev/null) || {
+          box=$(hcloud server describe "$BOX" -o json 2>/dev/null) || {
             echo "no $BOX — the normal case"; exit 0; }
-          read -r id created <<< "$box"
+          id=$(jq -r .id <<< "$box")
+          created=$(jq -r .created <<< "$box")
           age=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 3600 ))
           echo "$BOX up for ${age}h, limit ${MAX_HOURS}h"
           if [ "$age" -ge "$MAX_HOURS" ]; then
