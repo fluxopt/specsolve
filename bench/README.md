@@ -121,7 +121,8 @@ of them measured the same code with specsolve 1.24x to 1.75x apart while linopy
 stayed within 9% (#2168). The other libraries do not stand in for specsolve
 here. Every result file records the host, its processor's `/proc/cpuinfo`
 fields, its memory and polars' thread count, and the pull request comment warns
-when the two runs it compares report different clocks or microcode.
+when the two runs it compares report a different clock, core layout or
+microcode.
 
 The workflow reads the repository variable `BENCH_RUNNER` for its label, so
 pointing the run at a box is a settings change rather than a commit. Unset, it

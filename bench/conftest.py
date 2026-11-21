@@ -262,7 +262,7 @@ TRACKED = (
 )
 
 #: The `/proc/cpuinfo` fields that tell two servers of one type apart.
-CPUINFO = ('model name', 'cpu family', 'model', 'stepping', 'microcode', 'cpu MHz')
+CPUINFO = ('model name', 'cpu family', 'model', 'stepping', 'microcode', 'cpu MHz', 'siblings', 'cpu cores')
 
 
 @pytest.hookimpl(optionalhook=True)

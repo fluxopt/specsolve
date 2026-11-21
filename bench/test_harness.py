@@ -1154,7 +1154,9 @@ def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request:
         'the two dependencies the result files could not vouch for are fingerprinted'
     )
     if Path('/proc/cpuinfo').exists():
-        assert {'model name', 'microcode', 'cpu MHz'} <= set(host), 'the fields that tell two hosts apart are kept'
+        assert {'model name', 'microcode', 'cpu MHz', 'siblings', 'cpu cores'} <= set(host), (
+            'the fields that tell two hosts apart are kept, the core layout among them'
+        )
 
 
 @pytest.mark.parametrize(
@@ -1163,6 +1165,12 @@ def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request:
         pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_400_000_000}, False, id='one-host-read-twice'),
         pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_200_000_000}, True, id='another-clock'),
         pytest.param({'host': {'microcode': '0xa0011d5'}}, {'host': {'microcode': '0xa0011d1'}}, True, id='microcode'),
+        pytest.param(
+            {'host': {'cpu cores': '8', 'siblings': '8'}},
+            {'host': {'cpu cores': '4', 'siblings': '8'}},
+            True,
+            id='core-layout',
+        ),
         pytest.param({}, {}, False, id='a-file-from-before-the-host-was-recorded'),
     ],
 )
