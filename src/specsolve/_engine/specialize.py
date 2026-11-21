@@ -47,12 +47,7 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
     with no row, and a count along a dimension without a label, settle
     without a query.
     """
-    declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
-    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
-    regions = [
-        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
-    ]
-    masks = [*(d.where for d in declared if d.where is not None), *regions]
+    masks = _conditions(lowered)
     scope = Scope(lowered, attached, {})
     atoms = {atom for mask in masks for atom in mask.atoms}
     out: dict[program.Condition, bool] = {}
@@ -74,6 +69,16 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
         elif count == math.prod(scope.data.cardinality[d] for d in atom.dims):
             out[atom] = True
     return out
+
+
+def specialized_on(lowered: program.Program) -> frozenset[str]:
+    """The parameters whose data [`specialized`][] rewrites *lowered* by: a change of one can change the program built.
+
+    They are the names every condition [`settle`][] reads. An update of one
+    of them, numbers alone included, builds again rather than reading the
+    old program's declarations again.
+    """
+    return frozenset(name for mask in _conditions(lowered) for name in mask.names_read)
 
 
 def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
@@ -127,6 +132,16 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
 def rowless(declaration: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
     """Whether *declaration* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
     return any(not attached.cardinality[d] for d in declaration.dims) or rules_out(declaration.where, attached)
+
+
+def _conditions(lowered: program.Program) -> list[program.Mask]:
+    """Every condition the data can settle: each ``where``, and each ``cases:`` region the rows and bounds read."""
+    declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
+    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
+    regions = [
+        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+    ]
+    return [*(d.where for d in declared if d.where is not None), *regions]
 
 
 def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:

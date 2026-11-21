@@ -164,7 +164,7 @@ class Engine:
         if attached is None:
             attached = attach(program, sources)
         self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
-        if held is not None and changed and numbers_only(held, previous, attached, changed):
+        if held is not None and changed and numbers_only(program, held, previous, attached, changed):
             self._measured = copy.deepcopy(previous)
             with _clocked(self._seconds, 'build'):
                 self._built = refilled(held, attached, changed, self._measured)

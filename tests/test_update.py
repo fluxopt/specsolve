@@ -1101,14 +1101,14 @@ FLAGGED = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason='the refill reads the program as the old flags folded it')
 @pytest.mark.parametrize('overrides', [pytest.param(v, id=k) for k, v in FLAGGED.items()])
 def test_a_flag_the_build_folded_away_builds_again_when_it_moves(overrides):
     """`on` drops from 1 to 0 at every generator, so the flag the build folded true now folds false.
 
-    The update moves only numbers at the coordinates `on` had, so it took the
-    refill, which reads the program the build kept: the one the old `on`
-    folded, which no longer names `on` at all.
+    The update moves only numbers at the coordinates `on` had. It took the
+    refill, which read the program the build kept: the one the old `on`
+    folded, which no longer names `on` at all, so the floor kept its rows and
+    the objective its old prices.
     """
     spec = override(ROLES, **overrides)
     off = {'on': ROLE_DATA['on'].with_columns(pl.Series('value', [0.0, 0.0]))}

@@ -19,7 +19,7 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import rowless
+from specsolve._engine.specialize import rowless, specialized_on
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
 from specsolve._sinks.handoff import SENSE
@@ -508,17 +508,27 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
     return short
 
 
-def numbers_only(built: BuiltModel, measured: Measured, attached: AttachedSources, changed: Collection[str]) -> bool:
+def numbers_only(
+    lowered: program.Program,
+    built: BuiltModel,
+    measured: Measured,
+    attached: AttachedSources,
+    changed: Collection[str],
+) -> bool:
     """Whether *changed* moves only numbers [`refilled`][] can read again, so *built* keeps its labels and matrix.
 
     Every name must be a parameter that no build reads for which columns, rows
-    or matrix entries exist ([`_structural_parameters`][]), attached now at
-    exactly the coordinates *built* attached it at. A constraint it feeds must
-    have built every row it labelled: its checks ran on rows the stored frame
-    no longer holds once a row is dropped.
+    or matrix entries exist ([`_structural_parameters`][]), nor one *lowered*
+    is [`specialized_on`][], attached now at exactly the coordinates *built*
+    attached it at. Both are asked of *lowered*, the program as written:
+    *built* keeps the program the data specialized, which no longer names a
+    condition the old data settled. A constraint it feeds must have built
+    every row it labelled: its checks ran on rows the stored frame no longer
+    holds once a row is dropped.
     """
     plan = built.program
-    if not set(changed) <= set(plan.parameters) or set(changed) & _structural_parameters(plan):
+    structural = _structural_parameters(lowered) | specialized_on(lowered)
+    if not set(changed) <= set(plan.parameters) or set(changed) & structural:
         return False
     if any(name in measured.omitted for name in _fed(plan.constraints, changed, _constraint_parameters)):
         return False
