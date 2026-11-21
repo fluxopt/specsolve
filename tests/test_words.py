@@ -10,7 +10,7 @@ spans, code fences, link targets and generated blocks. A word is matched whole,
 in any letter case, and so is its plural.
 
 A word with no other meaning here is refused outright. A word that keeps a second,
-legitimate meaning, such as *mask* for linopy's ``mask=``, is held by a ratchet:
+legitimate meaning, such as a dtype *declaration*, is held by a ratchet:
 its ceiling is the count left in the tree, so a new use fails until a reviewer
 lowers it with the count.
 """
@@ -43,7 +43,7 @@ def _instead() -> dict[str, str]:
 #: Word → what to write instead, as the glossary's table gives it.
 INSTEAD = _instead()
 
-#: Uses left in another sense, such as linopy's ``mask=``.
+#: Uses left in another sense, such as a dtype declaration.
 #: A ratchet: lower it in the PR that lowers the count.
 CEILING = {
     'declaration': 7,
@@ -52,8 +52,6 @@ CEILING = {
     'dims': 6,
     'lowered': 1,
     'lowers': 2,
-    'mask': 6,
-    'masks': 1,
 }
 
 #: Pages that are generated, or that quote the retired words to retire them.

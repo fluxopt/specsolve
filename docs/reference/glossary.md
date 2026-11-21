@@ -82,6 +82,11 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   leaves the entry absent elsewhere
   ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
 
+**Mask**
+: The condition of a `where:`, as it narrows an entry. A condition under
+  `when:` or `holds:` narrows no entry, so it is not a mask. In Python a mask
+  is a `program.Mask`.
+
 **Absent**
 : Holding no value at a coordinate. An absent value is not zero: a `where:`
   leaves an entry absent, and so does a missing row under `missing: absent`.
@@ -186,7 +191,7 @@ word to write. A plural is refused with its word.
 | Not | Write |
 | --- | --- |
 | `declaration` | entry |
-| `mask`, `predicate` | condition, or `where:` |
+| `predicate` | condition |
 | `masked`, `masked out`, `unbuilt` | absent |
 | `unmasked` | with no condition |
 | `primitive` | operator |
