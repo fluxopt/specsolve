@@ -1,18 +1,21 @@
 """What the data decides about a program before a declaration is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
-same pass, every test a ``where`` makes ([`settle`][]). What that read settles
-is answered here: the program a build compiles is [`specialized`][] to it, and
-[`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
-already ruled out ([`rowless`][]). Every such decision lives in this module, so
-a build's shortcuts are one list rather than a check in each place that takes
-one.
+same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][]).
+What that read settles is answered here: the program a build compiles is
+[`specialized`][] to it, and [`Assembly`][specsolve._engine.assembly.Assembly]
+builds nothing the data has already ruled out ([`rowless`][]). The one decision
+taken elsewhere is a region's, which the compiler folds over the same read, in
+a build alone ([`Scope.settled`][specsolve._engine.scope.Scope.settled]).
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
 from typing import TYPE_CHECKING
+
+from mathspec import program
+from mathspec.program import walk
 
 from specsolve._collect import in_memory
 from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere, settled
@@ -21,22 +24,26 @@ from specsolve._engine.scope import Scope
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from mathspec import program
-
     from specsolve._engine.attaching import AttachedSources
 
 
 def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """The tests the ``where`` of every variable, constraint and assumption makes, settled over *attached*.
+    """The tests *lowered*'s conditions make, settled over *attached*.
 
-    One batch for the whole program: a model gates hundreds of declarations
-    on the same few flags. In memory, since each test reads one parameter's
+    The conditions are the ``where`` of every variable, constraint and
+    assumption, and of every ``cases:`` region the rows and bounds read. One
+    batch for the whole program: a model gates hundreds of declarations on
+    the same few flags. In memory, since each test reads one parameter's
     table whole. *attached* need not hold the answer yet; this is what
     computes it.
     """
     declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
+    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
+    regions = [
+        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+    ]
     with in_memory():
-        return settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+        return settled(Scope(lowered, attached, {}), [*(d.where for d in declared if d.where is not None), *regions])
 
 
 def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:

@@ -100,13 +100,17 @@ class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
-        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*.
+
+        The scope holds what *attached* settled, so the compiler folds each
+        ``cases:`` region over it too.
+        """
         self.program = program
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, labels.Labelled] = {}
         self.constraints: dict[str, labels.Labelled] = {}
-        self.scope = Scope(program, attached, self.variables)
+        self.scope = Scope(program, attached, self.variables, attached.settled)
         self.compiler = Compiler(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
