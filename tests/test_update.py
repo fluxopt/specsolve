@@ -968,17 +968,17 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     ran before the cleanup that forgets the last build's tables, so the next
     update kept the `load` built before the attached one.
     """
-    import specsolve._api as api
+    import specsolve._sources as door
 
     load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
     cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = api.kept_parameters
+    choose = door._kept
 
     def interrupted(*args):
-        monkeypatch.setattr(api, 'kept_parameters', choose)
+        monkeypatch.setattr(door, '_kept', choose)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(api, 'kept_parameters', interrupted)
+    monkeypatch.setattr(door, '_kept', interrupted)
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})

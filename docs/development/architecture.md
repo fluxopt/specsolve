@@ -41,7 +41,8 @@ flowchart TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
+            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
+            SPECIALIZE --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
@@ -165,9 +166,9 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 
 ## The relational lane
 
-**The spine is one module per box**: `attaching.py`, `compiler.py`,
-`assembly.py`, `_sinks/`, and `engine.py`, which runs the lifecycle. `scope.py`
-sits under them all.
+**The spine is one module per box**: `attaching.py`, `specialize.py`,
+`compiler.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
+lifecycle. `scope.py` sits under them all.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
 leaves no model.
@@ -199,21 +200,22 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language |
-| `_api.py` | the functions, and `load_result` / `scan_result` |
+| `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
-| `_inputs.py` | `Buildable` and `Source`, what every function takes |
+| `_inputs.py` | `SpecLike` and `Source`, what every function takes |
 | `_collect.py` | how polars materialises a frame |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | the door: caller data into tidy tables |
+| `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `_frames.py` | caller tables in, via the Arrow PyCapsule protocol |
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
-| `_strategy.py` | a sweep's driver: one plan per slice, folded |
-| `_axes.py` | how a sweep cuts its sources, and the stitch back |
-| `_sweep.py` | `Sweep`, its spill on disk, and `load_sweep` / `scan_sweep` |
+| `_solve_over.py` | a sweep's driver: one plan per slice, folded |
+| `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
+| `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable frames built so far |
 | `_engine/compiler.py` | plan → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
@@ -223,11 +225,14 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
+| `_engine/specialize.py` | what the data decides before a declaration is built |
 | `_engine/assembly.py` | one build: every declaration into the model tables |
 | `_engine/coverage.py` | is the data there where a declaration reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by label |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned |
+| `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
+| `_outputs.py` | what an answer carries: the kinds of frame, and the outputs a solve is asked for |
+| `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
 | `_sinks/handoff.py` | what every sink reads |
@@ -236,8 +241,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 
 **The lane imports nothing else from the package but `errors.py` and
 `_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer_layout.py`,
-`_collect.py`, `_names.py`, `_parquet.py`, `_result.py` and `_status.py`
-(`LANE`). No module imports linopy, and none imports xarray at module
+`_collect.py`, `_names.py`, `_outputs.py`, `_parquet.py`, `_records.py`,
+`_result.py` and `_status.py` (`LANE`). No module imports linopy, and none imports xarray at module
 level.
 
 ## Internal names
@@ -293,14 +298,14 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Carry** and **the wire**
 : One slice's answer copied into the next slice's data; how a slice's sources
-  cross to a worker (`_strategy.py`).
+  cross to a worker (`_solve_over.py`).
 
 ## Extension checklists
 
 **Add a macro or named expression:** edit YAML.
 
-**Add a sink:** a module in `_sinks/` named for it, with one line in
-`SOLVERS`, or one keyed by suffix in `WRITERS`. Its dependency
+**Add a sink:** a module in `_sinks/` named for it, with its class in
+`SOLVERS`, or one line keyed by suffix in `WRITERS`. Its dependency
 sits behind an extra, imported inside the function. The
 [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)
 is the full list.

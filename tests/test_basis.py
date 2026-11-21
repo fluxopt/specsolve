@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._answer_layout import NO_BASIS
+from specsolve._outputs import NO_BASIS
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -149,15 +149,15 @@ def test_a_model_with_a_quadratic_constraint_ends_on_no_basis() -> None:
 # sweeps
 # ---------------------------------------------------------------------------
 
-#: The dispatch model of ``test_strategy``: ``balance`` is an equality, so it
+#: The dispatch model of ``test_solve_over``: ``balance`` is an equality, so it
 #: is ``fixed`` or ``basic`` in every scenario, never at one side.
 SHAPES = [pytest.param(how, id=how) for how in ('held', 'process-pool', 'spilled', 'archived')]
 
 
 def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Sweep:
-    from tests.test_strategy import DISPATCH, scenario_sources
+    from tests.test_solve_over import DISPATCH, scenario_sources
 
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, archive=tmp_path / 'run.zip')
         archive = sps.load_archive(tmp_path / 'run.zip')
@@ -181,12 +181,12 @@ def test_a_sweep_reads_each_slices_basis(tmp_path: Path, how: str) -> None:
 
 
 def test_a_sweep_of_slices_that_ended_on_no_basis_says_why(tmp_path: Path) -> None:
-    from tests.test_strategy import DISPATCH, scenario_sources
+    from tests.test_solve_over import DISPATCH, scenario_sources
 
     sweep = sps.solve_over(
         DISPATCH,
         scenario_sources(),
-        sps.EachCoordinate('scenario'),
+        sps.EachLabel('scenario'),
         solver_options=NO_CROSSOVER['highs'],
         outputs=BASIS,
     )

@@ -29,7 +29,7 @@ import yaml
 from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
+from bench.ab.compare import Row, Worker, _ask, checkouts, compare, same_model, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -809,7 +809,9 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
+@pytest.mark.parametrize(
+    'case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector', 'curves']
+)
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
@@ -875,6 +877,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
+# Not `curves`: linopy writes each segment row divided by its x-step, the expansion multiplies through by it.
 @pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
@@ -1486,9 +1489,10 @@ def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: P
     case = CASES['declarations']
     shape = case.shape(label)
     schema = to_spec(str(case.spec_path(shape, cache=tmp_path)))
-    n = shape.sizes['declaration']
-    assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
-    assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
+    n, empty = shape.sizes['declaration'], shape.empty
+    assert len(schema.variables) == n + 2 * empty, 'a variable per swept declaration, and two kinds of empty one'
+    assert len(schema.constraints) == n + 1 + 2 * empty, 'a capacity constraint per variable, plus one balance'
+    assert len(schema.assumptions) == empty, 'an empty rung counts along store once per kind'
 
 
 def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
@@ -1509,9 +1513,37 @@ def test_only_the_masked_declaration_rungs_carry_a_where() -> None:
     case = CASES['declarations']
     for shape in case.ladder:
         text = _declarations_spec(shape)
-        assert ('where:' in text) == shape.masked, (
-            f'{shape.label}: a where: belongs on the masked rungs and only on those'
+        assert ('where: "p_max > 0"' in text) == shape.masked, (
+            f'{shape.label}: the vacuous where: belongs on the masked rungs and only on those'
         )
+
+
+def test_an_empty_declaration_rung_writes_its_twins_lp_file(tmp_path: Path) -> None:
+    """None of the empty declarations reaches the matrix, and the rung draws its twin's numbers.
+
+    The difference between the pair is then what the empty declarations cost
+    and nothing else, which is the measurement.
+    """
+    import specsolve as sps
+
+    case = CASES['declarations']
+    written = {}
+    for label, empty in (('twin', 0), ('empty', 3)):
+        shape = Shape(label, {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16, empty=empty)
+        (tmp_path / label).mkdir()
+        paths = case.write(shape, tmp_path / label)
+        sps.write(case.spec_path(shape, cache=tmp_path / label), paths, tmp_path / f'{label}.lp')
+        written[label] = (tmp_path / f'{label}.lp').read_text()
+    assert written['empty'] == written['twin'], 'an empty declaration changed the written model'
+
+
+def test_the_empty_declaration_rung_pairs_with_a_dense_twin() -> None:
+    ladder = {s.label: s for s in CASES['declarations'].ladder}
+    empty = [s for s in ladder.values() if s.empty]
+    assert [s.label for s in empty] == ['n008e'], 'one empty rung, beside the masked n008m'
+    twin = ladder['n008']
+    assert empty[0].sizes == twin.sizes, 'an empty rung and its twin build the same model'
+    assert empty[0].nominal_variables == twin.nominal_variables, 'an empty declaration adds no column'
 
 
 def test_the_masked_declaration_rungs_pair_with_a_dense_twin() -> None:
@@ -1538,10 +1570,23 @@ def test_a_masked_rung_without_a_dense_twin_is_refused(counts, masked, complaint
 
 
 @pytest.mark.parametrize(
+    ('empty', 'per_kind', 'complaint'),
+    [
+        pytest.param((4,), 1, 'no dense twin', id='empty-without-a-twin'),
+        pytest.param((2,), 0, 'at least one declaration', id='empty-rung-that-adds-nothing'),
+    ],
+)
+def test_an_empty_rung_without_a_twin_or_declarations_is_refused(empty, per_kind, complaint) -> None:
+    with pytest.raises(ValueError, match=complaint):
+        _declaration_sweep(pool=8, snapshots=10, counts=(2, 8), empty=empty, per_kind=per_kind)
+
+
+@pytest.mark.parametrize(
     ('label', 'sweep'),
     [
         pytest.param('n008', 'declaration', id='dense-rung'),
         pytest.param('n008m', 'declaration', id='masked-rung'),
+        pytest.param('n008e', 'declaration', id='empty-rung'),
         pytest.param('d50', 'density', id='density-rung'),
         pytest.param('w10', 'width', id='width-rung'),
         pytest.param('m', 'size ladder', id='size-rung'),
@@ -1565,6 +1610,7 @@ def test_every_rung_label_lands_in_its_own_sweep(label: str, sweep: str) -> None
         pytest.param('n008', '8', id='count'),
         pytest.param('n128', '128', id='larger-count'),
         pytest.param('n008m', '8 masked', id='masked-twin-prints-beside-its-count'),
+        pytest.param('n008e', '8 + empty', id='empty-twin-prints-beside-its-count'),
     ],
 )
 def test_a_declaration_rung_prints_its_count_and_whether_it_is_masked(label: str, printed: str) -> None:
@@ -2202,6 +2248,49 @@ def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
     assert row.error is None, row.error
     assert row.metric == 'peak_mb', 'a memory run judges the peak, not the clock'
     assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
+
+
+@pytest.mark.parametrize(
+    ('memory', 'builds'),
+    [
+        pytest.param(True, 1, id='a memory run builds once'),
+        pytest.param(False, 2, id='a timed run builds once off the clock first'),
+    ],
+)
+def test_a_memory_peak_is_of_a_process_that_built_once(
+    memory: bool, builds: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The peak is the highest the process ever stood, so a build off the clock is inside it.
+
+    A memory run used to build twice, as a timed run does. Its peak then turned
+    on whether the first model's garbage was collected before the second build
+    reached its own peak: over six processes on one tree `grid-worst-l` peaked
+    between 591 and 667 MB built twice, and between 572 and 580 MB built once
+    (#2143). The stand-in `specsolve` under the tree counts the builds of a
+    real worker process.
+    """
+    package = tmp_path / 'src/specsolve'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text(
+        'import os\n'
+        'from types import SimpleNamespace\n'
+        '\n'
+        '\n'
+        'def build(spec, sources):\n'
+        "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
+        "        log.write('built\\n')\n"
+        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(columns=1, rows=1))\n'
+    )
+    log = tmp_path / 'builds'
+    monkeypatch.setenv('AB_BUILDS', str(log))
+    workers = {} if memory else {'base': Worker(tmp_path, op='build', focus=None)}
+    try:
+        _ask(workers, {'base': tmp_path}, 'base', 'grid-baseline-tiny', 'build', None, None)
+    finally:
+        for worker in workers.values():
+            worker.close()
+    built = len(log.read_text().splitlines())
+    assert built == builds, f'the worker built {built} times: a peak is of one build, a timing of the second of two'
 
 
 def test_two_different_models_fail_however_fast() -> None:
