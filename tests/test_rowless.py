@@ -87,9 +87,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('constraint', 'over_nothing', id='a-constraint-over-a-dimension-without-a-label'),
         pytest.param('constraint', 'admits_nothing', id='a-constraint-whose-where-admits-no-row'),
         pytest.param('variable', 'y', id='a-variable-over-a-dimension-without-a-label'),
-        pytest.param(
-            'labelled', ('e',), id='an-entry-over-a-dimension-without-a-label-is-labelled-without-a-query'
-        ),
+        pytest.param('labelled', ('e',), id='an-entry-over-a-dimension-without-a-label-is-labelled-without-a-query'),
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
 )

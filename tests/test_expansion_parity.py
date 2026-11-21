@@ -1,7 +1,7 @@
 """Expansion means the same on both lanes.
 
 The rules for `macros:` and `expressions:` live with the language's own suite
-(#1150). Both constructs expand to core AST before dispatch, so one end-to-end
+(#1150). Both constructs expand into ordinary program nodes before dispatch, so one end-to-end
 case on which the lanes agree covers them.
 """
 

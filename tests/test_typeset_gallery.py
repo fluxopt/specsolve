@@ -42,7 +42,7 @@ TYPESET_PATHS = SPEC_PATHS
 
 @EVERY_FORMAT
 def test_every_example_renders(fmt):
-    """The walk consumes the same AST as lowering, so anything ``check``
+    """The walk reads the same program that compiling produces, so anything ``check``
     accepts it must print — a node it forgot is an exception, not a blank."""
     for path in TYPESET_PATHS:
         assert typeset(path, fmt).strip()

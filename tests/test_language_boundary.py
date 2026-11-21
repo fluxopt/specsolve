@@ -23,10 +23,10 @@ def _objective(expression: str) -> dict:
 
 @pytest.mark.parametrize('path', SPEC_PATHS, ids=lambda p: p.name)
 def test_every_shipped_example_is_inside_the_language(path):
-    """Every dim rule, over the corpus this repository ships, and then lowering.
+    """Every dimension rule, over the corpus this repository ships, and then compiling.
 
     The language sweeps the rules over its own probes; this is the same sweep
-    over the gallery and the ports. Loading a ``Spec`` runs every dim rule, and
+    over the gallery and the ports. Loading a ``Spec`` runs every dimension rule, and
     the result must then lower.
     """
     expanded(path, 'piecewise')
@@ -46,7 +46,7 @@ def test_every_shipped_example_is_inside_the_language(path):
     ],
 )
 def test_inside_the_language(patch):
-    """Each of these lowers, so both lanes accept it."""
+    """Each of these compiles, so both lanes accept it."""
     schema_of(DISPATCH, **patch)
 
 

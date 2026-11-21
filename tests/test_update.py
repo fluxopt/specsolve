@@ -2,7 +2,7 @@
 
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
-path: an update that moves a mask renumbers labels, so the engine rebuilds and
+path: an update that moves a condition renumbers labels, so the engine rebuilds and
 solves cold, and `diagnostics().loads` says which happened.
 """
 
@@ -57,7 +57,7 @@ REACH = {
 
 
 def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
-    """A `reach` frame. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
+    """A `reach` table. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
     return pl.DataFrame(
         {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
         schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
@@ -115,7 +115,7 @@ RUNGS = [
     ),
     pytest.param(
         Rung('dispatch', {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False),
-        id='mask',
+        id='condition',
     ),
     pytest.param(Rung('reach', {'levy': pl.DataFrame({'value': [500.0]})}, True), id='objective constant'),
     pytest.param(
@@ -165,7 +165,7 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
-    every label. Over **every** declaration and **every** sink that can stay
+    every label. Over **every** entry and **every** sink that can stay
     loaded, since each sink writes its own push.
     """
     spec, given = _case(rung, dispatch_yaml)
@@ -272,7 +272,7 @@ def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
 
 
 def _laid_out_alike(got: pl.DataFrame, want: pl.DataFrame, *, values: bool, where: str) -> None:
-    """*got* is *want*'s frame: same coordinates in the same order, same numbers."""
+    """*got* is *want*'s table: same coordinates in the same order, same numbers."""
     assert got.drop('value').equals(want.drop('value')), f'{where}: came back keyed or ordered differently'
     if values:
         assert got['value'].to_list() == pytest.approx(want['value'].to_list()), f'{where}: different numbers'
@@ -360,7 +360,7 @@ def _tables(spec: Any) -> Any:
 
 #: The three fields of the digest **no rung above can reach**: a variable's
 #: type, a row's comparison and the objective's direction all come from the
-#: YAML, so they are pinned one edit of the declaration apart.
+#: YAML, so they are pinned one edit of the entry apart.
 DECLARED = [
     pytest.param({'variables.p.domain': 'integer'}, id='a variable type'),
     pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
@@ -376,7 +376,7 @@ def test_the_digest_moves_where_a_declaration_moved(edited):
     )
 
 
-#: The counts, which no edit of a declaration reaches either.
+#: The counts, which no edit of an entry reaches either.
 COUNTS = [pytest.param('column_count', id='the column count'), pytest.param('row_count', id='the row count')]
 
 
@@ -451,7 +451,7 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
 
 
 def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
-    """What outlives a build is the digest, never the frames it was read from (#1608).
+    """What outlives a build is the digest, never the tables it was read from (#1608).
 
     A solver holding the tables it loaded has to drop them before the next
     build allocates, or a re-solving loop stands at two models' peak. **Asked
@@ -508,10 +508,10 @@ def test_a_update_may_be_repeated_and_each_answer_is_its_own(model):
 def test_a_result_from_before_a_update_keeps_reading(model):
     """A result owns its read-back, so nothing done to the model expires it.
 
-    The label frames are immutable and shared: an update builds new ones
+    The label tables are immutable and shared: an update builds new ones
     without touching what earlier results hold, so an old answer stays an
     answer over its own coordinates — a driver keeps any result it still
-    wants, at the price of keeping that build's label frames alive.
+    wants, at the price of keeping that build's label tables alive.
     """
     before = model.solve()
     kept = before.primal('p')
@@ -526,7 +526,7 @@ def test_a_result_from_before_a_update_keeps_reading(model):
 
 def test_closing_a_result_never_touches_the_model(model):
     """`close` releases what the result holds — its values and its hold on the
-    label frames — never the model or the solver, which are the handle's to
+    label tables — never the model or the solver, which are the handle's to
     close. So a result closed on the way out of a `with` block cannot take
     down the model a loop is still solving, and a sibling result, holding its
     own read-back, keeps reading.
@@ -566,7 +566,7 @@ def test_a_dimension_index_updates_as_a_source(model):
 def test_a_update_can_grow_a_dimension():
     """Appending rows is an update — the Benders master, in three lines.
 
-    A cut family is declared once and its members come from data (the data-attachment rules), so
+    A cut family is declared once and its labels come from data (the data-attachment rules), so
     an iteration hands over a longer table and the coordinates to match. The
     labels of the rows that were already there do not move, but the model has
     more rows than the solver holds, so it is loaded again.
@@ -646,8 +646,8 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
-    `examples/dispatch.yaml` masks on `p_max > 0`, so the shape is what
-    *survived* the mask rather than what the declarations multiply out to.
+    `examples/dispatch.yaml` has a `where:` of `p_max > 0`, so the shape is what
+    *survived* the condition rather than what the entries multiply out to.
     """
     with sps.build(dispatch_yaml, sources() | COORDS) as model:
         model.solve()
@@ -661,14 +661,14 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
 
 
 def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
-    """Read off the built model, so a mask that moved moves the counts with it."""
+    """Read off the built model, so a condition that moved moves the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with sps.build(dispatch_yaml, zeroed | COORDS) as model:
         assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
 
 
 def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
-    """The objective frame may change height across an update. The solver may not.
+    """The objective table may change height across an update. The solver may not.
 
     A zero cost is pruned, so `obj` holds one row fewer, while `structure`
     does not read `obj`. A push that read `obj` positionally would hand the
@@ -684,7 +684,7 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         updated = model.update({'cost': zeroed}).solve()
 
         assert model._engine._model.handoff.obj.height == before - 1, (
-            'the zero cost should have left the objective frame'
+            'the zero cost should have left the objective table'
         )
         assert model.diagnostics().loads == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 

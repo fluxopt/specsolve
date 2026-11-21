@@ -59,7 +59,7 @@ BASE: dict[str, Any] = {
 
 
 def spec(sos_type: int) -> dict[str, Any]:
-    """The base model with one set over ``take``'s ``size`` dim."""
+    """The base model with one set over ``take``'s ``size`` dimension."""
     return BASE | {'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': sos_type}}}
 
 
@@ -97,8 +97,8 @@ def test_the_three_regimes_have_different_optima():
 # ---------------------------------------------------------------------------
 
 
-#: A dim the model declares and ``take`` does not carry, so a set over it has
-#: no members — the one case needing a declaration the base model lacks.
+#: A dimension the model declares and ``take`` does not carry, so a set over it has
+#: no members — the one case needing an entry the base model lacks.
 UNCARRIED = {'dimensions': BASE['dimensions'] | {'other': {'dtype': 'str'}}}
 
 #: A member the set cannot hold at zero from one side, because the model
@@ -111,14 +111,16 @@ OPEN_BELOW = {'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'upper
     ('blocks', 'expected', 'also'),
     [
         pytest.param(
-            {'pick': {'variable': 'nope', 'along': 'size'}}, "'nope' is not a declared variable", {}, id='no-var'
+            {'pick': {'variable': 'nope', 'along': 'size'}}, "'nope' is not a declared variable", {}, id='no-variable'
         ),
-        pytest.param({'pick': {'variable': 'take', 'along': 'site2'}}, "undeclared dimension 'site2'", {}, id='no-dim'),
+        pytest.param(
+            {'pick': {'variable': 'take', 'along': 'site2'}}, "undeclared dimension 'site2'", {}, id='no-dimension'
+        ),
         pytest.param(
             {'pick': {'variable': 'take', 'along': 'other'}},
             "along 'other' is not a dim of variable 'take'",
             UNCARRIED,
-            id='a-dim-the-variable-does-not-carry',
+            id='a-dimension-the-variable-does-not-carry',
         ),
         pytest.param(
             {'pick': {'variable': 'take', 'along': 'size'}, 'again': {'variable': 'take', 'along': 'size', 'type': 2}},
@@ -259,12 +261,12 @@ def test_a_member_that_may_go_negative_is_held_at_zero_from_below():
 
 
 def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
-    """Membership is the variable's own, so a mask closes the gap it leaves.
+    """Membership is the variable's own, so a condition closes the gap it leaves.
 
-    With size 1 masked out at every site the members that exist are 0, 2 and
+    With size 1 absent at every site the members that exist are 0, 2 and
     3. A weight orders the members and nothing more, so a sink branching on
     the set reads ``{0, 2}`` as consecutive in the list it was handed, which
-    the unmasked model refuses.
+    the model without the `where` refuses.
     """
     raw = spec(2)
     raw['variables'] = {
@@ -272,7 +274,7 @@ def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
     }
     with sps.build(raw, DATA) as model:
         sets = model._engine._model.handoff.sos
-    assert sets['weight'].to_list() == [1, 3, 4] * 2, 'the masked member is still in the list, or the order moved'
+    assert sets['weight'].to_list() == [1, 3, 4] * 2, 'the absent member is still in the list, or the order moved'
 
 
 def test_a_set_written_out_is_integrality_and_the_dual_message_names_it():
@@ -289,7 +291,7 @@ def test_a_sos2_set_of_one_member_restricts_nothing():
     exist — which would pin the one member of the set to zero and quietly
     delete it from the model.
 
-    Masked down per site, so one set keeps three members and the other has
+    Narrowed per site, so one set keeps three members and the other has
     one: a set that is dropped whole must also not shift the rows the sets
     after it own.
     """
@@ -372,11 +374,11 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
 def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
     """A label is a position where nothing was dropped, and both paths say so.
 
-    An unmasked variable's sets and weights are arithmetic on the label, which
-    *is* the coordinate's position in the declared product. A masked one has
+    A variable with no `where` has sets and weights that are arithmetic on the label, which
+    *is* the coordinate's position in the declared product. A narrowed one has
     to read the coordinates, a dropped row being a label that no longer
-    decomposes. A mask that drops nothing sends the same model down both
-    paths, so either the two frames are one frame or one of them is wrong —
+    decomposes. A condition that drops nothing sends the same model down both
+    paths, so either the two tables are one table or one of them is wrong —
     and a member in the wrong set is linked to another set's binaries.
 
     Both orders of the ``dims``, because the split is where ``over`` sits
@@ -400,13 +402,13 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dim
 def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
     """A set number is a dense index, the way a column's and a row's are.
 
-    A coordinate's *position* is not: it counts the product the mask never
+    A coordinate's *position* is not: it counts the product the condition never
     materialised, which is what may pass 2^31 while every survivor fits
     (``engine._DTYPES``). So a set is renumbered wherever a row was dropped,
     and what reaches a sink counts the sets that exist rather than the ones
-    the declaration would have had.
+    the entry would have had.
 
-    The mask empties the *first* set here, which is the one arrangement where
+    The condition empties the *first* set here, which is the one arrangement where
     a hole and no hole are different numbers.
     """
     take = {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}

@@ -57,7 +57,7 @@ def build_model(
     relations: dict[tuple[str, str], xr.DataArray],
     given: Mapping[str, xr.DataArray] | None = None,
 ) -> None:
-    """Populate a linopy Model from a lowered program and loaded parameters.
+    """Populate a linopy Model from a compiled program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and the
     objective as declared in *program*. Nothing is re-checked here: a program

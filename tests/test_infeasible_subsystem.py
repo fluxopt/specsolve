@@ -1,4 +1,4 @@
-"""The irreducible infeasible subsystem of the last solve, read back by declaration and coordinate.
+"""The irreducible infeasible subsystem of the last solve, read back by entry and coordinate.
 
 The model is a dispatch whose second snapshot asks for more than both
 technologies can deliver, so the one minimal conflict is that snapshot's
@@ -140,7 +140,7 @@ def test_a_discrete_model_names_the_row_where_the_solver_finds_one(solver_name: 
             assert 'gurobi' in str(refused), 'the refusal names a sink that does find one'
             return
     assert list(found.constraints) == ['odd'], 'spare is slack'
-    assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dims'
+    assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dimensions'
 
 
 def _unsolved(model: Any) -> None:

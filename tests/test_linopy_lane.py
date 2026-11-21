@@ -92,7 +92,7 @@ def _schema(dims=None, params=None) -> Spec:
 
 
 def _program(schema: Spec):
-    """The plan the loader reads its declarations off, as a build makes one."""
+    """The program the loader reads its entries off, as a build makes one."""
 
     return schema.program
 
@@ -132,7 +132,7 @@ class TestMasterCoords:
     def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):
         """`datetime.date` out of pandas and `datetime64` out of polars are one label.
 
-        They compare unequal, so the declaration makes the axis canonical past
+        They compare unequal, so the entry makes the axis canonical past
         the read and the source library stops being visible.
         """
         import datetime
@@ -173,7 +173,7 @@ class TestLoadParameters:
                 pd.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
                 {'x': 1},
                 20.0,
-                id='tidy-frame',
+                id='tidy-table',
             ),
             pytest.param([0, 1], [10.0, 20.0], {'x': 1}, 20.0, id='sequence'),
             pytest.param(
@@ -181,7 +181,7 @@ class TestLoadParameters:
                 pl.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
                 {'x': 1},
                 20.0,
-                id='a-polars-frame',
+                id='a-polars-table',
             ),
             pytest.param(
                 [0, 1],
@@ -248,7 +248,7 @@ class TestLoadParameters:
                 {'p': {'dims': ['g']}},
                 {'g': ['a', 'b'], 'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
                 'that are not coordinates',
-                id='unknown-coord',
+                id='unknown-coordinate',
             ),
         ],
     )
@@ -260,19 +260,19 @@ class TestLoadParameters:
 
 
 # ---------------------------------------------------------------------------
-# where.evaluate_where: the linopy reading of a lowered predicate
+# where.evaluate_where: the linopy reading of a compiled condition
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def gens():
-    """A dataset and its master coords, with one generator masked out by p_max."""
+    """A dataset and its master coords, with one generator left absent by p_max."""
     ds = xr.Dataset({'p_max': xr.DataArray([100, 0, 50], dims=['g'], coords={'g': ['wind', 'solar', 'gas']})})
     return ds, {'g': pd.Index(['wind', 'solar', 'gas'], name='g')}
 
 
 def _lowered(text, parameters=('p_max',), dimensions=('g',)):
-    """The program a model with predicate *text* lowers to, and that predicate.
+    """The program a model with condition *text* compiles to, and that condition.
 
     Through a whole model, because the resolver is the language's.
     """
@@ -341,7 +341,7 @@ def _has_note(exc: BaseException, substring: str) -> bool:
 
 #: A constant side the data does not cover, which only the *build* can see: the
 #: rows exist, the parameter has no row at one of them, and the fill would be
-#: the bound. The declaration it names is reached through `note()` rather than
+#: the bound. The entry it names is reached through `note()` rather than
 #: written into the message.
 _UNCOVERED_BOUND = (
     "parameters:\n  cap: {dims: [g], missing: neutral}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
@@ -463,7 +463,9 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
     out = subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True, check=True)
     linopy_lane, native = (float(v) for v in out.stdout.split())
     assert linopy_lane == pytest.approx(native), f'lanes disagree outside the harness: {linopy_lane} vs {native}'
-    assert native == pytest.approx(125.0), 'the masked row should be dropped, leaving x[b] at its bound'
+    assert native == pytest.approx(125.0), (
+        'the row the condition leaves out should be dropped, leaving x[b] at its bound'
+    )
 
 
 #: A scalar switch gates one variable; the other keeps the model non-empty
@@ -481,7 +483,7 @@ SCALAR_SWITCH = {
 
 @pytest.mark.parametrize(('on', 'expected'), [pytest.param(True, 6.0, id='on'), pytest.param(False, 4.0, id='off')])
 def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
-    """A dims-less ``False`` is a false mask on both lanes, not a defined ``0.0``."""
+    """A ``False`` with no dimensions is a false condition on both lanes, not a defined ``0.0``."""
     with differential(SCALAR_SWITCH, {'i': [1, 2], 'on': on}) as agreed:
         assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
@@ -490,7 +492,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
     """A bound the data does not cover is a ``DataError`` at build, as on the native lane (#313).
 
     A coordinate the variable does not occupy needs no bound, so the gap is
-    refused and the masked one accepted.
+    refused and the absent one accepted.
     """
     spec = yaml_file("""
         dimensions:
@@ -568,7 +570,7 @@ EXPRESSION_DATA = {
 }
 
 
-#: ``EXPRESSION_YAML`` with ``p`` masked out at the generator whose ``p_max`` is
+#: ``EXPRESSION_YAML`` with ``p`` absent at the generator whose ``p_max`` is
 #: zero and declared ``missing: neutral``, plus one entry only a nonlinear read can
 #: tell apart from an affine one.
 ZERO_ABSENCE_YAML = EXPRESSION_YAML.replace(
@@ -583,7 +585,7 @@ ZERO_ABSENCE_DATA = {**EXPRESSION_DATA, 'p_max': pd.Series({'g1': 200.0, 'g2': 0
 
 
 def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_read(yaml_file):
-    """`missing: neutral` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
+    """`missing: neutral` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the absent generator on each."""
     path = yaml_file(ZERO_ABSENCE_YAML, 'zero_absence.yaml')
     with differential(path, ZERO_ABSENCE_DATA) as run:
         tidy = run.result.evaluate('grown')
@@ -597,7 +599,7 @@ def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_r
 
 
 def test_a_dual_on_a_solve_that_left_none_is_refused_on_this_lane_too(yaml_file):
-    """An integer variable makes duals undefined; linopy stores HiGHS's zeros for a MIP, so the read refuses by the declaration rather than reading a number that means nothing."""
+    """An integer variable makes duals undefined; linopy stores HiGHS's zeros for a MIP, so the read refuses on what the model declares rather than reading a number that means nothing."""
     path = yaml_file(
         EXPRESSION_YAML.replace(
             '    dims: [snapshot, generator]\n', '    dims: [snapshot, generator]\n    domain: integer\n'
@@ -638,7 +640,7 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
 
 
-#: A curve masked by ``points:``, so the expansion declares a parameter the file
+#: A curve narrowed by ``points:``, so the expansion declares a parameter the file
 #: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
 #: purpose: hydro states two breakpoints where the axis has four.
 MASKED_CURVE_YAML = """
@@ -701,12 +703,12 @@ MASKED_CURVE_DATA = {
 
 
 def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
-    """Both lanes value one named expression the same where a curve is masked.
+    """Both lanes value one named expression the same where a curve is narrowed.
 
-    `points:` names a values parameter, and the mask is that parameter read as
+    `points:` names a values parameter, and the condition is that parameter read as
     a bare name in a `where` — true wherever it has a row. So the weights the
     expression sums over exist at some breakpoints and not others, and a lane
-    that read the unmasked product would answer a longer curve.
+    that read the full product would answer a longer curve.
     """
     path = yaml_file(MASKED_CURVE_YAML, 'masked_curve.yaml')
     with differential(path, MASKED_CURVE_DATA) as run:
@@ -714,7 +716,7 @@ def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
         linopy_lane = specsolve_linopy.evaluate(run.model, expanded(path), 'spend', dict(MASKED_CURVE_DATA))
         got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
         want = {int(k): float(v) for k, v in linopy_lane.to_series().items()}
-        assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a masked curve'
+        assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a narrowed curve'
 
 
 def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
@@ -733,7 +735,7 @@ def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
 
 
 def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
-    """A Program is what a model lowered to, and lowering does not run backwards."""
+    """A Program is what a model compiles to, and compiling does not run backwards."""
     from mathspec import to_spec
 
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
@@ -744,7 +746,7 @@ def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
 
 
 def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    """One `sources` mapping of polars frames and a parquet path reaches either lane unchanged (#60)."""
+    """One `sources` mapping of polars tables and a parquet path reaches either lane unchanged (#60)."""
     frames = dispatch_frame_inputs
     path = tmp_path / 'load.parquet'
     frames['load'].write_parquet(path)
@@ -792,7 +794,7 @@ _BARE_SHIFT = {
 
 
 def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
-    """One gate, both lanes: the lowering pass's refusals fire on this lane too."""
+    """One gate, both lanes: the compile step's refusals fire on this lane too."""
     import specsolve as sps
 
     with pytest.raises(LanguageError, match='vacated positions') as native:
@@ -815,16 +817,16 @@ OBJECTIVE_CONSTANT = {
 
 
 def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
-    """The mirror of the test above: the streaming lane builds this one.
+    """The mirror of the test above: the relational lane builds this one.
 
-    The model is sayable, lowers and solves relationally, so the refusal says
+    The model is in the language, compiles and solves relationally, so the refusal says
     the wall is this lane's, which linopy's `Constant values in objective
     function not supported.` cannot say (#894).
     """
     import specsolve as sps
 
     assert sps.solve(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0}).objective == pytest.approx(5.0), (
-        'the streaming lane builds it, so the model is not the problem'
+        'the relational lane builds it, so the model is not the problem'
     )
     with pytest.raises(loader.OracleCannotBuildError) as refusal:
         specsolve_linopy.build(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0})
@@ -835,7 +837,7 @@ def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
 
 
 #: The terms on the right of the comparison. The language puts them on neither
-#: side — `ConstraintDeclaration` says which side a consumer gathers them onto
+#: side — `ConstraintDeclaration` says which side a tool gathers them onto
 #: is its own arrangement — and linopy takes them only on the left.
 TERM_ON_THE_RIGHT = {
     'dimensions': {'g': {'dtype': 'str'}},
@@ -922,5 +924,5 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
         linopy_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
         rel_p = run.result.to_pandas('p')
         merged = linopy_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_linopy', '_rel'))
-        assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
+        assert len(merged) == len(rel_p), 'nothing is absent here, so the rows align 1:1'
         assert np.allclose(merged['value_linopy'], merged['value_rel'], atol=1e-6)

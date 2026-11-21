@@ -4,7 +4,7 @@ The call walks to two columns of one relation and lands terms on a product of
 dimensions, as a capacity limit per location and technology asks (PyPSA's
 `tech_capacity_expansion_limit`). The lanes differ on the empty combination,
 which the linopy lane's unstack fills with ``const: nan``, and on label order,
-which a groupby sorts and the dim table keeps as declared.
+which a groupby sorts and the dimension table keeps as declared.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
 
     An empty group is a zero-length sum, so its row asks `0 <= 1` and binds
     nothing. Tightening that limit to zero must therefore change no answer,
-    which catches a lane that quietly summed the wrong members into it.
+    which catches a lane that quietly summed the wrong labels into it.
 
     A row left with no variables is not built on either lane;
     :func:`test_an_empty_combination_does_not_take_its_row_with_it` checks
@@ -131,7 +131,7 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
 def test_an_empty_combination_does_not_take_its_row_with_it():
     """A row whose group is empty but whose *other* terms are not is still a row.
 
-    The linopy lane reaches the combinations no member lands on by unstacking,
+    The linopy lane reaches the combinations no label lands on by unstacking,
     which invents them carrying linopy's own ``_fill_value`` — ``const: nan``.
     Left there, that NaN does not stay in the empty sum: it propagates through
     the addition, and linopy drops the whole row, `headroom` with it, leaving
@@ -168,8 +168,8 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
 def test_a_declared_order_the_groupby_would_not_pick():
     """The technologies are declared out of alphabetical order on purpose.
 
-    A groupby returns its groups sorted, the dim table keeps the declared
-    order, and v1 arithmetic refuses to combine a shared dim ordered two ways.
+    A groupby returns its groups sorted, the dimension table keeps the declared
+    order, and v1 arithmetic refuses to combine a shared dimension ordered two ways.
     So this model builds on both lanes only because the linopy lane puts its
     result back into declared order.
     """
@@ -210,12 +210,12 @@ def test_a_grouped_parameter_reads_zero_where_no_member_lands():
 
 
 # ---------------------------------------------------------------------------
-# lowering
+# compiling
 # ---------------------------------------------------------------------------
 
 
 def test_two_columns_lower_to_one_node_and_not_to_a_composition():
-    """One grouping, so one plan node: the coordinates ride one join.
+    """One grouping, so one program node: the coordinates ride one join.
 
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.

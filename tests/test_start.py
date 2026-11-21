@@ -99,7 +99,7 @@ def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
         assert isinstance(archive, sps.types.ResultArchive)
         before = archive.result
     _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
-    assert warm == 0, 'the frames on disk are the frames the live answer held'
+    assert warm == 0, 'the tables on disk are the tables the live answer held'
 
 
 def test_a_declaration_whose_dims_changed_starts_as_new() -> None:
@@ -306,7 +306,7 @@ def test_an_earlier_answer_starts_a_mixed_integer_solve_at_its_optimum(solver_na
         pytest.param(
             {'primal': {'take': TWO_ITEMS.rename({'item': 'items'})}},
             r"missing columns \['item'\]",
-            id='a-column-not-its-dims',
+            id='a-column-not-its-dimensions',
         ),
         pytest.param(
             {'primal': {'take': TWO_ITEMS}, 'constraint_basis': {'fits': FITS.with_columns(value=pl.lit('loose'))}},
@@ -474,7 +474,7 @@ def test_each_window_starts_from_the_same_window_of_an_earlier_sweep(monkeypatch
 
 
 def test_a_table_covering_one_window_starts_that_window_and_says_which_start_from_nothing() -> None:
-    """A window's own frame is over the dimension's labels, so it is cut like any other table."""
+    """A window's own table is over the dimension's labels, so it is cut like any other."""
     from tests.test_solve_over import WINDOW, WINDOW_AXIS, horizon_sources
 
     earlier = sps.solve_over(WINDOW, horizon_sources(), WINDOW_AXIS)

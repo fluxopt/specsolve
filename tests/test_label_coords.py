@@ -1,6 +1,6 @@
 """Relations: structure on a dimension, never an axis.
 
-Everything under ``dimensions:`` is an axis, and a label a dimension's members
+Everything under ``dimensions:`` is an axis, and a label each label of a dimension
 carry is a relation into another dimension.
 """
 
@@ -58,7 +58,7 @@ def test_a_relation_names_the_columns_a_row_is_keyed_by_and_the_ones_they_determ
     )
     (declared,) = schema.program.relations_of('generator').values()
     assert (declared.key, declared.values) == (('generator',), ('bus',)), (
-        'the declaration fixes which columns identify a row and which they determine, and no direction'
+        'the entry fixes which columns identify a row and which they determine, and no direction'
     )
 
 
@@ -88,7 +88,7 @@ def test_a_by_typo_is_offered_the_relations_it_could_have_meant():
 
 
 def test_a_dimension_only_a_relation_targets_draws_no_advice():
-    """A relation's target is reached: its members are the labels the map is checked against."""
+    """A relation's target is reached: its labels are the ones the map is checked against."""
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         sps.check(_spec())
@@ -236,7 +236,7 @@ def test_both_lanes_read_the_same_index():
 #: A three-line network whose structure is entirely relations: each line has two
 #: endpoints, and `spur` deliberately has an open end so the partial case is
 #: reachable. `voltage` targets an int dimension and `send`/`recv` a string one,
-#: so one model covers every relation predicate.
+#: so one model covers every relation condition.
 NETWORK = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {'dtype': 'str'}, 'kv': {'dtype': 'int'}},
     'relations': {
@@ -280,14 +280,14 @@ NETWORK_SOURCES = {
         pytest.param('recv', ['loop', 'ring_a', 'ring_b'], id='a-bare-relation-is-the-partial-case'),
         pytest.param('NOT voltage == 220', ['ring_b', 'spur'], id='negated'),
         pytest.param('voltage == 380 AND send != recv', ['ring_b'], id='conjoined-with-a-pair-comparison'),
-        pytest.param("at(bus == 'north', by=send[bus])", ['loop', 'ring_a', 'spur'], id='a-predicate-read-at'),
+        pytest.param("at(bus == 'north', by=send[bus])", ['loop', 'ring_a', 'spur'], id='a-condition-read-at'),
         pytest.param("at(bus == 'north', by=recv[bus])", ['loop', 'ring_b'], id='read-at-a-partial-relation'),
     ],
 )
 def test_a_where_reads_a_relation(where, kept):
     """The atom #553 asked for, in both shapes.
 
-    `kept` is asserted rather than just a count: a predicate that inverted its
+    `kept` is asserted rather than just a count: a condition that inverted its
     sense would keep the complement, which is the same size on a symmetric
     case and a different model everywhere.
 
@@ -308,7 +308,7 @@ def test_a_where_reads_a_relation(where, kept):
         # the linopy lane's null exclusion: numpy answers `None != 'north'` with True
         pytest.param("recv != 'north'", 10.0, id='not-equal-over-a-null-value'),
         pytest.param('recv != send', 30.0, id='not-equal-between-two-relations'),
-        pytest.param("at(bus == 'north', by=send[bus])", 80.0, id='a-predicate-read-at'),
+        pytest.param("at(bus == 'north', by=send[bus])", 80.0, id='a-condition-read-at'),
         pytest.param("NOT at(bus == 'south', by=recv[bus])", 90.0, id='negated-read-at-a-partial-relation'),
         pytest.param("at(bus == 'north', by=recv[bus]) AND voltage == 220", 30.0, id='read-at-conjoined'),
     ],
@@ -316,9 +316,9 @@ def test_a_where_reads_a_relation(where, kept):
 def test_a_relation_where_agrees_with_the_oracle(where, objective):
     """Both lanes, one answer — the differential half of #553.
 
-    A mask reading a relation is a join on the dim table in the relational lane
+    A condition reading a relation is a join on the dimension table in the relational lane
     and an array read in the linopy one; nothing but this shows they agree on
-    which rows survive, since a wrong mask still solves.
+    which rows survive, since a wrong condition still solves.
     """
     from tests.differential import differential
     from tests.oracle import pd
@@ -343,8 +343,8 @@ def test_a_relation_where_agrees_with_the_oracle(where, objective):
 
 
 def test_a_where_on_a_relation_outside_the_frame_is_refused():
-    """A relation is read on the dim it maps out of, so that dim has to be in the
-    frame — otherwise the mask would silently reduce over an unlisted dim."""
+    """A relation is read on the dimension it maps out of, so that dimension has to be in the
+    frame — otherwise the condition would silently reduce over an unlisted dimension."""
     spec = {
         **NETWORK,
         'variables': {'f': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -365,7 +365,7 @@ def test_a_where_on_a_relation_outside_the_frame_is_refused():
 def test_two_relations_over_different_dims_cannot_be_compared():
     """There is no row carrying both, so the comparison has nothing to test.
 
-    The pair comparison is legal exactly because two relations over one dim are
+    The pair comparison is legal exactly because two relations over one dimension are
     two columns of one index. Drop that condition and this reads as a join
     nobody wrote.
     """
@@ -389,8 +389,8 @@ def test_two_relations_over_different_dims_cannot_be_compared():
 def test_two_relations_into_different_label_sets_cannot_be_compared(extra, where):
     """One dimension is necessary but not sufficient — the targets must match too.
 
-    A bus label is never a zone label, so the predicate could only mask
-    everything out.
+    A bus label is never a zone label, so the condition could only leave
+    everything absent.
     """
     spec = {
         **NETWORK,
@@ -415,7 +415,7 @@ def test_a_relation_comparison_is_checked_against_its_dtype():
 
 
 def test_a_relation_compares_against_a_label_the_target_lacks():
-    """A stranger label masks everything out; it does not raise.
+    """A stranger label leaves everything absent; it does not raise.
 
     The relation column is compared as a string, because the target's `Enum`
     refuses a label outside it.
@@ -472,8 +472,8 @@ def test_a_map_is_not_a_column_of_the_index_it_runs_over():
 def test_a_map_alone_does_not_say_which_labels_exist():
     """A map is a relation over a dimension, never the dimension.
 
-    It may omit members and its key order is whatever someone typed, so reading
-    the label set out of it would let an added entry create a member and a
+    It may omit labels and its key order is whatever someone typed, so reading
+    the label set out of it would let an added entry create a label and a
     reordered map re-order the axis that ``shift`` reads positionally. With
     nothing supplying ``generator``'s labels, the map over it leaves the
     dimension without an index, and both lanes say so.
@@ -553,7 +553,7 @@ def test_a_where_reads_a_map_that_leaves_a_label_out():
     }
     with sps.solve(spec, sources) as result:
         built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
-    assert built == [0, 1, 2], 'the variable is unmasked; only the constraint reads the map'
+    assert built == [0, 1, 2], 'the variable has no condition; only the constraint reads the map'
     assert result.objective == pytest.approx(3.0), 'snapshot 2 is in no row of the map, so nothing constrains it'
 
 
@@ -602,7 +602,7 @@ def test_a_supplied_map_does_not_say_which_labels_exist():
     """A relation over a dimension is not the dimension, whoever holds it.
 
     Reading the label set out of the map would let an omitted row delete a
-    member, and `g3` — mapped nowhere and still a generator — is exactly the
+    label, and `g3` — mapped nowhere and still a generator — is exactly the
     row that would vanish.
     """
     with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):

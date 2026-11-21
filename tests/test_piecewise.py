@@ -843,7 +843,7 @@ def test_a_masked_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inputs
         'a gate that says its absence is zero wants one row, not the ungated half of a pair'
     )
     assert rows['cost_curve_convexity'].where is None, (
-        'and that row is unmasked — the gate reads 0 where it does not exist, so the row still builds'
+        'and that row has no condition — the gate reads 0 where it does not exist, so the row still builds'
     )
 
     gated = [True, False] * 6

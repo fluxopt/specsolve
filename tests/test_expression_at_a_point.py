@@ -18,7 +18,7 @@ Three tables, one fixture:
 
 - ``node`` — every expression :mod:`tests.expression_space` builds to
   ``--sweep-depth``, sharded by ``--sweep-shard`` like the solve sweep;
-- ``rewrite`` — the rewrites that must not move a value, compared frame to frame;
+- ``rewrite`` — the rewrites that must not move a value, compared table to table;
 - ``OPERATORS`` — one line per construct the generator does not build. **Add a
   case here** as a ``pytest.param`` whose ``id`` names what it exercises.
 
@@ -87,7 +87,7 @@ ANSWERS = 60
 
 @pytest.fixture(scope='module')
 def agreed() -> Iterator[Read]:
-    """The fixture held at one point, built once per module and worker: ``agreed(expression)`` is the frame both lanes read, or a failure naming both."""
+    """The fixture held at one point, built once per module and worker: ``agreed(expression)`` is the table both lanes read, or a failure naming both."""
     with at_a_point(_spec(), _data()) as read:
         yield read
 
@@ -103,7 +103,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 def _answer(agreed: Read, expression: str | Mapping[str, Any]) -> pl.DataFrame | None:
-    """The agreed frame, or None where the relational lane refuses a construct it cannot build.
+    """The agreed table, or None where the relational lane refuses a construct it cannot build.
 
     That refusal is #1137's: a ``sum`` or ``shift`` along a dimension a
     constant term of the expression does not carry. The linopy lane reads it,
@@ -133,27 +133,27 @@ def test_a_rewrite_that_must_not_change_the_meaning_does_not_change_the_value(ag
 
 
 OPERATORS = [
-    pytest.param('sum(x)', id='sum-over-every-dim'),
+    pytest.param('sum(x)', id='sum-over-every-dimension'),
     pytest.param('2 * z', id='a-variable-with-no-dimensions'),
     pytest.param('x + z', id='a-variable-with-no-dimensions-beside-one-with-two'),
     pytest.param('sum(x) - z', id='a-variable-with-no-dimensions-beside-a-full-sum'),
-    pytest.param('sum(y)', id='sum-over-every-dim-of-a-masked-variable'),
+    pytest.param('sum(y)', id='sum-over-every-dimension-of-a-partly-absent-variable'),
     pytest.param('sum(x * y, over=t)', id='sum-of-a-product-of-two-variables'),
-    pytest.param('x * w - y', id='subtract-a-masked-variable'),
+    pytest.param('x * w - y', id='subtract-a-partly-absent-variable'),
     pytest.param('x / w', id='divide-by-a-parameter'),
     pytest.param('w / x', id='divide-by-a-variable'),
-    pytest.param('x / y', id='divide-by-a-masked-variable'),
-    pytest.param('x / (w * y)', id='divide-by-a-parameter-times-a-masked-variable'),
+    pytest.param('x / y', id='divide-by-a-partly-absent-variable'),
+    pytest.param('x / (w * y)', id='divide-by-a-parameter-times-a-partly-absent-variable'),
     pytest.param('x / (x - x)', id='divide-by-zero'),
-    pytest.param('sum(x / y, over=f)', id='sum-of-a-quotient-by-a-masked-variable'),
-    pytest.param('sum(x / y + x, over=f)', id='sum-of-a-quotient-by-a-masked-variable-beside-a-present-term'),
+    pytest.param('sum(x / y, over=f)', id='sum-of-a-quotient-by-a-partly-absent-variable'),
+    pytest.param('sum(x / y + x, over=f)', id='sum-of-a-quotient-by-a-partly-absent-variable-beside-a-present-term'),
     pytest.param('x ** 2', id='square-a-variable'),
-    pytest.param('(x + y) ** 2', id='square-a-sum-with-a-masked-term'),
+    pytest.param('(x + y) ** 2', id='square-a-sum-with-a-partly-absent-term'),
     pytest.param('2 ** x', id='a-variable-exponent'),
     pytest.param('x ** w', id='a-parameter-exponent'),
     pytest.param("shift(x, along=t, offset=1, edge='wrap')", id='shift-wrap'),
     pytest.param('shift(x, along=t, offset=lead, edge=0)', id='shift-by-a-parameter-offset'),
-    pytest.param('shift(y, along=t, offset=2)', id='shift-a-masked-variable-past-most-of-the-axis'),
+    pytest.param('shift(y, along=t, offset=2)', id='shift-a-partly-absent-variable-past-most-of-the-axis'),
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=t)', id='sum-a-vacated-edge-beside-a-present-term'),
     pytest.param('sum(shift(x, along=t, offset=1) + x, over=f)', id='sum-across-a-vacated-edge'),
     pytest.param('shift(x, along=t, offset=1, within=season_of[s])', id='shift-within-a-group'),
@@ -162,7 +162,7 @@ OPERATORS = [
         id='sum-a-shift-within-a-partial-group-beside-a-present-term',
     ),
     pytest.param('sum_back(x, along=t, window=2)', id='sum-back'),
-    pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-masked-variable'),
+    pytest.param("sum_back(y, along=t, window=2, edge='wrap')", id='sum-back-wrap-over-a-partly-absent-variable'),
     pytest.param('sum_back(x, along=t, window=lead)', id='sum-back-by-a-parameter-window'),
     pytest.param('sum_back(x, along=t, window=2, within=season_of[s])', id='sum-back-within-a-group'),
     pytest.param(
@@ -170,10 +170,10 @@ OPERATORS = [
         id='sum-a-sum-back-within-a-partial-group-beside-a-present-term',
     ),
     pytest.param('sum(x, over=t, by=season_of[s])', id='sum-by-a-relation'),
-    pytest.param('sum(y, over=t, by=season_of[s])', id='sum-a-masked-variable-by-a-relation'),
-    pytest.param('sum(y * w + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-masked-term'),
+    pytest.param('sum(y, over=t, by=season_of[s])', id='sum-a-partly-absent-variable-by-a-relation'),
+    pytest.param('sum(y * w + w, over=f)', id='sum-a-parameter-over-fewer-dimensions-beside-a-partly-absent-term'),
     pytest.param(
-        'sum(shift(x, along=t, offset=1) + w, over=f)', id='sum-a-parameter-over-fewer-dims-beside-a-vacated-edge'
+        'sum(shift(x, along=t, offset=1) + w, over=f)', id='sum-a-parameter-over-fewer-dimensions-beside-a-vacated-edge'
     ),
     pytest.param(
         {
@@ -185,7 +185,7 @@ OPERATORS = [
     ),
     pytest.param(
         {'dims': ['f', 't'], 'cases': {'gated': {'when': 'gate', 'expression': 'y'}}, 'otherwise': 'x'},
-        id='cases-by-a-mask',
+        id='cases-by-a-condition',
     ),
 ]
 
