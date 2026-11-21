@@ -27,7 +27,7 @@ from specsolve._engine.assembly import (
     declares_quadratic,
     short_parameters,
 )
-from specsolve._engine.attaching import attach
+from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.compiler import Compiler, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
@@ -131,10 +131,14 @@ class Engine:
     # build
     # ------------------------------------------------------------------
 
-    def build(self, program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> None:
+    def build(
+        self, program: program.Program, sources: Mapping[str, pl.LazyFrame], attached: AttachedSources | None = None
+    ) -> None:
         """Attach *sources*, then build every declaration into the model frames.
 
-        A second call rebuilds over the same object. The held solver reads its
+        *attached* is *sources* already attached, as reading the assumptions
+        left them, and is not attached again; the time that attach took is
+        recorded either way. A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         frames. A build that raises leaves no model rather than half of one.
@@ -144,8 +148,9 @@ class Engine:
         self._built = None
         self._solved = None
         self._measured = Measured()
-        with _clocked(self._seconds, 'attach'):
+        if attached is None:
             attached = attach(program, sources)
+        self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(program, attached, self._measured)
         with _clocked(self._seconds, 'build'):

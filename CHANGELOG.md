@@ -25,6 +25,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(sweep): a spilled sweep that stops before it ends keeps its reasons on resume ([#2121](https://github.com/fluxopt/specsolve/pull/2121))
 - fix(sweep): an archived sweep rebuilds each slice with the carry it was solved with ([#2124](https://github.com/fluxopt/specsolve/pull/2124))
 - feat(sweep): build_slice gives the model of one slice of a sweep, and axis.slices is gone ([#2126](https://github.com/fluxopt/specsolve/pull/2126))
+- perf(api): a build attaches its sources once, not again after reading the assumptions ([#2131](https://github.com/fluxopt/specsolve/pull/2131))
 
 ## 0.11.2 (2026-11-19)
 
