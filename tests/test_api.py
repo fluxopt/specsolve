@@ -504,6 +504,20 @@ def test_a_dimension_named_value_is_refused_at_load(name):
         sps.check(spec)
 
 
+@pytest.mark.xfail(strict=True, reason='a dimension named like a build column crashes in polars')
+@pytest.mark.parametrize('name', ['row', 'coeff', 'cval', 'ord', 'var_label', 'var_label_2'], ids=str)
+def test_a_dimension_named_like_a_build_column_is_refused_at_load(name):
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
+    }
+    with pytest.raises(sps.errors.SpecsolveError, match=rf"^dimension '{name}' has the name of a column specsolve"):
+        sps.check(spec)
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
