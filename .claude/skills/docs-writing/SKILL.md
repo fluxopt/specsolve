@@ -184,13 +184,12 @@ not
   rhythm.
 - **No overloaded words** — do not write "the case in point" beside a `cases:`
   keyword.
-- **mathspec's word wins.** A meaning the
-  [mathspec glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)
-  names takes its word, in prose, messages and docstrings alike.
-  `tests/test_words.py` refuses the words it replaces and names the one to
-  write; it reads mathspec's words from the copy in `tests/mathspec/`, which is
-  taken again whenever the mathspec pin moves. specsolve's own words are in `docs/reference/glossary.md`, and the
-  names of its parts in `docs/development/architecture.md`.
+- **The glossary's word wins.** A meaning `docs/reference/glossary.md` names
+  takes its word, in prose, messages and docstrings alike, and the table that
+  ends it lists the words this project does not use. `tests/test_words.py`
+  reads that table, refuses those words and names the one to write. To change
+  a word, change the glossary. The names of the package's parts are in
+  `docs/development/architecture.md`.
 - **Gloss where the term is used**, and link
   `docs/reference/glossary.md` rather than redefine it.
   The glossary holds the one definition; a second copy drifts.

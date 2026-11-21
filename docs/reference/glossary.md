@@ -1,9 +1,11 @@
 # Glossary
 
-The one definition of each name this project uses. A word of the language,
-such as entry, condition or operator, means what the
-[mathspec glossary](https://mathspec.readthedocs.io/en/latest/reference/glossary/)
-says.
+The one definition of each word specsolve uses, in its code, its messages and
+these pages. The language itself is
+[mathspec's](https://mathspec.readthedocs.io/en/latest/reference/language/);
+the words for it are defined here, and
+[the words this project does not use](#words-this-project-does-not-use) end
+the page.
 
 > A **spec** is what you write: the math, with no data. A **model** is a spec
 > with your data attached, a `Model` in Python. A **result** is one answer read
@@ -19,18 +21,16 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 ## The chain
 
 **Spec**
-: The math before any data: a YAML file, a mapping, or a `Spec`
-  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#spec)). What it may
+: The math before any data: a YAML file, a mapping, or a `Spec`. What it may
   contain is
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
-: What [`check`](api.md#specsolve.check) returns: what the spec compiles to
-  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#program)), and what a build reads. No function takes one back, so keep the `Spec`.
+: What [`check`](api.md#specsolve.check) returns: what the spec compiles to,
+  and what a build reads. No function takes one back, so keep the `Spec`.
 
 **Model**
-: A spec with data attached ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#model)): what
-  [`build`](api.md) returns.
+: A spec with data attached: what [`build`](api.md) returns.
 
 **Result**
 : One answer read back from a solve:
@@ -43,6 +43,56 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Archive**
 : A spec, its data and its answer, written as one zip or directory by
   `archive=` ([archiving](../howto/archiving.md)).
+
+## The language
+
+**Entry**
+: One named item of a spec, under one of its sections: a dimension, a
+  parameter, a variable, a constraint, a named expression.
+
+**Dimension**
+: A set of labels that entries are indexed over, such as `generator`.
+
+**Label**
+: One member of a dimension, such as `wind` in `generator`. A dimension's
+  labels arrive in `sources` under its name, in order, each once
+  ([where coordinates come from](data.md#where-coordinates-come-from)).
+
+**Coordinate**
+: One point of an entry's dimensions: one snapshot for one generator.
+
+**Parameter**
+: An entry the data fills: one number per coordinate of its dimensions.
+
+**Variable**
+: An entry the solver decides: one column of the model per coordinate.
+
+**Constraint**
+: An entry the solution must hold: one row of the model per coordinate.
+
+**Relation**
+: A named map between dimensions, such as the bus each generator sits on. Its
+  rows arrive with the data.
+
+**Condition**
+: A true-or-false expression, such as `p_max > 0`.
+
+**`where:`**
+: Narrows an entry to the coordinates where its condition is true, and
+  leaves the entry absent elsewhere
+  ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
+
+**Absent**
+: Holding no value at a coordinate. An absent value is not zero: a `where:`
+  leaves an entry absent, and so does a missing row under `missing: absent`.
+
+**Operator**
+: A construct built into the language, such as `sum`, `at` or `shift`. A file
+  cannot add one ([operators](https://mathspec.readthedocs.io/en/latest/reference/language/operators/)).
+
+**Compile**
+: To turn a spec into its program. Every function compiles the spec first, so
+  a spec the language refuses is refused before any data is read.
 
 ## The functions
 
@@ -70,39 +120,19 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : The data you attach: a `dict` from each declared name to a table, and from
   each dimension to its labels ([the data contract](data.md)).
 
-**Label**
-: One member of a dimension, such as `wind` in `generator`
-  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#label)). A dimension's
-  labels arrive in `sources` under its name, in order, each once
-  ([where coordinates come from](data.md#where-coordinates-come-from)).
-
-**Coordinate**
-: One point of an entry's dimensions: one snapshot for one generator
-  ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#coordinate)).
-
 **Table**
 : A polars `DataFrame` with one column per dimension and a `value` column, one
   row per coordinate.
 
-**Relation**
-: A named map between dimensions, such as the bus each generator sits on.
-
-**`where:`**
-: Narrows an entry to the coordinates where its condition is true, and
-  leaves the entry absent elsewhere ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#where),
-  [absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
-
 ## How it runs
 
 **Engine**
-: A tool that attaches data to a spec, builds the model and hands it to a
-  solver, as mathspec
-  [defines it](https://mathspec.readthedocs.io/en/latest/reference/glossary/#tool).
-  specsolve is one.
+: Software that attaches data to a spec, builds the model and hands it to a
+  solver. specsolve is one.
 
 **attach**
 : Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
-  `update` ([mathspec](https://mathspec.readthedocs.io/en/latest/reference/glossary/#attach)).
+  `update`.
 
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
@@ -134,3 +164,31 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **held** · **spilled**
 : A held sweep keeps its answers in memory. A spilled one writes them to
   `spill_to=` ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+
+## Words this project does not use
+
+Each word on the left has a word above that means the same, or is vague.
+`tests/test_words.py` refuses it in code, messages and pages, and names the
+word to write. A plural is refused with its word.
+
+| Not | Write |
+| --- | --- |
+| `declaration` | entry |
+| `mask`, `predicate` | condition, or `where:` |
+| `masked`, `masked out`, `unbuilt` | absent |
+| `unmasked` | with no condition |
+| `primitive` | operator |
+| `lowered`, `lowering`, `lowers` | compiled, compiling, compiles |
+| `summand` | a term of a sum |
+| `dim`, `dims` | dimension, dimensions; `dims:` is the key |
+| `frame` | table, for a polars table; its dimensions, for what an entry is indexed over |
+| `consumer` | a tool, or the code that reads it |
+| `bind data` | attach data |
+| `reject`, `rejected`, `error out` | refuse, refused |
+| `normal form` | the canonical form |
+| `streaming lane` | relational lane |
+| `sayable` | in the language |
+| `seam`, `surface`, `tax`, `closure` | the plain thing |
+
+A dimension's labels are its labels, never its index: an index is a solver's
+position of a column or a row, or a pandas index.

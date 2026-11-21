@@ -1469,7 +1469,7 @@ def test_a_failing_slice_reports_the_real_error_across_a_process_boundary():
     """An exception has to survive pickling or the cause is lost.
 
     A custom ``__init__`` signature is the classic way this breaks, and it
-    surfaces as an unrelated ``TypeError`` raised while *unpickling* — so the
+    shows up as an unrelated ``TypeError`` raised while *unpickling* — so the
     worker's real complaint never arrives.
     """
     broken = {**scenario_sources()}
