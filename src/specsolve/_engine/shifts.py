@@ -145,9 +145,9 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
 
     frame = order.remap(p.frame, p.carried, p.dims, moved=moved, prepared=lagged)
     if width_name is not None and scope.absent(width_name):
-        return replace(p, frame=frame, presences=(_widths_defined(scope, order, width_name),))
+        return replace(p, body=frame, presences=(_widths_defined(scope, order, width_name),))
     unplaced = (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
-    return replace(p, frame=frame, presences=unplaced)
+    return replace(p, body=frame, presences=unplaced)
 
 
 def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
@@ -229,7 +229,7 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
     frame = remap(p.frame, p.carried, p.dims)
     if not s.wrap and s.fill is not None and p.kind == 'constant':
         frame = pl.concat([frame, edge.filled(scope, others, s.fill)], how='vertical_relaxed')
-    return replace(p, frame=frame, presences=travelled_presences())
+    return replace(p, body=frame, presences=travelled_presences())
 
 
 @dataclass(frozen=True)

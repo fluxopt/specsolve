@@ -80,10 +80,15 @@ def masked(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> p
 
 
 def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
-    """How many rows of *atom*'s parameter pass its test, as a one-cell frame; a missing row reads as false."""
+    """How many rows of *atom*'s parameter pass its test, as a one-cell frame; a missing row reads as false.
+
+    The parameter is joined onto its own keys, never read by position:
+    reading it so means holding its column in order first, a read per
+    parameter outside the one batch every test here shares.
+    """
     keys = tuple(atom.dims)
     base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
-    carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys)
+    carrier, condition = compile_predicate(scope, base, program.Mask(atom), keys, by_position=False)
     return carrier.filter(falsy_if_null(condition)).select(pl.len())
 
 
@@ -93,9 +98,12 @@ def counted_over_nothing(atom: program.CountComparison) -> bool:
 
 
 def compile_predicate(
-    scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
+    scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...], *, by_position: bool = True
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """``(frame with the mask's parameters joined, boolean expression)``.
+
+    A parameter with a row at every coordinate is read at each row's position
+    rather than joined, unless *by_position* is false.
 
     Walking joins the parameters, so the condition is built before the frame is
     read. A name the mask is certain of ([`_certain_names`][]) is inner- or
@@ -110,7 +118,9 @@ def compile_predicate(
         how: JoinStrategy = 'inner' if param in certain else 'left'
         return carrier.once(
             f'__where {param}__',
-            lambda f, alias: scope.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
+            lambda f, alias: scope.parameter_join(
+                f, param, dims, alias, f"where-parameter '{param}'", how, by_position=by_position
+            ),
         )
 
     def refuse_outside_frame(reading: str, dimension: str) -> None:

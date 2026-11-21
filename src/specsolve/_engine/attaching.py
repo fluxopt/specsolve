@@ -60,6 +60,14 @@ class AttachedSources:
         """Whether *dim* was given an ``Enum``."""
         return self.dimensions[dim].collect_schema()['val'] == pl.Enum
 
+    def covers(self, parameter: str, dims: tuple[str, ...]) -> bool:
+        """Whether *parameter*, declared over *dims*, has a row at every coordinate of them.
+
+        Duplicates and strangers are refused at the door, so a table as tall as
+        the product of its dims has one row at each.
+        """
+        return self.parameter_rows.get(parameter) == math.prod(self.cardinality[d] for d in dims)
+
 
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
     """Shape the door's frames into what *program* is written against.
