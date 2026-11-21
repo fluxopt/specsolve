@@ -8,7 +8,7 @@ on whether that data is usable is made here, once.
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -69,29 +69,66 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
-    return tidied_and_attached(program, data)[0]
+    refuse_unknown_sources(program, data)
+    sources = dict(_read(program, data))
+    validate_assumptions(program, sources)
+    return sources
 
 
 def tidied_and_attached(
     program: Program, data: Mapping[str, Source]
-) -> tuple[dict[str, pl.LazyFrame], AttachedSources | None]:
-    """[`tidy_sources`][], and the attach its assumptions were read against, so a build attaches once.
+) -> tuple[Mapping[str, pl.LazyFrame], AttachedSources | None]:
+    """[`tidy_sources`][] for a build: each parameter read and checked when something first asks for it, and the attach its assumptions were read against.
 
-    The attach is ``None`` where the assumptions attached nothing, and a build
-    attaches itself.
+    A parameter no live row, bound, assumption or later read asks for is
+    never read, so a fault in its data is never refused, as linopy refuses
+    only what a live row reads. The attach is ``None`` where the assumptions
+    attached nothing, and a build attaches itself.
     """
     refuse_unknown_sources(program, data)
     sources = _read(program, data)
     return sources, validate_assumptions(program, sources)
 
 
+class OnRead(Mapping[str, pl.LazyFrame]):
+    """Sources by name, each kept once it is read; *pending* holds the read of each one not read yet.
+
+    A read that raises stays pending, so the next ask raises it again.
+
+    A sweep of hundreds of PyPSA parameters most of which no live row reads is
+    why: reading, checking and attaching every table was most of a small
+    build, and much of a large one.
+    """
+
+    def __init__(self, ready: dict[str, pl.LazyFrame], pending: dict[str, Callable[[], pl.LazyFrame]]) -> None:
+        self._names = [*ready, *pending]
+        self._ready = ready
+        self._pending = pending
+
+    def __getitem__(self, name: str) -> pl.LazyFrame:
+        if name not in self._ready:
+            self._ready[name] = self._pending[name]()
+            del self._pending[name]
+        return self._ready[name]
+
+    def __contains__(self, name: object) -> bool:
+        return name in self._ready or name in self._pending
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._names)
+
+    def __len__(self) -> int:
+        return len(self._names)
+
+
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def _read(program: Program, data: Mapping[str, Source]) -> OnRead:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
-    [`validate_assumptions`][] runs
-    after it. It attaches in memory too, and checks each assumption over the
-    dimensions on the default engine.
+    The dimensions and relations are read here; each parameter is read and
+    checked the first time it is asked for, in memory as well.
+    [`validate_assumptions`][] runs after it. It attaches in memory too, and
+    checks each assumption over the dimensions on the default engine.
     """
     _check_relation_sources(program, data)
     data = _read_paths_at_once(program, data)
@@ -108,19 +145,27 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     _check_relations_hold_labels(program, relations, sources)
     sources |= relations
 
-    for pname, pdef in program.parameters.items():
+    for pname in program.parameters:
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = parameter_frame(pname, pdef, data[pname], sources)
+
+    indexes = dict(sources)
     labels: dict[str, pl.Series] = {}
-    for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels=labels)
 
-    for dname in program.dimensions:
-        if dname not in sources:
-            raise DataError(_no_index_source_message(dname))
+    def reading(pname: str, pdef: Parameter) -> Callable[[], pl.LazyFrame]:
+        def read() -> pl.LazyFrame:
+            with in_memory():
+                frame = parameter_frame(pname, pdef, data[pname], indexes)
+                return _checked_parameter(pname, pdef, frame, indexes, labels=labels)
 
-    return sources
+        return read
+
+    read = OnRead(sources, {pname: reading(pname, pdef) for pname, pdef in program.parameters.items()})
+    if unindexed := [dname for dname in program.dimensions if dname not in sources]:
+        for pname in program.parameters:
+            read[pname]
+        raise DataError(_no_index_source_message(unindexed[0]))
+    return read
 
 
 def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[str, Source]:
@@ -152,7 +197,12 @@ def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict
 
     A dimension comes back as ``(dim, specsolve_position)``, the position an
     ``Int64`` from 0 in index order; a parameter and a relation unchanged.
-    Nothing is read again, so a model archives what its build read.
+    Every source is read here: a parameter a build has not read is read and
+    checked now, and one it has read is not read again.
+
+    Raises:
+        DataError: A parameter a build has not read, as [`tidy_sources`][]
+            refuses it.
     """
     tables = dict(tidied)
     for dim in program.dimensions:
