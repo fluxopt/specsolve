@@ -4,9 +4,11 @@
 same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][]).
 What that read settles is answered here: the program a build compiles is
 [`specialized`][] to it, and [`Assembly`][specsolve._engine.assembly.Assembly]
-builds nothing the data has already ruled out ([`rowless`][]). The one decision
-taken elsewhere is a region's, which the compiler folds over the same read, in
-a build alone ([`Scope.settled`][specsolve._engine.scope.Scope.settled]).
+builds nothing the data has already ruled out ([`rowless`][]). Two decisions
+are taken in the compiler, over facts read here: a region the data settles,
+folded in a build alone ([`Scope.settled`][specsolve._engine.scope.Scope.settled]),
+and a term of the objective whose coefficient is zero everywhere
+([`zero_parameters`][]).
 """
 
 from __future__ import annotations
@@ -14,12 +16,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+import polars as pl
 from mathspec import program
 from mathspec.program import walk
 
-from specsolve._collect import in_memory
+from specsolve._collect import collected_all, in_memory
 from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere, settled
 from specsolve._engine.scope import Scope
+from specsolve._names import VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -44,6 +48,29 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
     ]
     with in_memory():
         return settled(Scope(lowered, attached, {}), [*(d.where for d in declared if d.where is not None), *regions])
+
+
+def zero_parameters(lowered: program.Program, attached: AttachedSources) -> frozenset[str]:
+    """The parameters the objective multiplies a variable by that are zero at every row they have.
+
+    Asked of the objective alone, named expressions read through, since there
+    a zero term adds nothing, where in a constraint it would still keep its
+    row. Any value ``missing:`` fills counts. One batch, in memory.
+    """
+    if lowered.objective is None:
+        return frozenset()
+    names = sorted(
+        {
+            f.name
+            for e in walk(lowered.objective.expression)
+            if isinstance(e, program.Multiply)
+            for f, g in ((e.left, e.right), (e.right, e.left))
+            if isinstance(f, program.ParameterReference) and program.carries_variable(g)
+        }
+    )
+    with in_memory():
+        found = collected_all(attached.parameters[n].select((pl.col(VALUE) != 0).any()) for n in names)
+    return frozenset(n for n, nonzero in zip(names, found, strict=True) if not nonzero.item())
 
 
 def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
