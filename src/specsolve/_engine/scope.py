@@ -6,7 +6,6 @@ a variable is built has to see its frame.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -65,7 +64,7 @@ class Scope:
         declaration = self.program.parameters[param]
         if declaration.missing != 'absent':
             return False
-        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in declaration.dims)
+        return not self.data.covers(param, declaration.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dim tables: labels and ordinals, nothing else.

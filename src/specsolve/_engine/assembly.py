@@ -368,12 +368,12 @@ class Assembly:
         by_position = [
             (p.body, sign) for p, sign in linear if isinstance(p.body, Positional) and p.body.stands_for(p.presences)
         ]
-        positional = bool(linear) and len(by_position) == len(linear)
+        whole_by_position = bool(linear) and len(by_position) == len(linear)
         restrictions = absence_restrictions(
-            [p for p, _ in ((*quadratic, *constant) if positional else (*linear, *quadratic, *constant))]
+            [p for p, _ in ((*quadratic, *constant) if whole_by_position else (*linear, *quadratic, *constant))]
         )
         labelled: pl.DataFrame | None
-        if positional and admitted is None and c.dims and not restrictions:
+        if whole_by_position and admitted is None and c.dims and not restrictions:
             labelled = None
         elif admitted is None:
             labelled = labels.frame(self.scope, c.dims, None, 'row', start, restrictions)
@@ -383,7 +383,7 @@ class Assembly:
             labelled = admitted
         declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
         stacked, positions = None, None
-        if positional:
+        if whole_by_position:
             stacked, labelled, positions = self._placed_by_position(by_position, c.dims, labelled, start)
         assert labelled is not None, 'only a constraint placed by position is left for its placing to label'
         if declared > labelled.height:
@@ -553,20 +553,12 @@ class Assembly:
 
 
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
-    """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
-
-    The door refuses duplicates and strangers, so a parameter's height is the
-    number of coordinates it covers.
-    """
-    short: dict[str, tuple[int, int]] = {}
-    for name, p in program.parameters.items():
-        if not p.dims:
-            continue
-        reach = math.prod(attached.cardinality[d] for d in p.dims)
-        rows = attached.parameter_rows[name]
-        if rows < reach:
-            short[name] = (reach, rows)
-    return short
+    """Which parameters arrived short of their coordinates, and by how much: ``name -> (reach, rows)``."""
+    return {
+        name: (math.prod(attached.cardinality[d] for d in p.dims), attached.parameter_rows[name])
+        for name, p in program.parameters.items()
+        if p.dims and not attached.covers(name, p.dims)
+    }
 
 
 def declares_quadratic(c: program.Constraint) -> bool:

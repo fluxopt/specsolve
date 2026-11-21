@@ -127,24 +127,19 @@ def constant(value: float) -> Values | None:
     return lambda at: pl.lit(value, dtype=pl.Float64)
 
 
-def covers(scope: Scope, name: str) -> bool:
-    """Whether parameter *name* has a row at every coordinate of its dims.
-
-    Duplicates and strangers are refused at the door, so a table as tall as
-    the product of its dims has one row at each.
-    """
-    dims = scope.program.parameters[name].dims
-    return scope.data.parameter_rows.get(name) == math.prod(scope.data.cardinality[d] for d in dims)
+def readable(scope: Scope, name: str) -> bool:
+    """Whether parameter *name* can be read by position: it [covers][specsolve._engine.attaching.AttachedSources.covers] its dims."""
+    return scope.data.covers(name, scope.program.parameters[name].dims)
 
 
 def worth_reading(scope: Scope, name: str) -> bool:
-    """Whether parameter *name* [`covers`][] its dims and spans [`READ_BY_POSITION_FROM`][] coordinates or more."""
+    """Whether parameter *name* is [`readable`][] and spans [`READ_BY_POSITION_FROM`][] coordinates or more."""
     dims = scope.program.parameters[name].dims
-    return covers(scope, name) and math.prod(scope.data.cardinality[d] for d in dims) >= READ_BY_POSITION_FROM
+    return readable(scope, name) and math.prod(scope.data.cardinality[d] for d in dims) >= READ_BY_POSITION_FROM
 
 
 def column(scope: Scope, name: str) -> pl.Series:
-    """Parameter *name*'s value column in the row-major order of its dims, as it was attached; it [`covers`][] them."""
+    """Parameter *name*'s value column in the row-major order of its dims, as it was attached; it is [`readable`][]."""
     return _read_once(scope, ('column', name), _column_by_position)
 
 
@@ -155,7 +150,7 @@ def values(scope: Scope, name: str) -> pl.Series:
 
 def parameter(scope: Scope, name: str) -> Values | None:
     """Parameter *name* by position, or ``None`` where it is short of a row."""
-    if not covers(scope, name):
+    if not readable(scope, name):
         return None
     dims = scope.program.parameters[name].dims
     return lambda at: _read(values(scope, name), at, dims)

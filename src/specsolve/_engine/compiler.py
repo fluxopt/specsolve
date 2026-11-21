@@ -176,7 +176,7 @@ class Compiler:
         declaration = self.scope.program.parameters[param]
         if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
             return None
-        if not positional.covers(self.scope, param):
+        if not positional.readable(self.scope, param):
             return None
         return frame.with_columns(positional.values(self.scope, param).alias(alias))
 

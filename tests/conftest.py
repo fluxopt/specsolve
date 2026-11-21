@@ -127,7 +127,7 @@ def nothing_by_position(put: Callable[[object, str, object], None] = setattr) ->
 
     put(positional, 'constant', lambda *args: None)
     put(positional, 'variable', lambda *args: None)
-    put(positional, 'covers', lambda *args: False)
+    put(positional, 'readable', lambda *args: False)
 
 
 @pytest.fixture
