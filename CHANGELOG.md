@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(api): a dimension named like a column the build writes is refused at load ([#2167](https://github.com/fluxopt/specsolve/pull/2167))
 - refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(sweep): an archive holds a sweep's answer one file per slice, as a spill and a saved sweep do ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(api): EachCoordinate is EachLabel, and solve_over takes its axis as over ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
