@@ -7,6 +7,38 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(sweep): an archive holds a sweep's answer one file per slice, as a spill and a saved sweep do ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): EachCoordinate is EachLabel, and solve_over takes its axis as over ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): an axis names its own key column ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): solve_over no longer takes slices written by hand ([#2102](https://github.com/fluxopt/specsolve/pull/2102))
+- refactor(api): sweep.record is sweep.records, model.check for a sink is model.check_sink, record_options is also_record, and workers_share_fs is shared_filesystem ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a window over a dimension that is not declared ordered is refused ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a start with a basis status that is none is refused before a slice is solved ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): sources that type a sweep's column differently are refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
+- fix(sweep): a row with no label in the column a sweep cuts on is refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
+- fix(sweep): an archived sweep keyed by datetimes in a time zone reads back ([#2114](https://github.com/fluxopt/specsolve/pull/2114))
+- fix(result): a save replaces what its directory held, and never the files it is reading ([#2115](https://github.com/fluxopt/specsolve/pull/2115))
+- fix(sweep): a sweep that solved and holds no frame of a kind no longer says its models did not solve ([#2118](https://github.com/fluxopt/specsolve/pull/2118))
+- fix(sweep): a sweep that cannot read an unnamed expression names the archive that can ([#2119](https://github.com/fluxopt/specsolve/pull/2119))
+- fix(sweep): a spilled sweep that stops before it ends keeps its reasons on resume ([#2121](https://github.com/fluxopt/specsolve/pull/2121))
+- fix(sweep): an archived sweep rebuilds each slice with the carry it was solved with ([#2124](https://github.com/fluxopt/specsolve/pull/2124))
+- feat(sweep): build_slice gives the model of one slice of a sweep, and axis.slices is gone ([#2126](https://github.com/fluxopt/specsolve/pull/2126))
+
+## 0.11.2 (2026-11-19)
+
+**Absent terms and amounts build the rows the language says, and piecewise
+cost curves build faster.** A `sum_back` window that reaches only absent terms
+now holds its row as 0, as `sum` does. A `shift` whose `missing: absent` offset
+has no row there builds no row, under any edge, and neither does a `sum_back`
+whose `missing: absent` width has no row there. A model that relied on one of
+the old readings builds different rows, though its file still loads.
+
+- fix(engine): a sum_back over only absent terms keeps its row as 0 ([#2095](https://github.com/fluxopt/specsolve/pull/2095))
+- fix(engine): a shift whose offset is absent builds no row ([#2096](https://github.com/fluxopt/specsolve/pull/2096))
+- fix(data): a divisor or an exponent that a case makes 0 is read as 0 ([#2097](https://github.com/fluxopt/specsolve/pull/2097))
+- perf(engine): a variable times a sum of parameters, as in a piecewise curve, builds about 40% faster ([#2091](https://github.com/fluxopt/specsolve/pull/2091))
 - docs(benchmarks): the published benchmarks are re-measured on 0.11.1 ([#2086](https://github.com/fluxopt/specsolve/pull/2086))
 
 ## 0.11.1 (2026-11-16)

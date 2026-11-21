@@ -113,8 +113,11 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for. A window
-    vacates nothing, so an operand with no presence gains one only under a
-    partition, for the coordinates in no group.
+    is a sum, so the operand's presence does not travel: an absent slot is one
+    summand fewer, and a window of only absent slots is an empty sum whose row
+    stands. The absence it reports is a coordinate with no window at all: one
+    a partition places in no group, or one a ``missing: absent`` width has no
+    row for ([`_widths_defined`][]).
     """
     if s.along not in p.dims:
         refuse_a_term_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
@@ -140,18 +143,26 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
         widths, keys = _named_amount(scope, order, width_name, _WIDTH)
         return join_on(frame, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
 
-    remap = partial(order.remap, moved=moved, prepared=lagged)
+    frame = order.remap(p.frame, p.carried, p.dims, moved=moved, prepared=lagged)
+    if width_name is not None and scope.absent(width_name):
+        return replace(p, frame=frame, presences=(_widths_defined(scope, order, width_name),))
+    unplaced = (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
+    return replace(p, frame=frame, presences=unplaced)
 
-    def travelled(presence: Presence) -> Presence:
-        keyed_by, source = presence.keyed_by, presence.frame
-        if keyed_by is not None and not set(walked_dims(scope, s)).issubset(keyed_by):
-            source, keyed_by = scope.widen(source, keyed_by, p.dims), None
-        return Presence(remap(source, [], p.dims if keyed_by is None else keyed_by).unique(), keyed_by)
 
-    frame = remap(p.frame, p.carried, p.dims)
-    if not p.presences and order.grouping.partial:
-        return replace(p, frame=frame, presences=(Presence(order.grouping.placed(), order.grouping.keys),))
-    return replace(p, frame=frame, presences=tuple(travelled(x) for x in p.presences))
+def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
+    """The coordinates a width has a value for, as a presence: a window elsewhere is undefined, so absent.
+
+    Read off the order's table, which holds only the coordinates a partition
+    places, and through the group column for a per-group width, which no
+    frame carries.
+    """
+    grouping = order.grouping
+    widths, keys = _named_amount(scope, order, name, _WIDTH)
+    own = [key for key in keys if key not in grouping.key]
+    table = join_on(grouping.table, widths, [key for key in keys if key in grouping.key], 'inner')
+    coordinates = table.select(pl.col('val').alias(grouping.dimension), *grouping.joined, *own).unique()
+    return Presence(coordinates, (*grouping.keys, *own))
 
 
 def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *, over_a_variable: bool) -> Term:
@@ -193,9 +204,12 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         An existing presence goes through the same map as the rows, the vacated
         positions going back in under a fill. An operand with no presence gets
         one under an acyclic edge, or else its row would survive with the term
-        quietly gone; under a wrap or fill only a coordinate in no group is absent.
+        quietly gone; under a wrap or fill only a coordinate in no group is
+        absent, and one a named offset has no row for.
         """
         if not p.presences:
+            if edge.offsets is not None:
+                return (Presence(edge.coordinates(vacated=None), edge.keys),)
             if s.wrap or s.fill is not None:
                 return (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
             return (Presence(edge.coordinates(vacated=False), edge.keys),)
@@ -246,12 +260,12 @@ class _Edge:
     def keys(self) -> tuple[str, ...]:
         return tuple(dict.fromkeys((self.order.grouping.dimension, *self.offset_dims, *self.order.grouping.joined)))
 
-    def coordinates(self, *, vacated: bool) -> pl.LazyFrame:
-        """The coordinates the shift vacates, or keeps, under [`keys`][].
+    def coordinates(self, *, vacated: bool | None) -> pl.LazyFrame:
+        """The coordinates the shift vacates, keeps, or, under ``None``, both, under [`keys`][].
 
         Exact complements, so a fill and the presence it implies agree on the
         edge. Under a partition the edge is each group's; a coordinate in no
-        group is in neither.
+        group is in neither, and nor is one a named offset has no row for.
         """
         grouping, s = self.order.grouping, self.shift
         table, position, span = grouping.table, pl.col(GROUP_RANK), pl.col(GROUP_SIZE)
@@ -267,7 +281,9 @@ class _Edge:
         reaches = (source % span + span) % span if s.wrap else source
         outside = (reaches < 0) | (reaches >= span)
         keyed = [d for d in self.keys if d != s.along]
-        return table.filter(outside if vacated else ~outside).select(pl.col('val').alias(s.along), *keyed)
+        if vacated is not None:
+            table = table.filter(outside if vacated else ~outside)
+        return table.select(pl.col('val').alias(s.along), *keyed)
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
         """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""

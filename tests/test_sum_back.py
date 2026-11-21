@@ -120,9 +120,8 @@ def test_an_operand_carrying_a_constant_owes_the_window_of_constants():
         assert rhs == [1.0, 3.0, 5.0, 7.0], 'each row owes its own window of constants, moved to the right-hand side'
 
 
-#: A window over an operand that is masked away at one interior position. The
-#: width decides what the mask means: a wider window reaches it *and* live
-#: positions, a width of 1 reaches nothing else at all (#1059, #1060).
+#: A window over an operand that is masked away at one interior position. A
+#: wider window reaches it *and* live positions, a width of 1 reaches it alone.
 MASKED_WINDOW = masked_operand_spec('held', 'take <= sum_back(level, along=t, window=1)')
 
 MASKED_WINDOW_SOURCES = {
@@ -138,20 +137,17 @@ def masked_window_spec(window: str) -> dict:
     return spec
 
 
-def test_a_window_that_reaches_nothing_builds_no_row():
-    """A window is short, not empty — until every position it spans is masked.
+def test_a_window_over_only_masked_slots_is_zero_and_its_row_stands():
+    """A window whose every position is masked is an empty sum, 0, and its row stands.
 
     Width 1 at the masked snapshot: the window is exactly the slot that is not
-    there, so nothing live is left to sum and the row is a statement about
-    constants alone. It is not built, and `take[1]` — capped by no row —
-    reaches its own bound, which is what tells the two apart from the objective
-    rather than only from the row count (#1059).
+    there. A window is a sum, so a masked slot is one summand fewer, and the
+    row holds `take[1] <= 0`, as `sum` over the same slot would. The row was
+    dropped instead, which left `take[1]` capped by nothing (#2092).
     """
     with differential(MASKED_WINDOW, MASKED_WINDOW_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'the snapshot whose whole window is masked away holds no row'
-        assert run.oracle == pytest.approx(10.0), (
-            'take[1] is capped by nothing — 0.0 would mean a row asserting take <= 0 was built there'
-        )
+        assert run.engine.diagnostics().rows == 4, 'the snapshot whose whole window is masked away holds its row'
+        assert run.oracle == pytest.approx(0.0), 'take[1] is capped at 0 — 10.0 would mean its row was dropped'
 
 
 ZERO_WIDTH = {
@@ -246,15 +242,13 @@ PER_ENTITY_WINDOW = {
 }
 
 
-def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
-    """Whose window reached something is asked per entity, not per position.
+def test_a_per_entity_window_over_only_masked_slots_keeps_that_entitys_row():
+    """A per-entity window that reaches only masked slots is 0, and its row stands.
 
     `narrow` spans one snapshot and `wide` two, and the masked snapshot is the
-    same one for both. The row `narrow` holds there reaches nothing and is not
-    built; the one `wide` holds reaches the snapshot before it and is. A width
-    read only as a coefficient — zeroing the terms outside it but still
-    counting them as reached — would keep `narrow`'s row asserting `take <= 0`
-    (#1059).
+    same one for both. `narrow`'s window there reaches only the masked slot, so
+    it is an empty sum and its row holds `take <= 0`; `wide`'s reaches the
+    snapshot before it too (#2092).
     """
     sources = {
         'g': pd.Index(['narrow', 'wide'], name='g'),
@@ -263,8 +257,8 @@ def test_a_per_entity_window_reaching_nothing_is_that_entitys_row_alone():
         'usable': pd.Series([1.0, 0.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
     }
     with differential(PER_ENTITY_WINDOW, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 7, "every row but narrow's at the masked snapshot"
-        assert run.oracle == pytest.approx(10.0), 'take[narrow, 1] is capped by nothing, and no other take is free'
+        assert run.engine.diagnostics().rows == 8, "every row, narrow's at the masked snapshot included"
+        assert run.oracle == pytest.approx(0.0), 'every take is capped, take[narrow, 1] at 0 by a window of nothing'
 
 
 #: Representative days are separate samples rather than consecutive hours, so a
@@ -494,3 +488,72 @@ def test_a_width_with_no_dimensions_is_one_window_for_every_position(width):
         assert run.oracle == pytest.approx(2.0), (
             'x[1] and x[3] cover every two-wide window, as a literal width of 2 does'
         )
+
+
+#: The issue's case: the first two windows reach only masked slots (#2092).
+ONLY_ABSENT_TERMS = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'live': {'dims': ['t'], 'dtype': 'bool'}},
+    'variables': {
+        'x': {'dims': ['t'], 'where': 'live', 'bounds': {'lower': 0, 'upper': 10}},
+        'y': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}},
+    },
+    'constraints': {'window': {'dims': ['t'], 'expression': 'y <= sum_back(x, along=t, window=2)'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(y, over=t)'},
+}
+
+
+def test_a_window_over_only_absent_terms_is_zero_and_its_row_stands():
+    """A window of only absent terms is an empty sum, 0, and the row stands, as under `sum`.
+
+    The first two windows reach only masked `x`, and both lanes dropped their
+    rows, leaving `y[0]` and `y[1]` free at 10 (#2092).
+    """
+    sources = {
+        't': pd.Index([0, 1, 2], name='t'),
+        'live': pd.Series([False, False, True], index=pd.Index([0, 1, 2], name='t')),
+    }
+    with differential(ONLY_ABSENT_TERMS, sources, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'every snapshot holds its window row, absent terms or not'
+        assert run.oracle == pytest.approx(10.0), 'y[0] and y[1] are held at 0 by a window of nothing'
+
+
+def absent_width_spec(*, masked: bool) -> dict:
+    """A per-entity width that is `missing: absent`, with no row at `a`, over a masked or a dense operand."""
+    spec = {
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'u': {'dtype': 'str'}},
+        'parameters': {
+            'w': {'dims': ['u'], 'dtype': 'int', 'missing': 'absent'},
+            'live': {'dims': ['t'], 'dtype': 'bool'},
+        },
+        'variables': {
+            'x': {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+            'y': {'dims': ['t', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
+        },
+        'constraints': {'c': {'dims': ['t', 'u'], 'expression': 'y <= sum_back(x, along=t, window=w)'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y) - 1000 * sum(x)'},
+    }
+    if masked:
+        spec['variables']['x']['where'] = 'live'
+    return spec
+
+
+ABSENT_WIDTH_SOURCES = {
+    't': pd.Index([0, 1, 2], name='t'),
+    'u': pd.Index(['a', 'b'], name='u'),
+    'w': pd.Series([2], index=pd.Index(['b'], name='u')),
+    'live': pd.Series([True, True, False], index=pd.Index([0, 1, 2], name='t')),
+}
+
+
+@pytest.mark.parametrize('masked', [True, False], ids=['masked-operand', 'dense-operand'])
+def test_an_entity_whose_width_is_absent_has_no_window_and_no_row(masked: bool):
+    """A `missing: absent` width with no row at an entity leaves its window undefined there, so no row.
+
+    Both lanes built `y[a, t] <= 0` there instead: the relational lane read
+    the missing width as a window of nothing, and the linopy lane read it as 0
+    once its operand's absence stopped travelling through the window (#2095).
+    """
+    with differential(absent_width_spec(masked=masked), ABSENT_WIDTH_SOURCES, lp=True) as run:
+        assert run.engine.diagnostics().rows == 3, 'only the three rows at u=b, whose width is defined'
+        assert run.oracle == pytest.approx(30.0), 'y[a, *] is capped by no row, each at its bound of 10'
