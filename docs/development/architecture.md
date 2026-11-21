@@ -187,6 +187,8 @@ position, and the right-hand side's only when every constant term is. A
 `where` and a bound read such a parameter at each row's position as well, from
 100,000 coordinates up and where the row's labels are their own ordinals
 (`Scope.parameter_join`).
+Every such read is a polars expression over a frame of positions, so it runs
+on the threads and the memory the rest of the build uses.
 `pixi run test-by-join` builds the whole suite with nothing read by position.
 
 **Labels are dense `0..n-1`, row-major over the masked coordinate product.**
