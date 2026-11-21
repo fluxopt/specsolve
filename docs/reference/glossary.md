@@ -10,7 +10,7 @@ The one definition of each name this project uses.
 spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
  │       (+data)                     (one answer)
  └─────▶ check ──▶ Program
-                   (the plan, for reading)
+                   (the compiled spec, for reading)
 ```
 
 ## The chain
@@ -21,8 +21,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
-: What [`check`](api.md#specsolve.check) returns: the spec as the plan a build
-  reads. No function takes one back, so keep the `Spec`.
+: What [`check`](api.md#specsolve.check) returns: what the spec compiles to,
+  and what a build reads. No function takes one back, so keep the `Spec`.
 
 **Model**
 : A spec with data attached: what [`build`](api.md) returns.
@@ -52,10 +52,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **update**
 : `model.update(sources)` puts new numbers on a built model in place. A change
-  that moves a mask builds again.
+  that alters which coordinates a `where:` keeps builds again.
 
 **load** · **scan**
-: `load_…` reads a saved answer whole. `scan_…` reads each frame when asked,
+: `load_…` reads a saved answer whole. `scan_…` reads each table when asked,
   so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
 
@@ -70,7 +70,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   ([where coordinates come from](data.md#where-coordinates-come-from)).
 
 **Coordinate**
-: One point of a declaration's dimensions: one snapshot for one generator.
+: One point of an entry's dimensions: one snapshot for one generator.
 
 **Table**
 : A polars `DataFrame` with one column per dimension and a `value` column, one
@@ -79,8 +79,9 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Relation**
 : A named map between dimensions, such as the bus each generator sits on.
 
-**Mask**
-: The `where:` on a declaration. A coordinate it excludes has no row
+**`where:`**
+: Narrows an entry to the coordinates where its condition is true, and
+  leaves the entry absent elsewhere
   ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
 
 ## How it runs

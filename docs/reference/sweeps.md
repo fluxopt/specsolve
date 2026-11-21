@@ -179,7 +179,7 @@ label 23 of a window keeping 24, not label 47 of the 48 it solved.
 | Rule | |
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
-| **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole frame. |
+| **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole table. |
 | **a window carries nothing over the dimension it windows** | No two windows hold the same labels, so a parameter over that dimension is refused. |
 | **that dimension must be the one `EachWindow` windows** | Any other is refused. A carry on `EachLabel` collapses nothing. |
 | **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` where `position(t) == 0`, a window's first row. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |

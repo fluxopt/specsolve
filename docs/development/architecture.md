@@ -10,9 +10,9 @@ is asserted line for line by `tests/test_walkthrough.py`.
 
 ## The pipeline
 
-A spec is a **closed AST known before any data is touched**, so it can be
-built two ways that mean the same thing. The package's build is the
-*relational lane* (`_engine/`, `_sinks/` and the modules both read), a plan
+A spec compiles to a **closed program known before any data is touched**, so
+it can be built two ways that mean the same thing. The package's build is the
+*relational lane* (`_engine/`, `_sinks/` and the modules both read), a program
 streamed to a sink. The test suite's
 is *the oracle* (`tests/linopy_lane/`), a `linopy.Model`.
 
@@ -21,26 +21,26 @@ flowchart TB
     Y[YAML file] --> SPEC
     DATA[("your data<br/>parquet · polars · any Arrow table")] --> SRC
 
-    subgraph MS["mathspec — another package, pinned in pyproject.toml: read · expand · resolve · judge · lower"]
-        SPEC["<b>Spec</b> — what the file says<br/>fully resolved: names typed, dims checked, degree judged"]
-        SPEC --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a consumer, not a stage</i>"]
-        SPEC -->|".program"| PLAN["<b>Program</b> — what it means, the narrow waist<br/>the plan both lanes build from<br/>closed from both sides"]
+    subgraph MS["mathspec — another package, pinned in pyproject.toml: read · expand · resolve · judge · compile"]
+        SPEC["<b>Spec</b> — what the file says<br/>fully resolved: names typed, dimensions checked, degree judged"]
+        SPEC --> TS["typesetting/<br/>latex · typst · markdown<br/><i>a tool, not a stage</i>"]
+        SPEC -->|".program"| PLAN["<b>Program</b> — what it means, the narrow waist<br/>what both lanes build from<br/>closed from both sides"]
     end
 
-    SPEC -->|"the declarations to attach against"| SRC
+    SPEC -->|"the entries to attach against"| SRC
     SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
 
-    PLAN -->|"outside the plan:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
-    PLAN -->|"the plan"| COMP
+    PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
+    PLAN -->|"the program"| COMP
     SRC --> ATTACH
-    PLAN -->|"the plan, the same one"| BUILD
+    PLAN -->|"the program, the same one"| BUILD
     SRC --> LOAD
 
-    subgraph REL["the streaming lane"]
+    subgraph REL["the relational lane"]
         direction TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
-            COMP["compiler.py<br/>plan → lazy queries · reads nothing"] --> ENGINE
+            COMP["compiler.py<br/>program → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
             SPECIALIZE --> ENGINE["assembly.py + labels.py<br/>assemble the model tables"]
         end
@@ -54,7 +54,7 @@ flowchart TB
 
     subgraph LIN["tests/linopy_lane/ — the test oracle, not shipped"]
         direction TB
-        LOAD["loader.py<br/>the tidy tables → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the plan"]
+        LOAD["loader.py<br/>the tidy tables → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the program"]
     end
 
     BUILD --> MODEL["<b>a linopy.Model</b> — the oracle stops here<br/>solved by the tests, and compared with the Result"]
@@ -77,7 +77,7 @@ flowchart TB
     class ANS,MODEL out
 ```
 
-- **The language is another package.** `mathspec` reads a file and lowers it
+- **The language is another package.** `mathspec` reads a file and compiles it
   to a `Program`. It cannot import anything here.
 - **Data enters through one door, and both lanes use it.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
@@ -97,7 +97,7 @@ with an underscore and is internal. `tests/test_architecture.py` pins each
 `__all__` and refuses a new module named without one, and
 [the Python API](../reference/api.md) renders the docstrings.
 
-**Nothing on the surface constructs math or reaches the plan.** The YAML file
+**Nothing on the surface constructs math or reaches the program.** The YAML file
 is the model, and Python runs it.
 
 ## Hard rules
@@ -108,8 +108,8 @@ the dependency claims.*
 0. **The layers are ordered, and imports prove it.** Every module imports only
    downward, at module level. An undeclared in-function import fails the build
    (`DELIBERATE_LAZY_IMPORTS`).
-1. **Core AST is the whole language, and the language is upstream.** The AST
-   that crosses is fully resolved: macros and named expressions without
+1. **The program is the whole language, and the language is upstream.** The
+   program that crosses is fully resolved: macros and named expressions without
    `cases:` are substituted, and `Spec.expand` expands `piecewise:` first.
    Every `mathspec` import names the package, never a module inside it.
 2. **The engine knows nothing about linopy, xarray or YAML.** It imports
@@ -122,12 +122,12 @@ the dependency claims.*
 4. **A YAML file is self-contained.** No Python-side state may change what a
    file means.
 5. **The public interface is a declared spec, not a Python API.** There is no
-   API to construct a spec, hand in a plan, or populate a registry
+   API to construct a spec, hand in a program, or populate a registry
    ([the Python surface](#the-python-surface)).
 
 ## The plan, node for node
 
-**The plan is the vocabulary both lanes speak.** The table gives what the file
+**The program is the vocabulary both lanes speak.** The table gives what the file
 writes and what the relational query does with it. The oracle's call is in
 [what a construct becomes in the oracle](verification.md#what-a-construct-becomes-in-the-oracle).
 `tests/test_docs_site.py` holds the table to `mathspec.program.Expression`'s
@@ -138,7 +138,7 @@ subclasses.
 absence is pushed into the operand first
 ([#1142](https://github.com/fluxopt/specsolve/issues/1142)).
 
-| plan node | the file writes | fan-in | the relational query |
+| program node | the file writes | fan-in | the relational query |
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row constant term |
 | `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
@@ -146,14 +146,14 @@ absence is pushed into the operand first
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a constant term present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two lists of terms concatenated |
-| `Multiply` | `x * y` | one-to-one | a join on the shared dims, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic term |
+| `Multiply` | `x * y` | one-to-one | a join on the shared dimensions, a constant factor with a reduction under it added up to one value per coordinate first; two variable factors pair into a quadratic term |
 | `Divide` | `x / p` | one-to-one | a **left** join, so a divisor parameter with no row leaves a null to report; where the divisor is absent, so is the quotient; a divisor with a reduction under it is added up to one value per coordinate first; at a read, a divisor that is zero makes the quotient absent |
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
-| `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dims projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dims traded for the added ones, and a bare relation fans a member out to every group |
+| `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dimensions projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dimensions traded for the added ones, and a bare relation fans a label out to every group |
 | `Join` | `at(x, by=r[d])` | one-to-one | the relation's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
-| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own mask and the lists of terms concatenated |
+| `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own condition and the lists of terms concatenated |
 | `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
 
 **The engine only builds.** Every refusal about the shape of a file is made
@@ -175,18 +175,18 @@ leaves no model.
 
 **Tables are tidy.** Parameters are `(dims…, value)`. A variable table is
 `(dims…, var_label)`. A linear expression is `(dims…, var_label, coeff)` plus a
-constant term. A mask is a missing row, and broadcasting is a join.
+constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
-**Labels are dense `0..n-1`, row-major over the masked coordinate product.**
+**Labels are dense `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
 So `var_label` is the solver column, `row` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position.
 
-**The plan is affine.** No node adds variables or constraints. Binary and
+**The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
 a formulation out.
 
-**A frame is the boundary in both directions.** `_frames.py` reads a caller's
+**A table is the boundary in both directions.** `_frames.py` reads a caller's
 table through the Arrow PyCapsule protocol, and a `Result` hands back polars.
 
 **Sinks take four streams**: `cols`, `rows`, `A` in CSR, and `sos`. A sink
@@ -202,7 +202,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes |
-| `_collect.py` | how polars materialises a frame |
+| `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | the door: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
@@ -214,22 +214,22 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_solve_over.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
 | `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `load_sweep` / `scan_sweep` |
-| `_engine/scope.py` | the program, its attached data and the variable frames built so far |
-| `_engine/compiler.py` | plan → lazy queries |
+| `_engine/scope.py` | the program, its attached data and the variable tables built so far |
+| `_engine/compiler.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
 | `_engine/shifts.py` | `shift` and `sum_back` |
-| `_engine/predicates.py` | a `where:` mask as a boolean query |
+| `_engine/predicates.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/labels.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
-| `_engine/specialize.py` | what the data decides before a declaration is built |
-| `_engine/assembly.py` | one build: every declaration into the model tables |
-| `_engine/coverage.py` | is the data there where a declaration reads it |
+| `_engine/specialize.py` | what the data decides before an entry is built |
+| `_engine/assembly.py` | one build: every entry into the model tables |
+| `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by label |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
 | `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
-| `_outputs.py` | what an answer carries: the kinds of frame, and the outputs a solve is asked for |
+| `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
@@ -254,7 +254,7 @@ The names the code uses for its own parts. The names a caller meets are in
 **The door**
 : `_sources.tidy_sources`, the one function both lanes read data through.
 
-**Lowering**
+**Compiling**
 : Turning a spec into its `Program`, through `_inputs.as_program`.
 
 **Attached sources**
@@ -262,7 +262,7 @@ The names the code uses for its own parts. The names a caller meets are in
   label column as an `Enum` in declared order.
 
 **Term**, **presence** and **region**
-: One additive term of a compiled expression, over its own dims: linear,
+: One additive term of a compiled expression, over its own dimensions: linear,
   quadratic or constant; where the variable under it exists; the part of a
   `cases:` block it covers (`terms.py`).
 
@@ -270,7 +270,7 @@ The names the code uses for its own parts. The names a caller meets are in
 : The solver's index of one column or row (`labels.py`).
 
 **Collect engine**
-: Which polars engine materialises a frame. A build within `IN_MEMORY_REACH`
+: Which polars engine materialises a table. A build within `IN_MEMORY_REACH`
   columns and rows uses the in-memory engine (`collect.py`).
 
 **Parquet backend**
@@ -283,7 +283,7 @@ The names the code uses for its own parts. The names a caller meets are in
   of the one it holds (`handoff.py`).
 
 **Kind**
-: One frame family of an answer: `primal`, `dual`, `expression`, and each
+: One table family of an answer: `primal`, `dual`, `expression`, and each
   output `outputs=` asked for (`OUTPUT_KINDS`).
 
 **Run stamp**
@@ -291,7 +291,7 @@ The names the code uses for its own parts. The names a caller meets are in
   with `specsolve_` are reserved.
 
 **Slice**, **stitch** and **spill**
-: One model of a sweep; windowed frames put back over the dimension they cut;
+: One model of a sweep; windowed tables put back over the dimension they cut;
   a sweep's answers on disk (`_axes.py`, `_sweep.py`).
 
 **Carry** and **the wire**
@@ -308,7 +308,7 @@ sits behind an extra, imported inside the function. The
 [README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)
 is the full list.
 
-**Add a consumer of the AST:** a package of its own that depends on
+**Add a tool that reads a spec:** a package of its own that depends on
 `mathspec`, not on this one.
 
 **Add an operator:** first

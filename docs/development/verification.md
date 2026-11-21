@@ -26,12 +26,12 @@ that the copy still matches.
 
 Each row lives in `tests/linopy_lane/builder.py`.
 
-| Declaration | linopy |
+| Entry | linopy |
 |---|---|
 | `variables:` | `Model.add_variables(lower, upper, coords, name, mask, binary, integer)` |
 | `sos:` | `Model.add_sos_constraints(variable, sos_type, sos_dim)`, the block handed over rather than a formulation rebuilt |
-| `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per declaration |
-| `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dims it carries |
+| `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per entry |
+| `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dimensions it carries |
 | `expressions:` | evaluated at the solution as xarray arithmetic, every variable its `.solution` and every `dual(c)` the constraint's `.dual`; an entry the math never reads is read at whatever degree it was written |
 
 | In an expression | linopy or xarray |
@@ -48,7 +48,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 
 | A `where:` | linopy |
 |---|---|
-| on a declaration | the `mask=` argument; a mask that excludes nothing is passed as `None` |
+| on an entry | the `mask=` argument; a `where:` that leaves nothing absent is passed as `None` |
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
@@ -211,9 +211,9 @@ monolith.
 
 ## What a port could not say
 
-Each row is a verdict: macro, primitive, formulation, or refused.
+Each row is a verdict: macro, operator, formulation, or refused.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
-| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
+| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **operator**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut | [MTZ](../examples/tsp_mtz.md), O(n²) and static | **refused**: a solve loop is an algorithm, not a model |

@@ -387,7 +387,8 @@ skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 - **"Discuss", "should we", "is it worth" are questions.** Answer, then stop.
 - **Do not widen scope.** Name the adjacent thing in a sentence instead.
 - **Recommend, do not survey.**
-- **A language feature is triaged first: macro, primitive, formulation, or refused** — the
-  ceiling is relational, degree 2 in the math and 1 beside it. Locality prices a primitive
-  rather than barring it. The deliberate non-primitives in
-  [limits.md](https://mathspec.readthedocs.io/en/latest/about/limits/) come first.
+- **A language feature is triaged first: macro, operator, formulation, or refused** — the
+  ceiling is relational, degree 2 in the math and 1 beside it. Locality prices an operator
+  rather than barring it.
+  [What mathspec refuses](https://mathspec.readthedocs.io/en/latest/about/limits/#what-mathspec-refuses)
+  comes first.

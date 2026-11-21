@@ -94,11 +94,11 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a relation with two values for one key | |
 | a dimension carrying relations with no index | |
 | a dimension nothing can supply labels for | names both ways to fix it |
-| a dimension the spec declares and the caller also supplies | names the declaration and the colliding key |
+| a dimension the spec declares and the caller also supplies | names the entry and the colliding key |
 | a relation whose map the spec declares and the caller also supplies | names the map and the colliding column |
 | a declared map whose labels nothing supplies | names the map, and asks only for the labels |
 | a declared map keyed by something the labels do not carry | names the relation and the strays |
-| a column that is not the declared `dtype` | names both, and the declaration the data would satisfy |
+| a column that is not the declared `dtype` | names both, and the entry the data would satisfy |
 | a parameter or a relation with no row at a coordinate, under the default `missing: refused` | names the first such coordinate and how many more have no row ([a missing row](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#a-missing-row)) |
 | a `missing: neutral` divisor parameter with no row where the spec divides by it | names the parameter and how many rows ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)) |
 | a comparison's whole constant side with no value where the row is built, from a `missing: neutral` parameter | names the constraint |
@@ -122,7 +122,7 @@ attaches**, after every check above:
 | Declared | Columns |
 |---|---|
 | a dimension | `<dim>, specsolve_position`: each label once, and its position as an `Int64` from 0 |
-| a parameter | its dims, then `value` |
+| a parameter | its dimensions, then `value` |
 | a relation | the columns it declares |
 
 An [archive](../howto/archiving.md) holds these tables under `sources/`, each
@@ -147,6 +147,6 @@ A table read back from an archive attaches as the original did.
 
 **Do not write into data while a model or its answers are in use.** A model
 keeps tables without a copy, so writing into the numpy array under a polars
-frame changes what [`evaluate`](api.md#specsolve.types.Result.evaluate) reads
+table changes what [`evaluate`](api.md#specsolve.types.Result.evaluate) reads
 and what a save records. A parquet path is read once. Change data through
 `update`, or pass a copy.
