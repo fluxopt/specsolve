@@ -28,6 +28,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(api): a build attaches its sources once, not again after reading the assumptions ([#2131](https://github.com/fluxopt/specsolve/pull/2131))
 - perf(engine): a flag that switches declarations on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
+- perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
 
 ## 0.11.2 (2026-11-19)
 
