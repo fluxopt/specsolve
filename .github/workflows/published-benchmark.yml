@@ -41,7 +41,10 @@ jobs:
           LOCATION: ${{ vars.BENCH_LOCATION || 'nbg1' }}
           SSH_KEY: ${{ vars.BENCH_SSH_KEY }}
         run: |
-          hcloud server delete "$BOX" 2>/dev/null || true
+          if hcloud server describe "$BOX" >/dev/null 2>&1; then
+            hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
+            hcloud server delete "$BOX"
+          fi
           hcloud server create --name "$BOX" --image "$SNAPSHOT" --type "$TYPE" \
             --location "$LOCATION" ${SSH_KEY:+--ssh-key "$SSH_KEY"} --start-after-create
 
@@ -145,6 +148,8 @@ jobs:
             docs/about/benchmarks.json
           retention-days: 90
 
+  # A shutdown before the delete lets the runner end its session with GitHub; a server deleted
+  # running leaves one behind, and the next box's runner gives up on it after four minutes.
   teardown:
     name: take the box down
     needs: [provision, benchmark]
@@ -157,6 +162,7 @@ jobs:
           BOX: ${{ vars.BENCH_RUNNER }}
         run: |
           if hcloud server describe "$BOX" >/dev/null 2>&1; then
+            hcloud server shutdown --wait --wait-timeout 2m "$BOX" || echo "::warning::$BOX did not shut down in 2 minutes; its runner may hold a stale session"
             for attempt in 1 2 3; do
               hcloud server delete "$BOX" && break
               echo "delete failed, retry $attempt"; sleep 15

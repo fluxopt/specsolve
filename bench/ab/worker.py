@@ -1,13 +1,14 @@
 """A process that measures cells for one checkout, one request per line on stdin.
 
-    python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method]
+    python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method] [--memory]
 
 Each request is a JSON line ``{"cell": <id>, "fingerprint": <path or null>}``, and each
 answer one JSON line: the seconds, the peak resident memory of the process, the
 model's size and, where asked, a digest of what the build or the solve
 produced. The numbers behind the digest are saved at the path, so that two
 digests that differ can be compared number by number. The first request for a cell builds it once off the
-clock, so every timed build is a warm one.
+clock, so every timed build is a warm one. With ``--memory`` nothing runs off
+the clock, and the peak is that of a process asked once.
 
 Runs under whichever ``specsolve`` is first on ``PYTHONPATH``, which is how
 [`bench.ab.compare`][] points it at one checkout or the other, and refuses to
@@ -44,6 +45,7 @@ def main() -> None:
     parser.add_argument('--tree', type=Path, required=True)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus')
+    parser.add_argument('--memory', action='store_true')
     args = parser.parse_args()
 
     loaded = Path(sps.__file__).resolve()
@@ -56,17 +58,24 @@ def main() -> None:
     for line in sys.stdin:
         request = json.loads(line)
         try:
-            record = _measure(cell(request['cell']), run, clock, warm, fingerprint=request['fingerprint'])
+            record = _measure(
+                cell(request['cell']), run, clock, warm, memory=args.memory, fingerprint=request['fingerprint']
+            )
         except Exception as e:  # one cell that fails must not end the run of every cell after it
             record = {'error': f'{type(e).__name__}: {e}'.splitlines()[0]}
         print(json.dumps(record), flush=True)
 
 
 def _measure(
-    target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fingerprint: str | None
+    target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, memory: bool, fingerprint: str | None
 ) -> dict[str, Any]:
-    """One timed run of *target*, after a run off the clock the first time this process sees it."""
-    if target.id not in warm:
+    """One timed run of *target*, after a run off the clock the first time this process sees it.
+
+    With *memory* there is no run off the clock. ``ru_maxrss`` never falls, so
+    the peak would be of both runs, and higher or lower with the moment the
+    first run's garbage was collected.
+    """
+    if not memory and target.id not in warm:
         run(target)
         warm.add(target.id)
     if clock:
