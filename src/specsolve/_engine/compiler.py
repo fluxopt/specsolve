@@ -191,7 +191,7 @@ class Compiler:
         may. *reported* is set by a read, where a quotient is absent wherever
         its divisor is zero ([`_read_divisor`][]). The asserts are the
         program-boundary backstop to ``mathspec.degree``. No join in the walk
-        maintains order; every consumer verifies order where it reads.
+        maintains order; the code that reads a table verifies order there.
         """
 
         def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:

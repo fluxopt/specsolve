@@ -789,7 +789,7 @@ REDUCED = [
                 'r': pl.DataFrame({'g': ['g5'], 'k': [6]}),
             },
         ),
-        id='oracle: an at() in a where over a frame with its column',
+        id='oracle: an at() in a where over dimensions that hold its column',
     ),
     pytest.param(
         _case(

@@ -43,20 +43,17 @@ def _instead() -> dict[str, str]:
 #: Word → what to write instead, as the glossary's table gives it.
 INSTEAD = _instead()
 
-#: Uses left in another sense, such as linopy's ``mask=`` or an entry's frame.
+#: Uses left in another sense, such as linopy's ``mask=``.
 #: A ratchet: lower it in the PR that lowers the count.
 CEILING = {
     'declaration': 7,
     'declarations': 1,
     'dim': 1,
     'dims': 6,
-    'frame': 24,
     'lowered': 1,
     'lowers': 2,
     'mask': 6,
     'masks': 1,
-    'consumer': 2,
-    'consumers': 1,
     'seam': 16,
     'seams': 1,
     'surface': 14,

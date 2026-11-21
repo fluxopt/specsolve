@@ -342,9 +342,9 @@ def test_a_relation_where_agrees_with_the_oracle(where, objective):
         )
 
 
-def test_a_where_on_a_relation_outside_the_frame_is_refused():
-    """A relation is read on the dimension it maps out of, so that dimension has to be in the
-    frame — otherwise the condition would silently reduce over an unlisted dimension."""
+def test_a_where_on_a_relation_outside_the_entrys_dimensions_is_refused():
+    """A relation is read on the dimension it maps out of, so that dimension has to be one of
+    the entry's — otherwise the condition would silently reduce over an unlisted dimension."""
     spec = {
         **NETWORK,
         'variables': {'f': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},

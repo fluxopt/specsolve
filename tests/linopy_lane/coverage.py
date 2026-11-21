@@ -111,8 +111,8 @@ def _under_regions(
     """Every node under *node*, each with the rows it actually has to cover.
 
     The mask narrows at every region of a ``cases:`` block: a region's data is
-    owed only where that region applies, so asking a term to cover the whole
-    frame would refuse a model the language accepts. Sorted by the caller
+    owed only where that region applies, so asking a term to cover every
+    coordinate of its entry would refuse a model the language accepts. Sorted by the caller
     where the order decides which name an error can reach: a mask is an array,
     so the pairs are not orderable among themselves.
     """

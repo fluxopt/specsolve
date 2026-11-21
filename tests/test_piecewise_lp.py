@@ -315,7 +315,7 @@ def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
 def test_the_saving_is_columns_paid_for_in_rows():
     """The trade, measured on one model rather than argued.
 
-    `convex` declares a weight per breakpoint per frame row; `lp` declares
+    `convex` declares a weight per breakpoint per coordinate; `lp` declares
     none, and instead writes a row per segment plus two holding the domain.
     So this is columns traded for rows, and the numbers say how much.
     """
@@ -375,8 +375,8 @@ def test_breakpoints_that_do_not_increase_are_refused():
         sps.solve(expanded(spec), _relational(xs=[0.0, 10.0, 10.0, 30.0]))
 
 
-def test_each_curve_of_a_frame_is_checked_on_its_own():
-    """A block carries one curve per frame row, and one bad one is enough.
+def test_each_curve_of_a_block_is_checked_on_its_own():
+    """A block carries one curve per coordinate, and one bad one is enough.
 
     The guard broadcasts over the dimensions the values carry and walks the
     breakpoints of each row, so a concave curve hidden among convex ones is

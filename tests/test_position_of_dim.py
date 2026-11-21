@@ -183,8 +183,8 @@ def test_a_position_no_coordinate_occupies_is_an_error_at_bind(tmp_path, positio
         specsolve_linopy.build(path, sources)
 
 
-def test_a_position_along_a_dimension_the_frame_lacks_is_refused():
-    """Counting along an axis the constraint does not range over is a frame error.
+def test_a_position_along_a_dimension_the_entry_lacks_is_refused():
+    """Counting along a dimension the constraint is not indexed over is refused.
 
     `position(dim)` yields an integer, so the ordinary dimension-algebra rule every
     where-comparison meets is the one that speaks.

@@ -8,7 +8,7 @@ hold three things:
   ``edge=`` has nothing at the first position, and must not unmake a row the
   other regions do cover;
 * a region's data is required **where that region applies**, so a parameter
-  standing for one region is not asked to cover the whole frame, and a hole
+  standing for one region is not asked to cover every coordinate, and a hole
   inside the region it does stand for is still refused.
 """
 
@@ -115,7 +115,7 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
     ('flagged', 'objective', 'reads'),
     [
         pytest.param(
-            True, 130.0, 'the region takes the whole frame, so hi caps every step', id='a region that is everywhere'
+            True, 130.0, 'the region takes every coordinate, so hi caps every step', id='a region that is everywhere'
         ),
         pytest.param(
             False, 20.0, 'the region takes nothing, so the otherwise 5 caps every step', id='a region that is nowhere'

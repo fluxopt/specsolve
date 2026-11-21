@@ -46,7 +46,7 @@ objective:
 """
 #: The same restriction said as a set; it reaches the default's optimum on every sink.
 SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
-#: two dimensions in the frame, so the emitted ``dims`` has an order to get wrong.
+#: two dimensions, so the emitted ``dims`` has an order to get wrong.
 TWO_DIM_YAML = """
 dimensions:
   snapshot: {dtype: int, ordered: true}

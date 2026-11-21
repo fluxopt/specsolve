@@ -37,7 +37,7 @@ class Carrier:
         self._attached: set[str] = set()
 
     def once(self, alias: str, attach: Callable[[pl.LazyFrame, str], pl.LazyFrame]) -> str:
-        """Join *attach* onto the frame under *alias*, unless it already is, and return *alias*."""
+        """Join *attach* onto the table under *alias*, unless it already is, and return *alias*."""
         if alias not in self._attached:
             self.frame = attach(self.frame, alias)
             self._attached.add(alias)
@@ -82,12 +82,12 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
 def compile_condition(
     scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
-    """``(frame with the mask's parameters joined, boolean expression)``.
+    """The table with the condition's parameters joined, and the boolean expression.
 
-    Walking joins the parameters, so the condition is built before the frame is
+    Walking joins the parameters, so the condition is built before the table is
     read. A name *mask* is certain of ([`_certain_names`][]) is inner- or
-    semi-joined rather than left-joined. No join maintains order: consumers
-    verify it ([`indices.in_position_order`][]).
+    semi-joined rather than left-joined. No join maintains order: the code
+    that reads the table verifies it ([`indices.in_position_order`][]).
     """
     certain = _certain_names(mask)
     carrier = Carrier(frame)

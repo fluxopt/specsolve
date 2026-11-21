@@ -205,7 +205,7 @@ def _conjunct_stamps(marks: str) -> list[dict]:
         pytest.param('ff', 'never true', id='no rung makes it true'),
         pytest.param('tt', 'never false', id='no rung makes it false'),
         pytest.param('tf', None, id='true on one rung and false on another'),
-        pytest.param('-t', 'never false', id='a rung that builds no frame says nothing'),
+        pytest.param('-t', 'never false', id='a rung that builds no row of the block says nothing'),
     ],
 )
 def test_a_conjunct_no_rung_varies_is_reported(marks, expected):

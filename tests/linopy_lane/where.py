@@ -271,7 +271,7 @@ def _relation_has_a_row(node: program.RelationDefined, ctx: EvaluationContext) -
     out is null in every column; a row it does hold carries at least one value,
     a column left null in it being a value the model reads as absent. A bare
     relation has no value column to ask, and arrives as its membership over
-    the key's roles instead, which the frame reads at its dimensions.
+    the key's roles instead, which the entry reads at its dimensions.
     """
     relation = ctx.program.relations[node.name]
     if not relation.values:

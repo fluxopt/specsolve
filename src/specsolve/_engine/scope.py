@@ -94,7 +94,7 @@ class Scope:
     ) -> pl.LazyFrame:
         """Join *param* onto *frame*, its value column renamed to *alias*.
 
-        A parameter over a dimension the frame lacks would be reduced over it, so
+        A parameter over a dimension *frame* lacks would be reduced over it, so
         that is refused, naming *subject*. A left join of a parameter over no
         dimensions keeps every row of *frame*, reading null where the parameter
         has no row, which a cross join with its empty table would not.

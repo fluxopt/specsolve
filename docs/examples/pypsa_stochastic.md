@@ -233,7 +233,7 @@ feasible dispatch in the severe future, which asks for 210.
 with a `dims:` of `[scenario, snapshot, generator]` against a variable declared
 over `[generator]`: nine rows reading one column. That is how a first-stage
 decision couples to a second-stage one. The dimension algebra broadcasts the capacity
-because the constraint's frame says to.
+because the constraint's dimensions say to.
 
 **Prices carry the probability, and they add up to the capital cost.** The nodal
 price in `mild` is 6.0 rather than 10.0, because the term it prices is weighted
@@ -254,7 +254,7 @@ once is paid for by every future that runs it out.
 
 ## What it exercises
 
-Two variables that span different dimensions, coupled by a constraint whose
-frame is the wider of the two, and an objective that reduces one of them against
+Two variables that span different dimensions, coupled by a constraint indexed
+over the wider of the two, and an objective that reduces one of them against
 a probability. Nothing here declares a stage. The two stages are visible only in
 which dimensions each `dims:` lists.

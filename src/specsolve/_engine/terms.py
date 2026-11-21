@@ -42,11 +42,11 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a term exists, and what keys it.
 
-    Not which rows the term's frame has: a neutral parameter's missing rows
+    Not which rows the term's table has: a neutral parameter's missing rows
     are a zero coefficient, those a variable's condition leaves out are
-    absence, and the frame cannot tell them apart.
+    absence, and the table cannot tell them apart.
 
-    ``keyed_by`` is ``None`` where the frame is keyed by the term's own
+    ``keyed_by`` is ``None`` where the table is keyed by the term's own
     dimensions, an implied key that stays right as downstream operators rewrite
     them. A shift or window edge states a narrower one.
     """
@@ -296,7 +296,7 @@ def negate(p: Term) -> Term:
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
-    """*a*'s frame joined to *right*, *b*'s frame with its value renamed, and the dimensions out, *a*'s first.
+    """*a*'s table joined to *right*, *b*'s table with its value renamed, and the dimensions out, *a*'s first.
 
     The join is on the dimensions the two share, so *b* broadcasts over the rest.
     """
@@ -308,7 +308,7 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
     """*p*'s presences with their keys spelled out, before a product gives them a term over more dimensions.
 
     An implied key is the term's own dimensions, and the product's are a superset,
-    so carried over unspelled it would name columns the frame does not hold.
+    so carried over unspelled it would name columns the table does not hold.
     """
     return tuple(Presence(x.frame, x.keys(p.dims)) for x in p.presences)
 
@@ -319,7 +319,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     The right-hand value is renamed first: a suffix collision on ``cval`` would
     multiply a column by itself. A divide joins left, so a coordinate the
     divisor has no value for yields a null coefficient rather than dropping the
-    term; a coordinate where the divisor is absent leaves the frame, the
+    term; a coordinate where the divisor is absent leaves the table, the
     quotient being absent too. The presences of both sides travel out: at a
     read *c* may be a variable at its primal.
     """

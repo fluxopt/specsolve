@@ -392,7 +392,7 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     """Per block with a ``where:``, what each conjunct of its ``where:`` did on this rung — one character each.
 
     ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
-    and ``-`` where the rung builds no frame for the block at all. Positional:
+    and ``-`` where the rung builds no row of the block at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
     model = built_model._engine._model

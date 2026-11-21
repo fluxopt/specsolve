@@ -280,7 +280,7 @@ written.** `feat fix perf refactor docs` owe a changelog line,
 
 A diff across several rows takes the topmost it touches: a feature lands with
 its docs and its tests and is still a `feat`. A reshuffle inside `src/` that no
-consumer can tell apart — a module moved, a private name changed — is `chore`;
+caller can tell apart — a module moved, a private name changed — is `chore`;
 `refactor` publishes, so it is for the ones a changelog reader would want. Three
 cases the table decides and a writer still gets wrong:
 

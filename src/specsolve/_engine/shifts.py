@@ -190,7 +190,7 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         moved = (moved % pl.col(GROUP_SIZE) + pl.col(GROUP_SIZE)) % pl.col(GROUP_SIZE)
 
     def offsetted(frame: pl.LazyFrame) -> pl.LazyFrame:
-        """A per-entity offset is one more equi-join, on keys the frame already carries."""
+        """A per-entity offset is one more equi-join, on keys *frame* already carries."""
         if edge.offsets is None:
             return frame
         offsets, keys = edge.offsets
