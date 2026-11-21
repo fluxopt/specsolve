@@ -7,7 +7,7 @@ declaration built later reads what earlier ones produced.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, get_args
 
 import numpy as np
@@ -18,7 +18,7 @@ from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, labels
 from specsolve._engine.compiler import Compiler
-from specsolve._engine.predicates import holds_nowhere
+from specsolve._engine.predicates import folded, holds_everywhere, holds_nowhere, settled
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
@@ -26,6 +26,8 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -100,6 +102,8 @@ class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
     def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
+        """Start a build of *program* over *attached*, its ``where`` clauses settled first: [`_with_wheres_settled`][]."""
+        program = _with_wheres_settled(program, attached)
         self.program = program
         self.attached = attached
         self.measured = measured
@@ -495,6 +499,38 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
 def declares_quadratic(c: program.Constraint) -> bool:
     """Whether constraint *c* multiplies two variable-carrying operands, either side."""
     return program.is_quadratic(c.lhs) or program.is_quadratic(c.rhs)
+
+
+def _with_wheres_settled(lowered: program.Program, attached: AttachedSources) -> program.Program:
+    """*lowered* with each variable's and constraint's ``where`` folded over the tests the data settles.
+
+    Every test is read once for the whole program ([`settled`][specsolve._engine.predicates.settled]),
+    not once per declaration. A ``where`` that folds to true is dropped, so
+    the declaration takes the path of one without a ``where``: dense labels,
+    and terms placed on their rows without a join. One that folds to false
+    is kept as that literal, and the declaration is skipped with no further
+    read. The program the model keeps is this one, so readback reads the
+    declarations it built. The tests read one parameter's table whole, so
+    they run on the in-memory engine whatever the model's size.
+    """
+    declared = [*lowered.variables.values(), *lowered.constraints.values()]
+    with in_memory():
+        tests = settled(Scope(lowered, attached, {}), [d.where for d in declared if d.where is not None])
+
+    def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
+        out = {}
+        for name, declaration in declarations.items():
+            where = declaration.where
+            if where is None or not tests:
+                out[name] = declaration
+                continue
+            kept = folded(where, tests)
+            out[name] = replace(declaration, where=None if holds_everywhere(kept) else kept)
+        return out
+
+    if not tests:
+        return lowered
+    return replace(lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints))
 
 
 def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
