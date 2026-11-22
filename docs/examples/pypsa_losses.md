@@ -8,7 +8,7 @@ For each segment *k* PyPSA takes the point `p_k = k/segments · s_nom`, draws th
 tangent to the loss curve there, and adds it once for each sign of the flow.
 Each tangent is a half-plane on `(loss, s)`, so the approximation is linear
 rows and no auxiliary variable. The objective pushes the loss down, the
-tangents hold it up, and it settles on the curve.
+tangents hold it up, and it comes to rest on the curve.
 
 Six snapshots, three busy and three quiet, so the flows reach the early
 segments of the fan as well as the top. With the busy snapshots alone only two

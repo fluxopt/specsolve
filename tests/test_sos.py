@@ -401,7 +401,7 @@ def test_a_condition_that_drops_nothing_places_the_sets_where_the_arithmetic_doe
 
 
 def test_a_condition_that_empties_a_set_leaves_the_numbering_dense():
-    """A set number is a dense index, the way a column's and a row's are.
+    """A set number is a contiguous index, the way a column's and a row's are.
 
     A coordinate's *position* is not: it counts the product the condition never
     materialised, which is what may pass 2^31 while every survivor fits
