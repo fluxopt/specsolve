@@ -171,8 +171,8 @@ class Metrics(NamedTuple):
     """What a build and its solves took, as the row a result records beside its answer.
 
     The same columns whoever writes them — a result, an archive, a sweep's
-    slice, or [`Diagnostics.metrics`][specsolve._result.Diagnostics.metrics] —
-    so rows from unrelated runs concatenate into one table.
+    slice, or [`Model.metrics`][specsolve._api.Model.metrics] — so rows from
+    unrelated runs concatenate into one table.
 
     **The ``*_seconds`` columns are the phases of a call**, in the order they
     run: load, tidy, attach, build, handoff, solve, readback, write and
@@ -182,7 +182,7 @@ class Metrics(NamedTuple):
     column. [`phases`][] lays them out as a table.
 
     **Cumulative over the solves it counts**, which [`solves`][] says: every
-    solve of the model on ``Diagnostics.metrics``, and ``1`` on the row of a
+    solve of the model on ``Model.metrics()``, and ``1`` on the row of a
     result, an archive and a sweep's slice, whose clocks are that solve's own
     share, from where the answer before it was handed back. There
     [`solver_instances`][] is ``1`` where the solve took a new solver and
@@ -244,7 +244,7 @@ class Metrics(NamedTuple):
     #: The spec, the sources and the answer written to disk. Every member is
     #: timed but this row itself, which is written last: writing it and
     #: landing the archive are in
-    #: [`Diagnostics.metrics`][specsolve._result.Diagnostics.metrics] alone.
+    #: [`Model.metrics`][specsolve._api.Model.metrics] alone.
     archive_seconds: float
     #: What the archive holding this row was called, as
     #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null

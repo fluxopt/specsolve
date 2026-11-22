@@ -641,10 +641,10 @@ def test_the_condition_is_smaller_than_padding_the_curve_out(short_curve_inputs)
     del unmasked['parameters']['bp_present']
 
     with sps.build(expanded(raw_of(SHORT_CURVE)), short_curve_inputs) as masked_model:
-        masked = masked_model.diagnostics().metrics
+        masked = masked_model.metrics()
         assert masked_model.solve('highs').objective == pytest.approx(155.0)
     with sps.build(expanded(unmasked), padded) as padded_model:
-        grown = padded_model.diagnostics().metrics
+        grown = padded_model.metrics()
         assert padded_model.solve('highs').objective == pytest.approx(155.0), 'the same answer, larger'
 
     assert masked.columns < grown.columns, 'an absent breakpoint declares no weight and no segment binary'

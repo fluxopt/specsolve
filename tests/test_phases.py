@@ -68,7 +68,7 @@ def _timed(call: Callable[[], sps.types.Model], out: Path) -> Timed:
     started = time.perf_counter()
     model = call()
     wall = time.perf_counter() - started
-    kept = model.diagnostics().metrics
+    kept = model.metrics()
     model.close()
     return Timed(wall, _clocks(kept), _clocks(sps.read_archive(out).metrics))
 
@@ -160,7 +160,7 @@ def test_each_answer_carries_its_share_and_the_shares_add_up_to_the_model(
         first = model.solve()
         model.update({'load': load.with_columns(value=load['value'] * 0.5)})
         second = model.solve(archive=tmp_path / 'case.zip')
-        kept = model.diagnostics().metrics
+        kept = model.metrics()
     assert first.metrics is not None and second.metrics is not None, 'a solve hands back what it took'
     assert (first.metrics.solves, second.metrics.solves, kept.solves) == (1, 1, 2), 'a row per answer, one solve each'
     assert first.metrics.load_seconds > 0, 'the first answer carries the load'
@@ -250,7 +250,7 @@ def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispa
     """The row adds the archive's time so far itself, so the model's own clocks are checked apart from it."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         model.solve(archive=tmp_path / 'case.zip')
-        kept = model.diagnostics().metrics.archive_seconds
+        kept = model.metrics().archive_seconds
     recorded = sps.read_archive(tmp_path / 'case.zip').metrics.archive_seconds
     assert kept >= recorded > 0, f'the model keeps the {recorded} s its archive row recorded, and the rest: {kept}'
 
@@ -292,12 +292,12 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
 def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs, tmp_path, call):
     """Each call starts the clock, so a caller who waits between two calls is not billed for the wait."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
-        before = _clocks(model.diagnostics().metrics)
+        before = _clocks(model.metrics())
         time.sleep(DELAY)
         started = time.perf_counter()
         call(model, tmp_path, dispatch_table_inputs['load'])
         wall = time.perf_counter() - started
-        after = _clocks(model.diagnostics().metrics)
+        after = _clocks(model.metrics())
     grown = {phase: after[phase] - before[phase] for phase in PHASES}
     assert sum(grown.values()) <= wall, f'the wait before the call is in a phase: {grown} sum past the call, {wall}'
 

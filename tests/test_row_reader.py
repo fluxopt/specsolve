@@ -161,7 +161,7 @@ def test_an_entry_whose_coefficients_are_all_one_says_so_once() -> None:
 def test_it_answers_on_a_model_that_was_never_solved() -> None:
     """A model too wrong to solve is the one whose rows need reading, so no solve is required."""
     with sps.build(DISPATCH_SPEC, DATA) as model:
-        assert model.diagnostics().metrics.solves == 0, 'nothing has been solved, and the row still reads'
+        assert model.metrics().solves == 0, 'nothing has been solved, and the row still reads'
         assert model.row('balance', snapshot=0).rhs == 80.0
 
 

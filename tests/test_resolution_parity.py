@@ -217,7 +217,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
 
     with differential(spec, data) as run:
         assert 'convex' not in run.model.constraints, 'a row asserting something about constants only was built'
-        assert run.engine.diagnostics().metrics.rows == 0, 'the relational lane built one anyway'
+        assert run.engine.metrics().rows == 0, 'the relational lane built one anyway'
         assert run.engine.diagnostics().omissions.to_dicts() == [{'constraint': 'convex', 'rows_not_built': 2}], (
             'a declared row dropped for want of a term is only defensible because the build says it happened'
         )
@@ -258,7 +258,7 @@ def test_a_constraint_ranging_over_a_dimension_with_no_members_is_not_built_on_e
 
     with differential(EMPTY_FOREACH_SPEC, data) as run:
         assert 'kvl' not in run.model.constraints, 'a constraint with no rows was built anyway'
-        assert run.engine.diagnostics().metrics.rows == 0, 'the relational lane built a row over an empty dimension'
+        assert run.engine.metrics().rows == 0, 'the relational lane built a row over an empty dimension'
         assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an absent constraint constrains nothing'
 
 

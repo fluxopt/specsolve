@@ -329,7 +329,7 @@ def test_the_saving_is_columns_paid_for_in_rows():
             **{'piecewise.cost_curve.method': method, 'piecewise.cost_curve.links': links},
         )
         built = sps.build(expanded(spec), _relational())
-        sizes[method] = built.diagnostics().metrics
+        sizes[method] = built.metrics()
         built.close()
 
     weights = len(SNAPSHOTS) * len(BREAKPOINTS_X)

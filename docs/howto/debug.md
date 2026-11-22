@@ -19,8 +19,9 @@ refuses a built model the solver cannot take
 
 ```python
 model = sps.build('dispatch.yaml', sources)
+size = model.metrics()
+size.columns, size.rows, size.nonzeros  # 8, 4, 8
 report = model.diagnostics()
-report.metrics.columns, report.metrics.rows, report.metrics.nonzeros  # 8, 4, 8
 report.omissions  # rows a constraint declared and did not build
 report.sparse_parameters  # parameters whose table is short of their coordinates
 ```

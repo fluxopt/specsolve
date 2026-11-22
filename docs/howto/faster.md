@@ -68,7 +68,7 @@ print(sps.read_archive('runs/dispatch.zip').metrics.phases)
 
 A result holds the time since the model's previous result. The first result
 of a model carries the load and the build. A later one carries the update and
-the solve that led to it. `model.diagnostics().metrics` adds up every result
+the solve that led to it. `model.metrics()` adds up every result
 of the model, and also holds writing the archive's last file, which no result
 can time.
 

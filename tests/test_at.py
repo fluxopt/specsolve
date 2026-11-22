@@ -289,9 +289,7 @@ def test_at_through_a_null_relation_agrees_between_lanes():
 
     with differential(DANGLING, _dangling_sources(), lp=True) as run:
         assert run.oracle == pytest.approx(10.0)
-        assert run.engine.diagnostics().metrics.rows == 2, (
-            'the two flows that map somewhere have a row, and f3 has none'
-        )
+        assert run.engine.metrics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
 
 #: Two columns read at once, through a relation that leaves `f3` out.
@@ -327,9 +325,7 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
         lp=True,
     ) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound, not by a row reading nothing'
-        assert run.engine.diagnostics().metrics.rows == 2, (
-            'the two flows whose whole tuple maps have a row, and f3 has none'
-        )
+        assert run.engine.metrics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
 
 
 #: The same shape with a total relation; `level` is absent at `c2`.
@@ -347,7 +343,7 @@ def test_at_over_a_narrowed_variable_takes_the_row_with_it():
     usable = pd.Series([1.0, 0.0], index=pd.Index(COMPONENTS, name='component'))
     with differential(NARROWED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound — 0.0 would mean a row bound it'
-        assert run.engine.diagnostics().metrics.rows == 2, 'only the flows whose component has a level are asserted'
+        assert run.engine.metrics().rows == 2, 'only the flows whose component has a level are asserted'
 
 
 #: A pullback's absence is keyed by the fine dimension alone; `u` is a second dimension the shift edge spans.
@@ -390,9 +386,7 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
 
     extra = {'t': pd.Index([0, 1], name='t'), 'u': pd.Index(['a', 'b'], name='u')}
     with differential(DANGLING_SHIFTED, _dangling_sources(**extra), lp=True) as run:
-        assert run.engine.diagnostics().metrics.rows == 8, (
-            'the flows that map somewhere are asserted at both t, and f3 at neither'
-        )
+        assert run.engine.metrics().rows == 8, 'the flows that map somewhere are asserted at both t, and f3 at neither'
         assert run.oracle == pytest.approx(40.0), (
             "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
         )

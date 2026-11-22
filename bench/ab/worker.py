@@ -138,7 +138,7 @@ class _Built:
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
-        metrics = model.diagnostics().metrics
+        metrics = model.metrics()
         self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
 
     def numbers(self) -> dict[str, np.ndarray]:

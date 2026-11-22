@@ -399,6 +399,7 @@ class Engine:
 
         The one place a [`Metrics`][] is built from the model: a result's, an
         archive's and a sweep slice's rows are differences of two of these.
+        No table is built, so it costs what reading the counters costs.
         """
         measured, clocks = self._measured, self._seconds
         return Metrics(
@@ -422,7 +423,6 @@ class Engine:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured
         return Diagnostics(
-            metrics=self.metrics(),
             omissions=_per_name('constraint', measured.omitted, rows_not_built=pl.UInt32),
             coefficient_range=_per_name('constraint', measured.coefficients, smallest=pl.Float64, largest=pl.Float64),
             bound_range=_per_name('variable', measured.bounds, smallest=pl.Float64, largest=pl.Float64),

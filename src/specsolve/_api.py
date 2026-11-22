@@ -410,8 +410,8 @@ class Model:
         """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
 
         The metrics row is the last member written, so its ``archive_seconds``
-        covers every other one; writing and landing it are in
-        [`diagnostics`][] alone.
+        covers every other one; writing and landing it are in [`metrics`][]
+        alone.
         """
         recorded = answered.metrics
 
@@ -548,8 +548,20 @@ class Model:
         assert evaluate is not None, 'a model built from a spec as written compiles an ad-hoc expression'
         return evaluate
 
+    def metrics(self) -> Metrics:
+        """This model's size, counters and clocks over its whole life, taken now.
+
+        ``solves`` counts every solve, and each clock sums every lap of its
+        phase, so the [`metrics`][specsolve.types.Result.metrics] of every
+        result this model handed back add up to it, but for whatever came
+        after the last one and the landing of each archive. Answerable after
+        [`close`][], and after a build that raised, which leaves the sizes
+        at zero.
+        """
+        return self._engine.metrics()
+
     def diagnostics(self) -> Diagnostics:
-        """What this build and its solves did that the answer does not show.
+        """What the build looks like that the answer does not show: what it left out and how its numbers spread.
 
         Answerable after [`close`][], and after a build that raised. A raise
         leaves the sizes at zero, since they are taken once a model is whole,

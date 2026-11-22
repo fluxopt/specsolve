@@ -294,7 +294,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
     with Engine() as engine:
         engine.build(program, tidy_sources(program, dict(sources)))
         result = engine.solve(solver_options={'output_flag': False})
-        diagnostics = engine.diagnostics().metrics
+        diagnostics = engine.metrics()
         if (diagnostics.columns, diagnostics.rows) != (m.nvars, m.ncons):
             findings.append(
                 Finding(

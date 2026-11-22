@@ -234,15 +234,11 @@ _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 @dataclass(frozen=True)
 class Diagnostics:
-    """What a build and its solves did that the answer does not show.
+    """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
 
-    Advisory, all of it: no answer depends on any field.
+    Advisory, all of it: no answer depends on any field. What the build and
+    its solves cost is [`Model.metrics`][specsolve._api.Model.metrics].
     """
-
-    #: This model's sizes, counters and clocks over its whole life:
-    #: ``solves`` counts every solve, and each clock sums every lap of its
-    #: phase. [`Result.metrics`][specsolve.types.Result.metrics] is one solve's share of it.
-    metrics: Metrics
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
     #: the solver: one emptied of all its terms, and one a propagated absence

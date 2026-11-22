@@ -2305,7 +2305,7 @@ def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
 
     shape = SHAPES[name]
     model = sps.build(spec(shape), tables(shape, 24))
-    assert model.diagnostics().metrics.columns > 0
+    assert model.metrics().columns > 0
     if not shape.quadratic:
         assert sps.solve(spec(shape), tables(shape, 24), 'highs').status == 'ok'
 
@@ -2393,7 +2393,7 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
         'def build(spec, sources):\n'
         "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
         "        log.write('built\\n')\n"
-        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(metrics=SimpleNamespace(columns=1, rows=1)))\n'
+        '    return SimpleNamespace(metrics=lambda: SimpleNamespace(columns=1, rows=1))\n'
     )
     log = tmp_path / 'builds'
     monkeypatch.setenv('AB_BUILDS', str(log))

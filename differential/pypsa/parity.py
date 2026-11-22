@@ -741,7 +741,7 @@ def solver_size(n, built_model) -> dict[str, dict[str, int]]:
     padded term or a helper row one side adds.
     """
     theirs = n.model.solver_model
-    ours = built_model.diagnostics().metrics
+    ours = built_model.metrics()
     return {
         'pypsa': {'rows': theirs.getNumRow(), 'columns': theirs.getNumCol(), 'nonzeros': theirs.getNumNz()},
         'specsolve': {'rows': ours.rows, 'columns': ours.columns, 'nonzeros': ours.nonzeros},

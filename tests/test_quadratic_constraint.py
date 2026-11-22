@@ -254,9 +254,7 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             first = model.solve(solver_name='gurobi').objective
             model.update(moved)
             again = model.solve(solver_name='gurobi').objective
-            assert model.diagnostics().metrics.solver_instances == 2, (
-                'anything about a quadratic row is a model to load again'
-            )
+            assert model.metrics().solver_instances == 2, 'anything about a quadratic row is a model to load again'
             with sps.solve(weighted, moved, solver_name='gurobi') as fresh:
                 assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
                     'an update answers what a fresh build answers — a coefficient or a right-hand '
@@ -280,7 +278,7 @@ def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
         model.solve(solver_name='gurobi').close()
         model.update(tight)
         pushed = model.solve(solver_name='gurobi')
-        assert model.diagnostics().metrics.solver_instances == 1, 'only a linear right-hand side moved, so it is pushed'
+        assert model.metrics().solver_instances == 1, 'only a linear right-hand side moved, so it is pushed'
         with sps.solve(capped, tight, solver_name='gurobi') as fresh:
             assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
                 'a pushed right-hand side answers what a fresh build answers'

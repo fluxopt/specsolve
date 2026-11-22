@@ -109,7 +109,7 @@ def differential(
             assert result.objective == pytest.approx(oracle, rel=RTOL), (
                 f'the lanes disagree on the objective — relational {result.objective}, linopy {oracle}'
             )
-            _same_shape(engine.diagnostics().metrics, m)
+            _same_shape(engine.metrics(), m)
 
             lp_path = None
             if lp:
