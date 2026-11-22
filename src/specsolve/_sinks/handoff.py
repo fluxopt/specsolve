@@ -51,10 +51,10 @@ class RowVectors:
 
 @dataclass(frozen=True)
 class MatrixBlock:
-    """One chunk of rows ``[lo, hi)`` and the matrix entries those rows own.
+    """One chunk of rows ``[lo, hi)`` and the coefficients those rows own.
 
-    ``starts`` is the offset of each row's entries within the chunk — what a
-    solver's matrix API asks for. A row with no entries takes the next row's
+    ``starts`` is the offset of each row's coefficients within the chunk — what a
+    solver's matrix API asks for. A row with no coefficients takes the next row's
     offset, and so occupies no span.
     """
 
@@ -65,7 +65,7 @@ class MatrixBlock:
 
     @property
     def height(self) -> int:
-        """How many rows the chunk spans — entries or not."""
+        """How many rows the chunk spans — coefficients or not."""
         return self.hi - self.lo
 
 
@@ -100,7 +100,7 @@ class Handoff:
     ``qmatrix`` is the same form for the *rows* that carry one:
     ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
     row indices, beginning at [`linear_row_count`][] — the engine builds
-    quadratic entries last — so a sink holding linear and quadratic rows
+    quadratic coefficients last — so a sink holding linear and quadratic rows
     in different objects reads its answer back as two runs, not a scatter.
 
     ``sos`` is ``(set, type, col, weight)`` in ``(set, weight)`` order, one row
@@ -113,7 +113,7 @@ class Handoff:
     contiguous ``0..n-1``, so they *are* the solver's indices: every dense vector is
     read positionally and no sink builds a mapping. **``cols`` carries no
     ``COL`` and ``matrix`` no ``ROW``**: a ``cols`` row's position is its
-    index, and a matrix entry's row is where it sits between two starts;
+    index, and a coefficient's row is where it sits between two starts;
     [`matrix_block`][] spells them back out. ``obj`` keeps its ``COL``, being
     sparse, and **carries no order contract**: its row order differs between
     two builds of one model, so anything that reads it must scatter it over the
@@ -141,7 +141,7 @@ class Handoff:
         """The row ranges both block readers walk; ``budget=None`` is one span.
 
         Width is the average row, since a reader pays in nonzeros: 100k rows is
-        900k entries in one model and 10M in another.
+        900k coefficients in one model and 10M in another.
         """
         linear = self.linear_row_count
         if budget is None:
@@ -149,7 +149,7 @@ class Handoff:
         return ranges(linear, budget, self.matrix.height / max(1, self.row_count))
 
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
-        """The matrix entries rows ``[lo, hi)`` own.
+        """The coefficients rows ``[lo, hi)`` own.
 
         Both block readers slice through here, so the CSR arithmetic and the
         half-open ``hi`` bound cannot drift between them.
@@ -190,7 +190,7 @@ class Handoff:
 
         It stops at the sense, a [`SENSE_CODES`][] byte, because that is where
         the solvers part — HiGHS wants ``lower``/``upper``, the others a
-        comparison and right-hand side. A row with no entry gets a comparison
+        comparison and right-hand side. A row with no coefficient gets a comparison
         nothing can fail (``>=`` against ``-infinity``) rather than the
         ``== 0`` that would be an equality the model never stated.
         """
@@ -215,7 +215,7 @@ class Handoff:
         I hold and take the new numbers by value? Bounds, costs and right-hand
         sides go in that way. The matrix's coefficients are the solver's own
         question ([`keeps`][specsolve._sinks.solver.Solver.keeps]).
-        The counts, which column each matrix entry sits in, each row's comparison,
+        The counts, which column each coefficient sits in, each row's comparison,
         each column's type, every SOS member, the quadratic objective's
         pattern and each quadratic *constraint* whole — coefficients and
         right-hand side — do not, so a model whose digest moved is loaded
@@ -250,7 +250,7 @@ class Handoff:
             yield members.item(0, 'type'), members.get_column(COL), members.get_column('weight')
 
     def quadratic_blocks(self) -> Iterator[tuple[int, pl.DataFrame]]:
-        """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` entries it owns.
+        """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` coefficients it owns.
 
         One row at a time, since every API that takes a quadratic constraint
         takes one per call.
@@ -259,11 +259,11 @@ class Handoff:
             yield int(row), entries.select(COL_L, COL_R, COEFF)
 
     def row_blocks(self, budget: int | None) -> Iterator[MatrixBlock]:
-        """Each chunk of rows with the matrix entries it owns — every sink's reader.
+        """Each chunk of rows with the coefficients it owns — every sink's reader.
 
         A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
         searched. A sink that needs the ``ROW`` indices asks
-        [`matrix_block`][] with the chunk's own range, so its spans and entries
+        [`matrix_block`][] with the chunk's own range, so its spans and coefficients
         cannot disagree.
         """
         for lo, hi in self._spans(budget):

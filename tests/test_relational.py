@@ -1136,7 +1136,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_a_row_of_only_zeros_stays_the_infeasibility_it_is(self):
         """Pruning may not turn `0 >= 10` into no constraint at all.
 
-        A row whose every coefficient is zero owns no matrix entries once they are
+        A row whose every coefficient is zero owns no coefficients once they are
         pruned, which is exactly the shape `_drop_termless_rows` removes — so the
         prune has to run after that rule rather than before it. Removing the row
         would report `optimal` for a model with no feasible point.

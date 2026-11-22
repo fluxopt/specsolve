@@ -101,7 +101,7 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     A column's lines occupy ``slots`` consecutive keys — the integer marker, its
-    objective coefficient, each matrix entry at its row index, the closing
+    objective coefficient, each coefficient at its row index, the closing
     marker — so one sort fixes both the column order and the order within a
     column. Every column gets an objective line, coefficient or not: a column
     MPS never names is a column the reader does not have.

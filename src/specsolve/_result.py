@@ -237,7 +237,7 @@ class Diagnostics:
     Advisory, all of it: no answer depends on any field.
     """
 
-    #: The shape the build produced: columns, rows, and matrix entries.
+    #: The shape the build produced: columns, rows, and coefficients.
     columns: int
     rows: int
     nonzeros: int

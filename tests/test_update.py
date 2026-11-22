@@ -35,10 +35,10 @@ def sources() -> dict[str, pl.DataFrame]:
     }
 
 
-#: Which plants may serve which zone, and how well. Every matrix entry of
+#: Which plants may serve which zone, and how well. Every coefficient of
 #: `examples/dispatch.yaml` is a 1 and its objective has no constant, so this
-#: model moves what that one cannot: a coefficient, an entry's column, an
-#: entry's row, and the objective constant.
+#: model moves what that one cannot: a coefficient, a coefficient's column, a
+#: coefficient's row, and the objective constant.
 ZONES = ['north', 'south']
 PLANTS = ['a', 'b', 'c', 'd']
 REACH = {

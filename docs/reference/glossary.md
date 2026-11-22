@@ -228,6 +228,7 @@ word to write. A plural is refused with its word.
 | `sayable` | in the language |
 | `seam`, `surface`, `tax`, `closure` | the plain thing |
 | `handover`, `owned` | horizon end, the window's horizon |
+| `matrix entry` | coefficient |
 
 A dimension's labels are its labels, never its index: an index is a solver's
 position of a column or a row, or a pandas index.

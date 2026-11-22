@@ -148,7 +148,7 @@ def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
 
 
 def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
-    """``(variable, coordinate, coefficient)`` for one row's matrix entries, in the entries' order.
+    """``(variable, coordinate, coefficient)`` for one row's coefficients, in the matrix's order.
 
     Each entry owns a contiguous run of column indices, so a term's variable
     is a range test and its place in that table is a positional take.

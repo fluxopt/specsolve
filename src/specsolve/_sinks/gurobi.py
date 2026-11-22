@@ -319,8 +319,8 @@ def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> None:
 def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowVectors, spelling: Any) -> None:
     """Every quadratic constraint, one ``addMQConstr`` call each, over only the columns it holds.
 
-    A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
-    and its linear entries from the matrix at the same row index. A matrix or
+    A row takes its quadratic coefficients unhalved, as [`_set_quadratic`][] does,
+    and its linear coefficients from the matrix at the same row index. A matrix or
     vector as wide as the model would cost each row time in the column count.
     """
     import numpy as np
