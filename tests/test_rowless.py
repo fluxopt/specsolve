@@ -208,7 +208,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
     """A skip is decided on the data a build reads, so `update` decides it again.
 
     `cap > 100` admits no row of `admits_nothing` until the update moves `cap`'s
-    numbers alone: no dimension changes, so it is the case a refill could keep.
+    numbers alone: no dimension changes, so it is the case a splice could keep.
     """
     with sps.build(SPEC, first) as model:
         model.update(then)

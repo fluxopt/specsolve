@@ -20,7 +20,7 @@ distribution is a quantile average and sounds nonlinear. It is an epigraph over
 a level `theta` the model is free to place. The objective's weight on it
 pulls it down onto the true value at risk.
 
-Two things the source settles. **The tail is the operating cost only**: capital
+Two things the source decides. **The tail is the operating cost only**: capital
 cost sits outside the blend, so `omega` prices what a future costs to *run*. And
 **`alpha` and `omega` are independent**: `alpha` says where the tail starts,
 `omega` how much of the objective it is.
