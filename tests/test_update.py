@@ -2,7 +2,7 @@
 
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
-path: an update that moves a mask renumbers labels, so the engine rebuilds and
+path: an update that moves a condition renumbers solver indices, so the engine rebuilds and
 solves cold, and `diagnostics().loads` says which happened.
 """
 
@@ -19,12 +19,13 @@ from mathspec import to_spec
 from polars.testing import assert_frame_equal
 
 import specsolve as sps
+from specsolve._names import COL
 from specsolve._sources import attachable
 from tests.conftest import KNAPSACK, expanded, knapsack_sources, override, port_sources
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
-COORDS = {'snapshot': SNAPSHOTS, 'generator': GENERATORS}
+COORDINATES = {'snapshot': SNAPSHOTS, 'generator': GENERATORS}
 
 
 def sources() -> dict[str, pl.DataFrame]:
@@ -58,7 +59,7 @@ REACH = {
 
 
 def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
-    """A `reach` frame. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
+    """A `reach` table. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
     return pl.DataFrame(
         {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
         schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
@@ -86,9 +87,9 @@ class Rung(NamedTuple):
 
 
 def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
-    """The rung's model and the sources that build it, index included."""
+    """The rung's model and the sources that build it, labels included."""
     return {
-        'dispatch': lambda: (dispatch_yaml, sources() | COORDS),
+        'dispatch': lambda: (dispatch_yaml, sources() | COORDINATES),
         'reach': lambda: (REACH, reach_sources()),
         'knapsack': lambda: (KNAPSACK, knapsack_sources()),
     }[rung.model]()
@@ -116,7 +117,7 @@ RUNGS = [
     ),
     pytest.param(
         Rung('dispatch', {'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}, False),
-        id='mask',
+        id='condition',
     ),
     pytest.param(Rung('reach', {'levy': pl.DataFrame({'value': [500.0]})}, True), id='objective constant'),
     pytest.param(
@@ -150,7 +151,7 @@ RUNGS = [
 @pytest.fixture
 def model(dispatch_yaml):
     """The example dispatch on its own data, built and open for the test's duration."""
-    with sps.build(dispatch_yaml, sources() | COORDS) as model:
+    with sps.build(dispatch_yaml, sources() | COORDINATES) as model:
         yield model
 
 
@@ -166,7 +167,7 @@ def test_a_update_answers_what_a_fresh_build_answers(dispatch_yaml, rung, solver
     """The oracle. Every rung, one assertion: the reference build is the truth.
 
     Read-back is keyed by coordinate, so this holds even where the rung moved
-    every label. Over **every** declaration and **every** sink that can stay
+    every solver index. Over **every** entry and **every** sink that can stay
     loaded, since each sink writes its own push.
     """
     spec, given = _case(rung, dispatch_yaml)
@@ -273,7 +274,7 @@ def _prices(result: Any, program: Any) -> dict[str, pl.DataFrame] | None:
 
 
 def _laid_out_alike(got: pl.DataFrame, want: pl.DataFrame, *, values: bool, where: str) -> None:
-    """*got* is *want*'s frame: same coordinates in the same order, same numbers."""
+    """*got* is *want*'s table: same coordinates in the same order, same numbers."""
     assert got.drop('value').equals(want.drop('value')), f'{where}: came back keyed or ordered differently'
     if values:
         assert got['value'].to_list() == pytest.approx(want['value'].to_list()), f'{where}: different numbers'
@@ -330,10 +331,10 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
 
 
 def _same_handoff(got: Any, want: Any, where: str) -> None:
-    """Two hand-offs hold the same model: every frame alike, a sum in another order alike to its last bits."""
-    for frame in ('cols', 'rows', 'matrix', 'qmatrix', 'quad', 'sos'):
-        assert_frame_equal(getattr(got, frame), getattr(want, frame), rel_tol=1e-12, abs_tol=0.0)
-    assert_frame_equal(got.obj.sort('col'), want.obj.sort('col'), rel_tol=1e-12, abs_tol=0.0)
+    """Two hand-offs hold the same model: every table alike, a sum in another order alike to its last bits."""
+    for table in ('cols', 'rows', 'matrix', 'qmatrix', 'quad', 'sos'):
+        assert_frame_equal(getattr(got, table), getattr(want, table), rel_tol=1e-12, abs_tol=0.0)
+    assert_frame_equal(got.obj.sort(COL), want.obj.sort(COL), rel_tol=1e-12, abs_tol=0.0)
     assert (got.row_starts == want.row_starts).all(), f'{where}: the matrix rows start elsewhere'
     assert (got.column_count, got.row_count) == (want.column_count, want.row_count), f'{where}: another shape'
     assert got.objective_constant == pytest.approx(want.objective_constant, rel=1e-12), f'{where}: another constant'
@@ -342,8 +343,8 @@ def _same_handoff(got: Any, want: Any, where: str) -> None:
 def _same_diagnostics(got: Any, want: Any, where: str) -> None:
     """Two models report the same shape and the same ranges, a block at a time in build order."""
     assert (got.columns, got.rows, got.nonzeros) == (want.columns, want.rows, want.nonzeros), f'{where}: another shape'
-    for frame in ('omissions', 'sparse_parameters', 'coefficient_range', 'bound_range', 'rhs_range'):
-        assert_frame_equal(getattr(got, frame), getattr(want, frame), rel_tol=1e-12, abs_tol=0.0)
+    for table in ('omissions', 'sparse_parameters', 'coefficient_range', 'bound_range', 'rhs_range'):
+        assert_frame_equal(getattr(got, table), getattr(want, table), rel_tol=1e-12, abs_tol=0.0)
     assert got.objective_range == pytest.approx(want.objective_range, rel=1e-12), f'{where}: another objective range'
 
 
@@ -351,7 +352,7 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
     """Each real-valued parameter of a port, its numbers moved alone, gives the hand-off and diagnostics a fresh build gives.
 
     Whichever way the update went: a parameter that feeds only bounds,
-    constant sides, linear coefficients and the objective is read again on the old labels
+    constant sides, linear coefficients and the objective is read again on the old indices
     ([`refilled`][specsolve._engine.assembly.refilled]), and any other is
     built in full. A change the fresh build refuses is left out; the model
     goes back to the port's own numbers after each.
@@ -419,7 +420,7 @@ COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
 
 
 @pytest.mark.parametrize(
-    ('declarations', 'change', 'refilled', 'loads'),
+    ('entries', 'change', 'refilled', 'loads'),
     [
         pytest.param({}, {'cap': [8.0, 9.0]}, True, 1, id='a bound'),
         pytest.param({}, {'demand': [5.0]}, True, 1, id='a constant side'),
@@ -451,22 +452,22 @@ COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
             1,
             id='fewer coordinates',
         ),
-        pytest.param({}, {'generator': ROLE_GENERATORS}, False, 1, id='an index'),
+        pytest.param({}, {'generator': ROLE_GENERATORS}, False, 1, id='a dimension'),
     ],
 )
-def test_new_numbers_are_read_again_on_the_old_labels_only_where_nothing_else_can_move(
-    monkeypatch, declarations, change, refilled, loads
+def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_can_move(
+    monkeypatch, entries, change, refilled, loads
 ):
     """Numbers that feed bounds, constant sides, linear coefficients and costs, at the coordinates they had, skip the build.
 
     A parameter a `where` reads moves which columns or rows exist; so do new
-    coordinates or a new index. Each of those builds in full. Either way the
+    coordinates or new labels. Each of those builds in full. Either way the
     hand-off is a fresh build's. A coefficient falling to zero takes its
-    matrix entry with it, on the old labels, and the entries after it move up.
+    matrix entry with it, on the old indices, and the entries after it move up.
     """
     from specsolve._engine import engine as engine_module
 
-    spec = override(ROLES, **declarations)
+    spec = override(ROLES, **entries)
     new = {
         name: ROLE_DATA[name].with_columns(pl.Series('value', value))
         if name in ROLES['parameters'] and isinstance(value, list)
@@ -497,11 +498,11 @@ def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'eff on a quadratic row')
-    assert not took, 'a quadratic row was read again on the old labels'
+    assert not took, 'a quadratic row was read again on the old indices'
 
 
 def test_a_divisor_falling_to_zero_is_refused_as_a_fresh_build_refuses_it():
-    """`p / eff` read again on the old labels still refuses a divisor of zero, in a fresh build's words."""
+    """`p / eff` read again on the old indices still refuses a divisor of zero, in a fresh build's words."""
     spec = override(ROLES, **{'constraints.meet.expression': 'sum(p / eff, over=generator) >= demand'})
     change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.0, 2.0]))}
     with pytest.raises(sps.errors.DataError, match='eff') as fresh:
@@ -565,7 +566,7 @@ def test_a_parameter_that_picks_which_entries_exist_is_built_again(monkeypatch, 
     """A `cases:` condition over variables, or a shift's named offset, decides which matrix entries exist.
 
     Neither is a scaling of a variable the walk of products can see, so each
-    has its own branch; either one missed reads new numbers onto old labels.
+    has its own branch; either one missed reads new numbers onto old indices.
     """
     from specsolve._engine import engine as engine_module
 
@@ -575,7 +576,7 @@ def test_a_parameter_that_picks_which_entries_exist_is_built_again(monkeypatch, 
     with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
-    assert not took, 'a parameter that decides which entries exist was read again on the old labels'
+    assert not took, 'a parameter that decides which entries exist was read again on the old indices'
 
 
 def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
@@ -595,13 +596,13 @@ def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
     with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'cap moved to b')
-    assert not took, 'other coordinates were read again on the old labels'
+    assert not took, 'other coordinates were read again on the old indices'
 
 
 def test_new_numbers_on_a_row_the_build_dropped_are_refused_as_a_fresh_build_refuses_them():
-    """A constraint that dropped a row with no terms builds in full, because its checks read the rows it labelled.
+    """A constraint that dropped a row with no terms builds in full, because its checks read the rows it indexed.
 
-    `a` has no row at t=2, so `a * x` has no term there: the row is labelled,
+    `a` has no row at t=2, so `a * x` has no term there: the row is indexed,
     keeps no term and is dropped. A divisor of zero at t=2 is refused by a
     fresh build; read again on the rows that survived, it would go unseen.
     """
@@ -628,7 +629,7 @@ def test_new_numbers_on_a_row_the_build_dropped_are_refused_as_a_fresh_build_ref
 
 
 @pytest.mark.parametrize('rung', RUNGS)
-def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, rung, solver_name):
+def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch_yaml, rung, solver_name):
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
@@ -646,8 +647,8 @@ def test_only_a_update_that_moves_a_label_loads_the_solver_again(dispatch_yaml, 
         expected = 1 if rung.keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
         assert seen.loads == expected, (
-            'an update that keeps every label pushes values onto the loaded solver; '
-            'one that moves a label has to load the model again'
+            'an update that keeps every solver index pushes values onto the loaded solver; '
+            'one that moves a solver index has to load the model again'
         )
 
 
@@ -659,7 +660,7 @@ def _tables(spec: Any) -> Any:
 
 #: The three fields of the digest **no rung above can reach**: a variable's
 #: type, a row's comparison and the objective's direction all come from the
-#: YAML, so they are pinned one edit of the declaration apart.
+#: YAML, so they are pinned one edit of the entry apart.
 DECLARED = [
     pytest.param({'variables.p.domain': 'integer'}, id='a variable type'),
     pytest.param({'constraints.meet.expression': 'sum(reach * p, over=plant) == demand'}, id="a row's comparison"),
@@ -668,14 +669,14 @@ DECLARED = [
 
 
 @pytest.mark.parametrize('edited', DECLARED)
-def test_the_digest_moves_where_a_declaration_moved(edited):
+def test_the_digest_moves_where_an_entry_moved(edited):
     """What a re-solve may not change, checked directly for want of a rung."""
     assert _tables(REACH).structure != _tables(override(REACH, **edited)).structure, (
         'a model a re-solve may not be pushed onto has to hash differently'
     )
 
 
-#: The counts, which no edit of a declaration reaches either.
+#: The counts, which no edit of an entry reaches either.
 COUNTS = [pytest.param('column_count', id='the column count'), pytest.param('row_count', id='the row count')]
 
 
@@ -750,7 +751,7 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
 
 
 def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
-    """What outlives a build is the digest, never the frames it was read from (#1608).
+    """What outlives a build is the digest, never the tables it was read from (#1608).
 
     A solver holding the tables it loaded has to drop them before the next
     build allocates, or a re-solving loop stands at two models' peak. **Asked
@@ -790,7 +791,7 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(model, solver_na
 def test_a_update_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, model):
     """Partial by construction: what is not named keeps what `build` bound."""
     every = {**sources(), 'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})}
-    with sps.solve(dispatch_yaml, every | COORDS) as reference:
+    with sps.solve(dispatch_yaml, every | COORDINATES) as reference:
         updated = model.update({'load': every['load']}).solve()
         assert updated.objective == pytest.approx(reference.objective)
 
@@ -803,16 +804,16 @@ def test_a_update_may_be_repeated_and_each_answer_is_its_own(model):
         served.append(model.update({'load': load}).solve().primal('p')['value'].sum())
 
     assert served == sorted(served), f'{served} — more load must dispatch more power'
-    assert model.diagnostics().loads == 1, 'a scaled right-hand side moves no label'
+    assert model.diagnostics().loads == 1, 'a scaled right-hand side moves no solver index'
 
 
 def test_a_result_from_before_a_update_keeps_reading(model):
     """A result owns its read-back, so nothing done to the model expires it.
 
-    The label frames are immutable and shared: an update builds new ones
+    The index tables are immutable and shared: an update builds new ones
     without touching what earlier results hold, so an old answer stays an
     answer over its own coordinates — a driver keeps any result it still
-    wants, at the price of keeping that build's label frames alive.
+    wants, at the price of keeping that build's index tables alive.
     """
     before = model.solve()
     kept = before.primal('p')
@@ -827,7 +828,7 @@ def test_a_result_from_before_a_update_keeps_reading(model):
 
 def test_closing_a_result_never_touches_the_model(model):
     """`close` releases what the result holds — its values and its hold on the
-    label frames — never the model or the solver, which are the handle's to
+    index tables — never the model or the solver, which are the handle's to
     close. So a result closed on the way out of a `with` block cannot take
     down the model a loop is still solving, and a sibling result, holding its
     own read-back, keeps reading.
@@ -844,7 +845,7 @@ def test_closing_a_result_never_touches_the_model(model):
     ('call', 'unknown'),
     [
         pytest.param(lambda model: model.update({'p_maxx': 1}), 'p_maxx', id='sources'),
-        pytest.param(lambda model: model.update({'snapshots': [0]}), 'snapshots', id='an index'),
+        pytest.param(lambda model: model.update({'snapshots': [0]}), 'snapshots', id='labels'),
     ],
 )
 def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown):
@@ -856,12 +857,12 @@ def test_a_update_refuses_a_name_the_model_does_not_declare(model, call, unknown
         call(model)
 
 
-def test_a_dimension_index_updates_as_a_source(model):
-    """A dimension index is a source (the data-attachment rules), so `update` takes it where it
+def test_a_dimension_s_labels_update_as_a_source(model):
+    """A dimension's labels are a source (the data-attachment rules), so `update` takes them where it
     takes any other — the refusal above is for names the model never declared,
     not for names that happen not to be parameters."""
     change = {'snapshot': [0, 1], 'load': pl.DataFrame({'snapshot': [0, 1], 'value': [5.0, 6.0]})}
-    assert model.update(change).solve().primal('p').height > 0, 'a dimension index is a source, and updates as one'
+    assert model.update(change).solve().primal('p').height > 0, "a dimension's labels are a source, and update as one"
 
 
 @pytest.mark.parametrize(
@@ -872,12 +873,12 @@ def test_a_dimension_index_updates_as_a_source(model):
             {'load'},
             id='a parameter alone',
         ),
-        pytest.param({'snapshot': SNAPSHOTS}, {'load'}, id='an index and the parameter over it'),
-        pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='an index and the parameters over it'),
+        pytest.param({'snapshot': SNAPSHOTS}, {'load'}, id='a dimension and the parameter over it'),
+        pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='a dimension and the parameters over it'),
     ],
 )
 def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked):
-    """A parameter whose own source and whose dims' indices an update leaves alone is not read or checked again."""
+    """A parameter whose own source and whose dimensions' labels an update leaves alone is not read or checked again."""
     from specsolve import _sources
 
     real = _sources._checked_parameter
@@ -893,10 +894,10 @@ def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeyp
 
 
 def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over_it(model):
-    """A parameter kept from the last build is still checked against an index the update changed.
+    """A parameter kept from the last build is still checked against the labels the update changed.
 
     `load` is not in the update, but its rows at snapshot 3 now name a label
-    the index no longer has.
+    the dimension no longer has.
     """
     with pytest.raises(sps.errors.DataError, match="parameter 'load' has label"):
         model.update({'snapshot': [0, 1, 2]})
@@ -905,9 +906,9 @@ def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over
 def test_a_update_can_grow_a_dimension():
     """Appending rows is an update — the Benders master, in three lines.
 
-    A cut family is declared once and its members come from data (the data-attachment rules), so
+    A cut family is declared once and its labels come from data (the data-attachment rules), so
     an iteration hands over a longer table and the coordinates to match. The
-    labels of the rows that were already there do not move, but the model has
+    indices of the rows that were already there do not move, but the model has
     more rows than the solver holds, so it is loaded again.
     """
     master = {
@@ -1019,7 +1020,7 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})
-    with sps.build(dispatch_yaml, sources() | COORDS | {'load': load, 'cost': cost}) as fresh:
+    with sps.build(dispatch_yaml, sources() | COORDINATES | {'load': load, 'cost': cost}) as fresh:
         expected = fresh.solve().objective
     assert model.solve().objective == pytest.approx(expected), 'the attached load, not the one built before it'
 
@@ -1027,10 +1028,10 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
-    `examples/dispatch.yaml` masks on `p_max > 0`, so the shape is what
-    *survived* the mask rather than what the declarations multiply out to.
+    `examples/dispatch.yaml` has a `where:` of `p_max > 0`, so the shape is what
+    *survived* the condition rather than what the entries multiply out to.
     """
-    with sps.build(dispatch_yaml, sources() | COORDS) as model:
+    with sps.build(dispatch_yaml, sources() | COORDINATES) as model:
         model.solve()
         seen = model.diagnostics()
 
@@ -1041,15 +1042,15 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     assert model.diagnostics().nonzeros == seen.nonzeros, 'a released model still says how big it was'
 
 
-def test_a_mask_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
-    """Read off the built model, so a mask that moved moves the counts with it."""
+def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
+    """Read off the built model, so a condition that moved moves the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
-    with sps.build(dispatch_yaml, zeroed | COORDS) as model:
+    with sps.build(dispatch_yaml, zeroed | COORDINATES) as model:
         assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
 
 
 def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
-    """The objective frame may change height across an update. The solver may not.
+    """The objective table may change height across an update. The solver may not.
 
     A zero cost is pruned, so `obj` holds one row fewer, while `structure`
     does not read `obj`. A push that read `obj` positionally would hand the
@@ -1065,7 +1066,7 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         updated = model.update({'cost': zeroed}).solve()
 
         assert model._engine._model.handoff.obj.height == before - 1, (
-            'the zero cost should have left the objective frame'
+            'the zero cost should have left the objective table'
         )
         assert model.diagnostics().loads == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 
@@ -1099,27 +1100,27 @@ def _idle_data(floor: float, ceiling: float) -> dict[str, object]:
     }
 
 
-def test_a_refill_reads_nothing_for_a_declaration_without_a_label(monkeypatch):
-    """A variable or constraint that holds nothing has no share to splice, so the refill compiles none of it."""
+def test_a_refill_reads_nothing_for_an_entry_without_an_index(monkeypatch):
+    """A variable or constraint that holds nothing has no share to splice, so the refill queries none of it."""
     from specsolve._engine import assembly as assembly_module
 
     read: list[str] = []
-    compiled, columns = assembly_module.Assembly._compiled, assembly_module.Assembly._columns
+    terms, columns = assembly_module.Assembly._terms, assembly_module.Assembly._columns
 
-    def spied_compiled(self, name, *args, **kwargs):
+    def spied_terms(self, name, *args, **kwargs):
         read.append(name)
-        return compiled(self, name, *args, **kwargs)
+        return terms(self, name, *args, **kwargs)
 
     def spied_columns(self, name, *args, **kwargs):
         read.append(name)
         return columns(self, name, *args, **kwargs)
 
     with sps.build(IDLE, _idle_data(1.0, 5.0)) as model, sps.build(IDLE, _idle_data(0.5, 9.0)) as reference:
-        monkeypatch.setattr(assembly_module.Assembly, '_compiled', spied_compiled)
+        monkeypatch.setattr(assembly_module.Assembly, '_terms', spied_terms)
         monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
         model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
-    assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no label'
+    assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no index'
 
 
 #: `on` is 1 at every generator, so the data settles every test of it true and the build folds it away.

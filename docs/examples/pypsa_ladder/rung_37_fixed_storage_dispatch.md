@@ -1106,8 +1106,8 @@ q_{\xi,t,v} = \mathrm{q}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_37_fixed_storage_dispatch.yaml', sources) as solution:
-        solution.objective  # 6395.833333
+    with sps.solve('differential/pypsa/rungs/rung_37_fixed_storage_dispatch.yaml', sources) as result:
+        result.objective  # 6395.833333
     ```
 
 === "PyPSA"

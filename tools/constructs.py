@@ -66,7 +66,7 @@ def constructs(spec: Path) -> set[str]:
     """The set of columns *spec* exercises.
 
     A bound counts only where it is not the open default. ``piecewise:`` is read
-    off the surface schema, because it lowers away into a lambda formulation.
+    off the spec as written, because expanding it writes a lambda formulation.
     """
     schema = to_spec(spec)
     lowered = schema.expand('piecewise').program

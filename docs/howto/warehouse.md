@@ -13,7 +13,7 @@ import specsolve as sps
 sps.solve(spec, sources, archive='runs/base')
 sps.solve(spec, peak, archive='runs/peak')
 sps.solve_over(spec, by_scenario, sps.EachLabel('scenario'), archive='runs/scenarios')
-sps.solve_over(spec, longer, sps.EachWindow('t', steps=4, lookahead=0), archive='runs/rolling')
+sps.solve_over(spec, longer, sps.EachWindow('t', horizon=4, lookahead=0), archive='runs/rolling')
 ```
 
 **A sweep writes one file per slice, and each carries the sweep's key**:
@@ -85,8 +85,9 @@ p = pl.concat([pl.read_parquet(file) for file in held], how='diagonal')
 ```
 
 **A rolling horizon's files hold every row each window solved.** Where the
-windows look ahead, `answer/owned.parquet` lists the rows each window owns:
-join on `specsolve_run`, the key and the windowed dimension to keep those.
+windows look ahead, `answer/horizon.parquet` lists the rows of each window's
+horizon: join on `specsolve_run`, the key and the windowed dimension to keep
+those.
 
 Every column has a type that parquet readers agree on
 ([the rule](../reference/data.md#column-types-in-an-archive)).
@@ -115,7 +116,7 @@ p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 
 | roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
 | a partition | `shift`, `sum_back` or `position` with `within=` | none |
 
-**A sum through a bare relation counts a member once per row it is related
+**A sum through a bare relation counts a label once per row it is related
 to.** `wind` is connected to both buses, so it counts twice:
 
 ```python

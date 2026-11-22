@@ -684,8 +684,8 @@ f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_55_scenario_transformer_cycle.yaml', sources) as solution:
-        solution.objective  # 13105.0
+    with sps.solve('differential/pypsa/rungs/rung_55_scenario_transformer_cycle.yaml', sources) as result:
+        result.objective  # 13105.0
     ```
 
 === "PyPSA"

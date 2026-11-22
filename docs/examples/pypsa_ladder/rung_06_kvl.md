@@ -980,8 +980,8 @@ s_{\xi,t,k} = \mathrm{s}^{\mathrm{set}}_{\xi,t,k} \qquad \forall\, \xi \in \Xi,\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_06_kvl.yaml', sources) as solution:
-        solution.objective  # 23962.0
+    with sps.solve('differential/pypsa/rungs/rung_06_kvl.yaml', sources) as result:
+        result.objective  # 23962.0
     ```
 
 === "PyPSA"

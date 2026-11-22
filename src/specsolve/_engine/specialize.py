@@ -1,8 +1,8 @@
-"""What the data decides about a program before a declaration is built.
+"""What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
 same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][]).
-What that read settles is answered here: the program a build compiles is
+What that read settles is answered here: the program a build reads is
 [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out ([`rowless`][]). Every such decision lives in this module, so
@@ -20,7 +20,7 @@ from mathspec import program
 from mathspec.program import walk
 
 from specsolve._collect import collected_all, in_memory
-from specsolve._engine.predicates import counted_over_nothing, passing
+from specsolve._engine.conditions import counted_over_nothing, passing
 from specsolve._engine.scope import Scope
 
 if TYPE_CHECKING:
@@ -29,26 +29,26 @@ if TYPE_CHECKING:
     from specsolve._engine.attaching import AttachedSources
 
 
-def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """Each test *lowered*'s conditions make that *attached* decides at every coordinate.
+def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
+    """Each test *compiled*'s conditions make that *attached* decides at every coordinate.
 
     The conditions are the ``where`` of every variable, constraint and
     assumption, and of every ``cases:`` region the rows and bounds read.
 
-    A test is a parameter's bare name or comparison, anywhere in a mask, a
+    A test is a parameter's bare name or comparison, anywhere in a ``where``, a
     named condition read through: ``True`` where it holds everywhere,
     ``False`` where nowhere. A test the data leaves partial is not in the
     answer. *attached* need not hold the answer yet; this is what computes it.
 
     Each test is read once over its parameter's own table, all in one batch
-    and in memory: a model gates hundreds of declarations on the same few
-    flags, and reading a flag per declaration over the product of its dims
-    was most of the cost of the declarations that build nothing. A parameter
+    and in memory: a model gates hundreds of entries on the same few
+    flags, and reading a flag per entry over the product of its dimensions
+    was most of the cost of the entries that build nothing. A parameter
     with no row, and a count along a dimension without a label, settle
     without a query.
     """
-    masks = _conditions(lowered)
-    scope = Scope(lowered, attached, {})
+    masks = _conditions(compiled)
+    scope = Scope(compiled, attached, {})
     atoms = {atom for mask in masks for atom in mask.atoms}
     out: dict[program.Condition, bool] = {}
     queried: list[program.ParameterDefined | program.ParameterComparison] = []
@@ -71,57 +71,57 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
     return out
 
 
-def specialized_on(lowered: program.Program) -> frozenset[str]:
-    """The parameters whose data [`specialized`][] rewrites *lowered* by: a change of one can change the program built.
+def specialized_on(compiled: program.Program) -> frozenset[str]:
+    """The parameters whose data [`specialized`][] rewrites *compiled* by: a change of one can change the program built.
 
     They are the names every condition [`settle`][] reads. An update of one
     of them, numbers alone included, builds again rather than reading the
-    old program's declarations again.
+    old program's entries again.
     """
-    return frozenset(name for mask in _conditions(lowered) for name in mask.names_read)
+    return frozenset(name for mask in _conditions(compiled) for name in mask.names_read)
 
 
-def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
-    """*lowered* with each ``where`` and ``cases:`` region it builds rows from folded over the tests *attached* settled.
+def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
+    """*compiled* with each ``where`` and ``cases:`` region it builds rows from folded over the tests *attached* settled.
 
     A variable's or constraint's ``where`` that folds to true is dropped, so
-    the declaration takes the path of one without a ``where``: dense labels,
+    the entry takes the path of one without a ``where``: dense labels,
     and terms placed on their rows without a join. One that folds to false is
     kept as that literal, for [`rowless`][] to skip. A region that folds to
     false is dropped from its ``cases:``, and one left alone holding true
     stands for its ``cases:``: a build places a term on its rows by the
-    term's own dims, and a sum spreads a term along what it sums, so the
-    region's dims are not needed to place it.
+    term's own dimensions, and a sum spreads a term along what it sums, so
+    the region's dimensions are not needed to place it.
 
     The program a build keeps is this one, so readback reads the
-    declarations it built. Assumptions keep their ``where`` as written, since
+    entries it built. Assumptions keep their ``where`` as written, since
     a refusal quotes it; [`rules_out`][] answers for them. The ``expressions``
-    stay as written too: a read takes its dims from its terms, and a region
-    may be the only one over a dim.
+    stay as written too: a read takes its dimensions from its terms, and a
+    region may be the only one over a dimension.
     """
     tests = attached.settled
     if not tests:
-        return lowered
+        return compiled
 
-    def where(declaration: program.Variable | program.Constraint) -> program.Mask | None:
-        if declaration.where is None:
+    def where(entry: program.Variable | program.Constraint) -> program.Mask | None:
+        if entry.where is None:
             return None
-        kept = _folded(declaration.where, tests)
+        kept = _folded(entry.where, tests)
         return None if _holds(kept, value=True) else kept
 
     def bound(b: program.Expression | None) -> program.Expression | None:
         return None if b is None else _regions_folded(b, tests)
 
     variables = {
-        n: replace(v, where=where(v), lower=bound(v.lower), upper=bound(v.upper)) for n, v in lowered.variables.items()
+        n: replace(v, where=where(v), lower=bound(v.lower), upper=bound(v.upper)) for n, v in compiled.variables.items()
     }
     constraints = {
         n: replace(c, where=where(c), lhs=_regions_folded(c.lhs, tests), rhs=_regions_folded(c.rhs, tests))
-        for n, c in lowered.constraints.items()
+        for n, c in compiled.constraints.items()
     }
-    o = lowered.objective
+    o = compiled.objective
     objective = None if o is None else replace(o, expression=_regions_folded(o.expression, tests))
-    return replace(lowered, variables=variables, constraints=constraints, objective=objective)
+    return replace(compiled, variables=variables, constraints=constraints, objective=objective)
 
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
@@ -129,19 +129,19 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     return where is not None and _holds(_folded(where, attached.settled), value=False)
 
 
-def rowless(declaration: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
-    """Whether *declaration* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
-    return any(not attached.cardinality[d] for d in declaration.dims) or rules_out(declaration.where, attached)
+def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
+    """Whether *entry* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
+    return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
 
 
-def _conditions(lowered: program.Program) -> list[program.Mask]:
+def _conditions(compiled: program.Program) -> list[program.Mask]:
     """Every condition the data can settle: each ``where``, and each ``cases:`` region the rows and bounds read."""
-    declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
-    bounds = [b for v in lowered.variables.values() for b in (v.lower, v.upper) if b is not None]
+    entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
+    bounds = [b for v in compiled.variables.values() for b in (v.lower, v.upper) if b is not None]
     regions = [
-        r.when for node in walk(*lowered.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+        r.when for node in walk(*compiled.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
     ]
-    return [*(d.where for d in declared if d.where is not None), *regions]
+    return [*(e.where for e in entries if e.where is not None), *regions]
 
 
 def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:

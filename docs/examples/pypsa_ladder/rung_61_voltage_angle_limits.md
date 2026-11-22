@@ -933,8 +933,8 @@ s_{\xi,t,k} \le \frac{\overline{\delta}_{\xi,k} \cdot \frac{3.141592653589793}{1
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_61_voltage_angle_limits.yaml', sources) as solution:
-        solution.objective  # 121834.620832
+    with sps.solve('differential/pypsa/rungs/rung_61_voltage_angle_limits.yaml', sources) as result:
+        result.objective  # 121834.620832
     ```
 
 === "PyPSA"

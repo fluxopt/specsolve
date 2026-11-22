@@ -13,6 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COEFF, COL_L, COL_R
 from specsolve.errors import SpecsolveError
 from tests.differential import differential
 
@@ -140,7 +141,7 @@ def test_a_pair_is_stored_once_whichever_order_it_was_written():
     written = quad_of('sum(p * q, over=g)')
     reversed_ = quad_of('sum(q * p, over=g)')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
-    assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
+    assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
 
 def test_the_same_pair_twice_is_summed_rather_than_repeated():
@@ -149,7 +150,7 @@ def test_the_same_pair_twice_is_summed_rather_than_repeated():
     once = quad_of('sum(p * p, over=g)')
     twice = quad_of('sum(p * p + p * p, over=g)')
     assert twice.height == once.height, 'a repeated pair collapses to one row'
-    assert twice['coeff'].to_list() == pytest.approx([2 * c for c in once['coeff'].to_list()])
+    assert twice[COEFF].to_list() == pytest.approx([2 * c for c in once[COEFF].to_list()])
 
 
 def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
@@ -159,7 +160,7 @@ def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
     a moved pattern, reloading on every update that touches a quadratic
     cost."""
     backwards = quad_of('sum(q * q, over=g) + sum(p * p, over=g)')
-    assert backwards['col_l'].to_list() == [0, 1, 2, 3], (
+    assert backwards[COL_L].to_list() == [0, 1, 2, 3], (
         'the quadratic stream leaves in (col_l, col_r) order however the expression was written'
     )
 
@@ -187,7 +188,7 @@ def test_the_lp_section_doubles_every_coefficient(tmp_path):
 
 
 def test_a_quadratic_term_is_absent_where_either_factor_is():
-    """Masked on one factor only, which is what makes the presence a
+    """A `where:` on one factor only, which is what makes the presence a
     conjunction rather than a copy: the term vanishes where ``q`` does."""
     masked = spec('sum(p * p + p * q + q * q, over=g)')
     masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
@@ -196,14 +197,14 @@ def test_a_quadratic_term_is_absent_where_either_factor_is():
 
     with sps.build(masked, SOURCES) as model:
         pairs = model._engine._model.handoff.quad
-        assert pairs.filter(pl.col('col_l') != pl.col('col_r')).height == 1, (
+        assert pairs.filter(pl.col(COL_L) != pl.col(COL_R)).height == 1, (
             "the cross term exists only where 'q' does — one coordinate of two"
         )
 
 
 def test_absence_under_a_quadratic_term_reaches_its_siblings():
     """The conjunction where it is observable: a reduction sums where the whole
-    summand exists, so a coordinate at which ``q`` is absent contributes
+    term exists, so a coordinate at which ``q`` is absent contributes
     neither the product nor the lone ``p`` beside it. Carrying only the left
     factor's presence keeps that ``p`` — one term heavier, and it still
     solves."""

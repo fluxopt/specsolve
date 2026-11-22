@@ -109,7 +109,7 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -196,9 +196,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve(to_spec('examples/ports/transport_pwl.yaml').expand(), sources) as solution:
-        solution.objective  # 8.786852757777865
+    # sources: parameter name -> table or parquet path
+    with sps.solve(to_spec('examples/ports/transport_pwl.yaml').expand(), sources) as result:
+        result.objective  # 8.786852757777865
     ```
 
 === "linopy"

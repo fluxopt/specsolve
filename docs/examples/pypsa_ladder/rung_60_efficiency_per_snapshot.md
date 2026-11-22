@@ -1242,8 +1242,8 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
         'snapshot_weightings_generators': weighting(n, 'generators'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_60_efficiency_per_snapshot.yaml', sources) as solution:
-        solution.objective  # 130562.094184
+    with sps.solve('differential/pypsa/rungs/rung_60_efficiency_per_snapshot.yaml', sources) as result:
+        result.objective  # 130562.094184
     ```
 
 === "PyPSA"
