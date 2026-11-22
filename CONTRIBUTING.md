@@ -130,10 +130,10 @@ reachable and out of the way.
 
 Three rules on top of that, each enforced, so none has to be remembered:
 
-- **Every page under `docs/` needs a `nav:` entry** in `mkdocs.yml`. Adding a
+- **Every page under `docs/` needs a `nav:` item** in `mkdocs.yml`. Adding a
   model page without one ships an unreachable page, so `pixi run test` refuses
   it. The build does not: zensical validates links and leaves navigation alone.
-  `docs/README.md` is the one file with no entry — it is the folder view GitHub
+  `docs/README.md` is the one file with no item — it is the folder view GitHub
   renders, the site builds no page from it, and `docs/index.md` is the home
   page.
 - **Inside `docs/`, link relatively.** `../reference/api.md`,
@@ -304,7 +304,7 @@ YAML, and `tests/test_models_gallery.py` holds the two in lockstep: a script
 with no tab fails, and so does a tab with no script behind it.
 
 A *teaching* model may carry the same three reference files — the instance, the
-script, the `references.json` entry — while its model file stays in
+script, the `references.json` record — while its model file stays in
 `examples/`, where the guide points. Its check is weaker and the provenance
 says so: agreement with an independent hand-written formulation, not a
 published figure.
@@ -331,7 +331,7 @@ published figure.
   a dual vector is where two implementations disagree quietly — which side of a
   constraint the price belongs to, and what sign an inequality carries. The
   reference script prints a `duals {...}` line keyed by constraint name; paste
-  it into the port's entry as a `duals` block. A MILP has no dual solution, so
+  it into the port's record as a `duals` block. A MILP has no dual solution, so
   it records none and the test skips rather than passing vacuously.
 - **Regenerate the gallery's tables**, don't write them: both the construct
   matrix and the reference table in `docs/development/verification.md` come from

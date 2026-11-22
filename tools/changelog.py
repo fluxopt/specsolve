@@ -3,7 +3,7 @@
     python -m tools.changelog check           # fail if the headings are not a release this repo can cut
     python -m tools.changelog pending         # print the version to release, or nothing
     python -m tools.changelog notes 0.1.0     # print that version's section
-    python -m tools.changelog entry "<PR title>" base.md   # fail if the PR adds no line it owes
+    python -m tools.changelog line "<PR title>" base.md   # fail if the PR adds no line it owes
 
 ``CHANGELOG.md`` is edited by hand. Above the first release sits at most one
 ``## Upcoming version``. A release PR renames it to ``## 0.1.0 (2026-10-01)``,
@@ -151,7 +151,7 @@ def upcoming(text: str) -> list[str]:
     return []
 
 
-def missing_entry(title: str, text: str, base: str) -> str | None:
+def missing_line(title: str, text: str, base: str) -> str | None:
     """Why a pull request titled *title* owes the changelog a line, or None when it does not.
 
     *text* is the changelog on the pull request and *base* the one on its base
@@ -186,8 +186,8 @@ def main(argv: list[str]) -> int:
                 print(pending(text, _tags()) or '')
             case ['notes', version]:
                 sys.stdout.write(notes(text, version))
-            case ['entry', title, base]:
-                if (reason := missing_entry(title, text, Path(base).read_text())) is not None:
+            case ['line', title, base]:
+                if (reason := missing_line(title, text, Path(base).read_text())) is not None:
                     raise ChangelogError(reason)
                 print('the changelog line is there, or this PR owes none')
             case _:
