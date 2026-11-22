@@ -93,7 +93,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     after it. It attaches in memory too, and checks each assumption over the
     dimensions on the default engine.
     """
-    _check_relation_sources(program, data)
+    _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, data)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
@@ -105,7 +105,7 @@ def _read(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFram
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
-    _check_relations_hold_labels(program, relations, sources)
+    _refuse_unknown_labels_in_relations(program, relations, sources)
     sources |= relations
 
     for pname, pdef in program.parameters.items():
@@ -222,8 +222,8 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
         f"the labels table of dimension '{dim}'",
         (dim,) if dtype == 'datetime' else (),
     )
-    _check_labels_are_present(dim, labels[dim])
-    _check_labels_are_unique(dim, labels[dim], given_as_table=given is not None)
+    _refuse_null_labels(dim, labels[dim])
+    _refuse_repeated_labels(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
 
@@ -239,7 +239,7 @@ def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> 
     return _labels_of(dim, _labels_table(data[dim], dim, program.dimensions[dim].dtype))
 
 
-def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
+def _refuse_null_labels(dim: str, labels: pl.Series) -> None:
     """Refuse labels holding a null: a coordinate is a label, and a null names none."""
     if not (nulls := labels.null_count()):
         return
@@ -249,7 +249,7 @@ def _check_labels_are_present(dim: str, labels: pl.Series) -> None:
     )
 
 
-def _check_labels_are_unique(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
+def _refuse_repeated_labels(dim: str, labels: pl.Series, *, given_as_table: bool) -> None:
     """Refuse labels that hold one twice: a label's position is the row it is on."""
     twice = labels.filter(labels.is_duplicated()).unique(maintain_order=True).to_list()
     if not twice:
@@ -302,7 +302,7 @@ def _not_labels(dim: str, values: object) -> str:
     )
 
 
-def _check_relation_sources(program: Program, data: Mapping[str, Source]) -> None:
+def _refuse_unsupplied_or_misplaced_relations(program: Program, data: Mapping[str, Source]) -> None:
     """Refuse a relation nothing supplies, and a relation column carried beside a dimension's labels."""
     for name, relation in program.relations.items():
         if name not in data:
@@ -362,7 +362,7 @@ def _over_datetimes(columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.
     return [c for c, dim in columns if dim in labels and isinstance(labels[dim].collect_schema()[dim], pl.Datetime)]
 
 
-def _check_same_clock(owner: str, column: str, dim: str, given: pl.DataType, listed: pl.DataType) -> None:
+def _refuse_another_clock(owner: str, column: str, dim: str, given: pl.DataType, listed: pl.DataType) -> None:
     """Refuse a datetime column in another time zone than its dimension's labels: the two compare on one clock only."""
     if isinstance(given, pl.Datetime) and isinstance(listed, pl.Datetime) and given.time_zone != listed.time_zone:
         raise DataError(
@@ -392,7 +392,7 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
-def _check_relations_hold_labels(
+def _refuse_unknown_labels_in_relations(
     program: Program, relations: Mapping[str, pl.LazyFrame], labels: Mapping[str, pl.LazyFrame]
 ) -> None:
     """Every column of every relation holds labels of its dimension.
@@ -402,16 +402,16 @@ def _check_relations_hold_labels(
     """
     for name, relation in program.relations.items():
         for role, dim in relation.columns:
-            _check_column_holds_labels(relations[name], name, role, dim, _labels_of(dim, labels[dim]))
+            _refuse_unknown_labels_in_column(relations[name], name, role, dim, _labels_of(dim, labels[dim]))
 
 
-def _check_column_holds_labels(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
+def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
     """Refuse a relation column holding a value that is not a label of its dimension.
 
     Offenders keep their own type — a python native off polars, never a numpy
     scalar — because the message reprs them.
     """
-    _check_same_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
+    _refuse_another_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
     known = set(labels.to_list())
     strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
     if not strays:
@@ -665,13 +665,13 @@ def _checked_parameter(
     checked = in_microseconds(
         table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
     )
-    _check_one_row_per_coordinate(name, p, checked, sources, kind)
-    _check_values_are_present(name, p, checked, kind)
-    _check_value_dtype(name, p, checked, kind)
+    _refuse_unknown_or_repeated_coordinates(name, p, checked, sources, kind)
+    _refuse_absent_values(name, p, checked, kind)
+    _refuse_another_value_dtype(name, p, checked, kind)
     return checked.lazy()
 
 
-def _check_one_row_per_coordinate(
+def _refuse_unknown_or_repeated_coordinates(
     name: str, p: Parameter, table: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
 ) -> None:
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
@@ -691,7 +691,7 @@ def _check_one_row_per_coordinate(
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
     for d, labels in known.items():
-        _check_same_clock(f"{kind} '{name}'", d, d, table.schema[d], labels.dtype)
+        _refuse_another_clock(f"{kind} '{name}'", d, d, table.schema[d], labels.dtype)
     positions = _row_major_positions(p.dims, table, known)
 
     for d, labels in known.items():
@@ -755,7 +755,7 @@ def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
     return pl.col(dim).is_in(labels.implode()).fill_null(False)
 
 
-def _check_values_are_present(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
+def _refuse_absent_values(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
     """Every row carries a value: a null or a NaN is refused rather than read."""
     value = pl.col(VALUE)
     holed = value.is_null() | value.is_nan() if table.schema[VALUE].is_float() else value.is_null()
@@ -794,7 +794,7 @@ def declared_dtype_of(column: pl.DataType) -> str | None:
     return next((name for name, types in _COLUMNS.items() if column in types), None)
 
 
-def _check_value_dtype(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
+def _refuse_another_value_dtype(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
     """The attached column is the type the entry claims.
 
     Asked after the holes, so a column of nothing but nulls — which polars

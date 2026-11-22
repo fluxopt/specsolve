@@ -119,19 +119,19 @@ The rows and tables those hand back:
 
 ### Read an answer back
 
-::: specsolve.load_archive
+::: specsolve.read_archive
     options:
       heading_level: 4
 
-::: specsolve.load_inputs
+::: specsolve.read_inputs
     options:
       heading_level: 4
 
-::: specsolve.load_result
+::: specsolve.read_result
     options:
       heading_level: 4
 
-::: specsolve.load_sweep
+::: specsolve.read_sweep
     options:
       heading_level: 4
 
