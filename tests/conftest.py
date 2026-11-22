@@ -459,7 +459,7 @@ QP = {
         'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
-    #: A linear term beside the quadratic one: a hand-off that passed only ``Q`` drops it.
+    #: A linear term beside the quadratic one: a handoff that passed only ``Q`` drops it.
     'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
 }
 

@@ -3,7 +3,7 @@
 `linopy.Model` refuses a `QuadraticExpression` in a constraint, so two weaker
 oracles replace the differential one:
 
-1. **Two independent encodings** — the direct `addMQConstr` hand-off against
+1. **Two independent encodings** — the direct `addMQConstr` handoff against
    the same model as LP text read back by Gurobi's parser. They share the
    tables and nothing below, so an encoding error shows up as two numbers.
 2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built tables
@@ -97,7 +97,7 @@ def test_the_two_encodings_reach_one_optimum(expression, tmp_path):
         path = tmp_path / 'model.lp'
         sps.write(varied, SOURCES, path)
         assert _read_back(path) == pytest.approx(direct.objective, rel=RTOL), (
-            'the written file and the direct hand-off are the same model by two routes; a '
+            'the written file and the direct handoff are the same model by two routes; a '
             'disagreement is an encoding error in one of them'
         )
 
@@ -331,7 +331,7 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
-    """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
+    """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
     from specsolve._sinks.highs import Highs

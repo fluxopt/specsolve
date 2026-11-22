@@ -127,7 +127,7 @@ def test_solver_options_reach_xpress() -> None:
 
 
 def test_constructing_xpress_loads_the_model_and_stops() -> None:
-    """The hand-off `bench/` measures: a loaded problem, unsolved."""
+    """The handoff `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff

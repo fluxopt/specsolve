@@ -117,7 +117,7 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
         model.write(tmp_path / 'model.lp')
         ran = model.diagnostics().seconds
         assert set(ran) == {'attach', 'build', 'handoff', 'solve', 'write'}, (
-            'a solve adds the hand-off and the solver run, a write adds the file stream'
+            'a solve adds the handoff and the solver run, a write adds the file stream'
         )
         assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
 

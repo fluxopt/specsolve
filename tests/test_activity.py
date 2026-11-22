@@ -1,7 +1,7 @@
 """Activity: a constraint row's left-hand side, read back after a solve.
 
 The value is the solver's own, so a CSR recomputation agreeing with it checks
-the whole chain: matrix, hand-off, solve, read-back. Unlike a dual, an
+the whole chain: matrix, handoff, solve, read-back. Unlike a dual, an
 activity exists at any mixed-integer incumbent.
 """
 

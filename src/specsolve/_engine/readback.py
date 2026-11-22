@@ -62,7 +62,7 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     """*found*'s solver indices as the entries and coordinates that built them.
 
     A row carries its sense and right-hand side, a bound its side and value,
-    read off the hand-off the solver was given.
+    read off the handoff the solver was given.
     """
     rows = pl.DataFrame({ROW: found.rows}).join(
         model.handoff.rows.select(pl.col(ROW).cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on=ROW

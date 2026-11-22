@@ -423,7 +423,7 @@ class Assembly:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
-        ``0``. Rows landing on one column are summed here, because the hand-off
+        ``0``. Rows landing on one column are summed here, because the handoff
         scatter keeps only the last write.
         """
         if o is None:

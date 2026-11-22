@@ -1,4 +1,4 @@
-"""The relational lane as such: matrix assembly, solver indices, and the solver hand-off.
+"""The relational lane as such: matrix assembly, solver indices, and the solver handoff.
 
 A repeated cell collapsing, a column being positional, a bound attached by
 position rather than joined, a solution read back in index order: none is a
@@ -1340,7 +1340,7 @@ class TestThePositionalHandoff:
         the read-back never reads, 8 bytes a column for as long as the result is
         held.
 
-        Read off the hand-off rather than off the `Result`, which lays these
+        Read off the handoff rather than off the `Result`, which lays these
         vectors into its tables and keeps no second copy of them.
         """
         with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
@@ -1357,7 +1357,7 @@ class TestThePositionalHandoff:
     def test_row_chunks_are_bounded_by_nonzeros_not_by_rows(self):
         """A chunk of rows is a chunk of *entries*, and only entries are residency.
 
-        The solver hand-off reads ``matrix`` a range at a time and holds that range
+        The solver handoff reads ``matrix`` a range at a time and holds that range
         while it works it. Sizing the range in rows bounds the wrong quantity: the
         same 100k-row range is 900k entries in ``transport`` and 10M in
         ``dispatch``, so what the sink holds would be set by the model's shape
@@ -1396,7 +1396,7 @@ class TestThePositionalHandoff:
         [(0, 100, 1.0), (1, 100, 1.0), (10, 3, 1.0), (10, 100, 1.0), (10, 3, 7.0), (10, 3, 0.25), (10, 1, 1e9)],
     )
     def test_chunk_ranges_are_contiguous_gapless_and_cover_everything(self, total, budget, width):
-        """The property the whole hand-off rests on, at every awkward size.
+        """The property the whole handoff rests on, at every awkward size.
 
         ``addCols`` and ``addRows`` append: column *k* must be the *k*-th row handed
         over. That holds only if the ranges are ordered, consecutive and gapless —

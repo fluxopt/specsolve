@@ -233,7 +233,7 @@ def test_highs_refuses_the_written_section_which_is_why_a_set_is_written_out_for
 
 
 def test_a_set_on_a_sink_with_no_concept_is_refused_naming_the_expansion():
-    """Nothing is rewritten at the hand-off: the language writes a set out, and the refusal says so."""
+    """Nothing is rewritten at the handoff: the language writes a set out, and the refusal says so."""
     with pytest.raises(SpecsolveError, match='special-ordered sets') as refusal:
         sps.solve(spec(1), DATA)
     assert 'expand()' in str(refusal.value) and 'gurobi' in str(refusal.value), (
