@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): a model's metrics are a property, as an archive's are ([#2186](https://github.com/fluxopt/specsolve/pull/2186))
 - feat(api): the metrics time every phase from the spec to the archive, and an older answer reads as another layout ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - refactor(api): diagnostics and metrics count the solver instances a model's solves took as solver_instances, which was loads ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - refactor(api): a saved answer is read with read_result, read_sweep, read_archive and read_inputs, as scan_… scans it ([#2179](https://github.com/fluxopt/specsolve/pull/2179))
