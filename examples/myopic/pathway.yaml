@@ -38,7 +38,7 @@ constraints:
       what stands is what was carried in plus what was built. The addition
       lives in the model rather than the driver because a carry is a copy and
       never arithmetic: accumulation is math, and math belongs in the file a
-      reviewer reads and the oracle checks.
+      reviewer reads and the linopy lane checks.
     dims: [generator]
     expression: total == existing + build
 

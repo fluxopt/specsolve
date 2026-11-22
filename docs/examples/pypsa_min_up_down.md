@@ -318,7 +318,7 @@ dropping the row, so no `edge=` argument appears.
 
 **The initial conditions are switched off rather than defaulted.**
 `up_time_before` defaults to 1 in PyPSA, meaning the unit was already running.
-That default emits a further block pinning the status on for the rest of its
+That default emits a further constraint pinning the status on for the rest of its
 minimum up time. That is a second feature, and this model is about the
 windows, so both `*_time_before` values are 0. Every unit is therefore off before
 the first snapshot, and the first snapshot's transition rows mirror the ones

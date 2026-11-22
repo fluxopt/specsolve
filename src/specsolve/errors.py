@@ -36,7 +36,7 @@ class LayoutError(SpecsolveError):
     """What is on disk is not a layout this package reads.
 
     The fix is which path was named, or re-solving a model whose layout has
-    moved since it was written. The layout is the one
+    changed since it was written. The layout is the one
     [`save`][specsolve._result.Result.save] stamps.
     """
 

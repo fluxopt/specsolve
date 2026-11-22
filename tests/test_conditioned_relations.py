@@ -207,7 +207,7 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
 def test_the_linopy_lane_refuses_a_shape_it_does_not_build_and_names_the_lane_that_does(
     relations: dict, expression: str, dims: list[str], match: str
 ) -> None:
-    """An `OracleCannotBuildError` at the lane's door, before any data is read, naming the relational lane."""
+    """An `OracleCannotBuildError` as the linopy lane starts, before any data is read, naming the relational lane."""
     spec = _shaped(relations, expression, dims)
     sps.check(spec)
     with pytest.raises(OracleCannotBuildError, match=match) as caught:
@@ -216,7 +216,7 @@ def test_the_linopy_lane_refuses_a_shape_it_does_not_build_and_names_the_lane_th
 
 
 # ---------------------------------------------------------------------------
-# the door
+# tidy_sources
 # ---------------------------------------------------------------------------
 
 

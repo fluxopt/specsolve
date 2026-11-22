@@ -17,10 +17,10 @@ n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
 
 The two regimes are **one rule and a different predecessor**. A cyclic unit's
 first snapshot carries from its last. A seeded unit's first snapshot carries
-from a level in the data. Here that is three blocks under complementary conditions,
+from a level in the data. Here that is three constraints under complementary conditions,
 and the conditions are the flag itself:
 
-| Block | Where | What carries into the first snapshot |
+| Constraint | Where | What carries into the first snapshot |
 |---|---|---|
 | `energy_balance_cyclic` | `cyclic` | the unit's own last snapshot (`edge='wrap'`) |
 | `energy_balance_carry` | `NOT cyclic` | nothing — the vacated position is absent, so no row is built there |
@@ -354,5 +354,5 @@ energy worth anything.
 
 *A data column choosing between two boundary regimes.* Neither storage model
 has that shape: the two differ by one deleted `where`, and each is uniform. It
-needs no language feature: three blocks, complementary conditions, and the dropped
+needs no language feature: three constraints, complementary conditions, and the dropped
 row visible in `omissions`.
