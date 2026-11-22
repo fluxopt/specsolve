@@ -5,10 +5,10 @@ Column conventions, relied on by the engine:
 ===================  ==========================================
 table                columns
 ===================  ==========================================
-dimension table      ``val``, ``ord``
+dimension table      ``LABEL``, ``POSITION``
 relation table       its declared columns, each under its own name
 parameter table      ``dims…``, ``value``
-variable table       ``dims…``, ``col_index``
+variable table       ``dims…``, ``COL``
 ===================  ==========================================
 
 A term's columns are in ``terms.py``.
@@ -51,7 +51,7 @@ from specsolve._engine.terms import (
     times_variable,
     to_the_power,
 )
-from specsolve._names import VALUE
+from specsolve._names import COEFF, COL, CONSTANT, LABEL, ROW, VALUE
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -61,11 +61,11 @@ if TYPE_CHECKING:
 
 
 def _totalled(p: Term) -> pl.LazyFrame:
-    """Constant term *p* added up to one ``cval`` per coordinate, null where any of its rows is.
+    """Constant term *p* added up to one ``CONSTANT`` per coordinate, null where any of its rows is.
 
     A null term of a sum is a divisor's hole, so the total keeps it for the refusal.
     """
-    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
+    total = pl.when(pl.col(CONSTANT).is_null().any()).then(None).otherwise(pl.col(CONSTANT).sum()).alias(CONSTANT)
     return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
 
 
@@ -85,7 +85,7 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     dims = terms[0].dims
     if any(set(p.dims) != set(dims) or p.presences for p in terms):
         return terms
-    stacked = Term(dims, pl.concat([p.frame.select(*dims, 'cval') for p in terms]), 'constant')
+    stacked = Term(dims, pl.concat([p.frame.select(*dims, CONSTANT) for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
@@ -345,7 +345,7 @@ class Compiler:
 
         def ev(e: program.Expression) -> CompiledExpression:
             if isinstance(e, program.Constant):
-                frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
+                frame = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
                 return CompiledExpression((), (Term((), frame, 'constant'),))
             if isinstance(e, program.ParameterReference):
                 return CompiledExpression((), (self._parameter_term(e.name),))
@@ -413,24 +413,22 @@ class Compiler:
     def _parameter_term(self, name: str) -> Term:
         """A parameter as a constant term, keyed by its declared dimensions, present only at its rows under ``missing: absent``."""
         dims = self.scope.program.parameters[name].dims
-        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
-        present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
+        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
+        present = frame.select(*dims) if dims else frame.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
         return Term(dims, frame, 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
         dims = self.scope.program.variables[name].dims
-        frame = self.scope.variables[name].frame.select(
-            *dims, 'col_index', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
-        )
+        frame = self.scope.variables[name].frame.select(*dims, COL, pl.lit(1.0, dtype=pl.Float64).alias(COEFF))
         return Term(dims, frame, 'linear', presences=self._variable_presences(name, dims))
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
         entry = self.scope.program.variables[name]
         propagates = entry.where is not None and entry.missing == 'absent'
-        return (Presence(_presence(self.scope.variables[name], dims, 'col_index'), dims),) if propagates else ()
+        return (Presence(_presence(self.scope.variables[name], dims, COL), dims),) if propagates else ()
 
     def _solved_term(self, name: str) -> Term:
         """A variable at its primal — the constant term a read compiles it to, carrying the presence its linear term would.
@@ -442,11 +440,11 @@ class Compiler:
         held, entry = self.scope.variables[name], self.scope.program.variables[name]
         dims = entry.dims
         keys = dims or (UNIT,)
-        rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
+        rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias(CONSTANT))
         if entry.where is not None and entry.missing == 'neutral':
             everywhere = narrowed(self.scope, dims, None).select(*keys)
-            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
-        return Term(dims, rows.select(*dims, 'cval'), 'constant', presences=self._variable_presences(name, dims))
+            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col(CONSTANT).fill_null(0.0))
+        return Term(dims, rows.select(*dims, CONSTANT), 'constant', presences=self._variable_presences(name, dims))
 
     def _dual_term(self, name: str) -> Term:
         """``dual(name)`` at the solve's row duals — one value per row the constraint built, and present exactly there.
@@ -460,8 +458,8 @@ class Compiler:
             assert solution.no_duals is not None, 'a solve without duals says why'
             raise SpecsolveError(solution.no_duals)
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
-        frame = held.valued(dims, solution.dual.alias('cval'))
-        return Term(dims, frame, 'constant', presences=(Presence(_presence(held, dims, 'row'), dims),))
+        frame = held.valued(dims, solution.dual.alias(CONSTANT))
+        return Term(dims, frame, 'constant', presences=(Presence(_presence(held, dims, ROW), dims),))
 
     def _read_divisor(self, divisor: Term) -> Term:
         """*divisor* absent wherever it is zero, which is how a reported quotient reads a zero divisor.
@@ -471,7 +469,7 @@ class Compiler:
         the divisor has: a divisor parameter short of a row stays a null for
         the refusal to find.
         """
-        zeros = divisor.frame.filter(pl.col('cval') == 0)
+        zeros = divisor.frame.filter(pl.col(CONSTANT) == 0)
         if divisor.dims:
             present = narrowed(self.scope, divisor.dims, None).select(*divisor.dims)
             present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
@@ -531,7 +529,7 @@ class Compiler:
     def summed_onto(
         self, terms: Sequence[Term], carrier: pl.LazyFrame, *, absent: Literal['zero', 'hole', 'spreads']
     ) -> pl.LazyFrame:
-        """Constant *terms* added per coordinate onto *carrier* — its columns, then ``cval``.
+        """Constant *terms* added per coordinate onto *carrier* — its columns, then ``CONSTANT``.
 
         *carrier* holds one row per coordinate of
         [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
@@ -544,13 +542,13 @@ class Compiler:
         assert all(p.kind == 'constant' for p in terms), 'a read compiles every variable to its value'
         columns = [f'__term {i}__' for i in range(len(terms))]
         for p, column in zip(terms, columns, strict=True):
-            carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            carrier = join_on(carrier, constant_scalar(p).rename({CONSTANT: column}), p.dims, 'left')
             if absent == 'spreads' and p.region is not None:
                 carrier = self._zero_outside(carrier, column, p.region, self.scope.spanned(terms))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')
         if absent == 'hole':
             total = pl.when(pl.any_horizontal([pl.col(c).is_not_null() for c in columns])).then(total).otherwise(None)
-        return carrier.select(pl.exclude(columns), total.alias('cval'))
+        return carrier.select(pl.exclude(columns), total.alias(CONSTANT))
 
     def _zero_outside(
         self, carrier: pl.LazyFrame, column: str, region: program.Mask, dims: tuple[str, ...]
@@ -611,19 +609,19 @@ class Compiler:
         if p.kind != 'constant':
             return p
         if not p.dims:
-            zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
+            zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
             return replace(p, frame=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
-        first = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
+        first = self.scope.data.dimensions[p.dims[0]].select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
-        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
+        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
         return replace(p, frame=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
 
     def _at_term(self, p: Term, a: program.JoinColumns, context: str) -> Term:
         """Spread the dropped dimensions back out over the added ones — the adjoint of a group.
 
         The join fans out, so a later reduction can bring two copies of one
-        ``col_index`` into a row, where the terminal aggregate adds them. Unlike
+        ``COL`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
         missing = [d for d in a.dropped_dims if d not in p.dims]

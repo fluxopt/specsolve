@@ -28,6 +28,7 @@ from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import join_on
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
+from specsolve._names import COEFF, CONSTANT, ROW
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
@@ -54,7 +55,7 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
         DataError: Naming the divisor parameters of *expressions* and the
             count of undefined entries.
     """
-    coeff = stacked.get_column('coeff')
+    coeff = stacked.get_column(COEFF)
     divisors = program.parameters_of(*divisors_of(*expressions))
     _refuse_undefined(int(coeff.null_count()), int(coeff.is_finite().not_().sum()), divisors, subject)
 
@@ -78,7 +79,7 @@ def refuse_null_constants(
     """
     if not divisors:
         return
-    cval = pl.col('cval')
+    cval = pl.col(CONSTANT)
     counts = collected_all(
         [
             frame.select(
@@ -116,7 +117,7 @@ def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyF
     return [
         p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi')
         if p.dims
-        else p.frame.join(rows.select('row').head(1), how='cross')
+        else p.frame.join(rows.select(ROW).head(1), how='cross')
         for p in terms
     ]
 
@@ -145,7 +146,7 @@ def constant_side(
     carrier = rows
     for i, (p, sign) in enumerate(terms):
         column = f'__const {i}__'
-        aggregated = constant_scalar(p).rename({'cval': column})
+        aggregated = constant_scalar(p).rename({CONSTANT: column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
         if not p.parameters:
@@ -160,7 +161,7 @@ def constant_side(
         gaps[f'__gap {i}__'] = p.parameters
 
     built = carrier.select(
-        'row',
+        ROW,
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *gaps,

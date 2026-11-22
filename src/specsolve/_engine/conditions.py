@@ -18,6 +18,7 @@ from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mappin
 from specsolve._engine.scope import join_on
 from specsolve._engine.shifts import translate_rows
 from specsolve._messages import position_out_of_range_message, short_groups_message
+from specsolve._names import CONSTANT, LABEL, POSITION
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -109,7 +110,7 @@ def compile_condition(
         return carrier.once(
             f'__where ord {dimension}__',
             lambda f, alias: f.join(
-                scope.data.dimensions[dimension].select(pl.col('val').alias(dimension), pl.col('ord').alias(alias)),
+                scope.data.dimensions[dimension].select(pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)),
                 on=dimension,
                 how='left',
             ),
@@ -127,7 +128,7 @@ def compile_condition(
         return carrier.once(
             f'__where ord {p.name} by {p.partition.name}__',
             lambda f, alias: f.join(
-                grouping.table.select(pl.col('val').alias(p.name), *grouping.joined, offset.alias(alias)),
+                grouping.table.select(pl.col(LABEL).alias(p.name), *grouping.joined, offset.alias(alias)),
                 on=list(grouping.keys),
                 how='left',
             ),
@@ -168,7 +169,7 @@ def compile_condition(
         if isinstance(p, program.ExpressionComparison):
             left, right = (_values(scope, side) for side in (p.left, p.right))
             columns = tuple(
-                join_reduction('value', lambda a, v=values: v.rename({'cval': a}), on) for values, on in (left, right)
+                join_reduction('value', lambda a, v=values: v.rename({CONSTANT: a}), on) for values, on in (left, right)
             )
             return _COLUMN_COMPARISONS[p.op](pl.col(columns[0]), pl.col(columns[1]))
         if isinstance(p, program.CountComparison):
@@ -246,7 +247,7 @@ def compile_condition(
 
 
 def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:
-    """One side of a comparison of expressions as ``(dims…, cval)``, and the dimensions it is keyed by.
+    """One side of a comparison of expressions as ``(dims…, CONSTANT)``, and the dimensions it is keyed by.
 
     Read by the expression compiler, so it cannot drift from the rows. Its terms
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
@@ -261,7 +262,7 @@ def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple
     )
     dims = scope.spanned(compiled.constant)
     added = compiler.summed_onto(compiled.constant, narrowed(scope, dims, None), absent='spreads')
-    return added.select(*dims, 'cval'), dims
+    return added.select(*dims, CONSTANT), dims
 
 
 def _counted(scope: Scope, p: program.CountComparison, alias: str) -> pl.LazyFrame:

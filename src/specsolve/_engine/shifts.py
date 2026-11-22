@@ -18,7 +18,7 @@ from specsolve._collect import collected
 from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping
 from specsolve._engine.scope import join_on
 from specsolve._engine.terms import Presence, Term, refuse_a_term_without_the_dims
-from specsolve._names import VALUE
+from specsolve._names import CONSTANT, LABEL, VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -52,10 +52,10 @@ class _Order:
         """Rank *dimension* inside each group of *partition*, or along the whole of it."""
         grouping = Grouping.whole(scope.data, dimension) if partition is None else Grouping.of(scope.data, partition)
         incoming = grouping.table.select(
-            pl.col('val').alias(dimension), pl.col(GROUP_RANK).alias(_ORD_IN), *grouping.key, pl.col(GROUP_SIZE)
+            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_ORD_IN), *grouping.key, pl.col(GROUP_SIZE)
         )
         outgoing = grouping.table.select(
-            pl.col('val').alias(dimension), pl.col(GROUP_RANK).alias(_ORD_OUT), *grouping.key
+            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_ORD_OUT), *grouping.key
         )
         return cls(grouping, incoming, outgoing)
 
@@ -161,7 +161,7 @@ def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
     widths, keys = _named_amount(scope, order, name, _WIDTH)
     own = [key for key in keys if key not in grouping.key]
     table = join_on(grouping.table, widths, [key for key in keys if key in grouping.key], 'inner')
-    coordinates = table.select(pl.col('val').alias(grouping.dimension), *grouping.joined, *own).unique()
+    coordinates = table.select(pl.col(LABEL).alias(grouping.dimension), *grouping.joined, *own).unique()
     return Presence(coordinates, (*grouping.keys, *own))
 
 
@@ -283,12 +283,12 @@ class _Edge:
         keyed = [d for d in self.keys if d != s.along]
         if vacated is not None:
             table = table.filter(outside if vacated else ~outside)
-        return table.select(pl.col('val').alias(s.along), *keyed)
+        return table.select(pl.col(LABEL).alias(s.along), *keyed)
 
     def filled(self, scope: Scope, others: list[str], fill: float) -> pl.LazyFrame:
-        """``(dims…, cval=fill)`` at every coordinate the shift vacated, dense over *others*."""
+        """``(dims…, CONSTANT=fill)`` at every coordinate the shift vacated, dense over *others*."""
         edge = self.vacated(scope, (*others, self.shift.along), beside=None)
-        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias('cval'))
+        return edge.with_columns(pl.lit(fill, dtype=pl.Float64).alias(CONSTANT))
 
     def vacated(self, scope: Scope, keys: tuple[str, ...], *, beside: pl.LazyFrame | None) -> pl.LazyFrame:
         """The coordinates the shift leaves with nothing to move in, under *keys*.

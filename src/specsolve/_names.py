@@ -29,6 +29,28 @@ RUN = f'{RESERVED_PREFIX}run'
 #: The column a dimension's table numbers its labels in, from 0 in label order.
 POSITION = f'{RESERVED_PREFIX}position'
 
+#: The column a dimension's table holds its labels in, beside [`POSITION`][].
+LABEL = f'{RESERVED_PREFIX}label'
+
+#: The column holding a constraint's row index, in its table and in the matrix a sink reads.
+ROW = f'{RESERVED_PREFIX}row'
+
+#: The column holding a variable's column index, in its table and in the matrix a sink reads.
+COL = f'{RESERVED_PREFIX}col'
+
+#: The second variable's column index of a quadratic term.
+COL_2 = f'{RESERVED_PREFIX}col_2'
+
+#: The smaller and the larger column index of a quadratic matrix entry.
+COL_L = f'{RESERVED_PREFIX}col_l'
+COL_R = f'{RESERVED_PREFIX}col_r'
+
+#: The column holding a term's coefficient.
+COEFF = f'{RESERVED_PREFIX}coeff'
+
+#: The column holding a constant term's value at a coordinate.
+CONSTANT = f'{RESERVED_PREFIX}constant'
+
 
 def refuse_reserved(name: str, which: str) -> None:
     """Refuse *name*, which *which* describes, where it starts with [`RESERVED_PREFIX`][] in any letter case.

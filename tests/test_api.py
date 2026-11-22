@@ -22,6 +22,7 @@ from mathspec import to_spec
 from mathspec.spec import Spec
 
 import specsolve as sps
+from specsolve._names import COEFF
 from specsolve.errors import DimensionError
 from tests.conftest import (
     CASES,
@@ -504,6 +505,30 @@ def test_a_dimension_named_value_is_refused_at_load(name):
         sps.check(spec)
 
 
+@pytest.mark.parametrize(
+    'name', ['row', 'col', 'col_index', 'coeff', 'cval', 'constant', 'val', 'ord', 'label', 'position'], ids=str
+)
+def test_a_dimension_named_like_a_column_the_build_writes_builds(name):
+    """The engine's own tables carry their columns beside a dimension's.
+
+    They were bare names, so a dimension called ``row``, ``coeff``, ``cval`` or
+    ``ord`` was a second column of the same name and the build died in polars
+    with a ``DuplicateError``. Under the ``specsolve_`` prefix no dimension can
+    take one.
+    """
+    spec = {
+        'dimensions': {name: {'dtype': 'str'}},
+        'parameters': {'need': {'dims': [name]}},
+        'variables': {'p': {'dims': [name], 'bounds': {'lower': 0, 'upper': 10}}},
+        'constraints': {'meet': {'dims': [name], 'expression': 'p >= need'}},
+        'objective': {'sense': 'minimize', 'expression': f'sum(p, over={name})'},
+    }
+    sources = {name: ['a', 'b'], 'need': pl.DataFrame({name: ['a', 'b'], 'value': [1.0, 2.0]})}
+    with sps.solve(spec, sources) as result:
+        assert result.objective == pytest.approx(3.0), 'each label meets its need, whatever the dimension is called'
+        assert result.dual('meet').height == 2, 'and the row reads back once per label'
+
+
 @pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
 def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
@@ -899,7 +924,7 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         assert first.is_ok
 
         built = model._engine._model
-        negated = replace(built.handoff, obj=built.handoff.obj.with_columns(-pl.col('coeff')))
+        negated = replace(built.handoff, obj=built.handoff.obj.with_columns(-pl.col(COEFF)))
         model._engine._built = replace(built, handoff=negated)
         second = model.solve()
 

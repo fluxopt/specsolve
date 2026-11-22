@@ -25,6 +25,7 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve._engine.engine import Engine
+from specsolve._names import COL
 from specsolve._sources import tidy_sources
 
 if TYPE_CHECKING:
@@ -162,7 +163,7 @@ def model_frames(engine: Engine, schema: Spec, program: Any) -> None:
     n_full = 6 * 4
     print('\n    where "p_max > 0" is not a mask array — it is row absence:')
     print(f'    p has {variables.height} rows, not {n_full}: retired oil never becomes a column.')
-    print(_indent(variables.sort('col_index').head(4)))
+    print(_indent(variables.sort(COL).head(4)))
 
 
 def lp_file(engine: Engine) -> None:

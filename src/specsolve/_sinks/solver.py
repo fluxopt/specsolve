@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._names import VALUE
+from specsolve._names import COEFF, VALUE
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
@@ -111,7 +111,7 @@ class Solver(ABC):
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
         #: The matrix's coefficients as loaded, in entry order, for [`keeps`][].
-        self._coefficients = handoff.matrix['coeff'].to_numpy()
+        self._coefficients = handoff.matrix[COEFF].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
@@ -165,7 +165,7 @@ class Solver(ABC):
         return (
             self._options == dict(solver_options or {})
             and self.structure() == handoff.structure
-            and np.allclose(handoff.matrix['coeff'].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
+            and np.allclose(handoff.matrix[COEFF].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
         )
 
     @classmethod

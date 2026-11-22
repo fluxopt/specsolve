@@ -11,6 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import ROW
 from specsolve._sinks import SOLVERS, solver
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC
 from tests.differential import RTOL, differential
@@ -33,7 +34,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
-        occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
+        occupied = sorted(set(tables.matrix_block(0, tables.row_count)[ROW].to_list()))
         assert occupied == [0, 1], 'the block closes up around the gap'
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
         with solver(solver_name)(tables) as sink:

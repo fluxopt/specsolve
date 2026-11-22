@@ -16,6 +16,7 @@ import specsolve as sps
 from specsolve import _assumptions
 from specsolve._engine import compiler as compiler_module
 from specsolve._engine import conditions, indices
+from specsolve._names import ROW
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -138,7 +139,7 @@ def test_a_constraint_without_a_where_is_indexed_only_inside_its_restrictions(mo
     frame, unrestricted = indices.frame, []
 
     def spied_frame(scope, dims, where, index, start, restrictions=()):
-        if index == 'row' and where is None and not restrictions:
+        if index == ROW and where is None and not restrictions:
             unrestricted.append(tuple(dims))
         return frame(scope, dims, where, index, start, restrictions)
 

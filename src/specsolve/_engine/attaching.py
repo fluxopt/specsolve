@@ -16,7 +16,7 @@ import polars as pl
 
 from specsolve._collect import collected, in_memory
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
-from specsolve._names import VALUE
+from specsolve._names import LABEL, POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ class AttachedSources:
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
-        return self.dimensions[dim].collect_schema()['val'] == pl.Enum
+        return self.dimensions[dim].collect_schema()[LABEL] == pl.Enum
 
 
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
@@ -73,9 +73,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         relations = {name: sources[name].pipe(collected) for name in program.relations}
         parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
-    enums = {d: pl.Enum(f['val']) for d, f in dimensions.items() if f.schema['val'] == pl.String}
+    enums = {d: pl.Enum(f[LABEL]) for d, f in dimensions.items() if f.schema[LABEL] == pl.String}
     for d, enum in enums.items():
-        dimensions[d] = dimensions[d].with_columns(pl.col('val').cast(enum))
+        dimensions[d] = dimensions[d].with_columns(pl.col(LABEL).cast(enum))
     for name, relation in program.relations.items():
         casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
         if casts:
@@ -132,7 +132,7 @@ def _product(
     columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, pl.DataFrame]
 ) -> pl.LazyFrame:
     """Every combination of the labels of the dimension under each of *columns*, one column per name."""
-    frames = [dimensions[dim(column)].lazy().select(pl.col('val').alias(column)) for column in columns]
+    frames = [dimensions[dim(column)].lazy().select(pl.col(LABEL).alias(column)) for column in columns]
     product = frames[0]
     for frame in frames[1:]:
         product = product.join(frame, how='cross', maintain_order='left_right')
@@ -181,7 +181,7 @@ def _filled(
 
 def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
     """The first label of a dimension whose labels are consecutive ascending integers, else ``None``."""
-    labels = dimension.get_column('val')
+    labels = dimension.get_column(LABEL)
     if not labels.dtype.is_integer() or labels.is_empty():
         return None
     first = int(labels[0])
@@ -190,7 +190,7 @@ def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
 
 def _ordinal_frame(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
     """A dimension's ``(val, ord)`` from its labels, a label's ordinal being its row."""
-    return labels.with_row_index('ord').select(pl.col(d).alias('val'), pl.col('ord').cast(pl.Int64))
+    return labels.with_row_index(POSITION).select(pl.col(d).alias(LABEL), pl.col(POSITION).cast(pl.Int64))
 
 
 def _plain_strings(frame: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:

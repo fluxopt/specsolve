@@ -5,9 +5,9 @@ Column conventions:
 ===================  ==========================================
 table                columns
 ===================  ==========================================
-linear term          ``dims…``, ``col_index``, ``coeff``
-quadratic term       ``dims…``, ``col_index``, ``col_index_2``, ``coeff``
-constant term        ``dims…``, ``cval``
+linear term          ``dims…``, ``COL``, ``COEFF``
+quadratic term       ``dims…``, ``COL``, ``COL_2``, ``COEFF``
+constant term        ``dims…``, ``CONSTANT``
 ===================  ==========================================
 """
 
@@ -20,6 +20,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve._engine.scope import join_on
+from specsolve._names import COEFF, COL, COL_2, CONSTANT
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class Term:
 
     @property
     def value_column(self) -> str:
-        """``coeff`` where a variable is under it, ``cval`` otherwise."""
+        """``COEFF`` where a variable is under it, ``CONSTANT`` otherwise."""
         return value_column(self.kind)
 
     @property
@@ -148,15 +149,15 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
 
 #: The column-index columns each kind carries, in the order a projection keeps them.
 _INDEX_COLUMNS: dict[Kind, list[str]] = {
-    'linear': ['col_index'],
-    'quadratic': ['col_index', 'col_index_2'],
+    'linear': [COL],
+    'quadratic': [COL, COL_2],
     'constant': [],
 }
 
 
 def value_column(kind: Kind) -> str:
     """The value column a term of this kind carries."""
-    return 'cval' if kind == 'constant' else 'coeff'
+    return CONSTANT if kind == 'constant' else COEFF
 
 
 def carried_columns(kind: Kind) -> list[str]:
@@ -174,10 +175,10 @@ class CompiledExpression:
 
 
 def constant_scalar(p: Term) -> pl.LazyFrame:
-    """The constant term summed per coordinate: ``(dims…, cval)``."""
+    """The constant term summed per coordinate: ``(dims…, CONSTANT)``."""
     if not p.dims:
-        return p.frame.select(pl.col('cval').sum())
-    return p.frame.group_by(p.dims).agg(pl.col('cval').sum())
+        return p.frame.select(pl.col(CONSTANT).sum())
+    return p.frame.group_by(p.dims).agg(pl.col(CONSTANT).sum())
 
 
 def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
@@ -316,14 +317,14 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
 def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     """``a * c`` (or ``a / c``) where *c* is a constant term, broadcast over the dimensions not shared.
 
-    The right-hand value is renamed first: a suffix collision on ``cval`` would
+    The right-hand value is renamed first: a suffix collision on ``CONSTANT`` would
     multiply a column by itself. A divide joins left, so a coordinate the
     divisor has no value for yields a null coefficient rather than dropping the
     term; a coordinate where the divisor is absent leaves the table, the
     quotient being absent too. The presences of both sides travel out: at a
     read *c* may be a variable at its primal.
     """
-    joined, out_dims = _paired(a, c, c.frame.rename({'cval': _RHS}), 'left' if divide else 'inner')
+    joined, out_dims = _paired(a, c, c.frame.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
     if divide:
         for presence in c.presences:
             joined = presence.restrict(joined, presence.keys(c.dims))
@@ -355,8 +356,8 @@ def to_the_power(a: Term, b: Term) -> Term:
     An inner join, unlike divide's left: a null base or exponent would poison
     the coefficient it multiplies rather than report anything.
     """
-    joined, out_dims = _paired(a, b, b.frame.rename({'cval': _RHS}), 'inner')
-    frame = joined.with_columns(pl.col('cval').pow(pl.col(_RHS)).alias('cval')).select(
+    joined, out_dims = _paired(a, b, b.frame.rename({CONSTANT: _RHS}), 'inner')
+    frame = joined.with_columns(pl.col(CONSTANT).pow(pl.col(_RHS)).alias(CONSTANT)).select(
         *out_dims, *carried_columns('constant')
     )
     return Term(
@@ -377,8 +378,8 @@ def times_variable(a: Term, b: Term) -> Term:
     canonicalised later, once column indices exist
     ([`Assembly._build_objective`][specsolve._engine.assembly.Assembly._build_objective]).
     """
-    joined, out_dims = _paired(a, b, b.frame.rename({'col_index': 'col_index_2', 'coeff': _RHS}), 'inner')
-    frame = joined.with_columns((pl.col('coeff') * pl.col(_RHS)).alias('coeff')).select(
+    joined, out_dims = _paired(a, b, b.frame.rename({COL: COL_2, COEFF: _RHS}), 'inner')
+    frame = joined.with_columns((pl.col(COEFF) * pl.col(_RHS)).alias(COEFF)).select(
         *out_dims, *carried_columns('quadratic')
     )
     return Term(out_dims, frame, 'quadratic', presences=_keyed(a) + _keyed(b), region=both_regions(a.region, b.region))

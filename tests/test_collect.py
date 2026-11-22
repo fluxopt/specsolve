@@ -10,6 +10,7 @@ from specsolve import _collect as collect
 from specsolve._collect import collected
 from specsolve._engine import assembly
 from specsolve._engine.scope import Scope, ordinal
+from specsolve._names import COL
 
 
 def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
@@ -88,9 +89,7 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
     sps.solve(dispatch_yaml, dispatch_table_inputs)
-    assert engines[('col_index', 'lb', 'ub')] == {'in-memory'}, (
-        f'every bounds collect names the in-memory engine: {engines}'
-    )
+    assert engines[(COL, 'lb', 'ub')] == {'in-memory'}, f'every bounds collect names the in-memory engine: {engines}'
 
 
 @pytest.fixture

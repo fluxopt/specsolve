@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
@@ -415,12 +416,12 @@ def recomputed_row_values(engine, result) -> Any:
     values = np.zeros(tables.row_count)
     spans = np.diff(tables.row_starts)
     rows = np.repeat(np.arange(tables.row_count), spans)
-    np.add.at(values, rows, tables.matrix['coeff'].to_numpy() * x[tables.matrix['col'].to_numpy()])
+    np.add.at(values, rows, tables.matrix[COEFF].to_numpy() * x[tables.matrix[COL].to_numpy()])
 
     quadratic = tables.qmatrix
     if quadratic.height:
-        pairs = quadratic['coeff'].to_numpy() * x[quadratic['col_l'].to_numpy()] * x[quadratic['col_r'].to_numpy()]
-        np.add.at(values, quadratic['row'].to_numpy(), pairs)
+        pairs = quadratic[COEFF].to_numpy() * x[quadratic[COL_L].to_numpy()] * x[quadratic[COL_R].to_numpy()]
+        np.add.at(values, quadratic[ROW].to_numpy(), pairs)
     return values
 
 

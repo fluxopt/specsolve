@@ -33,6 +33,7 @@ from specsolve._engine.compiler import Compiler
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.indices import Indexed
 from specsolve._engine.scope import Scope
+from specsolve._names import COEFF, COL, CONSTANT, LABEL, POSITION
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -69,9 +70,9 @@ GEN_BUS_JOIN = program.JoinColumns('gen_bus', GEN_BUS, joined=('generator',), gr
 CARDINALITY = {'snapshot': 24, 'generator': 3, 'bus': 2}
 
 DIMENSIONS = {
-    'snapshot': pl.LazyFrame(schema={'val': pl.Int64, 'ord': pl.Int64}),
-    'generator': pl.LazyFrame(schema={'val': pl.String, 'ord': pl.Int64}),
-    'bus': pl.LazyFrame(schema={'val': pl.String, 'ord': pl.Int64}),
+    'snapshot': pl.LazyFrame(schema={LABEL: pl.Int64, POSITION: pl.Int64}),
+    'generator': pl.LazyFrame(schema={LABEL: pl.String, POSITION: pl.Int64}),
+    'bus': pl.LazyFrame(schema={LABEL: pl.String, POSITION: pl.Int64}),
 }
 RELATIONS = {'gen_bus': pl.LazyFrame(schema={'generator': pl.String, 'bus': pl.String})}
 PARAMETERS = {
@@ -79,9 +80,7 @@ PARAMETERS = {
     'load': pl.LazyFrame(schema={'snapshot': pl.Int64, 'value': pl.Float64}),
     'available': pl.LazyFrame(schema={'generator': pl.String, 'value': pl.Float64}),
 }
-VARIABLES = {
-    'p': Indexed(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, 'col_index': pl.Int64}), 0, 0)
-}
+VARIABLES = {'p': Indexed(pl.LazyFrame(schema={'snapshot': pl.Int64, 'generator': pl.String, COL: pl.Int64}), 0, 0)}
 
 
 def attached() -> AttachedSources:
@@ -135,7 +134,7 @@ def test_a_variable_compiles_to_one_linear_term_over_its_dims():
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
     assert term.kind == 'linear'
-    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', COL, COEFF]
 
 
 def test_a_parameter_is_a_constant_term_not_a_linear_one():
@@ -143,7 +142,7 @@ def test_a_parameter_is_a_constant_term_not_a_linear_one():
     assert not compiled.linear
     assert compiled.constant[0].dims == ('generator',)
     assert compiled.constant[0].kind == 'constant'
-    assert columns(compiled.constant[0].frame) == ['generator', 'cval']
+    assert columns(compiled.constant[0].frame) == ['generator', CONSTANT]
 
 
 def test_addition_concatenates_terms_rather_than_joining():
@@ -156,7 +155,7 @@ def test_multiplying_a_variable_by_a_parameter_joins_on_the_shared_dim():
     compiled = compiler().expression(program.Multiply(P, COST, dims=P.dims), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['snapshot', 'generator', 'col_index', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'generator', COL, COEFF]
     assert 'JOIN' in query(term.frame)
 
 
@@ -180,7 +179,7 @@ def test_sum_drops_the_dim_it_sums_over_without_aggregating():
     compiled = compiler().expression(program.Sum(P, (program.Axis('generator'),), dims=('snapshot',)), 'test')
     term = compiled.linear[0]
     assert term.dims == ('snapshot',)
-    assert columns(term.frame) == ['snapshot', 'col_index', 'coeff']
+    assert columns(term.frame) == ['snapshot', COL, COEFF]
     assert 'AGGREGATE' not in query(term.frame)
 
 
@@ -200,7 +199,7 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
         {
             'snapshot': [s for s in snapshots for _ in generators],
             'generator': generators * len(snapshots),
-            'col_index': range(len(snapshots) * len(generators)),
+            COL: range(len(snapshots) * len(generators)),
         }
     )
     total = program.Sum(LOAD, (program.Axis('snapshot'),), dims=())
@@ -209,7 +208,7 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
     )
     terms = compiled.linear[0].frame.collect()
     assert terms.height == 72, 'one row per slot of p, not one per slot and snapshot'
-    assert terms['coeff'].unique().to_list() == [24.0], 'every term carries the whole total'
+    assert terms[COEFF].unique().to_list() == [24.0], 'every term carries the whole total'
 
 
 def narrowed_compiler() -> Compiler:
@@ -266,7 +265,7 @@ def test_sum_swaps_the_source_dim_for_the_target_and_emits_no_aggregate():
     node = program.Sum(program.Join(P, GEN_BUS_JOIN, dims=onto), GEN_BUS_JOIN.axes, dims=onto)
     term = compiler().expression(node, 'test').linear[0]
     assert term.dims == ('snapshot', 'bus')
-    assert columns(term.frame) == ['snapshot', 'bus', 'col_index', 'coeff']
+    assert columns(term.frame) == ['snapshot', 'bus', COL, COEFF]
     assert 'AGGREGATE' not in query(term.frame)
     assert joins(term.frame) == 1
 
@@ -275,7 +274,7 @@ def test_translate_keeps_its_dims_and_joins_the_dim_table_twice():
     """Bounded halo: a row at ord *o* lands at ord *o + by*, no window."""
     term = compiler().expression(program.Translate(P, 'snapshot', offset=1, wrap=True, dims=P.dims), 'test').linear[0]
     assert term.dims == ('snapshot', 'generator')
-    assert columns(term.frame) == ['generator', 'snapshot', 'col_index', 'coeff']
+    assert columns(term.frame) == ['generator', 'snapshot', COL, COEFF]
     assert joins(term.frame) == 2
     assert 'OVER' not in query(term.frame)
 
@@ -414,7 +413,7 @@ def test_a_constant_bound_needs_no_join_at_all():
 def test_a_side_the_program_leaves_open_is_an_infinite_column():
     """A program says an open side is `None`, and a relational sink reads an infinity in `lb` and `ub`."""
     variable = program.Variable(('snapshot', 'generator'), lower=None, upper=None)
-    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], 'col_index': [0]})
+    frame = pl.LazyFrame({'snapshot': [0], 'generator': ['a'], COL: [0]})
     bounded = compiler().bounds(frame, 'p', variable).select('lb', 'ub').collect()
     assert bounded.row(0) == (float('-inf'), float('inf')), 'an open side is the infinity on that side'
 
@@ -426,7 +425,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     row for it. Over a term there is nothing to write: the vacated slot
     contributes no term.
     """
-    snapshots = pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})
+    snapshots = pl.LazyFrame({LABEL: [0, 1, 2], POSITION: [0, 1, 2]})
     sources = AttachedSources(
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
         dimensions={'snapshot': snapshots},
@@ -441,7 +440,7 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
 
     rows = q.expression(shifted, 'test').constant[0].frame.collect().sort('snapshot')
     assert rows['snapshot'].to_list() == [0, 1, 2], 'the vacated snapshot has no row, so its zero is invisible'
-    assert rows['cval'].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
+    assert rows[CONSTANT].to_list() == [0.0, 10.0, 20.0], 'the fill is the value at the vacated slot'
 
     bare = program.Translate(LOAD, 'snapshot', 1, wrap=False, fill=None, dims=LOAD.dims)
     vacated = q.expression(bare, 'test').constant[0].frame.collect().sort('snapshot')

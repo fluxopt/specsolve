@@ -1,6 +1,6 @@
 """Dense solver indices for a coordinate product narrowed by a condition.
 
-``col_index`` is the solver's column index and ``row`` its row index, so two
+``COL`` is the solver's column index and ``ROW`` its row index, so two
 builds of one model must agree on every solver index
 (docs/development/architecture.md, "The relational lane").
 """
@@ -15,6 +15,7 @@ import polars as pl
 from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import UNIT, ordinal
+from specsolve._names import LABEL
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -100,7 +101,7 @@ def frame(
 
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
     """[`frame`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
-    schema = {d: scope.data.dimensions[d].collect_schema()['val'] for d in dims}
+    schema = {d: scope.data.dimensions[d].collect_schema()[LABEL] for d in dims}
     return pl.DataFrame(schema=schema | {index: pl.Int64})
 
 

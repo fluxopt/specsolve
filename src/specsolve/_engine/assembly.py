@@ -22,6 +22,7 @@ from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, absence_restrictions
 from specsolve._messages import null_bounds_message
+from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
@@ -37,22 +38,22 @@ IN_MEMORY_REACH = 250_000
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
-_OBJ = ('col', 'coeff')
-_QUAD = ('col_l', 'col_r', 'coeff')
-_ROWS = ('row', 'sense', 'rhs')
-_MATRIX = ('row', 'col', 'coeff')
-_QMATRIX = ('row', 'col_l', 'col_r', 'coeff')
-_SOS = ('set', 'type', 'col', 'weight')
+_OBJ = (COL, COEFF)
+_QUAD = (COL_L, COL_R, COEFF)
+_ROWS = (ROW, 'sense', 'rhs')
+_MATRIX = (ROW, COL, COEFF)
+_QMATRIX = (ROW, COL_L, COL_R, COEFF)
+_SOS = ('set', 'type', COL, 'weight')
 
-#: The dtype of each of those columns. ``col``, ``set`` and ``weight`` are the
+#: The dtype of each of those columns. ``COL``, ``set`` and ``weight`` are the
 #: solver's ``Int32``; a row index stays ``Int64``, a position in the full
 #: coordinate product, which can pass 2^31.
 _DTYPES = {
-    'col': pl.Int32, 'row': pl.Int64,
-    'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, 'coeff': pl.Float64,
+    COL: pl.Int32, ROW: pl.Int64,
+    'lb': pl.Float64, 'ub': pl.Float64, 'rhs': pl.Float64, COEFF: pl.Float64,
     'sense': SENSE, 'vtype': pl.Enum(get_args(program.VariableDomain)),
     'set': pl.Int32, 'type': pl.UInt8, 'weight': pl.Int32,
-    'col_l': pl.Int32, 'col_r': pl.Int32,
+    COL_L: pl.Int32, COL_R: pl.Int32,
 }  # fmt: skip
 
 
@@ -131,9 +132,9 @@ class Assembly:
             built = [self._build_constraint(name, c) for name, c in ordered]
             objective = self._build_objective(self.program.objective)
 
-        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), 'row')
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         matrix_starts = _row_starts(stacked, self.n_rows)
-        matrix = stacked.select('col', 'coeff').rechunk()
+        matrix = stacked.select(COL, COEFF).rechunk()
 
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
@@ -142,8 +143,8 @@ class Assembly:
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
-            qmatrix=indices.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), 'row'),
-            rows=indices.in_position_order(_stack([r for r, _, _ in built], _ROWS), 'row'),
+            qmatrix=indices.in_position_order(_stack([q for _, _, q in built if q is not None], _QMATRIX), ROW),
+            rows=indices.in_position_order(_stack([r for r, _, _ in built], _ROWS), ROW),
             matrix=matrix,
             sos=_stack(sets, _SOS),
             row_starts=matrix_starts,
@@ -177,8 +178,8 @@ class Assembly:
         """
         stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
-        share, dropped = _collapsed(stacked, ('row', 'col'), ordered=True)
-        return share, stacked.get_column('row').unique() if dropped else _ordered_rows(share)
+        share, dropped = _collapsed(stacked, (ROW, COL), ordered=True)
+        return share, stacked.get_column(ROW).unique() if dropped else _ordered_rows(share)
 
     # ------------------------------------------------------------------
     # entries
@@ -187,7 +188,7 @@ class Assembly:
     def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
         """One variable's indexed table, and its share of ``cols``.
 
-        The share leaves in index order: ``cols`` carries no ``col``, so a row's
+        The share leaves in index order: ``cols`` carries no ``COL``, so a row's
         position is its solver column index. The bounds are collected in memory:
         they are parameters looked up onto column indices already in memory, and polars
         2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
@@ -195,9 +196,9 @@ class Assembly:
         """
         start = self.n_cols
         if rowless(v, self.attached):
-            indexed = indices.nothing(self.scope, v.dims, 'col_index')
+            indexed = indices.nothing(self.scope, v.dims, COL)
         else:
-            indexed = indices.frame(self.scope, v.dims, v.where, 'col_index', start)
+            indexed = indices.frame(self.scope, v.dims, v.where, COL, start)
         self.n_cols = start + indexed.height
         self.variables[name] = indices.Indexed(indexed.lazy(), start, indexed.height)
         if not indexed.height:
@@ -207,8 +208,8 @@ class Assembly:
         if v.domain != 'continuous':
             lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.compiler.bounds(indexed.lazy(), name, v).select('col_index', lb.alias('lb'), ub.alias('ub'))
-            bounded = indices.in_position_order(bounds.pipe(collected), 'col_index')
+            bounds = self.compiler.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
+            bounded = indices.in_position_order(bounds.pipe(collected), COL)
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
         if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
@@ -238,11 +239,11 @@ class Assembly:
             place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
             frame = held.frame
-            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col('col_index')
+            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col(COL)
         placed = frame.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
-            col.cast(_DTYPES['col']).alias('col'),
+            col.cast(_DTYPES[COL]).alias(COL),
         ).pipe(collected)
 
         position = pl.col('#set position')
@@ -251,7 +252,7 @@ class Assembly:
         built = grouped.select(
             (dense + self.n_sets).cast(_DTYPES['set']).alias('set'),
             pl.lit(s.sos_type, dtype=_DTYPES['type']).alias('type'),
-            'col',
+            COL,
             'weight',
         )
         if built.height:
@@ -272,8 +273,8 @@ class Assembly:
         """
         start = self.n_rows
         if rowless(c, self.attached):
-            return self._without_a_row(name, indices.nothing(self.scope, c.dims, 'row'), start)
-        admitted = None if c.where is None else indices.frame(self.scope, c.dims, c.where, 'row', start)
+            return self._without_a_row(name, indices.nothing(self.scope, c.dims, ROW), start)
+        admitted = None if c.where is None else indices.frame(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
@@ -284,7 +285,7 @@ class Assembly:
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
         if admitted is None or restrictions:
-            indexed = indices.frame(self.scope, c.dims, c.where, 'row', start, restrictions)
+            indexed = indices.frame(self.scope, c.dims, c.where, ROW, start, restrictions)
         else:
             indexed = admitted
         if restrictions:
@@ -304,7 +305,7 @@ class Assembly:
         rows = coverage.constant_side(self.scope, frame, constant, c, subject)
 
         if not linear and not quadratic:
-            none = pl.Series('row', [], dtype=_DTYPES['row'])
+            none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
             rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
@@ -313,26 +314,26 @@ class Assembly:
         dense = c.where is None and not restrictions
         for p, sign in linear:
             if dense and set(p.dims) == set(c.dims):
-                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias('row'))
+                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias(ROW))
             else:
                 placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
             frames.append(
                 placed.select(
-                    'row',
-                    pl.col('col_index').cast(_DTYPES['col']).alias('col'),
-                    (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
+                    ROW,
+                    pl.col(COL).cast(_DTYPES[COL]).alias(COL),
+                    (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
                 )
             )
         matrix, term_rows = (
             self._matrix_share(frames, subject, c.lhs, c.rhs)
             if frames
-            else (_stack([], _MATRIX), pl.Series('row', [], dtype=_DTYPES['row']))
+            else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
         )
         qmatrix = self._quadratic_share(frame, quadratic, name, c)
         if qmatrix is not None:
-            term_rows = pl.concat([term_rows, qmatrix.get_column('row').unique()]).unique()
+            term_rows = pl.concat([term_rows, qmatrix.get_column(ROW).unique()]).unique()
         rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
-        spread = _magnitude_range(matrix, 'coeff')
+        spread = _magnitude_range(matrix, COEFF)
         if spread is not None:
             self.measured.coefficients[name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
@@ -374,15 +375,15 @@ class Assembly:
             return None
         frames = [
             join_on(frame, p.frame, p.dims, 'inner').select(
-                'row',
+                ROW,
                 *_ordered_pair(),
-                (sign * pl.col('coeff')).cast(pl.Float64).alias('coeff'),
+                (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
             )
             for p, sign in quadratic
         ]
         stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
-        share, _ = _collapsed(stacked, ('row', 'col_l', 'col_r'), ordered=True)
+        share, _ = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
         return share
 
     def _drop_termless_rows(
@@ -404,18 +405,16 @@ class Assembly:
         if kept.len() == rows.height:
             return rows, matrix, qmatrix, start + rows.height
 
-        surviving = rows.filter(pl.col('row').is_in(kept)).sort('row')
-        renumber = surviving.select('row').with_row_index('__new__', offset=start)
+        surviving = rows.filter(pl.col(ROW).is_in(kept)).sort(ROW)
+        renumber = surviving.select(ROW).with_row_index('__new__', offset=start)
         self.measured.omitted[name] = self.measured.omitted.get(name, 0) + rows.height - surviving.height
-        remap = dict(zip(renumber.get_column('row'), renumber.get_column('__new__'), strict=True))
-        rows = surviving.with_columns(pl.col('row').replace_strict(remap))
-        matrix = matrix.with_columns(pl.col('row').replace_strict(remap))
+        remap = dict(zip(renumber.get_column(ROW), renumber.get_column('__new__'), strict=True))
+        rows = surviving.with_columns(pl.col(ROW).replace_strict(remap))
+        matrix = matrix.with_columns(pl.col(ROW).replace_strict(remap))
         if qmatrix is not None:
-            qmatrix = qmatrix.with_columns(pl.col('row').replace_strict(remap))
+            qmatrix = qmatrix.with_columns(pl.col(ROW).replace_strict(remap))
         kept_frame = (
-            self.constraints[name]
-            .frame.filter(pl.col('row').is_in(kept))
-            .with_columns(pl.col('row').replace_strict(remap))
+            self.constraints[name].frame.filter(pl.col(ROW).is_in(kept)).with_columns(pl.col(ROW).replace_strict(remap))
         )
         self.constraints[name] = indices.Indexed(kept_frame, start, surviving.height)
         return rows, matrix, qmatrix, start + surviving.height
@@ -438,18 +437,16 @@ class Assembly:
                 f'objective constant term has dimensions {list(p.dims)} — the language refuses a '
                 f'variable-free term of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col('cval').sum()).pipe(collected).item() or 0.0
+            self.obj_const += p.frame.select(pl.col(CONSTANT).sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quadratic, o.expression)
         if not comp.linear:
             return None
-        frames = [
-            p.frame.select(pl.col('col_index').cast(_DTYPES['col']).alias('col'), pl.col('coeff')) for p in comp.linear
-        ]
+        frames = [p.frame.select(pl.col(COL).cast(_DTYPES[COL]).alias(COL), pl.col(COEFF)) for p in comp.linear]
         stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
-        objective, _ = _collapsed(stacked, ('col',), ordered=False, space=self.n_cols)
-        self.measured.objective_range = _magnitude_range(objective, 'coeff')
+        objective, _ = _collapsed(stacked, (COL,), ordered=False, space=self.n_cols)
+        self.measured.objective_range = _magnitude_range(objective, COEFF)
         return objective
 
     def _objective_quadratic(self, quadratic: tuple[Term, ...], expression: program.Expression) -> pl.DataFrame | None:
@@ -461,10 +458,10 @@ class Assembly:
         """
         if not quadratic:
             return None
-        frames = [p.frame.select(*_ordered_pair(), pl.col('coeff')) for p in quadratic]
+        frames = [p.frame.select(*_ordered_pair(), pl.col(COEFF)) for p in quadratic]
         stacked = pl.concat(frames).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
-        quad, _ = _collapsed(stacked, ('col_l', 'col_r'), ordered=True)
+        quad, _ = _collapsed(stacked, (COL_L, COL_R), ordered=True)
         return quad
 
 
@@ -493,8 +490,8 @@ def declares_quadratic(c: program.Constraint) -> bool:
 def _ordered_pair() -> tuple[pl.Expr, pl.Expr]:
     """A quadratic pair canonicalised by column index, so ``x·y`` and ``y·x`` land in one row."""
     return (
-        pl.min_horizontal('col_index', 'col_index_2').cast(_DTYPES['col_l']).alias('col_l'),
-        pl.max_horizontal('col_index', 'col_index_2').cast(_DTYPES['col_r']).alias('col_r'),
+        pl.min_horizontal(COL, COL_2).cast(_DTYPES[COL_L]).alias(COL_L),
+        pl.max_horizontal(COL, COL_2).cast(_DTYPES[COL_R]).alias(COL_R),
     )
 
 
@@ -557,7 +554,7 @@ def _collapsed(
         repeated = _repeats_an_index(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
-    aggregated = stacked.lazy().group_by(*keys).agg(pl.col('coeff').sum())
+    aggregated = stacked.lazy().group_by(*keys).agg(pl.col(COEFF).sum())
     if ordered:
         aggregated = aggregated.sort(*keys)
     summed = aggregated.pipe(collected)
@@ -590,12 +587,12 @@ def _in_key_order(keys: tuple[str, ...]) -> pl.Expr:
 
 
 def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
-    """The distinct ``row`` indices of a matrix already ordered by ``row``.
+    """The distinct ``ROW`` indices of a matrix already ordered by ``ROW``.
 
     ``set_sorted`` is an assertion, not a check: an unordered column silently
     loses rows, so call it only on what [`_collapsed`][] returned ordered.
     """
-    return matrix.get_column('row').set_sorted().unique()
+    return matrix.get_column(ROW).set_sorted().unique()
 
 
 def _repeats_an_index(keys: pl.Series, count: int) -> bool:
@@ -615,17 +612,17 @@ def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
     A pruned share no longer says which rows had terms, so
     [`Assembly._matrix_share`][] reads that set before pruning.
     """
-    if not matrix.select(pl.col('coeff').eq(0).any()).item():
+    if not matrix.select(pl.col(COEFF).eq(0).any()).item():
         return matrix
-    return matrix.filter(pl.col('coeff') != 0).rechunk()
+    return matrix.filter(pl.col(COEFF) != 0).rechunk()
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, ...], np.dtype[np.int64]]:
     """Each row's first entry in the row-ordered *ordered* — CSR's own index.
 
-    *ordered* must ascend in ``row``: a row in two runs silently gets wrong spans.
+    *ordered* must ascend in ``ROW``: a row in two runs silently gets wrong spans.
     """
-    runs = ordered['row'].rle()
+    runs = ordered[ROW].rle()
     starts = np.zeros(row_count + 1, dtype=np.int64)
     starts[runs.struct.field('value').to_numpy() + 1] = runs.struct.field('len').to_numpy()
     return np.cumsum(starts, out=starts)

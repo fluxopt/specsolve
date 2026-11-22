@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._names import VALUE
+from specsolve._names import LABEL, POSITION, VALUE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -76,7 +76,7 @@ class Scope:
         """
         out: pl.LazyFrame | None = None
         for d in dims:
-            table = self.data.dimensions[d].select(pl.col('val').alias(d), pl.col('ord').alias(ordinal(d)))
+            table = self.data.dimensions[d].select(pl.col(LABEL).alias(d), pl.col(POSITION).alias(ordinal(d)))
             out = table if out is None else out.join(table, how='cross', maintain_order='left_right')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
@@ -131,7 +131,7 @@ class Scope:
         if (first := self.data.consecutive.get(dim)) is not None:
             return column.cast(pl.Int64) - first
         ordinals = self.data.dimensions[dim].pipe(collected)
-        return column.replace_strict(ordinals.get_column('val'), ordinals.get_column('ord'), return_dtype=pl.Int64)
+        return column.replace_strict(ordinals.get_column(LABEL), ordinals.get_column(POSITION), return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dimension in *want*, saying the same thing.
@@ -144,7 +144,7 @@ class Scope:
     def spread(self, frame: pl.LazyFrame, dims: Iterable[str]) -> pl.LazyFrame:
         """*frame* repeated at every label of each of *dims*, which it does not carry."""
         for d in dims:
-            frame = frame.join(self.data.dimensions[d].select(pl.col('val').alias(d)), how='cross')
+            frame = frame.join(self.data.dimensions[d].select(pl.col(LABEL).alias(d)), how='cross')
         return frame
 
     def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:

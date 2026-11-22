@@ -151,7 +151,7 @@ absence is pushed into the operand first
 | `Power` | `p ** q` | one-to-one | an inner join and `pow`, each side with a reduction under it added up to one value per coordinate first |
 | `Sum` | `sum(x)`, `sum(x, over=d)`, `sum(x, over=c, by=r[d])` | many-to-one | the summed dimensions projected away — no aggregate; over the axes of a `Join` under it, one inner join with the relation's table on the columns the join matches, the dropped dimensions traded for the added ones, and a bare relation fans a label out to every group |
 | `Join` | `at(x, by=r[d])` | one-to-one | the relation's table joined on the columns read, the key coming back, fanning out; a `Join` that opens axes stands only under the `Sum` over them |
-| `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `ord`, modulo its size under `wrap` |
+| `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `POSITION`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own condition and the lists of terms concatenated |
 | `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
@@ -173,12 +173,13 @@ lifecycle. `scope.py` sits under them all.
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
 leaves no model.
 
-**Tables are tidy.** Parameters are `(dims…, value)`. A variable table is
-`(dims…, col_index)`. A linear expression is `(dims…, col_index, coeff)` plus a
+**Tables are tidy.** The engine's own columns are named once, in `_names.py`,
+under the `specsolve_` prefix a dimension cannot take. Parameters are
+`(dims…, value)`. A variable table is `(dims…, COL)`. A linear expression is `(dims…, COL, COEFF)` plus a
 constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
 **Solver indices are dense `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
-So `col_index` is the solver column, `row` is the solver row, and a build is
+So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position.
 
@@ -260,7 +261,7 @@ The names the code uses for its own parts. The names a caller meets are in
 : Turning a spec into its `Program`, through `_inputs.as_program`.
 
 **Attached sources**
-: The tidy tables as every query reads them: a dimension as `(val, ord)`, a
+: The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
   label column as an `Enum` in declared order.
 
 **Term**, **presence** and **region**
