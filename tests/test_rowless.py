@@ -134,19 +134,21 @@ SPARSE_SOURCES = {
 }
 
 
-def test_a_constraint_without_a_where_is_indexed_only_inside_its_restrictions(monkeypatch):
-    """A sparse absence narrows such a constraint, and indexing it unrestricted first would hold the full product of its dimensions."""
-    table, unrestricted = indices.table, []
+def test_a_constraint_without_a_where_is_indexed_only_inside_its_presences(monkeypatch):
+    """A sparse absence narrows such a constraint, and indexing it before its presences would hold the full product of its dimensions."""
+    table, unnarrowed = indices.table, []
 
-    def spied_table(scope, dims, where, index, start, restrictions=()):
-        if index == ROW and where is None and not restrictions:
-            unrestricted.append(tuple(dims))
-        return table(scope, dims, where, index, start, restrictions)
+    def spied_table(scope, dims, where, index, start, presences=()):
+        if index == ROW and where is None and not presences:
+            unnarrowed.append(tuple(dims))
+        return table(scope, dims, where, index, start, presences)
 
     monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
-    assert not unrestricted, f'`capped` was indexed over its full product {unrestricted} before its restriction'
+    assert not unnarrowed, (
+        f'`capped` was indexed over its full product {unnarrowed} before the presences that narrow it'
+    )
 
 
 def test_a_constraint_with_a_where_and_restrictions_reads_its_where_once(monkeypatch):

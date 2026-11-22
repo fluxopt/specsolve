@@ -44,7 +44,7 @@ try:
     import linopy
     import xarray
 except ModuleNotFoundError as exc:
-    msg = 'The linopy oracle needs linopy and xarray, which the dev group carries: pixi install'
+    msg = 'The linopy lane needs linopy and xarray, which the dev group carries: pixi install'
     raise ModuleNotFoundError(msg) from exc
 
 

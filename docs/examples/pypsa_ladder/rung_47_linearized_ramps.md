@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa_linearized_uc/#rung-47--ramps-and-signs-as-the-integer-file-states-them): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **12862.5** on both sides; structure ✔ 18 constraints · 5 variables, name for name; size ✔ 179 rows · ✔ 72 columns · ✔ 353 nonzeros; duals ✔ 179 rows, 1 negated; **model for model**: 23 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **12862.5** on both sides; structure ✔ 18 constraints · 5 variables, name for name; size ✔ 179 rows · ✔ 72 columns · ✔ 353 nonzeros; duals ✔ 179 rows, 1 negated; **model for model**: 23 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

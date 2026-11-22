@@ -44,9 +44,9 @@ def join_on(
 UNIT = '__unit__'
 
 
-def ordinal(dim: str) -> str:
+def position_column(dim: str) -> str:
     """The column carrying *dim*'s position in its declared order."""
-    return f'__ord {dim}__'
+    return f'__position {dim}__'
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ class Scope:
         return self.data.parameter_rows[parameter] < math.prod(self.data.cardinality[d] for d in entry.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
-        """Cross join of the dimension tables: labels and ordinals, nothing else.
+        """Cross join of the dimension tables: labels and positions, nothing else.
 
         Each cross join keeps its left side's order, then its right's, so the
         product arrives row-major, which is index order, on either engine; the
@@ -76,7 +76,7 @@ class Scope:
         """
         out: pl.LazyFrame | None = None
         for d in dims:
-            table = self.data.dimensions[d].select(pl.col(LABEL).alias(d), pl.col(POSITION).alias(ordinal(d)))
+            table = self.data.dimensions[d].select(pl.col(LABEL).alias(d), pl.col(POSITION).alias(position_column(d)))
             out = table if out is None else out.join(table, how='cross', maintain_order='left_right')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
@@ -107,31 +107,31 @@ class Scope:
             values = pl.concat([values, null]).head(1)
         return join_on(table, values, entry.dims, how, maintain_order)
 
-    def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
+    def row_major(self, dims: tuple[str, ...], positions: Callable[[str], pl.Expr]) -> pl.Expr:
         """A coordinate's row-major position in the declared product of *dims*, contiguous over the full product.
 
         A solver index, a bound's slot and a set's position all read this one rule, so two
-        builds of one model agree on every index. *ordinals* reads a dimension's
-        ordinal off the table in hand.
+        builds of one model agree on every index. *positions* reads a dimension's
+        position off the table in hand.
         """
         position: pl.Expr = pl.lit(0, dtype=pl.Int64)
         for d in dims:
-            position = position * self.data.cardinality[d] + ordinals(d)
+            position = position * self.data.cardinality[d] + positions(d)
         return position.cast(pl.Int64)
 
-    def ordinal_of(self, dim: str) -> pl.Expr:
-        """A *dim* value column as that dimension's ordinal.
+    def position_of(self, dim: str) -> pl.Expr:
+        """A *dim* value column as that dimension's position.
 
-        Attaching encodes an ``Enum`` in ordinal order, so its physical code is the
-        ordinal, and a run of consecutive integers is its own ordinal less its first.
+        Attaching encodes an ``Enum`` in label order, so its physical code is the
+        position, and a run of consecutive integers is its own position less its first.
         """
         column = pl.col(dim)
         if self.data.is_enum_encoded(dim):
             return column.to_physical().cast(pl.Int64)
         if (first := self.data.consecutive.get(dim)) is not None:
             return column.cast(pl.Int64) - first
-        ordinals = self.data.dimensions[dim].pipe(collected)
-        return column.replace_strict(ordinals.get_column(LABEL), ordinals.get_column(POSITION), return_dtype=pl.Int64)
+        positions = self.data.dimensions[dim].pipe(collected)
+        return column.replace_strict(positions.get_column(LABEL), positions.get_column(POSITION), return_dtype=pl.Int64)
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dimension in *want*, saying the same thing.

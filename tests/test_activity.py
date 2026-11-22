@@ -1,7 +1,7 @@
 """Activity: a constraint row's left-hand side, read back after a solve.
 
 The value is the solver's own, so a CSR recomputation agreeing with it checks
-the whole chain: matrix, hand-off, solve, read-back. Unlike a dual, an
+the whole chain: matrix, handoff, solve, read-back. Unlike a dual, an
 activity exists at any mixed-integer incumbent.
 """
 
@@ -24,10 +24,10 @@ ACTIVITY = frozenset({'activity'})
 def _agrees_with_csr(run) -> None:
     """Each constraint's activity against its slice of the recomputation."""
     recomputed = recomputed_row_values(run.engine, run.result)
-    for name, block in run.engine._model.constraints.items():
+    for name, indexed in run.engine._model.constraints.items():
         got = run.result.activity(name)['value'].to_numpy()
-        assert got == pytest.approx(recomputed[block.start : block.start + block.height], rel=ACTIVITY_RTOL), (
-            f'the solver judged feasibility against a different {name!r} LHS than the CSR block holds. '
+        assert got == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=ACTIVITY_RTOL), (
+            f'the solver judged feasibility against a different {name!r} LHS than its CSR rows hold. '
             f'Activity is the *whole* left-hand side, which is Ax on a linear row and x^T Q x + Ax '
             f'on a quadratic one — `recomputed_row_values` adds both, and this disagreement is that '
             f'invariant failing.'

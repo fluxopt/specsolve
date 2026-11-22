@@ -336,7 +336,7 @@ process launched for them has to build the arrays first. Their other verbs,
 other two need nothing a contributor does not already have. So are `mps`, the
 other file format every arm with a writer reaches, and `xpress`, which only
 specsolve reaches — its wheel's Community licence refuses a solve over 5,000 rows
-plus columns but not a load, so the hand-off measures at every rung. A cell
+plus columns but not a load, so the handoff measures at every rung. A cell
 whose solver package is not installed is skipped with the package's name. It is also the only
 sink two of the three arms can reach, and a cell an arm cannot reach is skipped
 with the reason rather than left to look like a measurement that failed.
@@ -346,12 +346,12 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`loadModel` hand-off our own `Gurobi` constructor does, so what separates it from
+`loadModel` handoff our own `Gurobi` constructor does, so what separates it from
 `specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
 expected answer and not the point: it is the baseline most readers already
-have, and appsi's `set_instance` reaches the same hand-off our sinks do — the
+have, and appsi's `set_instance` reaches the same handoff our sinks do — the
 solver's own model, populated, with nothing solved. Nothing of pyomo's is
 switched off that pyomo does not switch off itself; `symbolic_solver_labels`
 is already false by default, which is the cheap side of the same choice
@@ -361,7 +361,7 @@ is already false by default, which is the cheap side of the same choice
 `bench/models/<case>/linopy.py` is `examples/ports/references/linopy/<case>.py`
 against the ladder's parquet — scripts #681 reviewed for idiom and the docs
 execute, which is what keeps this arm from being a strawman somebody wrote in
-an afternoon. The linopy oracle in `tests/linopy_lane` is not this arm and is
+an afternoon. The linopy lane in `tests/linopy_lane` is not this arm and is
 not measured.
 
 **A hand-written arm is a model somebody typed twice**, and nothing structural
@@ -384,7 +384,7 @@ number for the common case, which is why both run by default.
 **What an arm's own defaults cost is the next arm's problem, and it is
 load-bearing.** The retired linopy arm passed `set_names=False` because linopy
 names every variable and constraint while our sinks name nothing, and naming is
-**82% of linopy's HiGHS hand-off** (0.11s against 0.02s at 200k variables) and
+**82% of linopy's HiGHS handoff** (0.11s against 0.02s at 200k variables) and
 35% of its Gurobi one. Any arm added here answers the same question in its own
 docstring: which defaults were switched off, and what each one cost.
 
@@ -536,7 +536,7 @@ Two of those are deliberate calls rather than defaults:
   any more — `close()` drops frames this process owns — so the phase is kept as
   a tripwire rather than a cost: if it ever stops reading ~0, something
   acquired a lifetime again.
-Every arm starts from the same parquet files and stops at the same hand-off, so
+Every arm starts from the same parquet files and stops at the same handoff, so
 each pays for its own data ingestion. That is the honest unit. The *phases* are
 not comparable one-for-one across arms — a library that defers coefficient
 materialisation to its writer spends nothing in `build` that another spends
@@ -673,7 +673,7 @@ decision rather than an omission.
 nothing about how much headroom is left in it. `bench/floor.py` is what a
 number is read against: it hand-writes **one** model — `transport` — from the
 case's cached parquet straight into numpy arrays and a CSR matrix, no specsolve
-and no expression engine anywhere in the path, and ends at the same hand-off as
+and no expression engine anywhere in the path, and ends at the same handoff as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
 the sentence becomes *"we are at Nx the floor"* — a claim about engineering
@@ -758,7 +758,7 @@ are `read-frames` and `read-parquet`, rendered by `bench.tidy` alone.
 
 `test_fresh` prices the first window of a process started for one solve, from
 launch to exit: the interpreter, the library's import, the build and the
-hand-off. Every other test runs in a process that has imported its library
+handoff. Every other test runs in a process that has imported its library
 already. The test pickles what `prepare` returns and runs `python -m
 bench.fresh` on it; the child times the arm's own `build_and_emit` as the phase
 `first_window`, so `wall_seconds` less `first_window` is the interpreter and the

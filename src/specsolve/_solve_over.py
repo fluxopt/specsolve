@@ -388,7 +388,7 @@ def _check_the_carry(
         raise SpecsolveError(
             f'carry {parameter!r} <- {rule.variable!r} collapses {rule.dropped!r}, and {advance}: a carry hands '
             f"on the row at a slice's horizon end, so it can only collapse the dimension the sweep advances "
-            f'along. Reduce {rule.dropped!r} in the YAML — a derived variable is where the oracle can see the '
+            f'along. Reduce {rule.dropped!r} in the YAML — a derived variable is where the linopy lane can see the '
             f'math — so that {parameter!r} and {rule.variable!r} are over the same dimensions.'
         )
 
