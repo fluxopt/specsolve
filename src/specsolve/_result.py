@@ -237,7 +237,7 @@ class Diagnostics:
     Advisory, all of it: no answer depends on any field.
     """
 
-    #: The shape the build produced: columns, rows, and matrix entries.
+    #: The shape the build produced: columns, rows, and coefficients.
     columns: int
     rows: int
     nonzeros: int
@@ -257,20 +257,20 @@ class Diagnostics:
     sparse_parameters: pl.DataFrame
 
     #: ``(constraint, smallest, largest)`` — the coefficient magnitudes each
-    #: constraint block put in the matrix, one row per block that kept a term,
+    #: constraint put in the matrix, one row per constraint that kept a term,
     #: in build order. ``largest / smallest`` over the table is the
     #: conditioning to compare against the solver's.
     coefficient_range: pl.DataFrame
 
     #: ``(variable, smallest, largest)`` — the bound magnitudes each variable
-    #: block put on its columns, one row per block that declared a finite one.
+    #: put on its columns, one row per variable that declared a finite one.
     #: Zero and infinity are excluded. A model can be clean on
     #: [`coefficient_range`][] and still have bounds the solver asks to have
     #: scaled. A large ``largest`` is usually a big number standing in for
     #: "uncapped", and wants no upper bound at all rather than a rounder one.
     bound_range: pl.DataFrame
 
-    #: ``(constraint, smallest, largest)`` — the same for each block's
+    #: ``(constraint, smallest, largest)`` — the same for each constraint's
     #: right-hand sides, over the rows that survived.
     rhs_range: pl.DataFrame
 
@@ -899,7 +899,7 @@ def load_result(directory: str | Path) -> Result:
 
     Raises:
         LayoutError: A directory holding no ``record.parquet``, or one whose
-            layout has moved since it was written.
+            layout has changed since it was written.
     """
     return _answer_under(Path(directory), eager=True)
 

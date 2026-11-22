@@ -37,6 +37,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   [`Result`](api.md#specsolve.types.Result). It owns its tables, so it outlives
   its model.
 
+**Solution**
+: The values a solve found: each variable's primal and each row's dual. A
+  `Result` holds one solution; a `Sweep` holds one per slice.
+
 **Answer**
 : What came back: a `Result` for one solve, a [`Sweep`](#sweeps) for a sweep.
 
@@ -228,6 +232,8 @@ word to write. A plural is refused with its word.
 | `sayable` | in the language |
 | `seam`, `surface`, `tax`, `closure` | the plain thing |
 | `handover`, `owned` | horizon end, the window's horizon |
+| `matrix entry` | coefficient |
+| `door` | the function by name: `tidy_sources`, `as_program` |
 
 A dimension's labels are its labels, never its index: an index is a solver's
 position of a column or a row, or a pandas index.

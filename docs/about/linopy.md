@@ -58,7 +58,7 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
   small.
 - **linopy is not a dependency.** Only the test suite uses it, to build every
   file a second time and compare
-  ([verification](../development/verification.md#the-oracle)).
+  ([verification](../development/verification.md#the-linopy-lane)).
 - **Some of linopy is not taken**: array operations such as `merge` and
   `reindex` are data preparation, and the solver layer is specsolve's own
   ([#106](https://github.com/fluxopt/specsolve/issues/106)).

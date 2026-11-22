@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa_linearized_uc/#rung-67--a-committable-link-and-process-relaxed): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **47777.333333** on both sides; structure ✔ 39 constraints · 10 variables, name for name; size ✔ 184 rows · ✔ 65 columns · ✔ 420 nonzeros; duals ✔ 184 rows, 2 negated, 6 inside PyPSA's range; **model for model**: 49 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **47777.333333** on both sides; structure ✔ 39 constraints · 10 variables, name for name; size ✔ 184 rows · ✔ 65 columns · ✔ 420 nonzeros; duals ✔ 184 rows, 2 negated, 6 inside PyPSA's range; **model for model**: 49 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

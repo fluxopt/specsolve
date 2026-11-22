@@ -8,7 +8,7 @@ Each check is an oracle that needs no expected answer:
   canonical form is a fixed point.
 - **typeset**: every format prints an accepted spec, written out and as stated.
 - **build**: the two lanes accept the same data or refuse it with the same
-  sentence. An oracle gap (``OracleCannotBuildError``) is not a finding.
+  sentence. A gap in the linopy lane (``OracleCannotBuildError``) is not a finding.
 - **read**: every expression the case names reads the same on both lanes at one
   point (:func:`tests.differential.at_a_point`'s claim, without its asserts).
 - **solve**: for a linear case with an objective (linopy solves no feasibility problem), both lanes reach the same status and objective,
@@ -130,7 +130,7 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
 def _guarded(oracle: str, run: Callable[[], list[Finding]]) -> list[Finding]:
     """*run*'s findings, or the crash it raised: one oracle that raises does not hide the others' findings.
 
-    An oracle gap is no finding here either, as everywhere else in this module.
+    A gap in the linopy lane is no finding here either, as everywhere else in this module.
     """
     try:
         return run()
@@ -282,7 +282,7 @@ def _close(a: float, b: float) -> bool:
 def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]:
     """Solve both lanes and compare what they built and reached.
 
-    The oracle is solved through HiGHS directly and with its zeros kept: under
+    The linopy lane's model is solved through HiGHS directly and with its zeros kept: under
     ``sanitize_zeros`` and through an LP file linopy drops a row whose every
     coefficient is zero, and the language keeps that row.
     """
@@ -361,8 +361,8 @@ def _same_matrix(engine: Engine, m: Any) -> list[Finding]:
     """
     tables = engine._model.handoff
     findings = []
-    for constraint, block in engine._model.constraints.items():
-        got = _canonical(tables.matrix_block(block.start, block.start + block.height), block.height)
+    for constraint, indexed in engine._model.constraints.items():
+        got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height), indexed.height)
         want = _linopy_matrix(m, constraint)
         if len(got) != len(want) or any(
             len(a) != len(b) or not all(_close(x, y) for x, y in zip(a, b, strict=True))
@@ -468,7 +468,7 @@ def _attempt(call: Callable[[], Any]) -> tuple[Any, BaseException | None]:
 
 
 def _is_gap(e: BaseException | None) -> bool:
-    """A refusal one lane makes by design: the oracle's ``OracleCannotBuildError``, or the relational lane's #1137."""
+    """A refusal one lane makes by design: the linopy lane's ``OracleCannotBuildError``, or the relational lane's #1137."""
     return isinstance(e, OracleCannotBuildError) or (
         isinstance(e, SpecsolveError) and not isinstance(e, DataError) and 'specsolve cannot build that' in str(e)
     )

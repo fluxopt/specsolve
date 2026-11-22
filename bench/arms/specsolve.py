@@ -169,7 +169,7 @@ def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
     """``Engine._hand_off`` as the checkout under test spells it, and whether it loaded the solver from scratch.
 
     A checkout that still takes ``keep`` closes the held solver itself for a
-    cold window, inside the timed hand-off; a later one has no ``keep``, so a
+    cold window, inside the timed handoff; a later one has no ``keep``, so a
     cold window closes it here first.
     """
     engine = model._engine

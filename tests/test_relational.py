@@ -1,4 +1,4 @@
-"""The relational lane as such: matrix assembly, solver indices, and the solver hand-off.
+"""The relational lane as such: matrix assembly, solver indices, and the solver handoff.
 
 A repeated cell collapsing, a column being positional, a bound attached by
 position rather than joined, a solution read back in index order: none is a
@@ -277,7 +277,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `Engine.build` takes a *program* and the tables
+    Below `specsolve.build`: `Engine.build` takes a *program* and the tables
     a built model reads, which is the same shape `tidy_sources` hands over — a
     table of labels per dimension, and each map as its own two-column relation.
     """
@@ -528,7 +528,7 @@ class TestTheIndexSpace:
         """A column index is the solver's own column, so its order is the contract.
 
         Column indices are contiguous ``0..n-1`` over the coordinates the condition leaves, assigned
-        row-major on the dimensions' declared ordinals. An off-by-one here is a different
+        row-major on the dimensions' positions. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
         """
@@ -712,7 +712,7 @@ class TestTheIndexSpace:
         A solver vector is positional in the solver indices, so an entry's
         share of it is a slice — but only if its indices are a contiguous run and
         the runs tile the whole index. Both are how `indices.table` numbers
-        an entry, and neither is visible from the tables: a block
+        an entry, and neither is visible from the tables: an entry's rows
         that started one late would report a neighbour's numbers under this
         entry's coordinates, with nothing out of range and nothing null.
         """
@@ -750,11 +750,11 @@ class TestTheIndexSpace:
     def test_a_variable_and_a_constraint_may_share_a_name(self):
         """Columns and rows are numbered independently, so the maps are separate.
 
-        `pypsa_unit_commitment` names both `start_up`, and linopy — the oracle the
-        whole corpus is checked against — keeps variables and constraints in
+        `pypsa_unit_commitment` names both `start_up`, and linopy — which the linopy lane
+        checks the whole corpus against — keeps variables and constraints in
         separate namespaces, so the model is legal and the read-back has to tell
-        the two apart. `pad` exists to push the variable's block off the
-        constraint's: sharing a start, the wrong block returns plausible numbers
+        the two apart. `pad` exists to push the variable's columns off the
+        constraint's rows: sharing a start, the wrong entry returns plausible numbers
         from the wrong entry rather than a length error.
         """
         spec = {
@@ -1066,7 +1066,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             assert len(terms) == 2
 
             tables = model._engine._model.handoff
-            cells = tables.matrix_block(0, tables.row_count).select(ROW, COL)
+            cells = tables.matrix_chunk(0, tables.row_count).select(ROW, COL)
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
     @pytest.mark.parametrize(
@@ -1136,7 +1136,7 @@ class TestWhatReachesTheSolverAsAnEntry:
     def test_a_row_of_only_zeros_stays_the_infeasibility_it_is(self):
         """Pruning may not turn `0 >= 10` into no constraint at all.
 
-        A row whose every coefficient is zero owns no matrix entries once they are
+        A row whose every coefficient is zero owns no coefficients once they are
         pruned, which is exactly the shape `_drop_termless_rows` removes — so the
         prune has to run after that rule rather than before it. Removing the row
         would report `optimal` for a model with no feasible point.
@@ -1211,7 +1211,7 @@ DENSE_BOUND_SPEC = {
 }
 
 
-#: The same numbers the oracle sees, with the coordinates deliberately out of
+#: The same numbers the linopy lane sees, with the coordinates deliberately out of
 #: order — a positional attach that skipped the sort would pair every
 #: coordinate with another one's bound.
 SHUFFLED_BOUND = pl.DataFrame(
@@ -1249,7 +1249,7 @@ def _aligned_for(spec, data, monkeypatch):
     return seen
 
 
-#: One dimension, so the oracle can take it: the linopy loader wants a
+#: One dimension, so the linopy lane can take it: the linopy loader wants a
 #: `pd.Series` for a 1-D parameter and refuses a polars table for a 2-D one.
 FLAT_SPEC = {
     'dimensions': {'n': {'dtype': 'str'}},
@@ -1340,7 +1340,7 @@ class TestThePositionalHandoff:
         the read-back never reads, 8 bytes a column for as long as the result is
         held.
 
-        Read off the hand-off rather than off the `Result`, which lays these
+        Read off the handoff rather than off the `Result`, which lays these
         vectors into its tables and keeps no second copy of them.
         """
         with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
@@ -1357,7 +1357,7 @@ class TestThePositionalHandoff:
     def test_row_chunks_are_bounded_by_nonzeros_not_by_rows(self):
         """A chunk of rows is a chunk of *entries*, and only entries are residency.
 
-        The solver hand-off reads ``matrix`` a range at a time and holds that range
+        The solver handoff reads ``matrix`` a range at a time and holds that range
         while it works it. Sizing the range in rows bounds the wrong quantity: the
         same 100k-row range is 900k entries in ``transport`` and 10M in
         ``dispatch``, so what the sink holds would be set by the model's shape
@@ -1396,7 +1396,7 @@ class TestThePositionalHandoff:
         [(0, 100, 1.0), (1, 100, 1.0), (10, 3, 1.0), (10, 100, 1.0), (10, 3, 7.0), (10, 3, 0.25), (10, 1, 1e9)],
     )
     def test_chunk_ranges_are_contiguous_gapless_and_cover_everything(self, total, budget, width):
-        """The property the whole hand-off rests on, at every awkward size.
+        """The property the whole handoff rests on, at every awkward size.
 
         ``addCols`` and ``addRows`` append: column *k* must be the *k*-th row handed
         over. That holds only if the ranges are ordered, consecutive and gapless —
@@ -1474,10 +1474,10 @@ class TestThePositionalHandoff:
         `avail` spans exactly `p`'s dimensions and has a row per coordinate, so the
         index table and the parameter describe the same product — and the index
         table is in index order by construction. Sorting the parameter by the
-        dimension ordinals reproduces that order, so the value column is attached
+        dimension positions reproduces that order, so the value column is attached
         rather than joined, which on `profiled/l` is most of a 0.58 s join.
 
-        Checked against the oracle, because a misaligned bound is a different model
+        Checked against the linopy lane, because a misaligned bound is a different model
         rather than an error.
         """
         data = FLAT_LABELS | {
@@ -1507,13 +1507,13 @@ class TestThePositionalHandoff:
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
     def test_a_condition_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
-        """Both ways position stops meaning the coordinate, refused by the gate.
+        """Both ways position stops meaning the coordinate, refused by the density check.
 
         A `where` makes the index table a subset of the product, and a parameter
         with a missing row makes the *parameter* one — either way the two sides no
         longer line up row for row, and attaching would pair a coordinate with
         another coordinate's bound. Neither is a shape the join cannot handle, so
-        the gate declines and nothing else changes.
+        the check declines and nothing else changes.
         """
         masked = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0'})
         shuffled = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}
@@ -1620,7 +1620,7 @@ class TestWhereTheLanesDifferByDesign:
         """#1137: the refusal is this lane's, so it may not wear the language's class.
 
         `LanguageError` here says the file is unsayable, which is false twice over:
-        `check` passes with no data, and the linopy oracle builds the model and
+        `check` passes with no data, and the linopy lane builds the model and
         reaches *answer*. What is true is that this lane cannot represent a constant
         term with no rows for the dimension the operator acts along, so the refusal is
         a `SpecsolveError` that names the rewrite.
@@ -1634,7 +1634,7 @@ class TestWhereTheLanesDifferByDesign:
         assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
         assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
         assert not isinstance(refusal.value, LanguageError), (
-            'a lane gap is not a language error — the file is in the language and the oracle builds it'
+            'a lane gap is not a language error — the file is in the language and the linopy lane builds it'
         )
 
     @pytest.mark.parametrize(('expression', 'answer'), REWRITE_CASES)
@@ -1657,7 +1657,7 @@ class TestWhereTheLanesDifferByDesign:
 
         Differential rather than a pinned number, because the question is not what
         the answer is but whether the two lanes give the same one — and the linopy
-        lane is the oracle for exactly this reading of v1 §13.
+        lane is the reference for exactly this reading of v1 §13.
         """
         spec = _absent_slot_spec(expression)
         relational = sps.solve(spec, ABSENT_SLOT_SOURCES).objective
