@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]]) -> list[str]:
-    """Every conjunct of every mask true somewhere on the ladder and false somewhere.
+    """Every conjunct of every condition true somewhere on the ladder and false somewhere.
 
-    A mask is exercised as a whole the moment one of its conjuncts varies, so
+    A condition is exercised as a whole the moment one of its conjuncts varies, so
     `committable AND p_nom_mod > 0` passes block-level coverage while
     `committable` is true everywhere (mathspec#312).
 

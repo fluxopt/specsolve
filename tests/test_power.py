@@ -110,12 +110,12 @@ def test_a_missing_row_under_a_power_that_adds_reads_as_zero_on_both_lanes():
 
 
 # ---------------------------------------------------------------------------
-# the plan boundary: a guard no file can reach
+# the program boundary: a guard no file can reach
 # ---------------------------------------------------------------------------
 
 
 def test_a_power_over_a_variable_is_refused_at_the_plan_boundary():
-    """Purpose-built, because `check` refuses it before a plan exists, so the plan is built by hand."""
+    """Purpose-built, because `check` refuses it before a program exists, so the program is built by hand."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'growth': {'dims': []}, 'period': {'dims': ['g']}},

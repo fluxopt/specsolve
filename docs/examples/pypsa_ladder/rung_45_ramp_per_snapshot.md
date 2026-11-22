@@ -1509,8 +1509,8 @@ z_{\xi,t,j} - \mathit{Process\_previous\_p}_{\xi,t,j} \le \mathit{Process\_ramp\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_45_ramp_per_snapshot.yaml', sources) as solution:
-        solution.objective  # 10996.0
+    with sps.solve('differential/pypsa/rungs/rung_45_ramp_per_snapshot.yaml', sources) as result:
+        result.objective  # 10996.0
     ```
 
 === "PyPSA"

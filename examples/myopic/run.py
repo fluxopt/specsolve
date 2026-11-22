@@ -132,8 +132,8 @@ def _check_the_carry_moved_the_fleet(sweep: sps.types.Sweep) -> None:
     """
     totals, builds = sweep.primal('total'), sweep.primal('build')
 
-    def per_year(frame: pl.DataFrame, year: int) -> list[float]:
-        return frame.filter(pl.col('year') == year).sort('generator')['value'].to_list()
+    def per_year(table: pl.DataFrame, year: int) -> list[float]:
+        return table.filter(pl.col('year') == year).sort('generator')['value'].to_list()
 
     for earlier, later in itertools.pairwise(YEARS):
         ended = per_year(totals, earlier)

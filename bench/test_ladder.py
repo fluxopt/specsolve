@@ -1,4 +1,4 @@
-"""The ladder: one model, two lanes, one seam — measured by whichever plugin is loaded.
+"""The ladder: one model, two lanes, one hand-off — measured by whichever plugin is loaded.
 
     pixi run refresh    # every rung, then both writers, in order — or by hand:
     pixi run ladder     # the size ladder alone, at the rungs pyproject.toml names
@@ -155,7 +155,7 @@ def test_emit(
 ) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
-    Every arm starts from the same parquet and stops at the same seam, and pays
+    Every arm starts from the same parquet and stops at the same hand-off, and pays
     for its own data ingestion. A floor arm is the exception: it times its
     ``load`` alone, over the finished arrays ``prepare`` wrote and
     ``load_setup`` reads back in the spawned child.

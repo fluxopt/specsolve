@@ -33,7 +33,7 @@ PyPSA modular capacity expansion: a technology bought in whole units. The capaci
 |---|---|
 | $`\mathrm{p}^{\mathrm{nom,mod}}`$ | `p_nom_mod` over $`\mathcal{G}`$ — capacity of one module — what a single unit of this technology adds |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
@@ -94,7 +94,7 @@ p^{\mathrm{nom}}_{g} = n^{\mathrm{mod}}_{g} \cdot \mathrm{p}^{\mathrm{nom,mod}}_
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -131,7 +131,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: most capacity that may stand at a generator once built
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       marginal_cost:
         description: cost of one unit of output
@@ -184,9 +184,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_modular.yaml', sources) as solution:
-        solution.objective  # 56700.0
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_modular.yaml', sources) as result:
+        result.objective  # 56700.0
     ```
 
 === "PyPSA"

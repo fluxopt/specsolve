@@ -6,7 +6,7 @@
 # That page writes $\mathrm{soc}_s = \mathrm{soc}_{s-1} + \eta\,\mathrm{charge}_s
 # - \mathrm{discharge}_s$ by hand. The generated math says the same thing, with
 # one difference worth keeping: the wraparound is *visible*. The page has to
-# explain "with $s-1$ wrapping at the horizon" in prose underneath, because
+# explain "with $s-1$ wrapping from the first snapshot to the last" in prose underneath, because
 # $s-1$ cannot say it; $s \ominus 1$ can, and the legend defines it.
 
 notation: latex

@@ -1,6 +1,6 @@
 """`cases:` — one quantity, a value per region, on both lanes.
 
-Each lane builds a region against its own mask and adds the results. The tests
+Each lane builds a region against its own condition and adds the results. The tests
 hold three things:
 
 * a region's value reaches the coordinates it claims, and only those;
@@ -8,7 +8,7 @@ hold three things:
   ``edge=`` has nothing at the first position, and must not unmake a row the
   other regions do cover;
 * a region's data is required **where that region applies**, so a parameter
-  standing for one region is not asked to cover the whole frame, and a hole
+  standing for one region is not asked to cover every coordinate, and a hole
   inside the region it does stand for is still refused.
 """
 
@@ -53,8 +53,8 @@ CAPPED_SOURCES = {
 }
 
 
-def _frames(sources):
-    """A dimension's labels as a Series and every parameter as a frame, the shape both lanes take."""
+def _tables(sources):
+    """A dimension's labels as a Series and every parameter as a table, the shape both lanes take."""
     import polars as pl
 
     built = {}
@@ -68,7 +68,7 @@ def _frames(sources):
 
 
 def test_each_region_carries_the_coordinates_it_claims():
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 40 and 60, the rest at 5'
         caps = run.result.activity('under_cap').sort('t')
         assert list(caps.get_column('value')) == [40.0, 5.0, 60.0, 5.0], (
@@ -87,7 +87,7 @@ def test_each_region_carries_the_coordinates_it_claims():
 )
 def test_a_constant_side_is_asked_for_data_only_where_its_region_applies(hi, objective):
     """`hi` is the flagged region's cap, so it answers for that region and is never asked about the rest."""
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES | {'hi': hi})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES | {'hi': hi})) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), 'rows outside the region change nothing'
 
 
@@ -98,7 +98,7 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
     Asserted lane by lane: one lane refusing satisfies a ``pytest.raises``
     around both.
     """
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
+    sources = _tables(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / 'capped.yaml'
         path.write_text(yaml.safe_dump(CAPPED_BY_REGION))
@@ -115,14 +115,14 @@ def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
     ('flagged', 'objective', 'reads'),
     [
         pytest.param(
-            True, 130.0, 'the region takes the whole frame, so hi caps every step', id='a region that is everywhere'
+            True, 130.0, 'the region takes every coordinate, so hi caps every step', id='a region that is everywhere'
         ),
         pytest.param(
             False, 20.0, 'the region takes nothing, so the otherwise 5 caps every step', id='a region that is nowhere'
         ),
     ],
 )
-def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
+def test_a_region_whose_condition_reads_no_dimension(flagged, objective, reads):
     """A scalar `when` names no coordinate set to cut the region down by, so it cuts by its own constant."""
     spec = CAPPED_BY_REGION | {
         'parameters': CAPPED_BY_REGION['parameters'] | {'flag_all': {'dims': [], 'dtype': 'bool'}},
@@ -130,7 +130,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
             'cap': {'dims': ['t'], 'cases': {'flagged': {'when': 'flag_all', 'expression': 'hi'}}, 'otherwise': 5}
         },
     }
-    sources = _frames(
+    sources = _tables(
         CAPPED_SOURCES
         | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}, 'flag_all': {'value': [flagged]}}
     )
@@ -177,7 +177,7 @@ CARRIED_IN = {
 
 
 def _carried_sources(switchable, before):
-    return _frames(
+    return _tables(
         {
             't': [0, 1, 2, 3],
             'g': ['base', 'peak'],
@@ -203,7 +203,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert sorted(set(rows.get_column('t'))) == [0, 1, 2, 3], 't == 0 is built like any other position'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
 
 
@@ -214,7 +214,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
             [False, True],
             [1.0, 0.0],
             4890.0,
-            'boundary: peak was off before the horizon, so it may start at first_step 55',
+            'boundary: peak was off before the first snapshot, so it may start at first_step 55',
             id='peak starts cold',
         ),
         pytest.param(
@@ -253,9 +253,9 @@ def test_a_region_binding_tighter_makes_the_model_infeasible_on_both_lanes():
 
 
 def test_a_region_that_claims_nothing_does_not_unmake_the_row():
-    """The complement of a mask reading no dimension claims nothing, and so may restrict nothing.
+    """The complement of a condition reading no dimension claims nothing, and so may restrict nothing.
 
-    With a true scalar mask the ``otherwise`` claims nothing, while its
+    With a true scalar condition the ``otherwise`` claims nothing, while its
     ``shift`` with no ``edge=`` is still absent at the first position.
     """
     spec = CARRIED_IN | {
@@ -268,13 +268,13 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row():
             }
         },
     }
-    sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
-    sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
+    sources = _carried_sources([False, True], [1.0, 0.0]) | _tables({'everywhere': {'value': [True]}})
+    sources['load'] = _tables({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
     with differential(spec, sources, outputs=frozenset({'activity'})) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
         assert run.oracle == pytest.approx(3990.0, rel=RTOL), (
             'carried is 1 everywhere, so the first position is held to step rather than first_step'
@@ -295,7 +295,7 @@ def test_one_parameter_answering_for_two_regions():
             }
         },
     }
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
+    sources = _tables(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
 
@@ -312,7 +312,7 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
         },
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
+    sources = _tables(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
 
@@ -329,7 +329,7 @@ def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
         },
         'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
     }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
+    sources = _tables(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
     both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
 
 
@@ -356,7 +356,7 @@ SUMMED_SOURCES = CAPPED_SOURCES | {
 
 def test_a_region_narrows_what_a_summed_constant_side_owes():
     """Data for the steps a region claims, at every coordinate the sum reads — and no more."""
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES)) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES)) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 30+10 and 30+30, the rest at 5'
 
 
@@ -383,22 +383,22 @@ SUMMED_CASES_SOURCES = {
 
 
 def test_a_cased_quantity_summed_onto_a_constant_side_builds():
-    """A region's claim survives the reduction that keeps the dims it reads.
+    """A region's claim survives the reduction that keeps the dimensions it reads.
 
     After the sum over `t` the `a` term has no row at `k = b` and the
     `otherwise` term none at `k = a`; neither is a hole.
     """
-    with differential(SUMMED_CASES, _frames(SUMMED_CASES_SOURCES)) as run:
+    with differential(SUMMED_CASES, _tables(SUMMED_CASES_SOURCES)) as run:
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
 
 
-def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
+def test_a_hole_the_summed_region_reads_is_one_term_fewer():
     """A neutral hole under the sum inside the region contributes nothing (#1465).
 
     Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
     """
     holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed})) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES | {'hi': holed})) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the flagged steps cap at 40 and 30, the rest at 5'
 
 
@@ -442,7 +442,7 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
         'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
         'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
     }
-    with differential(OUTAGE_FLOW, _frames(sources)) as run:
+    with differential(OUTAGE_FLOW, _tables(sources)) as run:
         assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'
 
 
@@ -462,7 +462,7 @@ def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_h
         },
         'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
     }
-    sources = _frames(
+    sources = _tables(
         {'h': [1, 2, 3], 'a': {'h': [1, 2, 3], 'value': [2.0, -1.0, -1.0]}, 'b': {'h': [2], 'value': [4.0]}}
     )
     result = sps.solve(spec, sources)
@@ -506,25 +506,25 @@ DELAYED = {
 def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, delay, terms, objective, reads):
     """PyPSA's spec writes a delayed and a curved arrival for every link port, and most networks claim neither.
 
-    Each term of a region carries presences over the full product of its dims,
+    Each term of a region carries presences over the full product of its dimensions,
     so a region claiming nothing still read that product to cut it away.
     """
-    from specsolve._engine import compiler as compiler_module
+    from specsolve._engine import queries as queries_module
 
     built = []
-    expression = compiler_module.Compiler.expression
+    expression = queries_module.QueryBuilder.expression
 
     def spied(self, e, what, **kwargs):
-        compiled = expression(self, e, what, **kwargs)
+        terms = expression(self, e, what, **kwargs)
         if what == "constraint 'held' lhs":
-            built.append(len(compiled.linear))
-        return compiled
+            built.append(len(terms.linear))
+        return terms
 
-    monkeypatch.setattr(compiler_module.Compiler, 'expression', spied)
-    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    monkeypatch.setattr(queries_module.QueryBuilder, 'expression', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
     with differential(DELAYED, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
-    assert built == [terms], f'`held` compiles {terms} term(s): one per region that claims a unit'
+    assert built == [terms], f'`held` builds {terms} term(s): one per region that claims a unit'
 
 
 @pytest.mark.parametrize(
@@ -537,7 +537,7 @@ def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, d
 def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solved):
     """`flat` claims every step, so `otherwise` claims none, and `otherwise` is the one region over `g`.
 
-    A build places each term on a row by its own dims, so a region that claims
+    A build places each term on a row by its own dimensions, so a region that claims
     nothing can be left out of it. A read takes its columns from the terms it
     is given, and with `otherwise` left out it came back over `h` alone, one
     value where the expression declares two.
@@ -556,7 +556,7 @@ def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solv
     if solved:
         spec['variables'] = {'v': {'dims': ['h', 'g'], 'bounds': {'lower': 0, 'upper': 5}}}
         spec['objective'] = {'sense': 'maximize', 'expression': 'sum(v)'}
-    sources = _frames(
+    sources = _tables(
         {
             'g': ['a', 'b'],
             'h': [7],
@@ -580,16 +580,16 @@ def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solv
 )
 def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkeypatch, delay, objective, reads):
     """`delay > 0` holds at no unit, or at every unit, and either is read once for the build rather than per region."""
-    from specsolve._engine import compiler as compiler_module
+    from specsolve._engine import queries as queries_module
 
-    read, real = [], compiler_module.masked
+    read, real = [], queries_module.narrowed
 
-    def spied(scope, dims, mask):
+    def spied(scope, dims, where):
         read.append(tuple(dims))
-        return real(scope, dims, mask)
+        return real(scope, dims, where)
 
-    monkeypatch.setattr(compiler_module, 'masked', spied)
-    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    monkeypatch.setattr(queries_module, 'narrowed', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
     with differential(DELAYED, sources) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), reads
     assert not read, f'a region whose condition the data settles was read over {read}'
@@ -597,7 +597,7 @@ def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkey
 
 @pytest.mark.parametrize('delay', [pytest.param([0, 0], id='settled-false'), pytest.param([1, 1], id='settled-true')])
 def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_compiles(monkeypatch, delay):
-    """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to compile.
+    """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to build.
 
     The false one leaves, and the true one, left alone, stands for the `cases:`. Either kept builds the same model
     over a filter no query needs, which only this sees.
@@ -606,15 +606,15 @@ def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_compile
 
     from specsolve._engine import assembly as assembly_module
 
-    compiled, real = [], assembly_module.Assembly.__init__
+    programs, real = [], assembly_module.Assembly.__init__
 
-    def spied(self, lowered, *args):
-        compiled.append(lowered)
-        real(self, lowered, *args)
+    def spied(self, compiled, *args):
+        programs.append(compiled)
+        real(self, compiled, *args)
 
     monkeypatch.setattr(assembly_module.Assembly, '__init__', spied)
-    sources = _frames({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
     sps.build(DELAYED, sources).close()
-    held = compiled[0].constraints['held']
+    held = programs[0].constraints['held']
     left = [e for e in program.walk(held.lhs, held.rhs) if isinstance(e, program.Cases)]
-    assert not left, f'the build compiles {left}, where the data settled every region of it'
+    assert not left, f'the build reads {left}, where the data settled every region of it'

@@ -19,7 +19,7 @@ reference committed *because* the provenance is external.
 compares the two lanes' **coefficient matrices**, constraint by constraint,
 canonically: each constraint as the sorted multiset of its rows, each row as
 the sorted multiset of its coefficients, so the claim survives the two lanes
-numbering rows and columns in their own declaration order. Structure exactly,
+numbering rows and columns in their own entry order. Structure exactly,
 values to a tolerance — the same coefficient reached by a different order of
 operations differs in its last bit, and that is not a difference in the model.
 
@@ -53,10 +53,10 @@ reach.
   failure.
 - **A probe moves to `conftest.py` on its second importer.** Not before.
 - **A claim decided at `to_spec` lives in mathspec's own suite** (#1150),
-  and nothing there imports a consumer — including `specsolve` itself, whose
+  and nothing there imports a tool — including `specsolve` itself, whose
   top-level namespace is the runner. The door the claim is *decided at* is the test, not
-  the subject it is about: "a stray dim is refused" is the language's, while
-  "`check` reaches that refusal with no sources bound" is `check`'s and belongs
+  the subject it is about: "a stray dimension is refused" is the language's, while
+  "`check` reaches that refusal with no sources attached" is `check`'s and belongs
   beside it. The package docstring carries the rule and the two tests that
   deliberately span both halves.
 - **Data is generated, seeded and feasible by construction**

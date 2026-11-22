@@ -64,7 +64,7 @@ fresh = sps.solve('dispatch.yaml', sources | {'p_max': p_max})
 print(fresh.objective)
 ```
 
-## A longer horizon
+## More snapshots
 
 Now solve two days. The `snapshot` labels and the `load` grow to eight rows,
 and the capacity goes back to the data:
@@ -85,5 +85,5 @@ loaded the model a second time.
 
 ## Next
 
-In [the next tutorial](sweep.md) you solve a horizon too large for one solve,
+In [the next tutorial](sweep.md) you solve a model too large for one solve,
 a window at a time.

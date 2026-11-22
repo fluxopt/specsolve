@@ -5,7 +5,7 @@ this order: the first ones keep the answer, the later ones change it.
 
 | Way | Keeps the optimum | What it costs |
 |---|---|---|
-| [Keep the model loaded](#keep-the-model-loaded) | yes | only data that moves no mask or label |
+| [Keep the model loaded](#keep-the-model-loaded) | yes | only data that leaves every `where:` and label as it was |
 | [Start from an earlier answer](#start-from-an-earlier-answer) | yes | can make a solve slower |
 | [Build many small models faster](#build-many-small-models-faster) | yes | only below 250,000 columns and rows |
 | [Build on one polars thread](#build-on-one-polars-thread) | yes | slows a large model |
@@ -26,12 +26,13 @@ for numbers in steps:
     result = model.update(numbers).solve()
 ```
 
-An `update` that moves a mask or adds a label builds and loads again. An
-`update` that gives a parameter new numbers at the coordinates it already
-has, where the parameter is only a bound, a right-hand side or a cost, also
-skips most of the build: only the bounds, right-hand sides and costs it
-feeds are read again. [Change it and solve again](../change.md) shows the
-loop and how to check that it stays loaded.
+An `update` that changes which coordinates a `where:` keeps, or adds a label,
+builds and loads again. An `update` that gives a parameter new numbers at the
+coordinates it already has, where the parameter is only a bound, a right-hand
+side or a cost, also skips most of the build: only the bounds, right-hand
+sides and costs it feeds are read again.
+[Change it and solve again](../change.md) shows the loop and how to check
+that it stays loaded.
 
 ## Start from an earlier answer
 
@@ -110,21 +111,21 @@ third on. To get prices for the integer answer instead, see
 
 ## Solve in windows
 
-Solve a long horizon one window at a time. Each window stays the same size,
-however long the horizon is:
+Solve a long run of snapshots one window at a time. Each window stays the
+same size, however many snapshots there are:
 
 ```python
 sweep = sps.solve_over(
     'storage.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=12, carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', horizon=24, lookahead=12, carry={'soc_initial': 'soc'}),
 )
 ```
 
 A window cannot see past its end, so the schedule costs more than one solve.
 A lookahead buys that back, and makes each window larger. The windows run one
 after the other, because each one starts where the one before stopped.
-[A horizon too large for one solve](../sweep.md) shows both.
+[A model too large for one solve](../sweep.md) shows both.
 
 ## Decompose
 

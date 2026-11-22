@@ -10,6 +10,7 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
     AT_LOWER,
@@ -282,7 +283,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
     (linear,) = handoff.row_blocks(None)
     entries = linear.entries
     matrix = scipy.sparse.csr_matrix(
-        (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(linear.starts, entries.height)),
+        (entries[COEFF].to_numpy(), entries[COL].to_numpy(), np.append(linear.starts, entries.height)),
         shape=(linear.height, handoff.column_count),
     ).tocsc()
     quad = handoff.quad
@@ -299,7 +300,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
         sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
         rhs=rows.rhs[: linear.height],
-        qobj_coo=(quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())),
+        qobj_coo=(quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy())),
     )
     m.update()
     return m
@@ -319,25 +320,23 @@ def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowV
     """Every quadratic constraint, one ``addMQConstr`` call each, over only the columns it holds.
 
     A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
-    and its linear entries from the matrix at the same row label. A matrix or
+    and its linear entries from the matrix at the same row index. A matrix or
     vector as wide as the model would cost each row time in the column count.
     """
     import numpy as np
     import scipy.sparse
 
     for row, pairs in handoff.quadratic_blocks():
-        held, at = np.unique(
-            np.concatenate([pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy()]), return_inverse=True
-        )
+        held, at = np.unique(np.concatenate([pairs[COL_L].to_numpy(), pairs[COL_R].to_numpy()]), return_inverse=True)
         quadratic = scipy.sparse.csr_matrix(
-            (pairs['coeff'].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
+            (pairs[COEFF].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
         )
         on = [columns[col] for col in held]
         entries = handoff.matrix_block(row, row + 1)
-        linear = [columns[col] for col in entries['col']]
+        linear = [columns[col] for col in entries[COL]]
         m.addMQConstr(
             quadratic,
-            entries['coeff'].to_numpy() if linear else None,
+            entries[COEFF].to_numpy() if linear else None,
             spelling[rows.sense[row]],
             float(rows.rhs[row]),
             on,
@@ -357,8 +356,8 @@ def _set_quadratic(m: Any, handoff: Handoff, cost: Any) -> None:
 
     pairs = scipy.sparse.csr_matrix(
         (
-            handoff.quad['coeff'].to_numpy(),
-            (handoff.quad['col_l'].to_numpy(), handoff.quad['col_r'].to_numpy()),
+            handoff.quad[COEFF].to_numpy(),
+            (handoff.quad[COL_L].to_numpy(), handoff.quad[COL_R].to_numpy()),
         ),
         shape=(handoff.column_count, handoff.column_count),
     )

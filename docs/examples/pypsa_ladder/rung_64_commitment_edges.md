@@ -1382,8 +1382,8 @@ u^{z}_{\xi,t,j} \le \mathrm{N}^{z,\mathrm{fix}}_{\xi,j} \qquad \forall\, \xi \in
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_64_commitment_edges.yaml', sources) as solution:
-        solution.objective  # 9245.0
+    with sps.solve('differential/pypsa/rungs/rung_64_commitment_edges.yaml', sources) as result:
+        result.objective  # 9245.0
     ```
 
 === "PyPSA"

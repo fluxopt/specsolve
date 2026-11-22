@@ -77,7 +77,7 @@ whole in memory while the model lives, so what you read is what it holds.
   }
   ```
 
-- **A lazy frame is a source too.** Specsolve collects it when the data
+- **A polars `LazyFrame` is a source too.** Specsolve collects it when the data
   attaches. Collect once yourself when several sources come from one file, as
   above. Each lazy source scans the file again.
 
