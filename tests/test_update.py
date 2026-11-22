@@ -2,7 +2,7 @@
 
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
-path: an update that moves a condition renumbers solver indices, so the engine rebuilds and
+path: an update that changes which coordinates a condition admits renumbers solver indices, so the engine rebuilds and
 solves cold, and `diagnostics().loads` says which happened.
 """
 
@@ -35,10 +35,10 @@ def sources() -> dict[str, pl.DataFrame]:
     }
 
 
-#: Which plants may serve which zone, and how well. Every matrix entry of
+#: Which plants may serve which zone, and how well. Every coefficient of
 #: `examples/dispatch.yaml` is a 1 and its objective has no constant, so this
-#: model moves what that one cannot: a coefficient, an entry's column, an
-#: entry's row, and the objective constant.
+#: model moves what that one cannot: a coefficient, a coefficient's column, a
+#: coefficient's row, and the objective constant.
 ZONES = ['north', 'south']
 PLANTS = ['a', 'b', 'c', 'd']
 REACH = {
@@ -688,8 +688,8 @@ def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
 
     The refused `load` is still the model's source, so an update of `cost`
     alone is refused for it, as a fresh build of the same sources is. The
-    door refused `load` before the last good tables were replaced, and the
-    next update kept that good `load` and built, until a failure forgot them.
+    `tidy_sources` refused `load` before the last good tables were replaced,
+    and the next update kept that good `load` and built, until a failure forgot them.
     """
     with pytest.raises(sps.errors.DataError):
         model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
@@ -706,17 +706,17 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     ran before the cleanup that forgets the last build's tables, so the next
     update kept the `load` built before the attached one.
     """
-    import specsolve._sources as door
+    from specsolve import _sources
 
     load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
     cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = door._kept
+    choose = _sources._kept
 
     def interrupted(*args):
-        monkeypatch.setattr(door, '_kept', choose)
+        monkeypatch.setattr(_sources, '_kept', choose)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(door, '_kept', interrupted)
+    monkeypatch.setattr(_sources, '_kept', interrupted)
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})
@@ -743,7 +743,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
 
 
 def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
-    """Read off the built model, so a condition that moved moves the counts with it."""
+    """Read off the built model, so a condition that admits other coordinates changes the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with sps.build(dispatch_yaml, zeroed | COORDINATES) as model:
         assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)

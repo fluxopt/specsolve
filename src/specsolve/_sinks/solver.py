@@ -110,7 +110,7 @@ class Solver(ABC):
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The matrix's coefficients the loaded model holds, in entry order, for [`keeps`][] and [`push`][].
+        #: The matrix's coefficients the loaded model holds, in matrix order, for [`keeps`][] and [`push`][].
         self._coefficients = handoff.matrix[COEFF].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count

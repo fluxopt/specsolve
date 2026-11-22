@@ -26,7 +26,7 @@ The split is by who can answer. `loaded(held, name, …)` is the whole of
 **reuse or load again**: it keeps a held solver exactly when it is the named
 class whose recorded digest and options match the new handoff — and then pushes
 the new numbers onto it — closing and replacing it otherwise. The base records
-that evidence at the load; a subclass owns **the hand-off**:
+that evidence at the load; a subclass owns **the handoff**:
 
 | | |
 |---|---|
@@ -54,7 +54,7 @@ So a model rebuilt with new numbers (`model.update`) has them pushed onto what
 the solver already holds. A solve carries the solver on by default;
 `start=None` or an answer given calls `forget()`, so the run begins as if the
 model were new. A member with nothing to discard implements `forget()` as a no-op.
-`forget()` rather than a reload, because keeping the solver skips the hand-off,
+`forget()` rather than a reload, because keeping the solver skips the handoff,
 while carrying its progress wins or loses by model.
 
 A **genuine rebuild** loads a fresh solver, which starts cold.
@@ -128,7 +128,7 @@ supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound t
 that was built, which is what `Model.check_sink(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is
-rewritten at the hand-off: the language writes a set out itself,
+rewritten at the handoff: the language writes a set out itself,
 `to_spec(...).expand()` stating each as binaries and linking rows, and that is
 the model a sink without the concept is given. `_load`, `push`, `_run` and the
 span check see one model, the one that was built, so a member is written as
@@ -137,7 +137,7 @@ though the fifth stream were never there.
 ## How the three take the matrix
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
-the three arrays and `xpress.py` hands `addRows` the same triple a block
+the three arrays and `xpress.py` hands `addRows` the same triple a chunk
 already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
 column, so it transposes the CSR first, which is what the `[gurobi]` extra's
 scipy is for.
@@ -184,7 +184,7 @@ where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
-a sink has no spelling for cannot reach that sink by any door: `Model.check_sink`,
+a sink has no spelling for cannot reach that sink through any verb: `Model.check_sink`,
 which asks without a solve, and the engine's `solve` and `write` — which ask
 without being asked, a file written without the section being a different model
 that parses and solves.

@@ -219,7 +219,7 @@ class Xpress(Solver):
 
 
 def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
-    """The loaded problem: columns with no entries, then every linear row in one ``addRows`` call.
+    """The loaded problem: columns with no coefficients, then every linear row in one ``addRows`` call.
 
     ``outputlog`` leads the controls so a caller's options can put the log back.
     """
@@ -244,7 +244,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
 
     rows = handoff.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
-    (linear,) = handoff.row_blocks(None)
+    (linear,) = handoff.row_chunks(None)
     entries = linear.entries
     p.addRows(
         rowtype=spelling[rows.sense[: linear.height]].tolist(),

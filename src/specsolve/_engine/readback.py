@@ -9,7 +9,7 @@ from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine import coverage, indices
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
 from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
@@ -62,7 +62,7 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     """*found*'s solver indices as the entries and coordinates that built them.
 
     A row carries its sense and right-hand side, a bound its side and value,
-    read off the hand-off the solver was given.
+    read off the handoff the solver was given.
     """
     rows = pl.DataFrame({ROW: found.rows}).join(
         model.handoff.rows.select(pl.col(ROW).cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on=ROW
@@ -148,7 +148,7 @@ def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
 
 
 def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
-    """``(variable, coordinate, coefficient)`` for one row's matrix entries, in the entries' order.
+    """``(variable, coordinate, coefficient)`` for one row's coefficients, in the matrix's order.
 
     Each entry owns a contiguous run of column indices, so a term's variable
     is a range test and its place in that table is a positional take.
@@ -346,7 +346,7 @@ def expression_table(name: str, expr: program.Expression, builder: QueryBuilder)
     context = f"named expression '{name}'"
     terms = builder.expression(expr, context, reported=True).constant
     dims = builder.scope.spanned(terms)
-    carrier = indices.table(builder.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    carrier = indices.table(builder.scope, dims, None, _EXPRESSION_ROW, 0, presences_of(terms)).lazy()
 
     coverage.refuse_null_constants(
         [_holed(carrier, terms), *(p.table.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],

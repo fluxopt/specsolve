@@ -70,7 +70,7 @@ def test_a_plain_lp_is_taken_by_every_sink():
 
 
 def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
-    """Nothing is rewritten at the hand-off, so the refusal names the language's own way out."""
+    """Nothing is rewritten at the handoff, so the refusal names the language's own way out."""
     with pytest.raises(SpecsolveError, match="'highs' sink cannot take special-ordered sets") as refusal:
         sps.solve(WITH_A_SET, SOURCES)
     assert 'gurobi' in str(refusal.value), 'the sinks that take a set are named'

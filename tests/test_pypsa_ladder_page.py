@@ -194,7 +194,7 @@ def test_a_projection_orders_its_names_the_same_whatever_the_hash_seed(tmp_path)
 
 
 def _conjunct_stamps(marks: str) -> list[dict]:
-    """One stamp per rung, each recording what a block's single conjunct did there."""
+    """One stamp per rung, each recording what an entry's single conjunct did there."""
     return [{'conjuncts': {'block': mark}} for mark in marks]
 
 
@@ -205,11 +205,11 @@ def _conjunct_stamps(marks: str) -> list[dict]:
         pytest.param('ff', 'never true', id='no rung makes it true'),
         pytest.param('tt', 'never false', id='no rung makes it false'),
         pytest.param('tf', None, id='true on one rung and false on another'),
-        pytest.param('-t', 'never false', id='a rung that builds no row of the block says nothing'),
+        pytest.param('-t', 'never false', id='a rung that builds no row of the entry says nothing'),
     ],
 )
 def test_a_conjunct_no_rung_varies_is_reported(marks, expected):
-    """The half the block-level sweep cannot reach — mathspec#312.
+    """The half the entry-level sweep cannot reach — mathspec#312.
 
     A condition of `a AND b` is exercised as a whole the moment `a` varies, so a `b`
     true at every coordinate of every rung passes unnoticed and a regime it

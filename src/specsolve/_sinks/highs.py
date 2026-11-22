@@ -365,7 +365,7 @@ def _row_bounds(rows: RowVectors, inf: float) -> tuple[Any, Any]:
 
 
 def _loaded(h: Any, status: Any, what: str) -> None:
-    """Raise unless HiGHS accepted the hand-off; it reports a refusal by return value alone."""
+    """Raise unless HiGHS accepted the handoff; it reports a refusal by return value alone."""
     import highspy
 
     if status == highspy.HighsStatus.kError:

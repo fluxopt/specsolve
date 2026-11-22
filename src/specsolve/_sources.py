@@ -1,4 +1,4 @@
-"""Attach runtime data to a compiled program — the one door both lanes enter.
+"""Attach runtime data to a compiled program: [`tidy_sources`][], the one function both lanes read data through.
 
 Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
 plain-Python shape become the tidy tables both lanes read by name. Every check
@@ -91,7 +91,7 @@ def tidied_and_attached(
 
 
 def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Collection[str]) -> dict[str, pl.LazyFrame]:
-    """The parameters of *previous* that a change of the sources named *changed* leaves as the door checked them.
+    """The parameters of *previous* that a change of the sources named *changed* leaves as [`tidy_sources`][] checked them.
 
     A parameter's checks read its own source and the index of each of its
     dimensions, a positional source included, so it is kept only where none of
@@ -249,10 +249,10 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
 
 def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
-    """*dim*'s labels as the door reads them out of *data*, in label order.
+    """*dim*'s labels as [`tidy_sources`][] reads them out of *data*, in label order.
 
     Raises:
-        DataError: No labels for *dim*, or labels the door refuses.
+        DataError: No labels for *dim*, or labels [`tidy_sources`][] refuses.
     """
     if dim not in data:
         raise DataError(_no_labels_source_message(dim))
