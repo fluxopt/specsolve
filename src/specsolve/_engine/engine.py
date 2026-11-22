@@ -232,7 +232,6 @@ class Engine:
         reloaded = self._solver is not held
         if not reloaded and not carry_on:
             self._solver.forget()
-        self.lap('handoff')
         return self._solver, reloaded
 
     def solve(
@@ -292,9 +291,7 @@ class Engine:
         answer = solver.run(handoff, basis='basis' in outputs)
         self.lap('solve')
         self._solved = answer.status
-        answered = self._answered(answer, solver_name, lower, outputs)
-        self.lap('readback')
-        return answered
+        return self._answered(answer, solver_name, lower, outputs)
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str

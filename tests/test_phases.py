@@ -229,6 +229,8 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
     timed = _timed(call, out)
 
     assert timed.recorded['handoff'] >= DELAY, f'the slowed digest is clocked in the handoff: {timed.recorded}'
+    others = {other: spent for other, spent in timed.kept.items() if other != 'handoff'}
+    assert all(spent < DELAY for spent in others.values()), f'and in no other phase: {others}'
     timed.check()
 
 

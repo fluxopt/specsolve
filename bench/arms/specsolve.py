@@ -170,7 +170,8 @@ def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
 
     A checkout that still takes ``keep`` closes the held solver itself for a
     cold window, inside the timed handoff; a later one has no ``keep``, so a
-    cold window closes it here first.
+    cold window closes it here first. A checkout whose engine laps its phases
+    leaves the lap to the solve that calls ``_hand_off``, so it is taken here.
     """
     engine = model._engine
     if 'keep' in inspect.signature(engine._hand_off).parameters:
@@ -179,7 +180,10 @@ def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
     if cold and engine._solver is not None:
         engine._solver.close()
         engine._solver = None
-    return engine._hand_off(sink, None)[1]
+    reloaded = engine._hand_off(sink, None)[1]
+    if hasattr(engine, 'lap'):
+        engine.lap('handoff')
+    return reloaded
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
