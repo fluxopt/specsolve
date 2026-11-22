@@ -20,7 +20,7 @@ from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import null_bounds_message
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.handoff import SENSE
@@ -268,8 +268,8 @@ class Assembly:
         can hide a hole. A row is built where either matrix has a term, and the
         indexed block narrows to the rows that survived. A constraint whose
         ``where`` admits no row has no query built. One without a ``where`` is
-        indexed only once its restrictions are known, so a sparse absence
-        never meets the full product of its dimensions.
+        indexed only once the presences that narrow it are known, so a sparse
+        absence never meets the full product of its dimensions.
         """
         start = self.n_rows
         if rowless(c, self.attached):
@@ -283,12 +283,12 @@ class Assembly:
         linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
-        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None or restrictions:
-            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, restrictions)
+        presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
+        if admitted is None or presences:
+            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, presences)
         else:
             indexed = admitted
-        if restrictions:
+        if presences:
             declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
             if declared > indexed.height:
                 self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
@@ -311,7 +311,7 @@ class Assembly:
 
         tables = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not restrictions
+        dense = c.where is None and not presences
         for p, sign in linear:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))

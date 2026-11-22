@@ -9,7 +9,7 @@ from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine import coverage, indices
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
 from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
@@ -346,7 +346,7 @@ def expression_table(name: str, expr: program.Expression, builder: QueryBuilder)
     context = f"named expression '{name}'"
     terms = builder.expression(expr, context, reported=True).constant
     dims = builder.scope.spanned(terms)
-    carrier = indices.table(builder.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    carrier = indices.table(builder.scope, dims, None, _EXPRESSION_ROW, 0, presences_of(terms)).lazy()
 
     coverage.refuse_null_constants(
         [_holed(carrier, terms), *(p.table.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],

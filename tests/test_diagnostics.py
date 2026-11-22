@@ -75,12 +75,12 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         )
 
 
-def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together():
-    """A restriction and a missing term can each remove a row of one constraint, and the report adds both.
+def test_rows_a_presence_removed_and_rows_with_no_terms_are_counted_together():
+    """A presence and a missing term can each remove a row of one constraint, and the report adds both.
 
-    ``p`` is absent at ``a``, so the restriction removes that row. ``k`` has no
+    ``p`` is absent at ``a``, so its presence removes that row. ``k`` has no
     value at ``b``, so that row has no term. Only ``c`` is built. The count of
-    rows with no term used to replace the count the restriction recorded.
+    rows with no term used to replace the count the presence recorded.
     """
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
@@ -97,7 +97,7 @@ def test_rows_a_restriction_removed_and_rows_with_no_terms_are_counted_together(
     with sps.build(spec, data) as model:
         assert model.diagnostics().rows == 1, 'only the row at c has a term'
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'cap', 'rows_not_built': 2}], (
-            'the row the restriction removed and the row with no term are both counted'
+            'the row the presence removed and the row with no term are both counted'
         )
 
 

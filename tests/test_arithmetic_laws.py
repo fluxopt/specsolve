@@ -138,7 +138,7 @@ def test_a_sum_skips_a_parameter_where_a_narrowed_operand_beside_it_is_absent():
     ``w`` is over ``f`` alone and ``y`` over ``f`` and ``t``, absent at ``f=b``.
     The term ``y + w`` is absent at ``f=b`` for every ``t``, so the row keeps
     ``w[a]`` alone and ``y[a, t]`` may reach ``10 - 2``. The relational lane kept
-    ``w[b]`` too, because it restricted only an operand that carried every
+    ``w[b]`` too, because it narrowed only an operand that carried every
     dimension ``y``'s presence is keyed by (#1782).
     """
     assert _objective_of('sum(y + w, over=f) <= 10', objective='sum(y)') == pytest.approx(16.0, rel=RTOL), (

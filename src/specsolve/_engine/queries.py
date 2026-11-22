@@ -35,7 +35,6 @@ from specsolve._engine.terms import (
     ExpressionTerms,
     Presence,
     Term,
-    absence_restrictions,
     acted_along,
     both_regions,
     constant_scalar,
@@ -43,6 +42,7 @@ from specsolve._engine.terms import (
     join_on,
     map_terms,
     negate,
+    presences_of,
     propagate_absence,
     refuse_a_term_without_the_dims,
     region_over,
@@ -78,7 +78,7 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     The total is what that pairing would give: a term without a row there is
     not in the stack, and a null value keeps the total null for the coverage
     refusal. A term under a presence keeps its own pairing, since the
-    presence restricts where the product may count.
+    presence narrows where the product may count.
     """
     if len(terms) < 2:
         return terms
@@ -520,15 +520,13 @@ class QueryBuilder:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return terms
             return ExpressionTerms((), (replace(constant[0], table=_totalled(constant[0])),))
-        dims, restrictions = self.scope.spanned(constant), absence_restrictions(constant)
+        dims, presences = self.scope.spanned(constant), presences_of(constant)
         carrier = narrowed(self.scope, dims, None)
-        for restriction in restrictions:
-            carrier = restriction.restrict(carrier, restriction.joined_on or ())
+        for presence in presences:
+            carrier = presence.narrow(carrier, presence.joined_on or ())
         added = self.summed_onto(constant, carrier, absent='hole' if self.solution is not None else absent)
         parameters = frozenset[str]().union(*(p.parameters for p in constant))
-        return ExpressionTerms(
-            (), (Term(dims, added, 'constant', presences=tuple(restrictions), parameters=parameters),)
-        )
+        return ExpressionTerms((), (Term(dims, added, 'constant', presences=tuple(presences), parameters=parameters),))
 
     def summed_onto(
         self, terms: Sequence[Term], carrier: pl.LazyFrame, *, absent: Literal['zero', 'hole', 'spreads']
@@ -536,7 +534,7 @@ class QueryBuilder:
         """Constant *terms* added per coordinate onto *carrier* — its columns, then ``CONSTANT``.
 
         *carrier* holds one row per coordinate of
-        [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
+        [`spanned`][specsolve._engine.scope.Scope.spanned], narrowed by
         the caller to where every variable under the terms exists. *absent*
         is what a term with no value adds: ``zero``; ``hole``, null where no
         term has a value; ``spreads``, null where any term has none inside
@@ -653,7 +651,7 @@ class QueryBuilder:
         def pulled(presence: Presence) -> Presence:
             join_columns = presence.join_columns(p.dims)
             if not join_columns:
-                return Presence(presence.restrict(reachable, join_columns), fine)
+                return Presence(presence.narrow(reachable, join_columns), fine)
             carries_targets = all(i in join_columns for i in a.joined_dims)
             source, join_columns = (
                 (presence.table, join_columns)
