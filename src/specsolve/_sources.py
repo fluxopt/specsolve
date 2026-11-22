@@ -91,7 +91,7 @@ def tidied_and_attached(
 
 
 def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Collection[str]) -> dict[str, pl.LazyFrame]:
-    """The parameters of *previous* that a change of the sources named *changed* leaves as the door checked them.
+    """The parameters of *previous* that a change of the sources named *changed* leaves as [`tidy_sources`][] checked them.
 
     A parameter's checks read its own source and the index of each of its
     dimensions, a positional source included, so it is kept only where none of

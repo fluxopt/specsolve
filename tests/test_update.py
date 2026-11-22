@@ -686,8 +686,8 @@ def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
 
     The refused `load` is still the model's source, so an update of `cost`
     alone is refused for it, as a fresh build of the same sources is. The
-    door refused `load` before the last good tables were replaced, and the
-    next update kept that good `load` and built, until a failure forgot them.
+    `tidy_sources` refused `load` before the last good tables were replaced,
+    and the next update kept that good `load` and built, until a failure forgot them.
     """
     with pytest.raises(sps.errors.DataError):
         model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
@@ -704,17 +704,17 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     ran before the cleanup that forgets the last build's tables, so the next
     update kept the `load` built before the attached one.
     """
-    import specsolve._sources as door
+    from specsolve import _sources
 
     load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
     cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = door._kept
+    choose = _sources._kept
 
     def interrupted(*args):
-        monkeypatch.setattr(door, '_kept', choose)
+        monkeypatch.setattr(_sources, '_kept', choose)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(door, '_kept', interrupted)
+    monkeypatch.setattr(_sources, '_kept', interrupted)
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})
