@@ -432,9 +432,9 @@ def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
     return table.select(dim).pipe(collected)[dim]
 
 
-def _dimension_labels(dims: Iterable[str], labels: Mapping[str, pl.LazyFrame]) -> dict[str, pl.Series]:
-    """The labels of each of *dims* that *labels* holds, read once; a dimension not read yet is left out."""
-    return {d: _labels_of(d, labels[d]) for d in dims if d in labels}
+def _dimension_labels(dims: Iterable[str], labels_tables: Mapping[str, pl.LazyFrame]) -> dict[str, pl.Series]:
+    """The labels of each of *dims* that *labels_tables* holds a table for, read once; a dimension not read yet is left out."""
+    return {d: _labels_of(d, labels_tables[d]) for d in dims if d in labels_tables}
 
 
 def _read_relation(source: Source, name: str, relation: Relation, labels: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:

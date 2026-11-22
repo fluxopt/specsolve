@@ -30,7 +30,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat(sweep): build_slice gives the model of one slice of a sweep, and axis.slices is gone ([#2126](https://github.com/fluxopt/specsolve/pull/2126))
 - perf(api): a build attaches its sources once, not again after reading the assumptions ([#2131](https://github.com/fluxopt/specsolve/pull/2131))
 - perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2154](https://github.com/fluxopt/specsolve/pull/2154))
-- perf(data): a build reads each dimension's labels once and shares one empty frame per dims, not one per parameter or declaration ([#2155](https://github.com/fluxopt/specsolve/pull/2155))
+- perf(data): a build reads each dimension's labels once and shares one empty table per set of dimensions rather than one per parameter or entry ([#2155](https://github.com/fluxopt/specsolve/pull/2155))
 
 ## 0.11.2 (2026-11-19)
 
