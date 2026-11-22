@@ -599,8 +599,8 @@ f_{\xi,t,l} = \mathrm{f}^{\mathrm{set}}_{\xi,t,l} \qquad \forall\, \xi \in \Xi,\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_01_transport.yaml', sources) as solution:
-        solution.objective  # 7182.222222222221
+    with sps.solve('differential/pypsa/rungs/rung_01_transport.yaml', sources) as result:
+        result.objective  # 7182.222222222221
     ```
 
 === "PyPSA"

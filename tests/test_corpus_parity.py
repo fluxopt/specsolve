@@ -14,6 +14,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from specsolve._names import COEFF, ROW
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 from tests.linopy_lane.loader import OracleCannotBuildError
@@ -67,7 +68,7 @@ def _same_matrix(name: str, run: Any) -> None:
 
 def _canonical(matrix: pl.DataFrame) -> list[tuple[float, ...]]:
     """``(row, col, coeff)`` as a sorted multiset of sorted coefficient rows."""
-    rows = matrix.group_by('row').agg(pl.col('coeff').sort()).get_column('coeff').to_list()
+    rows = matrix.group_by(ROW).agg(pl.col(COEFF).sort()).get_column(COEFF).to_list()
     return sorted(tuple(r) for r in rows)
 
 
@@ -124,8 +125,8 @@ def _tidy(dual: Any, dims: list[str], like: pl.DataFrame) -> pl.DataFrame:
     series = dual.to_series().dropna()
     keys = list(series.index)
     columns = {d: [k[i] if isinstance(k, tuple) else k for k in keys] for i, d in enumerate(dims)}
-    frame = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
-    return frame.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
+    table = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
+    return table.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
 
 
 def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:

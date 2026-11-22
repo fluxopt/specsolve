@@ -47,7 +47,7 @@ PyPSA's global constraints: four limits over four different selected sets — th
 | $`\mathrm{gen\_capital\_cost}`$ | `gen_capital_cost` over $`\mathcal{E}`$ — annualised cost of a unit of generator capacity |
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{L}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_length}`$ | `link_length` over $`\mathcal{L}`$ — how far a link reaches — what turns built capacity into a volume |
-| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
+| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over every snapshot, for the carriers that have such a limit |
 | $`\mathrm{bus\_capacity\_cap}`$ | `bus_capacity_cap` over $`\mathcal{B} \times \mathcal{C}`$, `absent` where the data has no row — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
 | $`\mathrm{volume\_cap}`$ | `volume_cap` (scalar) — capacity times length the whole network may build |
 | $`\mathrm{expansion\_cost\_cap}`$ | `expansion_cost_cap` (scalar) — money the whole network may spend building links |
@@ -140,7 +140,7 @@ g_{t,l} \le \mathit{link\_p\_nom}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -205,7 +205,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dims: [link]
       energy_cap:
         description: >-
-          energy a carrier may deliver over the whole horizon, for the carriers that
+          energy a carrier may deliver over every snapshot, for the carriers that
           have such a limit
         dims: [carrier]
         missing: absent
@@ -265,7 +265,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
       carrier_energy:
         description: >-
-          a carrier with an energy limit delivers no more than it over the horizon —
+          a carrier with an energy limit delivers no more than it over every snapshot —
           the generators are grouped onto the carrier they burn, which is the
           selection PyPSA makes by querying its own table
         dims: [carrier]
@@ -305,10 +305,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as solution:
-        solution.objective  # 127211.66666666666
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as result:
+        result.objective  # 127211.66666666666
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

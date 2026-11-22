@@ -19,11 +19,11 @@ spec: examples/walkthrough/walkthrough.yaml
     Program(
       p: Variable(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0, dims=()), upper=ParameterReference(name='p_max', dims=('generator',)), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
       power_balance: Constraint(dims=('snapshot',), lhs=ExpressionReference(name='total_supply', body=Sum(operand=VariableReference(name='p', dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), dims=('snapshot',)), sense='==', rhs=ParameterReference(name='load', dims=('snapshot',)), where=None, description='the fleet meets the load exactly in every snapshot')
-      Objective(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=()), description='total cost of generation over the horizon')
+      Objective(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=()), description='total cost of generation over every snapshot')
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
-[4] plan + data -> the model frames  (_engine/engine.py)
+[4] plan + data -> the model tables  (_engine/engine.py)
     cols                   18 rows
     obj                     6 rows
     rows                    6 rows
@@ -36,18 +36,18 @@ spec: examples/walkthrough/walkthrough.yaml
     where "p_max > 0" is not a mask array — it is row absence:
     p has 18 rows, not 24: retired oil never becomes a column.
     shape: (4, 3)
-    ┌──────────┬───────────┬───────────┐
-    │ snapshot ┆ generator ┆ var_label │
-    │ ---      ┆ ---       ┆ ---       │
-    │ i64      ┆ enum      ┆ i64       │
-    ╞══════════╪═══════════╪═══════════╡
-    │ 0        ┆ wind      ┆ 0         │
-    │ 0        ┆ solar     ┆ 1         │
-    │ 0        ┆ gas       ┆ 2         │
-    │ 1        ┆ wind      ┆ 3         │
-    └──────────┴───────────┴───────────┘
+    ┌──────────┬───────────┬───────────────┐
+    │ snapshot ┆ generator ┆ specsolve_col │
+    │ ---      ┆ ---       ┆ ---           │
+    │ i64      ┆ enum      ┆ i64           │
+    ╞══════════╪═══════════╪═══════════════╡
+    │ 0        ┆ wind      ┆ 0             │
+    │ 0        ┆ solar     ┆ 1             │
+    │ 0        ┆ gas       ┆ 2             │
+    │ 1        ┆ wind      ┆ 3             │
+    └──────────┴───────────┴───────────────┘
 
-[5] sink: stream the frames to an LP file  (_sinks/lp_file.py)
+[5] sink: stream the tables to an LP file  (_sinks/lp_file.py)
     min
     
     obj:
@@ -61,7 +61,7 @@ spec: examples/walkthrough/walkthrough.yaml
     s.t.
     ... (64 lines total)
 
-[6] sink: batches -> highspy -> solution frames  (_sinks/highs.py)
+[6] sink: batches -> highspy -> solution tables  (_sinks/highs.py)
     status     ok (optimal)
     objective  1,000.0
     shape: (6, 3)

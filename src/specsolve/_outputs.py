@@ -1,9 +1,9 @@
-"""What an answer carries: the kinds of frame it holds, and the outputs a solve is asked for.
+"""What an answer carries: the kinds of table it holds, and the outputs a solve is asked for.
 
-Every answer holds a ``primal``, a ``dual`` and an ``expression`` frame per
+Every answer holds a ``primal``, a ``dual`` and an ``expression`` table per
 name. An [`Output`][] asked for with ``outputs=`` adds the kinds in
 [`OUTPUT_KINDS`][]. A result, a sweep and the layout on disk all key their
-frames by these [`KINDS`][].
+tables by these [`KINDS`][].
 """
 
 from __future__ import annotations
@@ -27,20 +27,20 @@ Output = Literal['activity', 'reduced_cost', 'slack', 'basis']
 #: Every [`Output`][], in the order a message lists them.
 OUTPUTS: tuple[Output, ...] = get_args(Output)
 
-#: What a kind of frame holds one frame per.
+#: What a kind of table holds one table per.
 Per = Literal['variable', 'constraint']
 
 
 class OutputKind(NamedTuple):
-    """What one kind of frame an [`Output`][] carries is."""
+    """What one kind of table an [`Output`][] carries is."""
 
     #: The output that asks for it.
     output: Output
-    #: What it holds one frame per.
+    #: What it holds one table per.
     per: Per
 
 
-#: Each kind of frame the [`OUTPUTS`][] carry, named after the reader it comes
+#: Each kind of table the [`OUTPUTS`][] carry, named after the reader it comes
 #: back through: ``basis`` carries two, ``variable_basis`` and
 #: ``constraint_basis``, and every other output one, of its own name.
 OUTPUT_KINDS: Mapping[str, OutputKind] = MappingProxyType(
@@ -68,7 +68,7 @@ NO_BASIS = (
     "HiGHS's 'run_crossover', Gurobi's 'Crossover', Xpress's 'crossover' — or with a simplex method."
 )
 
-#: Every kind of frame an answer can hold: the three every solve answers with,
+#: Every kind of table an answer can hold: the three every solve answers with,
 #: then the [`OUTPUT_KINDS`][]. Each is named after the reader it comes back
 #: through.
 KINDS = ('primal', 'dual', 'expression', *OUTPUT_KINDS)

@@ -810,8 +810,8 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_20_phase_shifter.yaml', sources) as solution:
-        solution.objective  # 16455.0
+    with sps.solve('differential/pypsa/rungs/rung_20_phase_shifter.yaml', sources) as result:
+        result.objective  # 16455.0
     ```
 
 === "PyPSA"

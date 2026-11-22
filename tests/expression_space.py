@@ -34,7 +34,7 @@ class Node:
         text: The expression as it is written in the model file.
         dims: The dimensions the expression carries.
         degree: 0 for data, 1 linear, 2 quadratic.
-        total: Whether no masked variable appears anywhere inside.
+        total: Whether no partly absent variable appears anywhere inside.
     """
 
     text: str
@@ -46,7 +46,7 @@ class Node:
         return self.text
 
 
-#: The leaves: a total variable, a masked one, a parameter, and a literal.
+#: The leaves: a total variable, a partly absent one, a parameter, and a literal.
 LEAVES = (
     Node('x', frozenset({'f', 't'}), 1, total=True),
     Node('y', frozenset({'f', 't'}), 1, total=False),
@@ -146,7 +146,7 @@ def stride(cases: tuple, spec: str) -> tuple:
 
 
 def row_spec(node: Node) -> dict:
-    """The shared fixture's model, with *node* as its one binding row over its own dims."""
+    """The shared fixture's model, with *node* as its one binding row over its own dimensions."""
     return law_spec(f'{node} <= 10', dims=sorted(node.dims))
 
 
@@ -180,7 +180,7 @@ def _negate_through_sum(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
 def _reduction_is_linear(pool: tuple[Node, ...], over: str) -> Iterator[Rewrite]:
     """A reduction splits across a sum: ``sum(a + b)`` is ``sum(a) + sum(b)``.
 
-    Only while both operands are total, and only for a linear summand (#942).
+    Only while both operands are total, and only for a linear term of a sum (#942).
     """
     for a in pool:
         for b in pool:

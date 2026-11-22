@@ -8,7 +8,7 @@ Every parameter the files mark "data prep" is computed here, beside the plain
 renames — the prep half of how specsolve builds the corpus's specs, shown on
 the ladder page beside the tables it produces. `parity.py` is the caller and
 cuts the tables to what each spec declares; nothing here imports mathspec
-or specsolve — the mapping is pure PyPSA-and-pandas, handed over as polars frames.
+or specsolve — the mapping is pure PyPSA-and-pandas, handed over as polars tables.
 
 Sparseness is meaning: a table row left out is an absent value on the other
 side, so the sparse tables here (`*_set` pins, ramp limits, weights) drop
@@ -139,10 +139,10 @@ def per_component(component: str, values: pd.Series, dtype: object = float) -> p
 
 def long(component: str, dense: pd.DataFrame, dtype: object = float) -> pd.DataFrame:
     """A snapshot-by-component frame read long as ``(snapshot, dim, value)``."""
-    frame = dense.copy()
-    frame.index = pd.Index(frame.index, name='snapshot')
-    frame.columns = pd.Index(frame.columns.astype(str), name=DIM[component])
-    return frame.melt(ignore_index=False).reset_index().astype({'value': dtype})
+    table = dense.copy()
+    table.index = pd.Index(table.index, name='snapshot')
+    table.columns = pd.Index(table.columns.astype(str), name=DIM[component])
+    return table.melt(ignore_index=False).reset_index().astype({'value': dtype})
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +169,9 @@ def period_weights(n: pypsa.Network, column: str) -> pd.Series:
 def active_by_snapshot(n: pypsa.Network, component: str) -> pd.DataFrame:
     """Whether each asset stands at each snapshot — its period's flag, snapshots by names."""
     by_period = active_by_period(n, component)
-    frame = by_period[period_of(n)].T
-    frame.index = timesteps(n)
-    return frame
+    table = by_period[period_of(n)].T
+    table.index = timesteps(n)
+    return table
 
 
 def standing(n: pypsa.Network, component: str) -> dict[str, object]:
@@ -257,16 +257,16 @@ def ports(n: pypsa.Network, component: str) -> dict[str, object]:
         delays = np.ceil(table.get(delay_attr, pd.Series(0, index=table.index)).fillna(0) / hours).astype(int)
         cyclic = table.get(cyclic_attr, pd.Series(True, index=table.index)).fillna(True).astype(bool)
         keys = keyed(table.index, dim)
-        frame = pd.DataFrame(
+        static = pd.DataFrame(
             keys | {'bus': buses.to_numpy(), 'delay': delays.to_numpy(), 'cyclic_delay': cyclic.to_numpy()}
         )
-        frame[port_dim] = frame[dim] + '_bus' + port
-        statics.append(frame[declared])
+        static[port_dim] = static[dim] + '_bus' + port
+        statics.append(static[declared])
         dense = get_switchable_as_dense(n, component, coefficient).set_axis(timesteps(n), axis=0)
         dense.columns.names = ['scenario', dim] if dense.columns.nlevels > 1 else [dim]
         melted = dense.melt(ignore_index=False).reset_index(names='snapshot').astype({dim: str, 'value': float})
         melted[port_dim] = melted[dim] + '_bus' + port
-        named = set(frame.loc[declared, port_dim])
+        named = set(static.loc[declared, port_dim])
         coefficients.append(melted[melted[port_dim].isin(named)].drop(columns=dim))
     every = pd.concat(statics, ignore_index=True)
     keys = [k for k in ('scenario', port_dim) if k in every.columns]
@@ -336,7 +336,7 @@ def maintenance(n: pypsa.Network, component: str) -> dict[str, object]:
     A start covers itself and the snapshots after it until their generator
     weightings reach the duration — PyPSA's first window end whose cumulative
     weighting meets ``maintenance_duration`` less a relative ``1e-6``. A start
-    is blocked where its window runs past the horizon or into a snapshot the
+    is blocked where its window runs past the last snapshot or into a snapshot the
     unit does not stand in, and never for a unit that is not maintainable.
     """
     dim = DIM[component]
@@ -671,9 +671,9 @@ def _loss_cuts(n: pypsa.Network, component: str, losses: dict) -> dict[str, obje
         r.index = top.columns
 
     def melt(dense: pd.DataFrame) -> pd.DataFrame:
-        frame = dense.copy()
-        frame.columns.names = ['scenario', dim] if frame.columns.nlevels > 1 else [dim]
-        return frame.melt(ignore_index=False).reset_index(names='snapshot').astype({dim: str, 'value': float})
+        wide = dense.copy()
+        wide.columns.names = ['scenario', dim] if wide.columns.nlevels > 1 else [dim]
+        return wide.melt(ignore_index=False).reset_index(names='snapshot').astype({dim: str, 'value': float})
 
     slopes, offsets = [], []
     if losses.get('mode') == 'secants':
@@ -913,7 +913,7 @@ def carriers(n: pypsa.Network, multi: bool) -> dict[str, object]:
         f'{component}_carrier': relation(n, component, 'carrier', into='carrier')
         for component in ('Generator', 'Link', 'Process', 'StorageUnit', 'Store', 'Line')
     }
-    named = set().union(*(set(frame['carrier']) for frame in relations.values()))
+    named = set().union(*(set(relation['carrier']) for relation in relations.values()))
     labels = list(table.index.astype(str)) + sorted(named - set(table.index.astype(str)))
     growth = table['max_growth']
     relative = table['max_relative_growth'].set_axis(table.index.astype(str))
@@ -1112,15 +1112,15 @@ def global_constraints(n: pypsa.Network, multi: bool) -> dict[str, object]:
                         continue
                     if kind == 'transmission_volume_expansion_limit':
                         value = float(unit['length'])
-                        table = f'{component}_volume_weight'
+                        weight_name = f'{component}_volume_weight'
                     else:
                         share = 1.0
                         if multi and period is None:
                             share = float(sum(objective_weight[p] for p in by_period.columns if by_period.loc[name, p]))
                         value = float(cost.loc[name]) * share
-                        table = f'{component}_expansion_cost_weight'
+                        weight_name = f'{component}_expansion_cost_weight'
                     if value:
-                        weights[table].append(
+                        weights[weight_name].append(
                             key | {'global_constraint': label, DIM[component]: str(name), 'value': value}
                         )
         elif kind == 'tech_capacity_expansion_limit':
@@ -1153,16 +1153,16 @@ def global_constraints(n: pypsa.Network, multi: bool) -> dict[str, object]:
         ).astype({'value': bool}),
     }
     for name, rows in weights.items():
-        frame = pd.DataFrame(rows)
-        if frame.empty:
+        table = pd.DataFrame(rows)
+        if table.empty:
             dims = {
                 'Generator_primary_energy_weight': [*keys, 'global_constraint', 'snapshot', 'generator'],
             }.get(name)
             component = name.split('_')[0]
-            frame = pd.DataFrame(columns=dims or [*keys, 'global_constraint', DIM[component], 'value'])
-            if 'value' not in frame.columns:
-                frame['value'] = []
-        tables[name] = frame.astype({'value': float})
+            table = pd.DataFrame(columns=dims or [*keys, 'global_constraint', DIM[component], 'value'])
+            if 'value' not in table.columns:
+                table['value'] = []
+        tables[name] = table.astype({'value': float})
     return tables
 
 
