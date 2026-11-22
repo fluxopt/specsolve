@@ -247,10 +247,12 @@ def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs,
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         before = model.diagnostics().seconds
         time.sleep(DELAY)
+        started = time.perf_counter()
         call(model, tmp_path, dispatch_table_inputs['load'])
+        wall = time.perf_counter() - started
         after = model.diagnostics().seconds
     grown = {phase: after.get(phase, 0.0) - before.get(phase, 0.0) for phase in PHASES}
-    assert all(spent < DELAY for spent in grown.values()), f'the wait before the call is in a phase: {grown}'
+    assert sum(grown.values()) <= wall, f'the wait before the call is in a phase: {grown} sum past the call, {wall}'
 
 
 def test_the_phases_table_reads_the_clocks_in_the_order_they_run(dispatch_yaml, dispatch_table_inputs, tmp_path):
