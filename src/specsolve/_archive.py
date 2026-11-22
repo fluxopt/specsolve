@@ -1,7 +1,7 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
-[`load_archive`][] reads it whole; [`scan_archive`][] leaves the tables on
-disk; [`load_inputs`][] reads the spec and the data without the answer.
+[`read_archive`][] reads it whole; [`scan_archive`][] leaves the tables on
+disk; [`read_inputs`][] reads the spec and the data without the answer.
 ``archive=`` on the verbs that solve writes one, through
 [`specsolve._archive_layout`][].
 """
@@ -35,8 +35,8 @@ from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
 from specsolve._records import Metrics
-from specsolve._result import load_result, scan_result
-from specsolve._sweep import Sweep, load_sweep, scan_sweep, with_key
+from specsolve._result import read_result, scan_result
+from specsolve._sweep import Sweep, read_sweep, scan_sweep, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._result import Result
 
-__all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'load_archive', 'load_inputs', 'scan_archive']
+__all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'read_archive', 'read_inputs', 'scan_archive']
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,7 @@ class ResultArchive:
         spec: The spec as written, read back as one ``Spec`` whatever went in.
         sources: What was attached, keyed as the file declares it, as
             [`tidy`][specsolve._api.tidy] returns it: a table from
-            [`load_archive`][], the path to one from [`scan_archive`][],
+            [`read_archive`][], the path to one from [`scan_archive`][],
             which also holds the ``specsolve_run`` column.
         result: What the solve returned.
         metrics: What reaching the answer took, as one
@@ -88,8 +88,8 @@ class SweepArchive:
             holds them. A source an EachLabel axis cuts holds the axis
             column first.
         axis: What cut them, with the ``carry=`` it chained the slices with.
-        sweep: The archived answer, in memory from [`load_archive`][], on
-            disk from [`scan_archive`][], as [`load_sweep`][] and
+        sweep: The archived answer, in memory from [`read_archive`][], on
+            disk from [`scan_archive`][], as [`read_sweep`][] and
             [`scan_sweep`][] read a saved sweep.
     """
 
@@ -121,11 +121,11 @@ class ArchivedInputs:
     axis: Axis | None
 
 
-def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
+def read_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
     """Read the spec and the data an archive holds, without its answer.
 
     The spec and the sources have a layout of their own, so this reads an
-    archive whose answer [`load_archive`][] refuses because its layout has
+    archive whose answer [`read_archive`][] refuses because its layout has
     moved.
 
     Args:
@@ -144,7 +144,7 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
     return _read_unpacked(path, into, partial(_inputs, eager=True))
 
 
-def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
+def read_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back whole: the sources as tables, the answer's tables in memory.
 
     Args:
@@ -162,7 +162,7 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
         LayoutError: A member outside the layout, an *into* given for a
             directory, or a spec, sources or answer whose layout has changed
             since it was written. Where only the answer's has,
-            [`load_inputs`][] still reads the spec and the sources.
+            [`read_inputs`][] still reads the spec and the sources.
         SpecsolveError: An answer that names a different spec than the one
             beside it.
         zipfile.BadZipFile: A file that is not a zip archive.
@@ -186,7 +186,7 @@ def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
     """Read an archive back off disk: the sources as paths, each table read at the call that asks for it.
 
-    As [`load_archive`][], except that *into* is required for a zip, and kept,
+    As [`read_archive`][], except that *into* is required for a zip, and kept,
     since the members have to outlive the value; a zip with no *into* raises
     ``LayoutError``.
     """
@@ -213,10 +213,10 @@ def _read(under: Path, archive: Path, *, eager: bool) -> ResultArchive | SweepAr
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers((load_result if eager else scan_result)(saved), spec, sources)
+        answer = _attach_readers((read_result if eager else scan_result)(saved), spec, sources)
         metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
         return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers((load_sweep if eager else scan_sweep)(saved), spec, sources, inputs.axis)
+    answer = _attach_sweep_readers((read_sweep if eager else scan_sweep)(saved), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)
 
 
@@ -237,13 +237,13 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
 
     Checked before the answer is read, so this message wins over the generic
-    one [`load_result`][specsolve._result.load_result] gives, which names a scratch directory for a zip.
+    one [`read_result`][specsolve._result.read_result] gives, which names a scratch directory for a zip.
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(
             f'{str(archive)!r} holds an answer {other} and this package reads layout {ANSWER_LAYOUT}, so it '
             f'does not read the answer back. The spec and the data are in a layout this package reads: '
-            f'sps.load_inputs({str(archive)!r}) returns them, to solve again.'
+            f'sps.read_inputs({str(archive)!r}) returns them, to solve again.'
         )
 
 

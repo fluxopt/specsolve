@@ -25,11 +25,11 @@ from importlib.metadata import version as _installed_version
 from specsolve import errors as errors
 from specsolve import types as types
 from specsolve._api import build, check, evaluate, solve, tidy, write
-from specsolve._archive import load_archive, load_inputs, scan_archive
+from specsolve._archive import read_archive, read_inputs, scan_archive
 from specsolve._axes import EachLabel, EachWindow
-from specsolve._result import load_result, scan_result
+from specsolve._result import read_result, scan_result
 from specsolve._solve_over import build_slice, solve_over
-from specsolve._sweep import load_sweep, scan_sweep
+from specsolve._sweep import read_sweep, scan_sweep
 
 __all__ = [
     'EachLabel',
@@ -38,10 +38,10 @@ __all__ = [
     'build_slice',
     'check',
     'evaluate',
-    'load_archive',
-    'load_inputs',
-    'load_result',
-    'load_sweep',
+    'read_archive',
+    'read_inputs',
+    'read_result',
+    'read_sweep',
     'scan_archive',
     'scan_result',
     'scan_sweep',

@@ -105,8 +105,8 @@ slice, keyed by 'scenario'. Read it without per_window.
 The reader refuses `sum(p * cost)`, and `to_dataset()` leaves it out. Read it
 with `per_window=True`.
 
-**`save` writes a held sweep as a spill**, which `sps.load_sweep` and
-`sps.scan_sweep` read back ([`load_sweep`](api.md#specsolve.load_sweep)). It
+**`save` writes a held sweep as a spill**, which `sps.read_sweep` and
+`sps.scan_sweep` read back ([`read_sweep`](api.md#specsolve.read_sweep)). It
 replaces what an earlier save left in the directory, as a result's `save` does.
 **There is no per-slice reader**: one slice is
 `sweep.primal('p').partition_by(sweep.key_name, as_dict=True)`.

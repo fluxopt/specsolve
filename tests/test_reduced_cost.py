@@ -194,7 +194,7 @@ def test_an_integer_answer_bridged_to_xarray_gives_the_duals_reason(tmp_path: Pa
     with sps.solve(integer, SOURCES, outputs=RC) as answer:
         if saved:
             answer.save(tmp_path)
-        read = sps.load_result(tmp_path) if saved else answer
+        read = sps.read_result(tmp_path) if saved else answer
         with pytest.raises(SpecsolveError, match='mixed-integer'):
             read.to_dataset(kind='reduced_cost')
 
@@ -203,7 +203,7 @@ def test_a_saved_answer_reads_back_the_reduced_costs_it_was_asked_for(tmp_path: 
     with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
         live = answer.reduced_cost('p')
         answer.save(tmp_path)
-    assert sps.load_result(tmp_path).reduced_cost('p').equals(live)
+    assert sps.read_result(tmp_path).reduced_cost('p').equals(live)
 
 
 def test_a_saved_integer_answer_gives_the_duals_reason(tmp_path: Path) -> None:
@@ -212,7 +212,7 @@ def test_a_saved_integer_answer_gives_the_duals_reason(tmp_path: Path) -> None:
         answer.save(tmp_path)
     assert not (tmp_path / 'reduced_cost').exists(), 'nothing to write where there are no duals'
     with pytest.raises(SpecsolveError, match='mixed-integer'):
-        sps.load_result(tmp_path).reduced_cost('p')
+        sps.read_result(tmp_path).reduced_cost('p')
 
 
 def test_a_solve_not_asked_for_reduced_costs_names_the_output() -> None:
@@ -267,7 +267,7 @@ def _swept(tmp_path: Path, model_spec: dict, how: str) -> Sweep:
     axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, archive=tmp_path / 'run.zip')
-        archive = sps.load_archive(tmp_path / 'run.zip')
+        archive = sps.read_archive(tmp_path / 'run.zip')
         assert isinstance(archive, sps.types.SweepArchive)
         return archive.sweep
     spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
