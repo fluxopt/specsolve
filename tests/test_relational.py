@@ -750,8 +750,8 @@ class TestTheIndexSpace:
     def test_a_variable_and_a_constraint_may_share_a_name(self):
         """Columns and rows are numbered independently, so the maps are separate.
 
-        `pypsa_unit_commitment` names both `start_up`, and linopy — the oracle the
-        whole corpus is checked against — keeps variables and constraints in
+        `pypsa_unit_commitment` names both `start_up`, and linopy — which the linopy lane
+        checks the whole corpus against — keeps variables and constraints in
         separate namespaces, so the model is legal and the read-back has to tell
         the two apart. `pad` exists to push the variable's columns off the
         constraint's rows: sharing a start, the wrong entry returns plausible numbers
@@ -1211,7 +1211,7 @@ DENSE_BOUND_SPEC = {
 }
 
 
-#: The same numbers the oracle sees, with the coordinates deliberately out of
+#: The same numbers the linopy lane sees, with the coordinates deliberately out of
 #: order — a positional attach that skipped the sort would pair every
 #: coordinate with another one's bound.
 SHUFFLED_BOUND = pl.DataFrame(
@@ -1249,7 +1249,7 @@ def _aligned_for(spec, data, monkeypatch):
     return seen
 
 
-#: One dimension, so the oracle can take it: the linopy loader wants a
+#: One dimension, so the linopy lane can take it: the linopy loader wants a
 #: `pd.Series` for a 1-D parameter and refuses a polars table for a 2-D one.
 FLAT_SPEC = {
     'dimensions': {'n': {'dtype': 'str'}},
@@ -1477,7 +1477,7 @@ class TestThePositionalHandoff:
         dimension positions reproduces that order, so the value column is attached
         rather than joined, which on `profiled/l` is most of a 0.58 s join.
 
-        Checked against the oracle, because a misaligned bound is a different model
+        Checked against the linopy lane, because a misaligned bound is a different model
         rather than an error.
         """
         data = FLAT_LABELS | {
@@ -1620,7 +1620,7 @@ class TestWhereTheLanesDifferByDesign:
         """#1137: the refusal is this lane's, so it may not wear the language's class.
 
         `LanguageError` here says the file is unsayable, which is false twice over:
-        `check` passes with no data, and the linopy oracle builds the model and
+        `check` passes with no data, and the linopy lane builds the model and
         reaches *answer*. What is true is that this lane cannot represent a constant
         term with no rows for the dimension the operator acts along, so the refusal is
         a `SpecsolveError` that names the rewrite.
@@ -1634,7 +1634,7 @@ class TestWhereTheLanesDifferByDesign:
         assert "constraint 'bal'" in text, 'a refusal names where in the file it happened'
         assert 'Declare the parameter over' in text, 'and the rewrite that reaches the same number'
         assert not isinstance(refusal.value, LanguageError), (
-            'a lane gap is not a language error — the file is in the language and the oracle builds it'
+            'a lane gap is not a language error — the file is in the language and the linopy lane builds it'
         )
 
     @pytest.mark.parametrize(('expression', 'answer'), REWRITE_CASES)
@@ -1657,7 +1657,7 @@ class TestWhereTheLanesDifferByDesign:
 
         Differential rather than a pinned number, because the question is not what
         the answer is but whether the two lanes give the same one — and the linopy
-        lane is the oracle for exactly this reading of v1 §13.
+        lane is the reference for exactly this reading of v1 §13.
         """
         spec = _absent_slot_spec(expression)
         relational = sps.solve(spec, ABSENT_SLOT_SOURCES).objective

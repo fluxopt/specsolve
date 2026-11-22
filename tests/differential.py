@@ -2,7 +2,7 @@
 
 The same YAML means the same thing on the linopy lane and on the streaming
 relational one (docs/development/architecture.md, hard rule 3). Importing this module
-is the oracle's guard: a bare install skips every module that uses it at
+is the linopy lane's guard: a bare install skips every module that uses it at
 collection.
 
 The engine stays open for the length of the ``with`` block, so per-variable
@@ -97,7 +97,9 @@ def differential(
         m.solve(solver_name='highs', output_flag=False)
         oracle = float(m.objective.value)
         if not np.isfinite(oracle):
-            raise NoFiniteAnswerError('the linopy oracle is infeasible or unbounded — fix the data, not the tolerance')
+            raise NoFiniteAnswerError(
+                "the linopy lane's model is infeasible or unbounded — fix the data, not the tolerance"
+            )
 
         program = as_program(model)
         with Engine() as engine:

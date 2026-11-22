@@ -1,6 +1,6 @@
 """The linopy lane: its verbs, its loader, its where evaluator, its notes.
 
-Everything here needs the oracle's linopy. The lane holds no state: one call,
+Everything here needs linopy. The lane holds no state: one call,
 one model, nothing retained, and nothing put on ``linopy.Model``.
 """
 

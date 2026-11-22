@@ -164,7 +164,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     """The differential claim, plus the one oracle that is nobody's code.
 
     The harness is imported **inside the test**: importing it is the
-    oracle's guard, and the rest of this module runs on the bare install.
+    linopy lane's guard, and the rest of this module runs on the bare install.
     """
     from tests.differential import differential
 

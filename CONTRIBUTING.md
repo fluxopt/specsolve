@@ -7,7 +7,7 @@ should be readable in one sitting and go stale only when a command changes.
 ## Setup
 
 ```bash
-pixi install                   # the default environment: tools + the linopy oracle
+pixi install                   # the default environment: tools + the linopy lane
 pixi run pre-commit install    # once per clone
 ```
 
@@ -21,7 +21,7 @@ above are a convenience rather than a step you can forget.
 `test`, `lint`, `format`, `typecheck`, `check` (all four), `docs`.
 
 The default environment carries linopy, from the `dev` group, because the
-differential test suite compares every build against the linopy oracle in
+differential test suite compares every build against the linopy lane in
 `tests/linopy_lane`. It carries `[gurobi]` and `[xpress]` too, because a solver
 sink is checked against another solver. Both of
 those wheels carry a size-limited licence of their own — gurobipy's needs

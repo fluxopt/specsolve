@@ -1,7 +1,7 @@
 """Native API: YAML → streaming engine → solver, with linopy never imported.
 
 The linopy-free guarantee is asserted in a subprocess so the suite's own
-oracle imports cannot pollute the check. This module is pandas-free; the tests
+linopy-lane imports cannot pollute the check. This module is pandas-free; the tests
 of the bridges out say so with an ``importorskip``.
 """
 

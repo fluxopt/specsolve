@@ -15,7 +15,7 @@ match
 ([the limits](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#what-the-language-will-not-express)).
 **File portability is not a goal**: a Calliope model does not load here.
 
-**[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the oracle
+**[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the check
 and the denominator.** Where a concept is already theirs, we copy the spelling.
 Every language feature is differentially tested against a linopy build, and
 the [benchmarks](benchmarks.md) measure specsolve against it.

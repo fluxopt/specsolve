@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 class OracleCannotBuildError(SpecsolveError):
-    """The language accepts the spec and this oracle cannot build it."""
+    """The language accepts the spec and this lane cannot build it."""
 
 
 def refuse_relations_the_lane_does_not_build(program: program.Program) -> None:

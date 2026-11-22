@@ -58,7 +58,7 @@ def spec(expression: str, **patch) -> dict:
     ],
 )
 def test_both_lanes_reach_one_optimum(expression):
-    """The differential oracle: a power is one number per coordinate on either lane."""
+    """Checked against the linopy lane: a power is one number per coordinate on either lane."""
     with differential(spec(expression), SOURCES):
         pass
 

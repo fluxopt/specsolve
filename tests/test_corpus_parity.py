@@ -2,7 +2,7 @@
 
 ``test_ports.py`` asks whether the relational lane reaches a published
 optimum; this module asks whether the linopy lane builds the same model, and
-whether the written LP file re-solves to it. It needs the oracle, where
+whether the written LP file re-solves to it. It needs the linopy lane, where
 ``test_ports.py`` runs on the bare install.
 """
 

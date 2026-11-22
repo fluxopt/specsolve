@@ -14,7 +14,7 @@ A spec compiles to a **closed program known before any data is touched**, so
 it can be built two ways that mean the same thing. The package's build is the
 *relational lane* (`_engine/`, `_sinks/` and the modules both read), a program
 streamed to a sink. The test suite's
-is *the oracle* (`tests/linopy_lane/`), a `linopy.Model`.
+is *the linopy lane* (`tests/linopy_lane/`), a `linopy.Model`.
 
 ```mermaid
 flowchart TB
@@ -52,12 +52,12 @@ flowchart TB
 
     SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · evaluate<br/>polars tables you can join"]
 
-    subgraph LIN["tests/linopy_lane/ — the test oracle, not shipped"]
+    subgraph LIN["tests/linopy_lane/ — the linopy lane, not shipped"]
         direction TB
         LOAD["loader.py<br/>the tidy tables → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the program"]
     end
 
-    BUILD --> MODEL["<b>a linopy.Model</b> — the oracle stops here<br/>solved by the tests, and compared with the Result"]
+    BUILD --> MODEL["<b>a linopy.Model</b> — the linopy lane stops here<br/>solved by the tests, and compared with the Result"]
 
     classDef laneL stroke:#b7791f,stroke-width:2px
     classDef laneR stroke:#3a7d44,stroke-width:2px
@@ -115,7 +115,7 @@ the dependency claims.*
 2. **The engine knows nothing about linopy, xarray or YAML.** It imports
    nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
-3. **One language, two builds, and linopy is only the oracle.** Both pass
+3. **One language, two builds, and linopy only in the linopy lane.** Both pass
    `_inputs.as_program`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
    [Verification](verification.md#the-same-language-but-not-every-build).
@@ -128,8 +128,8 @@ the dependency claims.*
 ## The program, node for node
 
 **The program is the vocabulary both lanes speak.** The table gives what the file
-writes and what the relational query does with it. The oracle's call is in
-[what a construct becomes in the oracle](verification.md#what-a-construct-becomes-in-the-oracle).
+writes and what the relational query does with it. The linopy lane's call is in
+[what a construct becomes in the linopy lane](verification.md#what-a-construct-becomes-in-the-linopy-lane).
 `tests/test_docs_site.py` holds the table to `mathspec.program.Expression`'s
 subclasses.
 
@@ -250,9 +250,9 @@ The names the code uses for its own parts. The names a caller meets are in
 [the glossary](../reference/glossary.md).
 
 **Lane**
-: One way to build a spec: the relational lane, which is this package, or the
-  oracle, the linopy lane under `tests/linopy_lane/` that builds a
-  `linopy.Model`.
+: One way to build a spec: the relational lane, which is this package, or
+  the linopy lane under `tests/linopy_lane/`, which builds a `linopy.Model`
+  and is what every build is checked against.
 
 **The door**
 : `_sources.tidy_sources`, the one function both lanes read data through.
@@ -342,7 +342,7 @@ is the full list.
 
 **Add an operator:** first
 [in mathspec](https://mathspec.readthedocs.io/en/latest/contributing/#adding-an-operator),
-landed and tagged. Then here: the oracle's linopy call, the query builder's case, the
+landed and tagged. Then here: the linopy lane's call, the query builder's case, the
 engine, and a differential test through a solver and the LP writer.
 [The nightly canary](https://github.com/fluxopt/specsolve/blob/main/.github/workflows/canary.yml)
 checks the two halves have not drifted.

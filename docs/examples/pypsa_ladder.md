@@ -85,7 +85,7 @@ Both sides start from one object, the network the rung's script builds. PyPSA so
 | **structure** | `len(result.activity(constraint))`, `len(result.primal(variable))` | rows and columns of `n.model` per name, masked labels excluded | one entry per PyPSA name, equal count — a split counts as a difference |
 | **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros | the model handed to HiGHS is the same size on both sides |
 | **duals** | `result.dual(constraint)` | `n.model.constraints[name].dual` | every row's dual equal, absolute 1e-6, or inside the range of duals PyPSA's model admits on that row — against the negative where the file writes the row negated; an integer model has none |
-| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |
+| **linopy lane** | `tests/linopy_lane` | `n.optimize.create_model()` | label for label: coefficients, sense, right-hand side, bounds, integrality, objective terms |
 
 Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the rung's own spec attached to the tables `prep.py` makes of it. A difference in structure, duals or the linopy lane is allowed only with a reason in `differential/pypsa/deviations.yaml`; the runner fails on one recorded nowhere and on a reason no rung needs. A rung the pinned corpus gets wrong is listed in `differential/pypsa/known_failing.yaml` with the issue that fixes it, and stays UNEXPLAINED here until the corpus carries the fix. A rung the linopy lane cannot build yet names the blocker instead. Not compared: primals (an optimum need not be unique).
 

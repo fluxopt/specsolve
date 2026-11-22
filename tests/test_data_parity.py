@@ -410,7 +410,7 @@ def test_a_dimension_s_labels_are_a_table_on_both_lanes(tmp_path):
 
 
 def test_a_dimension_s_labels_may_be_a_parquet_path_without_pyarrow(tmp_path, monkeypatch, polars_parquet):
-    """The oracle brings pandas and xarray, and nothing says it brings pyarrow."""
+    """The linopy lane brings pandas and xarray, and nothing says it brings pyarrow."""
     import sys
 
     path = _written(tmp_path, RELATION_SPEC)

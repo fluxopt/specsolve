@@ -549,7 +549,7 @@ class Generator:
         return entry, (lhs, rhs)
 
     def _objective(self) -> Node | None:
-        """A body that carries a variable: the oracle has no slot for an objective constant (#894)."""
+        """A body that carries a variable: the linopy lane has no slot for an objective constant (#894)."""
         for _ in range(10):
             body = self.expression(self.rng.randint(1, 3))
             if body is not None and body.degree:

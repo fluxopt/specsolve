@@ -213,7 +213,7 @@ def test_both_lanes_read_the_same_labels():
     """The `period_of` relation is read the same way on the linopy lane too —
     both lanes reach the 6.0 the relational test above asserts.
 
-    The oracle is imported in the body, so the bare install skips this one test.
+    The linopy lane is imported in the body, so the bare install skips this one test.
     """
     from tests.differential import differential
     from tests.oracle import pd

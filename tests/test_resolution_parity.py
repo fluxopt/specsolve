@@ -1,4 +1,4 @@
-"""The scoping divergences, checked against the oracle lane itself.
+"""The scoping divergences, checked against the linopy lane itself.
 
 The rules are mathspec's and are swept there. This module checks that the
 linopy lane refuses what the relational lane refuses, in the same place, for the

@@ -59,7 +59,7 @@ def test_dual_respects_the_where_condition(dispatch_yaml, dispatch_inputs):
 def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
     """Integrality is decidable from the program, so the message says which.
 
-    A deliberate divergence from the oracle (#78): linopy returns zeros for
+    A deliberate divergence from the linopy lane (#78): linopy returns zeros for
     the duals of this model, a plausible number with no signal attached.
     """
     data = commitment_inputs

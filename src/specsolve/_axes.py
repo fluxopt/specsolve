@@ -377,7 +377,7 @@ class CarryRule:
             raise SpecsolveError(
                 f'carry {parameter!r} <- {variable!r} would collapse {dropped} at once: {variable!r} is over '
                 f'{source} and {parameter!r} over {over}. A carry collapses the one dimension the sweep '
-                f'advances along, so reduce the others in the YAML — a derived variable is where the oracle '
+                f'advances along, so reduce the others in the YAML — a derived variable is where the linopy lane '
                 f'can see the math.'
             )
         return cls(variable, dropped[0] if dropped else None)

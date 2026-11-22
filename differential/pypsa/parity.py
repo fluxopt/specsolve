@@ -19,7 +19,7 @@ pixi environment carries pypsa, so run it locally with the workflow's own line:
 Per rung, from the same network:
 
 1. **Spec against model** — PyPSA's ``n.optimize.create_model()`` and
-   the oracle's ``tests.linopy_lane.build``, label for label: coefficients, sense, right-hand
+   the linopy lane's ``tests.linopy_lane.build``, label for label: coefficients, sense, right-hand
    side, bounds, integrality, objective terms. No solver, so it covers MIP
    and QP alike. The verdict speaks the index table's words: ``equal`` is
    the one entry PyPSA builds — **done**; ``region`` is the same rows from
@@ -89,7 +89,7 @@ COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
 PATCHES: dict[str, Path] = {}
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
-sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy oracle in tests/
+sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy lane in tests/
 
 import linopy  # noqa: E402
 import mathspec  # noqa: E402

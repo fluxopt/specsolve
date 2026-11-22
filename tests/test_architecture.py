@@ -23,7 +23,7 @@ PKG = REPO / 'src' / 'specsolve'
 #: the bridges out of a result import it lazily, and the bare-install job fences it.
 FORBIDDEN_RUNTIME = {'linopy', 'xarray'}
 
-#: The differential-test oracle: the same YAML built as a ``linopy.Model``.
+#: The linopy lane: the same YAML built as a ``linopy.Model``.
 ORACLE = REPO / 'tests' / 'linopy_lane'
 
 
@@ -140,7 +140,7 @@ def test_the_lane_fences_see_running_code_and_only_running_code():
 
 
 def test_runtime_lane_never_imports_linopy_or_xarray():
-    """Hard rule 3: linopy is the test oracle only — never a runtime import."""
+    """Hard rule 3: linopy belongs to the linopy lane only — never a runtime import."""
     offenders = {}
     for path in _all_modules():
         bad = _module_level_imports(path) & FORBIDDEN_RUNTIME
@@ -148,7 +148,7 @@ def test_runtime_lane_never_imports_linopy_or_xarray():
             offenders[str(path.relative_to(PKG))] = sorted(bad)
     assert not offenders, (
         f'runtime modules import linopy-lane packages at module level: {offenders} '
-        f'— linopy belongs to the test oracle, and xarray is reached lazily'
+        f'— linopy belongs to the linopy lane, and xarray is reached lazily'
     )
 
 
@@ -172,7 +172,7 @@ def test_lazy_oracle_imports_stay_on_the_allowlist():
         if bad:
             offenders[str(path.relative_to(PKG))] = sorted(bad)
     assert not offenders, (
-        f'modules of the package reach the oracle lazily: {offenders} — '
+        f'modules of the package reach the linopy lane lazily: {offenders} — '
         f'move the code to tests/linopy_lane, or add it to LAZY_ORACLE_ALLOWED with a reason'
     )
 
