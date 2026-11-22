@@ -103,7 +103,7 @@ class Xpress(Solver):
         return self._p
 
     def push(self, handoff: Handoff) -> None:
-        """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per entry."""
+        """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per element."""
         import numpy as np
 
         xpress = _xpress()
@@ -180,8 +180,8 @@ class Xpress(Solver):
     def infeasible_subsystem(self) -> InfeasibleSubsystemIndices | None:
         """``firstIIS``, emphasising a small subsystem over a quick one.
 
-        A fixed column is both of its bounds; an integrality or set entry is
-        neither a row nor a bound, and is dropped.
+        A fixed column is both of its bounds; an integrality restriction or a set
+        is neither a row nor a bound, and is dropped.
         """
         import numpy as np
 
@@ -238,13 +238,13 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     rows = handoff.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
     (linear,) = handoff.row_chunks(None)
-    entries = linear.entries
+    coefficients = linear.coefficients
     p.addRows(
         rowtype=spelling[rows.sense[: linear.height]].tolist(),
         rhs=rows.rhs[: linear.height],
-        start=np.append(linear.starts, entries.height),
-        colind=entries[COL].to_numpy(),
-        rowcoef=entries[COEFF].to_numpy(),
+        start=np.append(linear.starts, coefficients.height),
+        colind=coefficients[COL].to_numpy(),
+        rowcoef=coefficients[COEFF].to_numpy(),
     )
 
     _add_sets(p, handoff, xpress)

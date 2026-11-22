@@ -126,7 +126,7 @@ cost is job count, and before 1.0 it deliberately trades coverage for cost. What
   floors bare. The floors are exercised *without* xarray/pandas, so the
   bridges out of a result are only ever tested against current xarray.
 
-This list used to carry a third entry, and it is worth keeping the correction
+This list used to carry a third item, and it is worth keeping the correction
 rather than the claim: *"the PR-title check does not re-run on `synchronize` …
 the cost is a missing CHANGELOG line, not a broken release."* The cost was a
 **permanently blocked PR**. A required check is evaluated against the head

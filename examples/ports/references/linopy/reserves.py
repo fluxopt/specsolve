@@ -34,7 +34,7 @@ def load_tables() -> dict[str, pd.DataFrame]:
 
 
 def indicator(rows: pd.Index, table: pd.DataFrame, member: str, leg: str) -> xr.DataArray:
-    """The rows x members 0/1 matrix of one leg, a null leg contributing no entry."""
+    """The rows x members 0/1 matrix of one leg, a null leg leaving its member's column zero."""
     out = pd.DataFrame(0.0, index=rows, columns=pd.Index(table[member], name=member))
     for m, target in zip(table[member], table[leg], strict=True):
         if pd.notna(target):
