@@ -97,11 +97,11 @@ for file in sorted(run.rglob('*.parquet')):
 `sources/` holds each table as the solve read it, and `answer/` holds one
 file for each variable and constraint.
 
-[`load_archive`](reference/api.md#specsolve.load_archive) reads the answer
+[`read_archive`](reference/api.md#specsolve.read_archive) reads the answer
 back without solving again:
 
 ```python exec="true" source="material-block" result="text" session="data" workdir="examples"
-archived = sps.load_archive(run)
+archived = sps.read_archive(run)
 print(archived.result.objective)
 ```
 

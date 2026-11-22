@@ -68,7 +68,7 @@ def test_a_saved_answer_reads_back_its_basis(tmp_path: Path) -> None:
     with sps.solve(SPEC, {}, outputs=BASIS) as answer:
         live = answer.variable_basis('u'), answer.constraint_basis('cap')
         answer.save(tmp_path)
-    loaded = sps.load_result(tmp_path)
+    loaded = sps.read_result(tmp_path)
     assert loaded.variable_basis('u').equals(live[0])
     assert loaded.constraint_basis('cap').equals(live[1])
 
@@ -82,8 +82,8 @@ def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) ->
     constraints = {('x' if name == 'loose' else name): row for name, row in SPEC['constraints'].items()}
     spec = {**SPEC, 'constraints': constraints}
     sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case').save(tmp_path / 'saved')
-    loaded = sps.load_result(tmp_path / 'saved')
-    archived = sps.load_archive(tmp_path / 'case')
+    loaded = sps.read_result(tmp_path / 'saved')
+    archived = sps.read_archive(tmp_path / 'case')
     assert isinstance(archived, sps.types.ResultArchive)
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet').filter(pl.col('name') == 'x')
 
@@ -160,7 +160,7 @@ def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Swee
     axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, archive=tmp_path / 'run.zip')
-        archive = sps.load_archive(tmp_path / 'run.zip')
+        archive = sps.read_archive(tmp_path / 'run.zip')
         assert isinstance(archive, sps.types.SweepArchive)
         return archive.sweep
     if how == 'process-pool':
