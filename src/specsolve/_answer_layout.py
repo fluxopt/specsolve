@@ -85,7 +85,7 @@ def check_format(directory: Path) -> None:
     if (other := other_layout(directory)) is not None:
         raise LayoutError(
             f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
-            f'{ANSWER_LAYOUT}. The layout moves before 1.0 and nothing reads another one back: solve '
+            f'{ANSWER_LAYOUT}. The layout changes before 1.0 and nothing reads another one back: solve '
             f'the model again and save it.'
         )
 
@@ -106,7 +106,7 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
         short = f'is short of {missing}' if missing else f'holds {stray}'
         raise LayoutError(
             f'{str(found)!r} holds a saved {row_type.__name__} row that {short}, so it was written in a '
-            f'layout this package does not read. The layout moves before 1.0 and '
+            f'layout this package does not read. The layout changes before 1.0 and '
             f'nothing reads an older one back: solve the model again and save it.'
         )
     return row_type(**columns)

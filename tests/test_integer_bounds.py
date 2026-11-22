@@ -28,7 +28,7 @@ def _one_integer(lower: float, upper: float, sense: str) -> dict:
 def test_an_integer_variable_reads_its_bounds_as_whole_numbers(
     lower: float, upper: float, sense: str, expected: float
 ) -> None:
-    """HiGHS answered a lower bound of -0.5 as optimal with no feasible values, and the oracle as -0.5 (#2048)."""
+    """HiGHS answered a lower bound of -0.5 as optimal with no feasible values, and the linopy lane as -0.5 (#2048)."""
     spec, sources = _one_integer(lower, upper, sense)
     with differential(spec, sources, lp=True) as run:
         assert run.oracle == pytest.approx(expected), f'v is the whole number nearest its bound, {expected}'

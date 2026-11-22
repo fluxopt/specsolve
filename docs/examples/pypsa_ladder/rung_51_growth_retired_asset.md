@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-51--a-growth-limit-after-an-asset-retires): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **3432.5** on both sides; structure ✔ 8 constraints · 2 variables, name for name; size ✔ 26 rows · ✔ 10 columns · ✔ 34 nonzeros; duals ✔ 26 rows; **model for model**: 10 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **3432.5** on both sides; structure ✔ 8 constraints · 2 variables, name for name; size ✔ 26 rows · ✔ 10 columns · ✔ 34 nonzeros; duals ✔ 26 rows; **model for model**: 10 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

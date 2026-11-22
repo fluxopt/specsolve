@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-34--maintenance-of-committable-units): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **6420.048611** on both sides; structure ✔ 101 constraints · 30 variables, name for name; size ✔ 503 rows · ✔ 277 columns · ✔ 1153 nonzeros; duals — integer model, no duals; **model for model**: 131 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **6420.048611** on both sides; structure ✔ 101 constraints · 30 variables, name for name; size ✔ 503 rows · ✔ 277 columns · ✔ 1153 nonzeros; duals — integer model, no duals; **model for model**: 131 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

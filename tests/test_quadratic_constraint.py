@@ -3,7 +3,7 @@
 `linopy.Model` refuses a `QuadraticExpression` in a constraint, so two weaker
 oracles replace the differential one:
 
-1. **Two independent encodings** — the direct `addMQConstr` hand-off against
+1. **Two independent encodings** — the direct `addMQConstr` handoff against
    the same model as LP text read back by Gurobi's parser. They share the
    tables and nothing below, so an encoding error shows up as two numbers.
 2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built tables
@@ -97,7 +97,7 @@ def test_the_two_encodings_reach_one_optimum(expression, tmp_path):
         path = tmp_path / 'model.lp'
         sps.write(varied, SOURCES, path)
         assert _read_back(path) == pytest.approx(direct.objective, rel=RTOL), (
-            'the written file and the direct hand-off are the same model by two routes; a '
+            'the written file and the direct handoff are the same model by two routes; a '
             'disagreement is an encoding error in one of them'
         )
 
@@ -111,9 +111,9 @@ def test_the_activity_is_the_whole_left_hand_side():
     with sps.build(SPEC, SOURCES) as model:
         result = model.solve(solver_name='gurobi', outputs={'activity'})
         recomputed = recomputed_row_values(model._engine, result)
-        block = model._engine._model.constraints['coupled']
+        indexed = model._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
-        assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
+        assert reported == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
 
 
@@ -150,14 +150,14 @@ def test_quadratic_entries_take_the_tail_of_the_label_space():
     with sps.build(first, SOURCES) as model:
         tables = model._engine._model.handoff
         assert model._engine._model.constraints['cap'].start == 0, 'the linear entry is built first'
-        assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
+        assert [row for row, _ in tables.quadratic_rows()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
         assert tables.linear_row_count == 1
 
 
 def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
-    """A row with no term closes up the block, and every quadratic entry moves with its row.
+    """A row with no term closes up the entry's rows, and every quadratic coefficient moves with its row.
 
     ``k`` has no value at ``a``, so that row has no term and is not built, and
     ``b`` and ``c`` move up to rows 0 and 1. Each keeps its own pair:
@@ -310,8 +310,8 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
-    """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``_inputs.as_program`` gate — and refuses it before linopy is asked,
+    """Hard rule 3's amendment where it bites. The linopy lane still *accepts* the
+    model — one ``_inputs.as_program`` — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 
@@ -331,7 +331,7 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
 
 
 def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
-    """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
+    """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
     from specsolve._sinks.highs import Highs

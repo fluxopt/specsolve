@@ -2,7 +2,7 @@
 
 There is no runtime fallback — the streaming subset IS the language
 (docs/development/architecture.md), and both lanes are inside it: `tests.linopy_lane`
-builds the same file through the same `_inputs.as_program` gate.
+builds the same file through `as_program`, the one function every verb compiles a spec through.
 Errors must carry the construct and its context, verbatim.
 """
 

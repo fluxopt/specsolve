@@ -141,7 +141,7 @@ specsolve, see
 
 The YAML format comes from [Calliope](https://github.com/calliope-project/calliope),
 and [linopy](https://github.com/PyPSA/linopy) supplies the vocabulary, the
-oracle and every benchmark denominator.
+linopy lane every build is checked against, and every benchmark denominator.
 [Prior art and credit](https://specsolve.readthedocs.io/en/latest/about/prior-art/)
 says what came from each.
 

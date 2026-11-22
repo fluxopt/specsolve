@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-63--modular-branches-and-storage): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **13927.0** on both sides; structure ✔ 27 constraints · 17 variables, name for name; size ✔ 108 rows · ✔ 52 columns · ✔ 200 nonzeros; duals — integer model, no duals; **model for model**: 44 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **13927.0** on both sides; structure ✔ 27 constraints · 17 variables, name for name; size ✔ 108 rows · ✔ 52 columns · ✔ 200 nonzeros; duals — integer model, no duals; **model for model**: 44 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
