@@ -157,7 +157,7 @@ class Spill:
 
     directory: Path
     key_name: str
-    #: The key column's type, settled over the sweep's keys, never per file.
+    #: The key column's type, decided once over the sweep's keys, never per file.
     key_dtype: pl.DataType
     #: How each table is written, where an archive adds its run; ``None`` is
     #: [`write_whole`][specsolve._answer_layout.write_whole].
