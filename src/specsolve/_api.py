@@ -234,7 +234,7 @@ class Model:
         whatever changed. Data that changes which coordinates a condition admits
         renumbers solver indices, so the model is rebuilt and solved cold rather
         than pushed onto a loaded solver;
-        [`loads`][specsolve._result.Diagnostics.loads] says which ran.
+        [`solver_loads`][specsolve._result.Diagnostics.solver_loads] says which ran.
 
         Results taken before the update keep reading their own tables, and
         keep their build's index tables alive until dropped or until

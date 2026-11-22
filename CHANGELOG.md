@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - feat(api): the metrics time every phase from the spec to the archive, and an older answer reads as another layout ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
+- refactor(api): diagnostics and metrics count a solver load as solver_loads, since load is the spec's ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - refactor(api): a saved answer is read with read_result, read_sweep, read_archive and read_inputs, as scan_… scans it ([#2179](https://github.com/fluxopt/specsolve/pull/2179))
 - fix(engine): a dimension may be called row, coeff, cval or ord, as any other name ([#2170](https://github.com/fluxopt/specsolve/pull/2170))
 - refactor: messages and docs use one word per meaning, as the glossary defines it ([#2166](https://github.com/fluxopt/specsolve/pull/2166))

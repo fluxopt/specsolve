@@ -337,7 +337,7 @@ class Sweep:
     #: One [`Metrics`][specsolve._records.Metrics] per slice, keyed as
     #: [`records`][] is and in slice order — [`diagnostics`][specsolve._api.Model.diagnostics]
     #: one dimension wider, its counts and clocks only. Each row is the slice's
-    #: own share: ``solves`` is ``1``, and ``loads`` is ``1`` where the solver
+    #: own share: ``solves`` is ``1``, and ``solver_loads`` is ``1`` where the solver
     #: took the model from scratch. Under a serial fold the first slice does
     #: and the rest are pushed values, so a later ``1`` is a slice whose data
     #: changed what a condition leaves absent; under an executor every slice builds alone and every one

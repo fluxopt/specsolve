@@ -53,7 +53,7 @@ hold = pl.when(pl.col('generator') == 'gas').then(60.0).otherwise(pl.col('value'
 held = pinned.update({'p_lo': p_lo.with_columns(value=hold), 'p_hi': p_hi.with_columns(value=hold)}).solve().objective
 
 pinning = pinned.diagnostics()
-print(f'{pinning.loads} loads over {pinning.solves} solves — a pin moves bounds, not labels')
+print(f'{pinning.solver_loads} loads over {pinning.solves} solves — a pin moves bounds, not labels')
 print(pl.DataFrame({'gas': ['free to dispatch', 'held at 60'], 'objective': [unpinned, held]}))
 ```
 

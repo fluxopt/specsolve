@@ -23,7 +23,7 @@ Each spec is parsed and built once, above the loop, and ``update`` puts the
 next iteration's numbers on the model that is already there. The subproblem's
 ``cap_hat`` reaches its rows as a right-hand side, so HiGHS keeps the model it
 holds and re-solves from the last basis; the master grows a row a step and is
-loaded again, as ``diagnostics().loads`` reports.
+loaded again, as ``diagnostics().solver_loads`` reports.
 """
 
 from __future__ import annotations
@@ -185,7 +185,7 @@ def main() -> None:
         print(f'cuts: {tables["cut_const"].height} optimality, {tables["fcut_const"].height} feasibility')
         for name, model in (('the subproblem', sub_model), ('the master', master)):
             seen = model.diagnostics()
-            print(f'{name} loaded the solver {seen.loads} time(s) in {seen.solves} solves')
+            print(f'{name} loaded the solver {seen.solver_loads} time(s) in {seen.solves} solves')
 
 
 if __name__ == '__main__':

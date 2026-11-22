@@ -280,10 +280,10 @@ class Diagnostics:
 
     #: How many times this model has been solved, and how many of those solves
     #: loaded the solver from scratch instead of pushing values onto one that
-    #: already held it. ``loads == solves`` on an iterating driver means the
+    #: already held it. ``solver_loads == solves`` on an iterating driver means the
     #: model has a condition on a parameter that varies.
     solves: int
-    loads: int
+    solver_loads: int
 
     #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
     #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
@@ -305,7 +305,7 @@ class Diagnostics:
             rows=self.rows,
             nonzeros=self.nonzeros,
             solves=self.solves,
-            loads=self.loads,
+            solver_loads=self.solver_loads,
             load_seconds=clocks.get('load', 0.0),
             tidy_seconds=clocks.get('tidy', 0.0),
             attach_seconds=clocks.get('attach', 0.0),

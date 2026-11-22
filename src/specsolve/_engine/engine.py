@@ -117,7 +117,7 @@ class Engine:
         self._solved: SolveStatus | None = None
         #: How many solves this model has been through, and how many loaded the solver from scratch.
         self._solves = 0
-        self._loads = 0
+        self._solver_loads = 0
         #: Wall seconds each phase has spent, cumulative across rebuilds.
         self._seconds: dict[str, float] = {}
 
@@ -212,7 +212,7 @@ class Engine:
         Returns the solver and whether it was loaded again, which
         [`loaded`][specsolve._sinks.loaded] decides. A solver
         kept forgets its last run unless *carry_on*. Counts toward neither
-        ``solves`` nor ``loads``, so timing this alone leaves them true.
+        ``solves`` nor ``solver_loads``, so timing this alone leaves them true.
         """
         self.check_sink(solver_name)
         self._solved = None
@@ -278,7 +278,7 @@ class Engine:
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:
-            self._loads += 1
+            self._solver_loads += 1
         with self.clocked('solve'):
             answer = solver.run(handoff, basis='basis' in outputs)
         self._solved = answer.status
@@ -395,7 +395,7 @@ class Engine:
             ),
             objective_range=measured.objective_range,
             solves=self._solves,
-            loads=self._loads,
+            solver_loads=self._solver_loads,
             seconds=dict(self._seconds),
         )
 

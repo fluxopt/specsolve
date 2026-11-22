@@ -218,7 +218,7 @@ STRICT = {
         'rows': pl.Int64,
         'nonzeros': pl.Int64,
         'solves': pl.Int64,
-        'loads': pl.Int64,
+        'solver_loads': pl.Int64,
         'load_seconds': pl.Float64,
         'tidy_seconds': pl.Float64,
         'attach_seconds': pl.Float64,

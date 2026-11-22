@@ -176,7 +176,7 @@ class Metrics(NamedTuple):
 
     **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
     for the archive [`specsolve.solve`][] writes and on each slice's row of a
-    sweep, whose clocks are that slice's own share. There [`loads`][] is ``1``
+    sweep, whose clocks are that slice's own share. There [`solver_loads`][] is ``1``
     where the solver took the slice from scratch and ``0`` where values were
     pushed onto the model it held. [`load_seconds`][] is on the row of the
     slice that built the model, and [`write_seconds`][] and
@@ -191,7 +191,7 @@ class Metrics(NamedTuple):
     #: How many solves the row covers, and how many of those loaded the solver
     #: from scratch. The clocks are cumulative over exactly these solves.
     solves: int
-    loads: int
+    solver_loads: int
     #: Wall-clock seconds in each phase, in the order the phases run. Each
     #: phase starts from what the one before it produced, so together they
     #: are the whole call and no step is in two of them. A phase that never
@@ -199,7 +199,7 @@ class Metrics(NamedTuple):
     #:
     #: - ``load``: mathspec's load, ``to_spec`` on the spec as given, a path
     #:   or a mapping, and the program compiled from it. Loading a solver is
-    #:   ``handoff``, which [`loads`][] counts.
+    #:   ``handoff``, which [`solver_loads`][] counts.
     #: - ``tidy``: each source read into its tidy table, the way
     #:   [`tidy`][specsolve._api.tidy] returns it.
     #: - ``attach``: the tidy tables encoded against the program's dimensions,
@@ -242,7 +242,7 @@ class Metrics(NamedTuple):
 PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
 
 #: The [`Metrics`][] columns a model sums over its solves.
-_CUMULATIVE = ('solves', 'loads', *(f'{phase}_seconds' for phase in PHASES))
+_CUMULATIVE = ('solves', 'solver_loads', *(f'{phase}_seconds' for phase in PHASES))
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
