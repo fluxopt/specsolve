@@ -708,7 +708,7 @@ parametrized by what the window moves:
 | `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
-`one` reads that parameter again and, where it moves only numbers at the
+`one` reads that parameter again and, where it changes only numbers at the
 coordinates it had, rebuilds only the entries it feeds; anything else
 builds in full. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP

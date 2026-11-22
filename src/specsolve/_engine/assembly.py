@@ -513,7 +513,7 @@ def numbers_only(
     attached: AttachedSources,
     changed: Collection[str],
 ) -> bool:
-    """Whether *changed* moves only numbers [`refilled`][] can read again, so *built* keeps its indices and matrix.
+    """Whether *changed* changes only numbers [`spliced_model`][] can read again, so *built* keeps its indices and matrix.
 
     Every name must be a parameter that no build reads for which columns, rows
     or matrix entries exist ([`_structural_parameters`][]), nor one *compiled*
@@ -528,12 +528,14 @@ def numbers_only(
     structural = _structural_parameters(compiled) | specialized_on(compiled)
     if not set(changed) <= set(plan.parameters) or set(changed) & structural:
         return False
-    if any(name in measured.omitted for name in _fed(plan.constraints, changed, _constraint_parameters)):
+    if any(name in measured.omitted for name in _entries_reading(plan.constraints, changed, _constraint_parameters)):
         return False
     return all(_same_coordinates(built.attached, attached, name, plan.parameters[name].dims) for name in changed)
 
 
-def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[str], measured: Measured) -> BuiltModel:
+def spliced_model(
+    built: BuiltModel, attached: AttachedSources, changed: Collection[str], measured: Measured
+) -> BuiltModel:
     """*built* with every bound, constant side and objective that reads a name in *changed* read again off *attached*.
 
     The hand-off a full build of the same data gives, where [`numbers_only`][]
@@ -555,13 +557,13 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     obj, quad, constant = handoff.obj, handoff.quad, handoff.objective_constant
 
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
-        for name in _fed(plan.variables, changed, _bound_parameters):
+        for name in _entries_reading(plan.variables, changed, _bound_parameters):
             held = built.variables[name]
             if not held.height:
                 continue
             share = assembly._columns(name, plan.variables[name], held.table)
             cols = _spliced(cols, held.start, held.start + held.height, share)
-        for name in _fed(plan.constraints, changed, _constraint_parameters):
+        for name in _entries_reading(plan.constraints, changed, _constraint_parameters):
             held = built.constraints[name]
             if not held.height:
                 continue
@@ -628,7 +630,9 @@ def _constraint_parameters(c: program.Constraint) -> frozenset[str]:
     return program.parameters_of(c.lhs, c.rhs)
 
 
-def _fed[D](entries: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]) -> list[str]:
+def _entries_reading[D](
+    entries: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]
+) -> list[str]:
     """The names of *entries* that *reads* says read a name in *changed*, in the order they are written."""
     return [name for name, d in entries.items() if reads(d) & set(changed)]
 
