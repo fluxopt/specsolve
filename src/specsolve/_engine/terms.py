@@ -41,23 +41,23 @@ PRESENT = '__present__'
 
 @dataclass(frozen=True)
 class Presence:
-    """Where the *variable* under a term exists, and what keys it.
+    """Where the *variable* under a term exists, and the columns it is joined on.
 
     Not which rows the term's table has: a neutral parameter's missing rows
     are a zero coefficient, those a variable's condition leaves out are
     absence, and the table cannot tell them apart.
 
-    ``keyed_by`` is ``None`` where the table is keyed by the term's own
-    dimensions, an implied key that stays right as downstream operators rewrite
-    them. A shift or window edge states a narrower one.
+    ``joined_on`` is ``None`` where the table is joined on the term's own
+    dimensions, implied columns that stay right as downstream operators rewrite
+    them. A shift or window edge states narrower ones.
     """
 
     table: pl.LazyFrame
-    keyed_by: tuple[str, ...] | None = None
+    joined_on: tuple[str, ...] | None = None
 
-    def keys(self, term_dims: tuple[str, ...]) -> tuple[str, ...]:
+    def join_columns(self, term_dims: tuple[str, ...]) -> tuple[str, ...]:
         """The columns this presence restricts by, for a term over *term_dims*."""
-        return self.keyed_by if self.keyed_by is not None else term_dims
+        return self.joined_on if self.joined_on is not None else term_dims
 
     def restrict(self, table: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
         """Keep only the rows of *table* this presence admits.
@@ -136,8 +136,8 @@ def refuse_a_term_without_the_dims(p: Term, dims: list[str], context: str, opera
 def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
     """*p* repeated at every label of each of *dims* it lacks, the same value at each.
 
-    Its presences leave with their keys spelled out, since the implied key,
-    the term's dimensions, now names columns their tables do not hold.
+    Its presences leave with their join columns spelled out, since the implied ones,
+    the term's dimensions, now name columns their tables do not hold.
     """
     missing = [d for d in dims if d not in p.dims]
     if not missing:
@@ -184,9 +184,9 @@ def constant_scalar(p: Term) -> pl.LazyFrame:
 def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
     """The presence tables a constraint's rows — or a read's — have to be contained in.
 
-    Each leaves with its key spelled out, since indexing cannot know the term it came from.
+    Each leaves with its join columns spelled out, since indexing cannot know the term it came from.
     """
-    return [Presence(x.table, x.keys(p.dims)) for p in terms for x in p.presences]
+    return [Presence(x.table, x.join_columns(p.dims)) for p in terms for x in p.presences]
 
 
 #: How a node's output rows relate to its input slots.
@@ -238,7 +238,7 @@ def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]
 
     Needed before a node that is not one-to-one ([`fan_in`][]): the row-level
     intersection at assembly cannot say which input slots behind a row survived.
-    A term lacking a dimension a restriction is keyed by is first repeated
+    A term lacking a dimension a restriction is joined on is first repeated
     along it, never along a dimension in *along*, which the operator refuses itself
     ([`refuse_a_term_without_the_dims`][]). A term is never restricted
     by its own presence: its rows are inside it by construction.
@@ -252,7 +252,7 @@ def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]
         for source, presence in absent:
             if source is p:
                 continue
-            on = list(presence.keys(source.dims))
+            on = list(presence.join_columns(source.dims))
             missing = [d for d in on if d not in dims]
             if any(d in along for d in missing):
                 continue
@@ -306,12 +306,12 @@ def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[p
 
 
 def _keyed(p: Term) -> tuple[Presence, ...]:
-    """*p*'s presences with their keys spelled out, before a product gives them a term over more dimensions.
+    """*p*'s presences with their join columns spelled out, before a product gives them a term over more dimensions.
 
-    An implied key is the term's own dimensions, and the product's are a superset,
+    The implied join columns are the term's own dimensions, and the product's are a superset,
     so carried over unspelled it would name columns the table does not hold.
     """
-    return tuple(Presence(x.table, x.keys(p.dims)) for x in p.presences)
+    return tuple(Presence(x.table, x.join_columns(p.dims)) for x in p.presences)
 
 
 def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
@@ -327,7 +327,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     joined, out_dims = _paired(a, c, c.table.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
     if divide:
         for presence in c.presences:
-            joined = presence.restrict(joined, presence.keys(c.dims))
+            joined = presence.restrict(joined, presence.join_columns(c.dims))
 
     value, rhs = pl.col(a.value_column), pl.col(_RHS)
     combined = value / rhs if divide else value * rhs

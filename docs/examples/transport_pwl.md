@@ -197,8 +197,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```python
     # sources: parameter name -> table or parquet path
-    with sps.solve(to_spec('examples/ports/transport_pwl.yaml').expand(), sources) as solution:
-        solution.objective  # 8.786852757777865
+    with sps.solve(to_spec('examples/ports/transport_pwl.yaml').expand(), sources) as result:
+        result.objective  # 8.786852757777865
     ```
 
 === "linopy"

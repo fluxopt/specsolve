@@ -228,14 +228,14 @@ WIDE_DATA = {
     'w': pd.Series([2.0, 3.0, 4.0, 5.0], index=pd.Index(['a', 'b', 'c', 'd'], name='f')),
 }
 
-WIDE_COORDS = {
+WIDE_COORDINATES = {
     'f': pd.DataFrame({'f': ['a', 'b', 'c', 'd']}),
     'grp': pd.DataFrame({'f': ['a', 'b', 'c', 'd'], 'g': ['g0', 'g0', 'g1', 'g1']}),
     'g': pd.Index(['g0', 'g1'], name='g'),
     't': pd.Index([0, 1], name='t'),
 }
 
-PLAIN_COORDS = {'f': pd.Index(['a', 'b', 'c', 'd'], name='f'), 't': pd.Index([0, 1], name='t')}
+PLAIN_COORDINATES = {'f': pd.Index(['a', 'b', 'c', 'd'], name='f'), 't': pd.Index([0, 1], name='t')}
 
 
 def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
@@ -262,7 +262,7 @@ def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
         'constraints': {'c': {'dims': dims, 'expression': expression}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
     }
-    with differential(spec, WIDE_DATA | (WIDE_COORDS if grouped else PLAIN_COORDS), lp=True) as run:
+    with differential(spec, WIDE_DATA | (WIDE_COORDINATES if grouped else PLAIN_COORDINATES), lp=True) as run:
         return float(run.result.objective)
 
 

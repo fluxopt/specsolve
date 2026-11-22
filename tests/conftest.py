@@ -142,7 +142,7 @@ def solve_written_file(path: Path | str) -> float:
     return h.getInfo().objective_function_value
 
 
-def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
+def primal_by_coordinate(result: Any, name: str, *dims: str) -> dict[Any, float]:
     """A variable's primal as ``{coordinate: value}`` — tuple keys past one dimension.
 
     One ``primal`` call: two separate calls are not promised to line up.
@@ -553,13 +553,13 @@ def assert_infeasible_reports_both_axes(solver_name: str) -> None:
     import specsolve as sps
     from specsolve.errors import NoSolutionError
 
-    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.has_primal
-        assert solution.objective != solution.objective, 'nan, not 0.0'
+    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as result:
+        assert result.status == 'warning'
+        assert result.termination_condition == 'infeasible'
+        assert not result.has_primal
+        assert result.objective != result.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='INFEASIBLE'):
-            solution.primal('p')
+            result.primal('p')
 
 
 #: A knapsack: the discrete model the update and warm-start tests share.

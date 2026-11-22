@@ -261,8 +261,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```python
     # sources: parameter name -> table or parquet path
-    with sps.solve('examples/ports/pypsa_min_up_down.yaml', sources) as solution:
-        solution.objective  # 32750.0
+    with sps.solve('examples/ports/pypsa_min_up_down.yaml', sources) as result:
+        result.objective  # 32750.0
     ```
 
 === "PyPSA"

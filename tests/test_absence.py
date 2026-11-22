@@ -13,7 +13,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.conftest import by_coord, override
+from tests.conftest import override, primal_by_coordinate
 from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
@@ -181,7 +181,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     """
     with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
         assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
-        built = by_coord(run.result, 'imports', 'bus')
+        built = primal_by_coordinate(run.result, 'imports', 'bus')
 
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
@@ -215,7 +215,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     }
     with differential(SPANNED_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(7.0 + 2.0, rel=RTOL), 'north takes both snapshots, south neither'
-        built = by_coord(run.result, 'imports', 'snapshot', 'bus')
+        built = primal_by_coordinate(run.result, 'imports', 'snapshot', 'bus')
 
     assert built[(0, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
@@ -250,7 +250,7 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     }
     with differential(PLURAL_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(3.0 + 4.0, rel=RTOL), 'south holds nothing at either technology'
-        built = by_coord(run.result, 'imports', 'bus', 'technology')
+        built = primal_by_coordinate(run.result, 'imports', 'bus', 'technology')
 
     assert built[('south', 'wind')] == pytest.approx(0.0), 'no generator sits at (south, wind)'
     assert built[('south', 'solar')] == pytest.approx(0.0), 'no generator sits at (south, solar)'
@@ -297,7 +297,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(ABSENT_VARIABLE_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
@@ -334,7 +334,7 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(DEFINED_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: the envelope binds'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'unsized: the complementary clause pins it'
 
@@ -364,7 +364,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(ABSENT_COEFFICIENT_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'the row survived the missing coefficient and pins x'
 

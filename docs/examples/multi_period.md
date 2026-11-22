@@ -183,9 +183,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```python
     # sources: parameter name -> table or parquet path
-    with sps.solve('examples/multi_period.yaml', sources) as solution:
-        solution.objective  # 10020.0
-        solution.dual('balance')
+    with sps.solve('examples/multi_period.yaml', sources) as result:
+        result.objective  # 10020.0
+        result.dual('balance')
     ```
 
 === "linopy"

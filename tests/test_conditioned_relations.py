@@ -17,7 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.conftest import by_coord, override, raw_of
+from tests.conftest import override, primal_by_coordinate, raw_of
 from tests.differential import RTOL, differential
 from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.oracle import pd, specsolve_linopy
@@ -107,7 +107,7 @@ def test_a_map_keyed_by_two_columns_groups_per_condition():
         assert run.oracle == pytest.approx(4 * 1.0 + 6 * 2.0 + 5 * 1.0, rel=RTOL), (
             'the hand-derived optimum, reached through the same map on both lanes and in the LP file'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(4.0), "zone n's cap binds in period 1"
     assert built[('g2', 1)] == pytest.approx(6.0), 'the rest of period 1 comes from the dearer generator'
@@ -128,7 +128,7 @@ def test_a_pair_the_map_leaves_out_is_in_no_group():
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 1.0, rel=RTOL), (
             'the unmapped pair costs the cheap generator nothing, and its mapped period is unchanged'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(10.0), 'in no zone in period 1, so no cap binds it'
     assert built[('g1', 2)] == pytest.approx(5.0), 'still mapped in period 2, where its zone caps the pair'
@@ -149,7 +149,7 @@ def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
         assert run.oracle == pytest.approx(4 * 1.0 + 6 * 2.0 + 5 * 1.0, rel=RTOL), (
             'each generator bounded by the cap of the zone its own pair reads'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(4.0), "read through its own pair, g1 takes zone n's cap"
     assert built[('g2', 1)] == pytest.approx(6.0), 'its pair reads zone s, whose cap is the larger one'
@@ -166,7 +166,7 @@ def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
 
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(4.0, rel=RTOL), 'the one surviving pair serves its own period'
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert sorted(built) == [('g1', 1)], 'the one pair the map sends to zone n'
 

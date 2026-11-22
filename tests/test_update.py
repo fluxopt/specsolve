@@ -23,7 +23,7 @@ from tests.conftest import KNAPSACK, expanded, knapsack_sources, override, port_
 
 GENERATORS = ['wind', 'solar', 'gas']
 SNAPSHOTS = [0, 1, 2, 3]
-COORDS = {'snapshot': SNAPSHOTS, 'generator': GENERATORS}
+COORDINATES = {'snapshot': SNAPSHOTS, 'generator': GENERATORS}
 
 
 def sources() -> dict[str, pl.DataFrame]:
@@ -87,7 +87,7 @@ class Rung(NamedTuple):
 def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
     """The rung's model and the sources that build it, labels included."""
     return {
-        'dispatch': lambda: (dispatch_yaml, sources() | COORDS),
+        'dispatch': lambda: (dispatch_yaml, sources() | COORDINATES),
         'reach': lambda: (REACH, reach_sources()),
         'knapsack': lambda: (KNAPSACK, knapsack_sources()),
     }[rung.model]()
@@ -149,7 +149,7 @@ RUNGS = [
 @pytest.fixture
 def model(dispatch_yaml):
     """The example dispatch on its own data, built and open for the test's duration."""
-    with sps.build(dispatch_yaml, sources() | COORDS) as model:
+    with sps.build(dispatch_yaml, sources() | COORDINATES) as model:
         yield model
 
 
@@ -489,7 +489,7 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(model, solver_na
 def test_a_update_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, model):
     """Partial by construction: what is not named keeps what `build` bound."""
     every = {**sources(), 'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [1.0, 2.0, 3.0, 4.0]})}
-    with sps.solve(dispatch_yaml, every | COORDS) as reference:
+    with sps.solve(dispatch_yaml, every | COORDINATES) as reference:
         updated = model.update({'load': every['load']}).solve()
         assert updated.objective == pytest.approx(reference.objective)
 
@@ -649,7 +649,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     `examples/dispatch.yaml` has a `where:` of `p_max > 0`, so the shape is what
     *survived* the condition rather than what the entries multiply out to.
     """
-    with sps.build(dispatch_yaml, sources() | COORDS) as model:
+    with sps.build(dispatch_yaml, sources() | COORDINATES) as model:
         model.solve()
         seen = model.diagnostics()
 
@@ -663,7 +663,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
 def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
     """Read off the built model, so a condition that moved moves the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
-    with sps.build(dispatch_yaml, zeroed | COORDS) as model:
+    with sps.build(dispatch_yaml, zeroed | COORDINATES) as model:
         assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
 
 

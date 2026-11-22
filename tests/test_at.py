@@ -15,7 +15,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import SpecsolveError
-from tests.conftest import EXAMPLES_DIR, by_coord, relation
+from tests.conftest import EXAMPLES_DIR, primal_by_coordinate, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
@@ -107,8 +107,8 @@ def test_one_binary_gates_every_flow_of_its_component():
     }
     with sps.solve(COMPONENT_GATE, sources) as result:
         assert result.objective == pytest.approx(38.0)
-        running = by_coord(result, 'on', 'component', 't')
-        rates = by_coord(result, 'rate', 'flow', 't')
+        running = primal_by_coordinate(result, 'on', 'component', 't')
+        rates = primal_by_coordinate(result, 'rate', 'flow', 't')
 
     for t in (0, 1):
         for flow, component in zip(flows, ['c1', 'c1', 'c2'], strict=True):
@@ -228,11 +228,11 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'tf': pl.DataFrame({'tf': hours}),
         'same_moment': relation('tf', 't', hours, hours),
     }
-    with sps.solve(spec, sources) as solution:
-        assert solution.objective == pytest.approx(13.0), (
+    with sps.solve(spec, sources) as result:
+        assert result.objective == pytest.approx(13.0), (
             'the slow unit runs and is held up its own three hours; 11.0 would mean the window read nothing'
         )
-        on = solution.primal('on').filter(pl.col('value') > 0.5)
+        on = result.primal('on').filter(pl.col('value') > 0.5)
         assert on.height == 3, 'exactly the three snapshots its own minimum up time forces'
         assert set(on['unit']) == {'slow'}, 'and it is the slow unit that is held, not the fast one'
 

@@ -146,14 +146,14 @@ def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
     return answer, int(master._engine._solver._handle.getInfo().simplex_iteration_count), seconds
 
 
-def _slope_at(solution: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def _slope_at(result: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """The subproblem's subgradient in capacity, and its value at *capacity*.
 
     The subgradient is the capacity row's dual, weighted by availability and
     summed over snapshots.
     """
     slope = (
-        solution.dual('capacity')
+        result.dual('capacity')
         .join(avail, on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')

@@ -137,27 +137,27 @@ def test_ok_means_values_worth_reading_not_optimality():
 
 
 def test_an_infeasible_solve_reports_both_axes_and_a_nan_objective():
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.is_ok
-        assert solution.objective != solution.objective, 'nan, not 0.0'
+    with sps.solve(*CASES['INFEASIBLE']) as result:
+        assert result.status == 'warning'
+        assert result.termination_condition == 'infeasible'
+        assert not result.is_ok
+        assert result.objective != result.objective, 'nan, not 0.0'
 
 
 def test_reading_results_without_a_solution_raises():
     """HiGHS returns a full-length vector of zeros whatever the status, so
     handing it back would be indistinguishable from an answer."""
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
+    with sps.solve(*CASES['INFEASIBLE']) as result:
         with pytest.raises(NoSolutionError, match='infeasible'):
-            solution.primal('p')
+            result.primal('p')
         with pytest.raises(NoSolutionError, match='infeasible'):
-            solution.dual('meet')
+            result.dual('meet')
 
 
 def test_a_solve_that_left_no_values_writes_the_record_and_no_tables(tmp_path):
     """An export of a run that did not solve is the record alone."""
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
-        out = solution.save(tmp_path / 'infeasible')
+    with sps.solve(*CASES['INFEASIBLE']) as result:
+        out = result.save(tmp_path / 'infeasible')
     assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
         'the record, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
     )
@@ -173,9 +173,9 @@ def test_a_result_hands_back_the_row_its_save_writes(case, tmp_path):
     The same row whichever side it is read from: the live result, the file
     `save` wrote, and the result `load_result` reads back off that file.
     """
-    with sps.solve(*CASES[case]) as solution:
-        record = solution.record
-        out = solution.save(tmp_path / case)
+    with sps.solve(*CASES[case]) as result:
+        record = result.record
+        out = result.save(tmp_path / case)
     written = Record(**pl.read_parquet(out / 'record.parquet').row(0, named=True))
     assert record == written, 'the property and the file are one row, not two readings of the solve'
     assert sps.load_result(out).record == written, 'and a result read back hands back the row it was read from'
@@ -189,8 +189,8 @@ def test_a_case_that_reached_no_objective_does_not_poison_the_others(tmp_path):
     among a hundred turns the mean of the hundred into nan.
     """
     for name, case in (('solved', 'LP'), ('unsolved', 'INFEASIBLE')):
-        with sps.solve(*CASES[case]) as solution:
-            solution.save(tmp_path / name)
+        with sps.solve(*CASES[case]) as result:
+            result.save(tmp_path / name)
 
     table = pl.read_parquet(tmp_path / '*' / 'record.parquet')
     assert table['objective'].null_count() == 1, 'one of the two cases reached no objective'

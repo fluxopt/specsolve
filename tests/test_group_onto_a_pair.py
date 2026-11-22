@@ -13,7 +13,7 @@ import pytest
 from mathspec.program import Join, Sum, VariableReference
 
 from specsolve.errors import SchemaError
-from tests.conftest import by_coord, override, raw_of, schema_of
+from tests.conftest import override, primal_by_coordinate, raw_of, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 
@@ -101,7 +101,7 @@ def test_grouping_onto_two_dimensions_agrees_across_the_lanes():
     sources = _inputs()
     with differential(SPEC, sources, lp=True) as run:
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 2.0 + 5 * 3.0, rel=RTOL)
-        built = by_coord(run.result, 'p', 'generator')
+        built = primal_by_coordinate(run.result, 'p', 'generator')
 
     assert built['g1'] == pytest.approx(10.0), '(a, wind) is the binding limit'
     assert built['g2'] == pytest.approx(5.0), '(a, sun) is the binding limit'

@@ -681,8 +681,8 @@ P_{g} = \mathrm{p}^{\mathrm{nom,set}}_{g} \qquad \forall\, g \in \mathcal{G} \,:
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_57_scenario_nom_set.yaml', sources) as solution:
-        solution.objective  # 4800.0
+    with sps.solve('differential/pypsa/rungs/rung_57_scenario_nom_set.yaml', sources) as result:
+        result.objective  # 4800.0
     ```
 
 === "PyPSA"

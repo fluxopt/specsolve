@@ -222,9 +222,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```python
     # sources: parameter name -> table or parquet path
-    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as solution:
-        solution.objective  # 5540.0
-        solution.dual('power_balance')
+    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as result:
+        result.objective  # 5540.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"

@@ -216,15 +216,15 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         return tuple(travelled(x) for x in p.presences)
 
     def travelled(presence: Presence) -> Presence:
-        source, keyed_by = presence.table, presence.keyed_by
-        if keyed_by is not None and not set(edge.keys).issubset(keyed_by):
-            source, keyed_by = scope.widen(source, keyed_by, p.dims), None
-        keys = p.dims if keyed_by is None else keyed_by
-        moved_presence = remap(source, [], keys)
+        source, joined_on = presence.table, presence.joined_on
+        if joined_on is not None and not set(edge.keys).issubset(joined_on):
+            source, joined_on = scope.widen(source, joined_on, p.dims), None
+        join_columns = p.dims if joined_on is None else joined_on
+        moved_presence = remap(source, [], join_columns)
         if s.wrap or s.fill is None:
-            return Presence(moved_presence, keyed_by)
-        vacated = edge.vacated(scope, keys, beside=source if over_a_variable else None)
-        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), keyed_by)
+            return Presence(moved_presence, joined_on)
+        vacated = edge.vacated(scope, join_columns, beside=source if over_a_variable else None)
+        return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), joined_on)
 
     table = remap(p.table, p.carried, p.dims)
     if not s.wrap and s.fill is not None and p.kind == 'constant':

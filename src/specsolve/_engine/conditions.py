@@ -94,11 +94,11 @@ def query_condition(
     carrier = Carrier(table)
     serial = itertools.count()
 
-    def join_param(param: str) -> str:
-        how: JoinStrategy = 'inner' if param in certain else 'left'
+    def join_parameter(parameter: str) -> str:
+        how: JoinStrategy = 'inner' if parameter in certain else 'left'
         return carrier.once(
-            f'__where {param}__',
-            lambda f, alias: scope.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
+            f'__where {parameter}__',
+            lambda f, alias: scope.parameter_join(f, parameter, dims, alias, f"where-parameter '{parameter}'", how),
         )
 
     def refuse_outside_table(reading: str, dimension: str) -> None:
@@ -165,7 +165,7 @@ def query_condition(
 
     def walk(p: program.Condition) -> pl.Expr:
         if isinstance(p, program.ParameterComparison):
-            return _compare(pl.col(join_param(p.name)), p.op, p.value)
+            return _compare(pl.col(join_parameter(p.name)), p.op, p.value)
         if isinstance(p, program.ExpressionComparison):
             left, right = (_values(scope, side) for side in (p.left, p.right))
             columns = tuple(
@@ -207,7 +207,7 @@ def query_condition(
             return pl.col(join_relation(p.name, p.dims, None)).is_not_null()
         if isinstance(p, program.ParameterDefined):
             dtype = scope.program.parameters[p.name].dtype
-            defined = _defined(pl.col(join_param(p.name)), dtype)
+            defined = _defined(pl.col(join_parameter(p.name)), dtype)
             if dtype == 'bool' or p.name not in scope.data.given:
                 return defined
             given = carrier.once(

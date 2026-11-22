@@ -34,7 +34,7 @@ type SpecLike = str | Path | Mapping[str, object] | Spec
 
 
 def as_spec(spec: SpecLike) -> Spec:
-    """*spec* as the document it is, whatever shape it arrived in.
+    """*spec* as the spec it is, whatever shape it arrived in.
 
     Raises:
         SpecsolveError: A compiled ``Program``.

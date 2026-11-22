@@ -157,19 +157,21 @@ class QueryBuilder:
         lower, upper = bound(v.lower, -math.inf), bound(v.upper, math.inf)
         return carrier.table.with_columns(lower.alias('lb'), upper.alias('ub'))
 
-    def _aligned_bound(self, table: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
-        """*table* with *param* attached by position, or ``None`` to join.
+    def _aligned_bound(
+        self, table: pl.LazyFrame, parameter: str, v: program.Variable, alias: str
+    ) -> pl.LazyFrame | None:
+        """*table* with *parameter* attached by position, or ``None`` to join.
 
         Position lines up only for a dense parameter over the dimensions of a
         variable without a condition, in order. Height stands in for density because
         duplicates are refused at the door.
         """
-        entry = self.scope.program.parameters[param]
+        entry = self.scope.program.parameters[parameter]
         if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
 
         expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
-        values = self.scope.data.parameters[param]
+        values = self.scope.data.parameters[parameter]
         if values.select(pl.len()).pipe(collected).item() != expected:
             return None
 
@@ -299,15 +301,15 @@ class QueryBuilder:
                 the scalar marker [`PRESENT`][], since a table with no columns
                 holds no rows.
                 """
-                have = x.keys(dims)
-                keys = tuple(dict.fromkeys((*have, *on)))
+                have = x.join_columns(dims)
+                join_columns = tuple(dict.fromkeys((*have, *on)))
                 complement = narrowed(self.scope, on, ~r.when)
-                if not keys:
+                if not join_columns:
                     marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.table, complement)]
-                    return Presence(pl.concat(marks).unique(), keys)
+                    return Presence(pl.concat(marks).unique(), join_columns)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
-                widened = [self.scope.widen(x.table, have, keys), self.scope.widen(elsewhere, on, keys)]
-                return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
+                widened = [self.scope.widen(x.table, have, join_columns), self.scope.widen(elsewhere, on, join_columns)]
+                return Presence(pl.concat(widened, how='vertical_relaxed').unique(), join_columns)
 
             def kept(p: Term) -> Term:
                 """One term cut down to the region's coordinates.
@@ -521,7 +523,7 @@ class QueryBuilder:
         dims, restrictions = self.scope.spanned(constant), absence_restrictions(constant)
         carrier = narrowed(self.scope, dims, None)
         for restriction in restrictions:
-            carrier = restriction.restrict(carrier, restriction.keyed_by or ())
+            carrier = restriction.restrict(carrier, restriction.joined_on or ())
         added = self.summed_onto(constant, carrier, absent='hole' if self.solution is not None else absent)
         parameters = frozenset[str]().union(*(p.parameters for p in constant))
         return ExpressionTerms(
@@ -633,7 +635,7 @@ class QueryBuilder:
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
     def _pulled_back_presences(self, p: Term, a: program.JoinColumns) -> tuple[Presence, ...]:
-        """Where a lookup's variables exist, keyed by the fine dimensions they now span, as [`Presence`][] requires.
+        """Where a lookup's variables exist, joined on the fine dimensions they now span, as [`Presence`][] requires.
 
         [`_remap_term`][]'s inner join swallows both the operand's absence and
         the relation's; unreported, the row survives to assert ``x <= 0`` where
@@ -649,14 +651,16 @@ class QueryBuilder:
             return () if reached == total else (Presence(reachable, fine),)
 
         def pulled(presence: Presence) -> Presence:
-            keys = presence.keys(p.dims)
-            if not keys:
-                return Presence(presence.restrict(reachable, keys), fine)
-            carries_targets = all(i in keys for i in a.joined_dims)
-            source, keys = (
-                (presence.table, keys) if carries_targets else (self.scope.widen(presence.table, keys, p.dims), p.dims)
+            join_columns = presence.join_columns(p.dims)
+            if not join_columns:
+                return Presence(presence.restrict(reachable, join_columns), fine)
+            carries_targets = all(i in join_columns for i in a.joined_dims)
+            source, join_columns = (
+                (presence.table, join_columns)
+                if carries_targets
+                else (self.scope.widen(presence.table, join_columns, p.dims), p.dims)
             )
-            return Presence(*walk_join(source, table, a, keys))
+            return Presence(*walk_join(source, table, a, join_columns))
 
         return tuple(pulled(x) for x in p.presences)
 
