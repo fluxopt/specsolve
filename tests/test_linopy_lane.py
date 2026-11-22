@@ -120,7 +120,7 @@ class TestMasterCoords:
     def test_the_labels_keep_the_order_they_arrived_in(self):
         """A caller's labels are read in their own order on both lanes.
 
-        The ordinals a translation moves by are positions in this list, so a
+        The positions a translation moves by are places in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 'neutral'}})

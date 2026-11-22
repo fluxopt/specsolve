@@ -366,9 +366,9 @@ def test_what_a_bare_name_asks_is_decided_by_its_entry():
 # ---------------------------------------------------------------------------
 
 
-def test_a_table_cross_joins_its_dim_tables_and_carries_their_ordinals():
+def test_a_table_cross_joins_its_dim_tables_and_carries_their_positions():
     table = narrowed(builder().scope, ('snapshot', 'generator'), None)
-    assert columns(table) == ['snapshot', '__ord snapshot__', 'generator', '__ord generator__']
+    assert columns(table) == ['snapshot', '__position snapshot__', 'generator', '__position generator__']
     assert 'CROSS' in query(table)
 
 

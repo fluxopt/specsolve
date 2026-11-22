@@ -14,7 +14,7 @@ import polars as pl
 
 from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
-from specsolve._engine.scope import UNIT, ordinal
+from specsolve._engine.scope import UNIT, position_column
 from specsolve._names import LABEL
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def table(
 ) -> pl.DataFrame:
     """The coordinate product of *dims* narrowed by *where*, with a contiguous *index* from *start*.
 
-    The index is row-major over the dimensions' declared ordinals, so it is the
+    The index is row-major over the dimensions' positions, so it is the
     solver's own index with no remapping. *restrictions* are the
     variable-presence semi-joins a constraint row must be contained in; which
     rows they remove is unknown until data is read, so they take the counted
@@ -124,7 +124,11 @@ def _factored(
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
     survivors = (
-        narrowed(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
+        narrowed(scope, kept, where)
+        .sort([position_column(d) for d in kept])
+        .select(*kept)
+        .with_row_index(rank)
+        .pipe(collected)
     )
     width = survivors.height
     if width == 0:
@@ -155,8 +159,8 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
 
 
 def _row_major(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
-    """[`Scope.row_major`][] over a product table, which carries its ordinals."""
-    return scope.row_major(dims, lambda d: pl.col(ordinal(d)))
+    """[`Scope.row_major`][] over a product table, which carries its positions."""
+    return scope.row_major(dims, lambda d: pl.col(position_column(d)))
 
 
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:

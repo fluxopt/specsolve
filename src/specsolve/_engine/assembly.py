@@ -239,7 +239,7 @@ class Assembly:
             place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
             table = held.table
-            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col(COL)
+            place, col = self.scope.row_major(v.dims, self.scope.position_of), pl.col(COL)
         placed = table.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
@@ -355,13 +355,13 @@ class Assembly:
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
 
-        Such a block numbers its rows row-major over the declared ordinals
+        Such a block numbers its rows row-major over the positions
         ([`indices.table`][specsolve._engine.indices.table]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
         """
-        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
+        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.position_of)
 
     def _quadratic_share(
         self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint

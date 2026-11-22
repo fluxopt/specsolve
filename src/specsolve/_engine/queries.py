@@ -175,7 +175,7 @@ class QueryBuilder:
         if values.select(pl.len()).pipe(collected).item() != expected:
             return None
 
-        position = self.scope.row_major(v.dims, self.scope.ordinal_of)
+        position = self.scope.row_major(v.dims, self.scope.position_of)
         pairs = values.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
         return table.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
 

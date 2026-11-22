@@ -677,7 +677,7 @@ POSITIONAL = {
 
 
 def test_a_supplied_map_does_not_reorder_the_labels_it_joins_onto():
-    """A label's position is its ordinal, and joining a map on may not move it.
+    """A label's position is its place in label order, and joining a map on may not move it.
 
     A positional shape is placed against the labels read back off the labels table
     *after* the map has been joined onto it, so a join free to reorder hands

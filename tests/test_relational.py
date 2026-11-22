@@ -528,7 +528,7 @@ class TestTheIndexSpace:
         """A column index is the solver's own column, so its order is the contract.
 
         Column indices are contiguous ``0..n-1`` over the coordinates the condition leaves, assigned
-        row-major on the dimensions' declared ordinals. An off-by-one here is a different
+        row-major on the dimensions' positions. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
         """
@@ -1474,7 +1474,7 @@ class TestThePositionalHandoff:
         `avail` spans exactly `p`'s dimensions and has a row per coordinate, so the
         index table and the parameter describe the same product — and the index
         table is in index order by construction. Sorting the parameter by the
-        dimension ordinals reproduces that order, so the value column is attached
+        dimension positions reproduces that order, so the value column is attached
         rather than joined, which on `profiled/l` is most of a 0.58 s join.
 
         Checked against the oracle, because a misaligned bound is a different model
