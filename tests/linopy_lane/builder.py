@@ -259,10 +259,10 @@ def _refuse_a_coefficient_that_is_not_finite(
     kept = mask & whole.const.notnull() & (whole.vars != -1).any(TERM_DIM)
     sides = [side.to_linexpr() if hasattr(side, 'to_linexpr') else side for side in (term, other)]
     terms = [side for side in sides if hasattr(side, 'nterm')]
-    entries = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
+    coefficients = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
     constants = sum(int((np.isinf(s.const) & kept).sum()) for s in terms)
-    if entries or constants:
-        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), entries or constants)}')
+    if coefficients or constants:
+        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), coefficients or constants)}')
     return tuple(_cleared(side, ~kept) for side in sides)
 
 
