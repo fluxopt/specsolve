@@ -913,7 +913,7 @@ def load_sweep(directory: str | Path) -> Sweep:
 
     Raises:
         LayoutError: *directory* holds no ``sweep.json``, misses a record every
-            fold writes, or is in a layout that has moved since it was written.
+            fold writes, or is in a layout that has changed since it was written.
     """
     under = Path(directory)
     opened = _opened_sweep(under)

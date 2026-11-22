@@ -899,7 +899,7 @@ def load_result(directory: str | Path) -> Result:
 
     Raises:
         LayoutError: A directory holding no ``record.parquet``, or one whose
-            layout has moved since it was written.
+            layout has changed since it was written.
     """
     return _answer_under(Path(directory), eager=True)
 

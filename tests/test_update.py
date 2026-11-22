@@ -2,7 +2,7 @@
 
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
-path: an update that moves a condition renumbers solver indices, so the engine rebuilds and
+path: an update that changes which coordinates a condition admits renumbers solver indices, so the engine rebuilds and
 solves cold, and `diagnostics().loads` says which happened.
 """
 
@@ -661,7 +661,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
 
 
 def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
-    """Read off the built model, so a condition that moved moves the counts with it."""
+    """Read off the built model, so a condition that admits other coordinates changes the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with sps.build(dispatch_yaml, zeroed | COORDINATES) as model:
         assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)

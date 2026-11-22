@@ -137,7 +137,7 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
         LayoutError: A member outside the layout, an *into* given for a
-            directory, or a spec and sources whose layout has moved since
+            directory, or a spec and sources whose layout has changed since
             they were written.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
@@ -160,7 +160,7 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
         LayoutError: A member outside the layout, an *into* given for a
-            directory, or a spec, sources or answer whose layout has moved
+            directory, or a spec, sources or answer whose layout has changed
             since it was written. Where only the answer's has,
             [`load_inputs`][] still reads the spec and the sources.
         SpecsolveError: An answer that names a different spec than the one
@@ -225,7 +225,7 @@ def _refuse_other_inputs(under: Path, archive: Path) -> None:
     if (other := other_layout(under, INPUTS_LAYOUT)) is not None:
         raise LayoutError(
             f'{str(archive)!r} holds a spec and sources {other} and this package reads layout '
-            f'{INPUTS_LAYOUT}. The layout moves before 1.0 and nothing reads another one back. The files are '
+            f'{INPUTS_LAYOUT}. The layout changes before 1.0 and nothing reads another one back. The files are '
             f"plain: 'spec.yaml' is the spec, and each 'sources/<key>.parquet' is one source as the solve read "
             f'it. Read the spec with mathspec.to_spec, pass each source as its path, and solve again. A sweep '
             f"archive also holds 'axis.json', which names the axis and the carry the sweep ran with. A .zip "
