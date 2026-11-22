@@ -51,7 +51,7 @@ variables:
   p:
     description: >-
       the one decision per link, PyPSA's p — what it draws at its input. Every
-      other end's flow is that draw scaled by its incidence entry, so it needs
+      other end's flow is that draw scaled by its incidence value, so it needs
       no variable of its own.
     dims: [link]
     bounds:

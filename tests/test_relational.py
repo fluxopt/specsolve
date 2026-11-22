@@ -966,8 +966,8 @@ def _spelled_zeros(rows: list[list[float]]) -> pl.DataFrame:
     )
 
 
-class TestWhatReachesTheSolverAsAnEntry:
-    """One coordinate is one entry, however many terms wrote to it.
+class TestWhatReachesTheSolverAsACoefficient:
+    """One cell of the matrix is one coefficient, however many terms wrote to it.
 
     These are the ways a matrix can be wrong while the model is right: a cell
     written twice and left duplicated, two reductions colliding, a zero handed
@@ -980,14 +980,14 @@ class TestWhatReachesTheSolverAsAnEntry:
 
         `x + 2 * x` is two linear terms landing on one solver column, so the
         assembly has to add them. Its coefficient must be 3, and the row must hold
-        one entry for that column rather than two — a solver handed the same
+        one coefficient for that column rather than two — a solver handed the same
         column twice in one row is entitled to refuse the model.
         """
         spec = override(RHS_SPEC, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
-            assert matrix.height == 2, 'one entry per row, not one per term'
+            assert matrix.height == 2, 'one coefficient per row, not one per term'
             assert sorted(matrix[COEFF].to_list()) == [3.0, 3.0]
             result = model.solve()
         assert result.objective == pytest.approx(5.0), '6/3 + 9/3'
@@ -1033,7 +1033,7 @@ class TestWhatReachesTheSolverAsAnEntry:
 
         with sps.build(spec, sources) as model:
             matrix = model._engine._model.handoff.matrix
-            assert matrix.height == height, 'one entry per (row, col) cell the expression reaches'
+            assert matrix.height == height, 'one coefficient per (row, col) cell the expression reaches'
             assert set(matrix[COEFF].to_list()) == {coeff}
 
     @pytest.mark.parametrize(
@@ -1054,7 +1054,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         The self-loop is the case the collapse exists for: `l1` leaves and arrives
         at `b0`, so `+f - f` lands twice on one cell. A matrix holding the same
         `(row, col)` twice is not a slower model, it is one the sinks disagree
-        about — an LP reader sums the pair and a solver handed duplicate entries is
+        about — an LP reader sums the pair and a solver handed duplicate coefficients is
         entitled to do either.
         """
         spec, sources = _network(ends)
@@ -1145,7 +1145,7 @@ class TestWhatReachesTheSolverAsAnEntry:
         with sps.build(SPELLED_ZEROS_SPEC, {'i': [0, 1], 'j': [0, 1], 'a': a}) as model:
             tables = model._engine._model.handoff
             assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
-            assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no entries'
+            assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no coefficients'
             assert model.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
 
     def test_a_zero_objective_coefficient_is_not_handed_to_the_solver(self):
@@ -1264,7 +1264,7 @@ class TestThePositionalHandoff:
     """The sink is handed positions, not an index column, and position is the whole contract.
 
     A column index *is* the solver column, a bound is attached by position
-    rather than joined, and a chunk is a range of entries. Every test here
+    rather than joined, and a chunk is a range of coefficients. Every test here
     would still pass if the column indices were wrong and only the arithmetic right,
     and every one fails if the order the sink is handed disagrees with the
     order the model believes.
@@ -1355,16 +1355,16 @@ class TestThePositionalHandoff:
                 assert len(values) == count, 'the read-back slices it positionally, so it spans the model'
 
     def test_row_chunks_are_bounded_by_nonzeros_not_by_rows(self):
-        """A chunk of rows is a chunk of *entries*, and only entries are residency.
+        """A chunk of rows is a chunk of *coefficients*, and only coefficients are residency.
 
         The solver handoff reads ``matrix`` a range at a time and holds that range
         while it works it. Sizing the range in rows bounds the wrong quantity: the
-        same 100k-row range is 900k entries in ``transport`` and 10M in
+        same 100k-row range is 900k coefficients in ``transport`` and 10M in
         ``dispatch``, so what the sink holds would be set by the model's shape
         rather than by the budget.
 
         Wide rows are the case that separates the two, so this builds them: 50
-        generators summed into each of 4 snapshots is 50 entries per row.
+        generators summed into each of 4 snapshots is 50 coefficients per row.
         """
         n_g, n_s = 50, 4
         gens = pd.DataFrame(
@@ -1388,7 +1388,7 @@ class TestThePositionalHandoff:
             assert widest(tables._spans(budget)) <= budget
 
             assert widest(ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
-                'the same budget spent as if a row cost one element puts every entry in one chunk'
+                'the same budget spent as if a row cost one element puts every coefficient in one chunk'
             )
 
     @pytest.mark.parametrize(
