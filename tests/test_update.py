@@ -98,8 +98,8 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
 #: gates ``where: p_max > 0`` *and* bounds the variable, so whether it is
 #: structural depends on its values.
 #:
-#: The `reach` rungs move the objective constant, a coefficient, an entry's
-#: column and an entry's row, and each changes the answer. A coefficient at
+#: The `reach` rungs move the objective constant, a coefficient, a coefficient's
+#: column and a coefficient's row, and each changes the answer. A coefficient at
 #: 0.8 leaves `a` alone cheapest in the north: at 0.5 it would tie `b`, and a
 #: warm solve and a cold one may stop at either optimum.
 RUNGS = [
