@@ -63,7 +63,12 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   ([where coordinates come from](data.md#where-coordinates-come-from)).
 
 **Coordinate**
-: One point of an entry's dimensions: one snapshot for one generator.
+: One label from each of an entry's dimensions, written as a tuple, such as
+  `(wind, 2030-01-01 00:00)` for an entry over `generator` and `snapshot`. A
+  variable has one column, and a constraint one row, at each coordinate the
+  entry is built at. An entry over no dimensions has exactly one coordinate,
+  the empty one. xarray calls a dimension's labels its *coordinates*; here a
+  coordinate is one point, never a dimension's labels.
 
 **Parameter**
 : An entry the data fills: one number per coordinate of its dimensions.
@@ -118,8 +123,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : `model.update(sources)` puts new numbers on a built model in place. A change
   to a [structural parameter](#how-it-runs) builds again.
 
-**`load_…`** · **`scan_…`**
-: `load_…` reads a saved answer whole. `scan_…` reads each table when asked,
+**`read_…`** · **`scan_…`**
+: `read_…` reads a saved answer whole. `scan_…` reads each table when asked,
   so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
 
@@ -230,7 +235,8 @@ word to write. A plural is refused with its word.
 | `streaming lane` | relational lane |
 | `refill` | splice, for new numbers put into a built model |
 | `sayable` | in the language |
-| `seam`, `surface`, `tax`, `closure` | the plain thing |
+| `surface` | the public API |
+| `seam`, `tax`, `closure` | the plain thing |
 | `handover`, `owned` | horizon end, the window's horizon |
 | `matrix entry` | coefficient |
 | `door` | the function by name: `tidy_sources`, `as_program` |
