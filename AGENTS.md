@@ -77,7 +77,7 @@ result, a sweep or an archive writes to disk also raises a layout number, so a
 file in the old layout is refused by name: `INPUTS_LAYOUT` in
 `_archive_layout.py` for an archive's `spec.yaml`, `sources/` and `axis.json`,
 and `ANSWER_LAYOUT` in `_answer_layout.py` for everything else,
-`catalog.parquet` included. `load_inputs` then still reads an
+`catalog.parquet` included. `read_inputs` then still reads an
 archive whose answer alone is out of date. A new output in `OUTPUT_KINDS` is the
 exception: an answer's `format.json` names the outputs it holds, so an older
 answer reads the new one as not asked for, and the layout stays. Changing what

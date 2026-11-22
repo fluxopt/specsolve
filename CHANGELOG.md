@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): a saved answer is read with read_result, read_sweep, read_archive and read_inputs, as scan_… scans it ([#2179](https://github.com/fluxopt/specsolve/pull/2179))
 - fix(engine): a dimension may be called row, coeff, cval or ord, as any other name ([#2170](https://github.com/fluxopt/specsolve/pull/2170))
 - refactor: messages and docs use one word per meaning, as the glossary defines it ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
 - refactor(sweep): EachWindow takes the labels each window keeps as horizon= rather than steps=, and an archive written before reads as another layout ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
