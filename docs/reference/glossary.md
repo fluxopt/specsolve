@@ -112,7 +112,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **update**
 : `model.update(sources)` puts new numbers on a built model in place. A change
-  that alters which coordinates a `where:` keeps builds again.
+  to a [structural parameter](#how-it-runs) builds again.
 
 **`load_…`** · **`scan_…`**
 : `load_…` reads a saved answer whole. `scan_…` reads each table when asked,
@@ -129,6 +129,15 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : A polars `DataFrame` with one column per dimension and a `value` column, one
   row per coordinate.
 
+**Dense**
+: Having a row, or a value, at every coordinate of its dimensions, as a
+  parameter's table can. A table that is not dense leaves the coordinates it
+  has no row for to `missing:`.
+
+**Flag**
+: A parameter of `0` and `1` that a `where:` reads, such as `committable`, so
+  that the data switches entries on or off.
+
 ## How it runs
 
 **Engine**
@@ -138,6 +147,17 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **attach**
 : Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
   `update`.
+
+**Settled**
+: An atom of a `where:` that the data makes true at every coordinate, or at
+  none, such as a flag that is `1` everywhere. A build drops a settled atom, or
+  the entry it empties, without reading it per row.
+
+**Structural parameter**
+: A parameter that decides which rows and columns a model has, as one that a
+  `where:` or a `cases:` condition reads does. Changing one builds the
+  model again; any other parameter only gives numbers, which `update` puts in
+  place.
 
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
@@ -204,6 +224,7 @@ word to write. A plural is refused with its word.
 | `reject`, `rejected`, `error out` | refuse, refused |
 | `normal form` | the canonical form |
 | `streaming lane` | relational lane |
+| `refill` | splice, for new numbers put into a built model |
 | `sayable` | in the language |
 | `seam`, `surface`, `tax`, `closure` | the plain thing |
 | `handover`, `owned` | horizon end, the window's horizon |
