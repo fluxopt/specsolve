@@ -448,7 +448,7 @@ class Sweep:
                 given[kind] = {name: self.scan(name, kind).rename(rename).pipe(collected) for name in held}
         return given
 
-    def _check_per_window(self) -> None:
+    def _refuse_per_window_without_windows(self) -> None:
         """Refuse ``per_window=True`` where there are no windows to read."""
         if self._stitch is None:
             raise SpecsolveError(
@@ -457,16 +457,16 @@ class Sweep:
                 f'it without per_window.'
             )
 
-    def _check_requested(self, kind: str, name: str) -> None:
+    def _refuse_an_unrequested_kind(self, kind: str, name: str) -> None:
         """Refuse a kind of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS] the sweep was not asked for."""
         if kind in OUTPUT_KINDS and OUTPUT_KINDS[kind].output not in self._outputs:
             raise SpecsolveError(not_requested_message(kind, name))
 
     def _named(self, kind: str, name: str, *, per_window: bool) -> pl.LazyFrame:
         """*name*'s table of *kind*, lazily: the answer, or the tables per window."""
-        self._check_requested(kind, name)
+        self._refuse_an_unrequested_kind(kind, name)
         if per_window:
-            self._check_per_window()
+            self._refuse_per_window_without_windows()
         held = self._slices.get(kind, {})
         table = held.get(name)
         if table is None:
@@ -668,7 +668,7 @@ class Sweep:
         if self._evaluate is None:
             raise SpecsolveError(self._nothing_to_evaluate(expression))
         if per_window:
-            self._check_per_window()
+            self._refuse_per_window_without_windows()
         return self._answered(self._evaluate(expression), per_window=per_window)
 
     def _expression_names(self) -> Mapping[str, object]:
@@ -831,9 +831,9 @@ class Sweep:
         ``_unstitchable`` refuses, which an archive's answer already lacks.
         """
         kind = checked_kind(kind)
-        self._check_requested(kind, 'anything')
+        self._refuse_an_unrequested_kind(kind, 'anything')
         if per_window:
-            self._check_per_window()
+            self._refuse_per_window_without_windows()
         held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
             absent = _whole_kind_absent(kind, held, self._no_duals, self.records) or _none_answered(
