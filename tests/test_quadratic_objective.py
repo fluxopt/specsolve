@@ -60,7 +60,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
 
 
 #: Every form here is **convex**, and deliberately: HiGHS solves only convex
-#: QPs, so a pure cross term is refused by the oracle lane before it can
+#: QPs, so a pure cross term is refused by the linopy lane before it can
 #: disagree with anything.
 @pytest.mark.parametrize(
     'expression',

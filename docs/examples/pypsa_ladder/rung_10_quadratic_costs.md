@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-10--quadratic-costs): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **12587.437500000098** on both sides; structure ✔ 5 constraints · 2 variables, name for name; size ✔ 60 rows · ✔ 24 columns · ✔ 80 nonzeros; duals ✔ 60 rows; **model for model**: 8 blocks equal, 0 documented splits.
+> ✔ Verified against pypsa master at 51986084 — objective **12587.437500000098** on both sides; structure ✔ 5 constraints · 2 variables, name for name; size ✔ 60 rows · ✔ 24 columns · ✔ 80 nonzeros; duals ✔ 60 rows; **model for model**: 8 entries equal, 0 documented splits.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

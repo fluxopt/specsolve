@@ -283,10 +283,10 @@ def test_both_lanes_check_the_entries_a_formulation_emits(tmp_path):
         specsolve_linopy.build(expanded(path), {})
 
 
-def test_a_curve_left_as_written_is_refused_at_both_doors(tmp_path):
+def test_a_curve_left_as_written_is_refused_by_both_lanes(tmp_path):
     """A ``piecewise:`` block is refused rather than expanded, and the refusal names the expansion.
 
-    Both lanes read a model through one door, so both refuse the same file in
+    Both lanes compile a model through `as_program`, so both refuse the same file in
     the same words (hard rule 3), and neither expands it on the caller's
     behalf: nothing expands a formulation unasked, here or in the language.
     """
@@ -335,7 +335,7 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
-    """`tidy_sources` is the relational lane's only door for data, so the guard
+    """`tidy_sources` is the one function the relational lane reads data through, so the guard
     has to live behind it too — not only in the linopy loader."""
     data = nonconvex_inputs
     schema = schema_of(CONVEX_SPEC)
@@ -774,7 +774,7 @@ def test_a_curve_narrowed_by_its_own_breakpoints_asks_for_nothing_extra():
         "the file's own parameters and dimensions, and nothing a block invented"
     )
     assert sorted(tidy_sources(program, _ONE_DIM_CURVE)) == ['bp', 'bp_x', 'bp_y', 'load', 'snapshot'], (
-        'and the door gives back one table per name it takes'
+        'and `tidy_sources` gives back one table per name it takes'
     )
     assert sps.solve(expanded(_nominated_condition_spec()), _ONE_DIM_CURVE).objective == pytest.approx(95.0), (
         'and the data still attaches and the curve solves, narrowed to the rows of its own breakpoints'

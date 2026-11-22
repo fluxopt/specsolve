@@ -1,6 +1,6 @@
 """The linopy lane: its verbs, its loader, its where evaluator, its notes.
 
-Everything here needs the oracle's linopy. The lane holds no state: one call,
+Everything here needs linopy. The lane holds no state: one call,
 one model, nothing retained, and nothing put on ``linopy.Model``.
 """
 
@@ -68,12 +68,12 @@ def test_nothing_is_patched_onto_linopy_model():
 
 
 def test_the_lane_takes_sources_as_the_one_type():
-    """The lane's two verbs annotate ``sources`` the way every door in ``_api.py`` does."""
+    """The lane's two verbs annotate ``sources`` the way every verb in ``_api.py`` does."""
     from tests.test_architecture import sources_annotations
 
-    doors = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
-    assert sources_annotations(doors) == {'Mapping[str, Source]'}, (
-        f'both lane verbs take sources as Mapping[str, Source], and these do not: {sources_annotations(doors)}'
+    verbs = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
+    assert sources_annotations(verbs) == {'Mapping[str, Source]'}, (
+        f'both lane verbs take sources as Mapping[str, Source], and these do not: {sources_annotations(verbs)}'
     )
 
 
@@ -98,7 +98,7 @@ def _program(schema: Spec):
 
 
 def _master_coords(schema: Spec, sources=None) -> dict:
-    """The labels, through the front door both lanes enter by."""
+    """The labels, through `tidy_sources`, which both lanes read data through."""
     return loader.dimension_coords(_program(schema), tidy_sources(_program(schema), sources or {}))[0]
 
 
@@ -120,7 +120,7 @@ class TestMasterCoords:
     def test_the_labels_keep_the_order_they_arrived_in(self):
         """A caller's labels are read in their own order on both lanes.
 
-        The ordinals a translation moves by are positions in this list, so a
+        The positions a translation moves by are places in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 'neutral'}})
@@ -794,7 +794,7 @@ _BARE_SHIFT = {
 
 
 def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
-    """One gate, both lanes: the compile step's refusals fire on this lane too."""
+    """One `as_program`, both lanes: the compile step's refusals fire on this lane too."""
     import specsolve as sps
 
     with pytest.raises(LanguageError, match='vacated positions') as native:
