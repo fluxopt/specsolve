@@ -407,7 +407,7 @@ class Model:
 
         def metrics() -> pl.DataFrame:
             self._engine.lap('archive')
-            return pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
+            return pl.DataFrame([self._engine.diagnostics().metrics._asdict()], schema_overrides=METRICS_SCHEMA)
 
         write_archive(
             out,

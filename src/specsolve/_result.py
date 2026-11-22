@@ -293,6 +293,7 @@ class Diagnostics:
     #: never ran has no key; one that ran again holds the sum.
     seconds: Mapping[str, float]
 
+    @property
     def metrics(self) -> Metrics:
         """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
 

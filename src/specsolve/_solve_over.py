@@ -60,8 +60,8 @@ def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
     A serial fold's model keeps summing across slices, so this slice's share is
     *after* minus *before*; a model built for one slice has no *before*.
     """
-    now = after.metrics()
-    return now if before is None else now.since(before.metrics())
+    now = after.metrics
+    return now if before is None else now.since(before.metrics)
 
 
 def solve_over(

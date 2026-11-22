@@ -32,7 +32,7 @@ Read the clocks as a table, one row per phase:
 ```python
 with sps.build('dispatch.yaml', sources) as model:
     model.solve(archive='runs/dispatch.zip')
-    print(model.diagnostics().metrics().phases)
+    print(model.diagnostics().metrics.phases)
 ```
 
 One run of the dispatch example prints:
