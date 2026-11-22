@@ -737,8 +737,8 @@ P_{g} \le \overline{\mathrm{p}}^{\mathrm{nom}}_{\xi,g} \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_15_multi_period.yaml', sources) as solution:
-        solution.objective  # 12747.191096
+    with sps.solve('differential/pypsa/rungs/rung_15_multi_period.yaml', sources) as result:
+        result.objective  # 12747.191096
     ```
 
 === "PyPSA"

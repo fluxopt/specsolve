@@ -59,11 +59,51 @@ _SPREAD_NOTE = (
 )
 
 
+def facts(run: Row) -> dict[str, str]:
+    """One run's box as the facts two runs are compared by, each only where the run recorded it.
+
+    The clock is rounded to 0.1 GHz, so one host reading 2.3964 GHz and 2.4000
+    GHz is one machine, and a host at 2.2 GHz is another. The layout is
+    `/proc/cpuinfo`'s ``cpu cores`` per package against its ``siblings``, the
+    threads per package: eight cores read as 8 of 8, or as 4 of 8 when each
+    core runs two threads. A layout with only one of the two is left out.
+    """
+    host = run.get('host') or {}
+    known = {
+        'cpu': run.get('cpu'),
+        'cores': f'{run["cores"]} cores' if run.get('cores') else None,
+        'clock': f'{run["clock_hz"] / 1e9:.1f} GHz' if run.get('clock_hz') else None,
+        'layout': f'{host["cpu cores"]} cores of {host["siblings"]} threads'
+        if host.get('cpu cores') and host.get('siblings')
+        else None,
+        'microcode': host.get('microcode'),
+        'platform': (run.get('platform') or '').strip() or None,
+    }
+    return {k: str(v) for k, v in known.items() if v}
+
+
 def machine(run: Row) -> str:
-    """One run's box, as the string two runs are compared by; every key is optional."""
-    cores = f', {run["cores"]} cores' if run.get('cores') else ''
-    where = (run.get('platform') or '?').strip() or '?'
-    return f'{run.get("cpu") or "?"}{cores} ({where})'
+    """One run's box as one line; every key is optional."""
+    f = facts(run)
+    detail = ''.join(
+        [
+            f', {f["cores"]}' if 'cores' in f else '',
+            f' at {f["clock"]}' if 'clock' in f else '',
+            f', {f["layout"]}' if 'layout' in f else '',
+            f', microcode {f["microcode"]}' if 'microcode' in f else '',
+        ]
+    )
+    return f'{f.get("cpu", "?")}{detail} ({f.get("platform", "?")})'
+
+
+def same_machine(a: Row, b: Row) -> bool:
+    """Whether two runs can be one machine: no fact both of them recorded differs.
+
+    A fact only one of them recorded is unknown rather than a difference, so a
+    run that records the microcode still matches a file from before it did.
+    """
+    fa, fb = facts(a), facts(b)
+    return all(fa[k] == fb[k] for k in fa.keys() & fb.keys())
 
 
 def provenance(runs: list[Row]) -> str:
@@ -369,7 +409,7 @@ def marginal(loop_rows: list[Row]) -> str:
         '',
         '**Read down a column, not across the row.** The build is not the same '
         'work in every library — one that defers materialising its coefficients '
-        'to its writer spends almost nothing here and pays it at the seam — so '
+        'to its writer spends almost nothing here and pays it at the hand-off — so '
         'these columns carry no ratios. The tables above measure to a common '
         'artifact and are where a comparison belongs.',
         '',

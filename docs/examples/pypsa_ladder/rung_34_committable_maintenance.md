@@ -2821,8 +2821,8 @@ u^{z}_{\xi,t,j} \le N^{z}_{j} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_34_committable_maintenance.yaml', sources) as solution:
-        solution.objective  # 6420.048611
+    with sps.solve('differential/pypsa/rungs/rung_34_committable_maintenance.yaml', sources) as result:
+        result.objective  # 6420.048611
     ```
 
 === "PyPSA"

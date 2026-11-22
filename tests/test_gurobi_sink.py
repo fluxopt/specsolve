@@ -67,9 +67,9 @@ def test_every_port_reaches_its_reference_optimum_on_gurobi(port: dict[str, Any]
     """
     if port['name'] in OVER_THE_GUROBI_LIMIT:
         pytest.skip(f'{port["name"]} exceeds the bundled gurobi licence — see OVER_THE_GUROBI_LIMIT')
-    with sps.solve(expanded(port['spec'], 'piecewise'), port_sources(port['name']), solver_name='gurobi') as solution:
-        assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
-        assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
+    with sps.solve(expanded(port['spec'], 'piecewise'), port_sources(port['name']), solver_name='gurobi') as result:
+        assert result.is_ok, f'{port["name"]} did not solve: {result.status}'
+        assert result.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
 # ---------------------------------------------------------------------------
@@ -132,22 +132,22 @@ def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None
 def test_a_mixed_integer_model_has_no_duals() -> None:
     """Gurobi refuses ``Pi`` rather than returning zeros; the sink passes the
     refusal on as the ``None`` that makes ``dual`` explain itself."""
-    with sps.solve(*CASES['MIP'], solver_name='gurobi') as solution:
-        assert solution.has_primal
+    with sps.solve(*CASES['MIP'], solver_name='gurobi') as result:
+        assert result.has_primal
         with pytest.raises(SpecsolveError, match='mixed-integer'):
-            solution.dual('budget')
+            result.dual('budget')
 
 
 def test_solver_options_reach_gurobi() -> None:
     """Verbatim, in Gurobi's own vocabulary — ``TimeLimit``, not HiGHS' ``time_limit``."""
-    with sps.solve(*CASES['MIP'], solver_options={'TimeLimit': 0.0}, solver_name='gurobi') as solution:
-        assert solution.termination_condition == 'time_limit'
+    with sps.solve(*CASES['MIP'], solver_options={'TimeLimit': 0.0}, solver_name='gurobi') as result:
+        assert result.termination_condition == 'time_limit'
     with pytest.raises(gurobipy.GurobiError, match='no_such_parameter'):
         sps.solve(*CASES['MIP'], solver_options={'no_such_parameter': 1}, solver_name='gurobi')
 
 
 # ---------------------------------------------------------------------------
-# the seams: the build without the search, and choosing a sink at all
+# the hand-offs: the build without the search, and choosing a sink at all
 # ---------------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ def test_solver_options_land_on_the_environment() -> None:
 
 
 def test_constructing_gurobi_loads_the_model_and_stops() -> None:
-    """`bench/`'s seam: the hand-off with no search behind it, so what it
+    """What `bench/` measures: the hand-off with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
     with sps.build(*CASES['MIP']) as model:
         tables = model._engine._model.handoff
@@ -210,7 +210,7 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
     """An environment started for a load that raises is disposed before the error leaves.
 
     Otherwise a model the sink refuses part way — a bad option value, a
-    matrix Gurobi rejects — would hold a licence until the collector found the
+    matrix Gurobi refuses — would hold a licence until the collector found the
     half-built model. The load fails either before the model exists or while
     the SOS and quadratic rows go onto it.
     """
@@ -314,7 +314,7 @@ def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
 
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
-    which makes the build seam a complete hand-off rather than a model plus a
+    which makes the build a complete hand-off rather than a model plus a
     number to remember."""
     with sps.build(*CASES['MAX']) as model, Gurobi(model._engine._model.handoff) as solver:
         assert solver.handle.ObjCon == pytest.approx(5.0)

@@ -11,7 +11,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import _api as api
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.fixtures import override
 
@@ -63,9 +63,11 @@ def result():
 
 
 def test_a_referenced_expression_reads_the_value_its_constraint_pinned(result):
-    frame = result.evaluate('total_gen')
-    assert frame.columns == ['snapshot', 'value'], 'an expression frame is (dims…, value), dims in declaration order'
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    table = result.evaluate('total_gen')
+    assert table.columns == ['snapshot', 'value'], (
+        'an expression table is (dims…, value), dimensions in the order the spec declares them'
+    )
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     assert got == pytest.approx({0: 50.0, 1: 120.0, 2: 80.0}), (
         'balance pins total_gen to load, so the reader must hand back exactly the load values'
     )
@@ -79,16 +81,16 @@ def test_an_expression_nothing_references_reads_the_value_the_primal_implies(res
         .agg((pl.col('value') * pl.col('cost')).sum().alias('value'))
         .sort('snapshot')
     )
-    frame = result.evaluate('spend')
-    assert frame.sort('snapshot').equals(external), (
+    table = result.evaluate('spend')
+    assert table.sort('snapshot').equals(external), (
         'spend is referenced by nothing, and must still equal sum(p * cost) computed from the primal by hand'
     )
 
 
 def test_a_scalar_expression_is_one_row_matching_the_objective(result):
-    frame = result.evaluate('total_cost')
-    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dims is a single value row'
-    assert frame.item() == pytest.approx(result.objective), (
+    table = result.evaluate('total_cost')
+    assert table.columns == ['value'] and table.height == 1, 'an expression with no dimensions is a single value row'
+    assert table.item() == pytest.approx(result.objective), (
         'total_cost restates the objective, so the two numbers must agree'
     )
 
@@ -108,10 +110,10 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
         pytest.param('total_cost', set(), id='summed-over-both'),
     ],
 )
-def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
-    frame = result.evaluate(name)
-    assert set(frame.columns) - {'value'} == dims, (
-        'the returned frame answers over the dims the expression still ranges over after its sums'
+def test_the_table_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
+    table = result.evaluate(name)
+    assert set(table.columns) - {'value'} == dims, (
+        'the returned table answers over the dimensions the expression still ranges over after its sums'
     )
 
 
@@ -120,7 +122,7 @@ def test_an_unknown_name_is_refused_as_a_name_the_model_does_not_declare(result)
         result.evaluate('nope')
 
 
-def test_a_masked_coordinate_has_no_row():
+def test_an_absent_coordinate_has_no_row():
     masked = {
         **SPEC,
         'variables': {
@@ -137,12 +139,12 @@ def test_a_masked_coordinate_has_no_row():
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [200.0, 0.0]}),
         'load': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [50.0, 120.0, 80.0]}),
     }
-    frame = sps.solve(masked, data).evaluate('scaled')
-    assert frame['generator'].unique().to_list() == ['g1'], (
-        'absence propagates into a reader the way it does into a constraint (the operator rules): the masked-out '
+    table = sps.solve(masked, data).evaluate('scaled')
+    assert table['generator'].unique().to_list() == ['g1'], (
+        'absence propagates into a reader the way it does into a constraint (the operator rules): the absent '
         "generator's coordinates have no rows rather than zeros"
     )
-    assert frame.height == 3, 'the surviving generator keeps one row per snapshot'
+    assert table.height == 3, 'the surviving generator keeps one row per snapshot'
 
 
 def test_an_entry_of_degree_two_reads_the_primal_squared(result):
@@ -158,7 +160,7 @@ def test_an_entry_of_degree_two_reads_the_primal_squared(result):
 
 def test_an_entry_reads_a_constraints_dual(result):
     assert result.evaluate('price').equals(result.dual('balance')), (
-        "dual(balance) is the constraint's own dual frame, row for row"
+        "dual(balance) is the constraint's own dual table, row for row"
     )
 
 
@@ -191,8 +193,8 @@ def test_an_operand_that_is_a_sum_is_read_whole(result, expression, of_load):
     Before #1777 the power and the quotient were taken of each generator's
     output and added: `p1² + p2²`, and `inf` wherever a generator produced nothing.
     """
-    frame = result.evaluate(expression)
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    table = result.evaluate(expression)
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     loads = {0: 50.0, 1: 120.0, 2: 80.0}
     assert got == pytest.approx({t: of_load(v) for t, v in loads.items()}), 'the sum is taken whole, as its total'
 
@@ -269,28 +271,28 @@ def test_a_quotient_is_absent_where_its_divisor_is_absent_or_zero(data, expressi
     Before #1775, an absent divisor was refused as if a parameter were short of
     a row, and a zero one read `inf`, or `nan` over a zero numerator.
     """
-    frame = sps.solve(override(SIZED, **{'expressions.q': expression}), data).evaluate('q')
-    got = dict(zip(frame['g'], frame['value'], strict=True))
+    table = sps.solve(override(SIZED, **{'expressions.q': expression}), data).evaluate('q')
+    got = dict(zip(table['g'], table['value'], strict=True))
     assert got == pytest.approx(expected), 'the coordinate whose divisor is absent or zero has no row, not inf'
 
 
-def test_a_zero_summand_does_not_make_a_divisor_that_is_a_sum_zero():
+def test_a_zero_term_does_not_make_a_divisor_that_is_a_sum_zero():
     """`sum(fixed, over=g)` is 4 + 0: the zero rule reads the total, so every coordinate divides by 4 and none is absent."""
     spec = override(SIZED, **{'expressions.q': 'out / sum(fixed, over=g)'})
-    frame = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
-    got = dict(zip(frame['g'], frame['value'], strict=True))
+    table = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
+    got = dict(zip(table['g'], table['value'], strict=True))
     assert got == pytest.approx({'a': 0.5, 'b': 1.25, 'c': 0.25}), 'out divided by the total 4, at every coordinate'
 
 
 @pytest.mark.parametrize('data', [pytest.param(ABSENT_AT_C, id='absent'), pytest.param(GIVEN_ZERO_AT_C, id='zero')])
 def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
-    """A summand with no value is one summand fewer, so the sum reads `a` and `b` and stands.
+    """A term of a sum with no value is one term fewer, so the sum reads `a` and `b` and stands.
 
-    Before #1775 the absent summand was refused as a short parameter, and the
+    Before #1775 the absent term was refused as a short parameter, and the
     zero one made the whole sum `inf`.
     """
-    frame = sps.solve(override(SIZED, **{'expressions.q': 'sum(out / size, over=g)'}), data).evaluate('q')
-    assert frame['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
+    table = sps.solve(override(SIZED, **{'expressions.q': 'sum(out / size, over=g)'}), data).evaluate('q')
+    assert table['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
 
 
 @pytest.mark.parametrize(
@@ -301,7 +303,7 @@ def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions
     """A missing row of a neutral divisor is not absence, so the refusal stands; its advice fits an entry that constrains nothing and takes no `where`.
 
     Before #1775 it read a constraint's message: that the constraint would stop
-    constraining, and to mask the coordinates out with a `where`. It also named
+    constraining, and to leave the coordinates absent with a `where`. It also named
     the variable in the divisor as a parameter.
     """
     spec = override(SIZED, **{'expressions.q': expression, 'parameters.fixed.missing': 'neutral'})
@@ -315,8 +317,8 @@ def test_a_divisor_parameter_short_of_a_row_is_refused_in_a_reported_expressions
 def test_a_product_is_absent_where_either_factor_is(crossed):
     """Presence travels out of a product, and a power, from both sides — as it does out of a quadratic term at a build.
 
-    `r` is masked out at `g2` and is 1 where it exists, so `p * r` and `p ** r`
-    both read `p`; `bonus`, a constant over the same dims, is owed only where
+    `r` is absent at `g2` and is 1 where it exists, so `p * r` and `p ** r`
+    both read `p`; `bonus`, a constant over the same dimensions, is owed only where
     the crossed term exists, so the sum over generators reads it at `g1` alone.
     Losing `r`'s presence would add `bonus` at `g2` back in.
     """
@@ -362,35 +364,35 @@ def test_a_variable_declared_zero_is_zero_under_a_nonlinear_read():
     data = sources() | {'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [200.0, 0.0]})}
     result = sps.solve(spec, data)
     p = result.primal('p').sort('snapshot')
-    assert p['generator'].unique().to_list() == ['g1'], 'g2 is masked out, so only g1 has a primal'
+    assert p['generator'].unique().to_list() == ['g1'], 'g2 is absent, so only g1 has a primal'
     want = [0.5**v + 1.0 for v in p['value']]
     assert result.evaluate('grown')['value'].to_list() == pytest.approx(want), (
         'the absent generator is a zero under missing: neutral, so 0.5 ** 0 counts as 1 in the sum'
     )
 
 
-def test_a_build_compiles_no_expression_and_a_read_compiles_exactly_one(monkeypatch):
-    compiled = []
-    original = Compiler.expression
+def test_a_build_queries_no_expression_and_a_read_queries_exactly_one(monkeypatch):
+    queried = []
+    original = QueryBuilder.expression
 
     def counting(self, expr, context, **kwargs):
-        compiled.append(context)
+        queried.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(Compiler, 'expression', counting)
+    monkeypatch.setattr(QueryBuilder, 'expression', counting)
     with sps.build(SPEC, sources()) as model:
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == [], 'a build lowers no named expression — fifty declared and none read must cost none'
-        assert len(compiled) == 2 * len(SPEC['constraints']) + 1, (
-            'a model declaring expressions compiles exactly what one without them compiles: '
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == [], 'a build queries no named expression — fifty declared and none read must cost none'
+        assert len(queried) == 2 * len(SPEC['constraints']) + 1, (
+            'a model declaring expressions queries exactly what one without them queries: '
             'each constraint side, and the objective'
         )
         outcome = model.solve()
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == [], 'a solve lowers none either — the readers it hands out are thunks'
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == [], 'a solve queries none either — the readers it hands out are thunks'
         outcome.evaluate('spend')
-        named = [c for c in compiled if c.startswith('named expression')]
-        assert named == ["named expression 'spend'"], 'reading one expression compiles that one expression'
+        named = [c for c in queried if c.startswith('named expression')]
+        assert named == ["named expression 'spend'"], 'reading one expression queries that one expression'
 
 
 def test_a_closed_result_refuses_an_expression_read():
@@ -422,9 +424,9 @@ def test_an_expression_the_file_never_declared_reads_what_the_primal_implies(res
         .agg((pl.col('value') * pl.col('cost') * 2).sum().alias('value'))
         .sort('snapshot')
     )
-    frame = result.evaluate('sum(p * cost * 2, over=generator)')
-    assert frame.columns == ['snapshot', 'value'], 'an evaluated frame is (dims…, value), like a declared one'
-    assert frame.sort('snapshot').equals(external), (
+    table = result.evaluate('sum(p * cost * 2, over=generator)')
+    assert table.columns == ['snapshot', 'value'], 'an evaluated table is (dims…, value), like a declared one'
+    assert table.sort('snapshot').equals(external), (
         'an expression nothing declared is evaluated at the same primal a declared one is'
     )
 
@@ -441,14 +443,14 @@ def test_a_mapping_carries_the_cases_a_string_cannot_say():
         'parameters': {**SPEC['parameters'], 'peak': {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}},
     }
     data = sources() | {'peak': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [False, True, False]})}
-    frame = sps.solve(spec, data).evaluate(
+    table = sps.solve(spec, data).evaluate(
         {
             'dims': ['snapshot'],
             'cases': {'busy': {'when': 'peak', 'expression': 'total_gen'}},
             'otherwise': 0,
         }
     )
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     assert got == pytest.approx({0: 0.0, 1: 120.0, 2: 0.0}), (
         'the case holds only where peak does, and otherwise supplies the rest'
     )
@@ -461,12 +463,12 @@ def test_an_expression_may_read_a_dual_the_file_never_priced(result):
 
 
 def test_a_name_the_model_does_not_declare_is_refused_rather_than_read_as_a_gap(result):
-    """A read reaches the solved model's own declarations and no further, so a new parameter is named as missing rather than read as an absence — supplying one is a build."""
+    """A read reaches the solved model's own entries and no further, so a new parameter is named as missing rather than read as an absence — supplying one is a build."""
     with pytest.raises(LanguageError, match='co2_rate'):
         result.evaluate('sum(p * co2_rate, over=generator)')
 
 
-def test_the_splice_steps_over_a_declaration_of_its_own_name():
+def test_the_splice_steps_over_an_entry_of_its_own_name():
     """Names share one flat namespace, so the spliced entry must not land on a declared one and shadow what the expression reads.
 
     Read through an expression that *references* the collision rather than
@@ -475,7 +477,7 @@ def test_the_splice_steps_over_a_declaration_of_its_own_name():
     spec = {**SPEC, 'expressions': {**SPEC['expressions'], '_evaluated': 'sum(p, over=generator) * 3'}}
     assert sps.solve(spec, sources()).evaluate('_evaluated * 2')['value'].to_list() == pytest.approx(
         [300.0, 720.0, 480.0]
-    ), "the splice lands beside the declaration, so the expression still reads the model's own entry"
+    ), "the splice lands beside the declared one, so the expression still reads the model's own entry"
 
 
 def test_an_answer_read_back_off_disk_says_why_it_cannot_evaluate(result, tmp_path):
@@ -484,7 +486,7 @@ def test_an_answer_read_back_off_disk_says_why_it_cannot_evaluate(result, tmp_pa
     with pytest.raises(SpecsolveError, match='no model behind it'):
         read_back.evaluate('sum(p, over=generator)')
     assert read_back.evaluate('total_gen').equals(result.evaluate('total_gen')), (
-        'a declared name is readable either way — it was written, so nothing needs lowering'
+        'a declared name is readable either way — it was written, so nothing needs compiling'
     )
 
 
@@ -516,18 +518,18 @@ def test_evaluate_off_a_loaded_archive_reads_the_archived_solution(result, archi
 
 
 def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_path):
-    """`scan_archive` leaves the frames on disk, and evaluate rebuilds against them just the same."""
+    """`scan_archive` leaves the tables on disk, and evaluate rebuilds against them just the same."""
     read_back = sps.scan_archive(archived, into=tmp_path / 'unpacked').result.evaluate('sum(p * p_max, over=generator)')
     live = result.evaluate('sum(p * p_max, over=generator)')
     keys = live.columns[:-1]
-    assert read_back.sort(keys).equals(live.sort(keys)), 'a scanned archive evaluates against the frames left on disk'
+    assert read_back.sort(keys).equals(live.sort(keys)), 'a scanned archive evaluates against the tables left on disk'
 
 
-def test_a_declared_name_off_an_archive_is_served_from_disk_not_lowered(archived, monkeypatch):
+def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
-    monkeypatch.setattr(api, 'lower_expression', lambda *a, **k: pytest.fail('a declared name must not lower'))
-    frame = sps.load_archive(archived).result.evaluate('total_gen')
-    assert frame.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written frame'
+    monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
+    table = sps.load_archive(archived).result.evaluate('total_gen')
+    assert table.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
 
 
 def test_a_closed_result_refuses_to_evaluate():

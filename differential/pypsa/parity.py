@@ -31,7 +31,7 @@ Per rung, from the same network:
    specsolve's, both HiGHS, rtol 1e-9 on the generic spine.
 3. **Coverage** — what the relational lane built per block, each
    dimension's size, the tables attached non-empty; and, over the ladder, that
-   every block is built, every mask is partially true and every parameter is
+   every block is built, every condition is partially true and every parameter is
    fed by some rung.
 4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
@@ -77,7 +77,7 @@ HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
 #: What the corpus leaves untested, one line per gap as `coverage` prints it — energy-models/mathspec#830.
 UNTESTED = HERE / 'untested.txt'
-#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and masks per rung.
+#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and conditions per rung.
 UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'dims', 'conjuncts'})
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
@@ -100,8 +100,9 @@ from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
-from specsolve._engine.predicates import masked  # noqa: E402
+from specsolve._engine.conditions import narrowed  # noqa: E402
 from specsolve._engine.scope import Scope  # noqa: E402
+from specsolve._names import COEFF, COL, ROW  # noqa: E402
 from specsolve._sources import tidy_sources  # noqa: E402
 
 
@@ -313,18 +314,18 @@ def fed(sources: dict[str, object]) -> list[str]:
 
 
 def _keyed_model(model) -> dict[str, object]:
-    """One build as label-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
+    """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
     built = model._engine._model
     handoff = built.handoff
 
     def keys(held: dict) -> dict[int, tuple]:
         out = {}
-        for name, labelled in held.items():
-            frame = labelled.frame.collect()
-            label = 'var_label' if 'var_label' in frame.columns else 'row'
-            dims = [c for c in frame.columns if c != label]
-            for row in frame.iter_rows(named=True):
-                out[row[label]] = (name, *(str(row[d]) for d in dims))
+        for name, indexed in held.items():
+            table = indexed.table.collect()
+            index = COL if COL in table.columns else ROW
+            dims = [c for c in table.columns if c != index]
+            for row in table.iter_rows(named=True):
+                out[row[index]] = (name, *(str(row[d]) for d in dims))
         return out
 
     columns, rows = keys(built.variables), keys(built.constraints)
@@ -333,8 +334,8 @@ def _keyed_model(model) -> dict[str, object]:
     terms = {}
     for r, (sense, rhs) in enumerate(zip(handoff.rows['sense'], handoff.rows['rhs'], strict=True)):
         span = matrix.slice(starts[r], starts[r + 1] - starts[r])
-        pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span['col'], span['coeff'], strict=True) if v)
-        terms[rows[handoff.rows['row'][r]]] = (str(sense), round(float(rhs), 9), pairs)
+        pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span[COL], span[COEFF], strict=True) if v)
+        terms[rows[handoff.rows[ROW][r]]] = (str(sense), round(float(rhs), 9), pairs)
     return {
         'columns': {
             columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
@@ -375,24 +376,24 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
     """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
-    frame `sps.solve` received, floats rounded to twelve places because a
+    table `sps.solve` received, floats rounded to twelve places because a
     ``pow`` differs by an ulp between libms and the gate is a byte diff. Once
     per table, under the lowest rung that feeds it.
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
     for name, source in tidy_sources(declared.program, sources).items():
-        frame = source.collect() if hasattr(source, 'collect') else source
-        if len(frame) and name not in FIRST[spec]:
-            frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
+        table = source.collect() if hasattr(source, 'collect') else source
+        if len(table) and name not in FIRST[spec]:
+            table.sort(table.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
             FIRST[spec].add(name)
 
 
 def conjunct_verdicts(built_model, program) -> dict[str, str]:
-    """Per masked block, what each conjunct of its ``where:`` did on this rung — one character each.
+    """Per block with a ``where:``, what each conjunct of its ``where:`` did on this rung — one character each.
 
     ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
-    and ``-`` where the rung builds no frame for the block at all. Positional:
+    and ``-`` where the rung builds no row of the block at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
     model = built_model._engine._model
@@ -403,9 +404,9 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
         if where is None:
             continue
         dims = tuple(getattr(block, 'dims', ()) or ())
-        whole = masked(scope, dims, None).select(pl.len()).collect().item()
+        whole = narrowed(scope, dims, None).select(pl.len()).collect().item()
         held = [
-            masked(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
+            narrowed(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
             for conjunct in where.conjuncts
         ]
         verdicts[name] = ''.join(
@@ -426,9 +427,9 @@ def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int
 def _dual_rows(constraint) -> pd.DataFrame:
     """A PyPSA constraint's dual per coordinate, with the label of the row that carries it."""
     if not constraint.dual.ndim:
-        return pd.DataFrame({'dual': [float(constraint.dual)], 'row': [int(constraint.labels)]})
-    frame = constraint.dual.to_dataframe('dual')
-    return frame.assign(row=constraint.labels.to_series().reindex(frame.index).to_numpy()).reset_index()
+        return pd.DataFrame({'dual': [float(constraint.dual)], ROW: [int(constraint.labels)]})
+    table = constraint.dual.to_dataframe('dual')
+    return table.assign(row=constraint.labels.to_series().reindex(table.index).to_numpy()).reset_index()
 
 
 def _gc_dual(constraint, label: str) -> pd.DataFrame:
@@ -502,7 +503,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             labels = [label for label, kind in gc_kinds.items() if kind == their_name]
             theirs = pd.concat(
                 [_gc_dual(n.model.constraints[f'GlobalConstraint-{label}'], label) for label in labels]
-                or [pd.DataFrame({'name': [], 'dual': [], 'row': []})]
+                or [pd.DataFrame({'name': [], 'dual': [], ROW: []})]
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
@@ -1024,7 +1025,7 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
+    """What the ladder as a whole leaves untested — empty when every block, condition and parameter is exercised.
 
     A patched file is held only to what its patch declares, as `owned` says.
     """
@@ -1052,7 +1053,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
                     0 < c < math.prod(stamp['dims'][d] for d in block.dims)
                     for c, stamp in zip(counts, stamps, strict=True)
                 ):
-                    gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
+                    gaps.append(f'{name}: {block_name} is always all-or-nothing, so its condition is untested')
         fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
             f'{name}: no rung feeds {unfed}'

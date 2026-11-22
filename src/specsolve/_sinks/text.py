@@ -9,14 +9,14 @@ import polars as pl
 __all__ = ['append_lines', 'chunk_key', 'digits', 'number']
 
 
-def append_lines(frame: pl.LazyFrame, f: IO[bytes]) -> None:
-    """Append a one-column frame to *f*, one raw line per row.
+def append_lines(table: pl.LazyFrame, f: IO[bytes]) -> None:
+    """Append a one-column table to *f*, one raw line per row.
 
     Polars writes through the caller's handle, so an ``f.write()`` between two
     calls lands between them. ``maintain_order`` is stated because its default
     is documented as unstable.
     """
-    frame.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
+    table.sink_csv(f, include_header=False, quote_style='never', maintain_order=True)
 
 
 def chunk_key(axis: pl.Expr, lo: int, slots: int, within: pl.Expr) -> pl.Expr:

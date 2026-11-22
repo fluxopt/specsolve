@@ -44,7 +44,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
@@ -123,7 +123,7 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -170,7 +170,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: demand to be met
         dims: [snapshot]
       period_weight:
-        description: what one period's costs are worth at the horizon's start
+        description: what one period's costs are worth at the start of the first period
         dims: [period]
       opex:
         description: cost of one unit of output
@@ -252,10 +252,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_growth_limit.yaml', sources) as solution:
-        solution.objective  # 47110.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_growth_limit.yaml', sources) as result:
+        result.objective  # 47110.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"
@@ -321,7 +321,7 @@ and the same instance builds 30, 40 and 50 of wind, 30 of gas, and costs
 −120.
 
 **`edge=0` keeps the first period's row.** Without it the shifted term is absent
-in the first period and the *row* goes with it. A masked variable term deletes
+in the first period and the *row* goes with it. An absent variable term deletes
 the row rather than zeroing it. PyPSA emits the bare allowance there:
 
 ```

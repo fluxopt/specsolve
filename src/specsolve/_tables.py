@@ -25,11 +25,11 @@ if TYPE_CHECKING:
     from specsolve._inputs import Source
 
 
-__all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'to_pandas']
+__all__ = ['as_table', 'is_dense_array', 'is_multi_indexed', 'to_pandas']
 
 
 def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
-    """A polars frame as pandas, column by column, without pyarrow."""
+    """A polars table as pandas, column by column, without pyarrow."""
     import pandas as pd
 
     encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
@@ -38,14 +38,14 @@ def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({name: table[name].to_numpy() for name in table.columns})
 
 
-def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
-    """One source as a lazy frame: a parquet path scanned, or an in-memory table normalised.
+def as_table(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
+    """One source as a lazy table: a parquet path scanned, or an in-memory table normalised.
 
     The one place a string is read as a parquet path. *dims* names the columns
     a pandas index becomes.
 
     Returns:
-        The frame, or ``None`` where *obj* is not table-shaped.
+        The table, or ``None`` where *obj* is not table-shaped.
     """
     import sys
 
@@ -61,8 +61,8 @@ def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
         import pandas as pd
 
         if isinstance(obj, pd.Series):
-            frame = _series_to_frame(obj, dims)
-            return _from_pandas(frame) if frame is not None else None
+            table = _series_to_table(obj, dims)
+            return _from_pandas(table) if table is not None else None
         if isinstance(obj, pd.DataFrame):
             return _from_pandas(obj)
 
@@ -93,14 +93,14 @@ def is_multi_indexed(obj: Source) -> bool:
     return isinstance(obj, pd.Series) and obj.index.nlevels > 1
 
 
-def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | None:
+def _series_to_table(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | None:
     """A pandas Series with its one index level promoted to a column.
 
     A named level keeps its name: renaming it to *dims* would transpose the
-    data when two dims share a label space.
+    data when two dimensions share a label space.
 
     Returns:
-        The tidy frame, or ``None`` where the declaration is not one dimension.
+        The tidy table, or ``None`` where the entry is not over one dimension.
     """
     if len(dims) != 1:
         return None
@@ -113,16 +113,16 @@ def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | N
 _POLARS_DATETIMES = frozenset({'datetime64[ms]', 'datetime64[us]', 'datetime64[ns]'})
 
 
-def _from_pandas(frame: pd.DataFrame) -> pl.LazyFrame:
-    """A pandas frame, column by column, without pyarrow.
+def _from_pandas(table: pd.DataFrame) -> pl.LazyFrame:
+    """A pandas table, column by column, without pyarrow.
 
     Object arrays go through a list so numpy's ``nan`` becomes a null rather
     than a string. A datetime in a unit polars does not read, such as the
     seconds ``pd.to_datetime`` gives a date, is cast to microseconds first.
     """
     columns: dict[str, object] = {}
-    for name in frame.columns:
-        values = frame[name].to_numpy()
+    for name in table.columns:
+        values = table[name].to_numpy()
         if values.dtype == object:
             columns[name] = pl.Series(name, [None if _is_missing(v) else v for v in values], strict=False)
         elif values.dtype.kind == 'M' and values.dtype.name not in _POLARS_DATETIMES:

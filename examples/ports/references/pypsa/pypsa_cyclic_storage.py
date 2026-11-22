@@ -15,7 +15,7 @@ own objects. Nothing here imports specsolve.
 
 Storage with ``cyclic_state_of_charge``. The first
 snapshot's state of charge carries over from the *last* rather than from a
-seed, so the horizon closes on itself and there is no
+seed, so the snapshots close into a cycle and there is no
 ``state_of_charge_initial``.
 """
 
@@ -31,7 +31,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_cyclic_storage.json
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

@@ -16,7 +16,7 @@ own objects. Nothing here imports specsolve.
 Ramp limits plus a ``StorageUnit``. Its state of charge carries energy
 between snapshots, charged at ``efficiency_store`` and discharged at
 ``efficiency_dispatch``, decaying by ``standing_loss`` each step. Left
-**non-cyclic**: the horizon starts at ``state_of_charge_initial`` and the end
+**non-cyclic**: the level starts at ``state_of_charge_initial`` and the end
 is free.
 """
 
@@ -32,7 +32,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_storage.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

@@ -1238,8 +1238,8 @@ p_{\xi,t,g} - \mathit{Generator\_previous\_p}_{\xi,t,g} \le \mathit{Generator\_r
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_44_linearized_commitment.yaml', sources) as solution:
-        solution.objective  # 7400.0
+    with sps.solve('differential/pypsa/rungs/rung_44_linearized_commitment.yaml', sources) as result:
+        result.objective  # 7400.0
     ```
 
 === "PyPSA"
