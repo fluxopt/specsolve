@@ -215,23 +215,41 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
-    def _hand_off(
-        self, solver_name: str, solver_options: Mapping[str, object] | None, *, carry_on: bool = False
+    def hand_off(
+        self,
+        solver_name: str,
+        solver_options: Mapping[str, object] | None,
+        *,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
     ) -> tuple[sinks.Solver, bool]:
-        """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
+        """The handoff phase whole: [`solve`][] up to the run, lapped as ``handoff``.
 
-        Returns the solver and whether it was loaded again, which
-        [`loaded`][specsolve._sinks.loaded] decides. A solver
-        kept forgets its last run unless *carry_on*. Counts toward neither
-        ``solves`` nor ``solver_loads``, so timing this alone leaves them true.
+        *start* is matched, the sink checked, the solver loaded or the new
+        numbers pushed onto the one held, as [`loaded`][specsolve._sinks.loaded]
+        decides, and the start given. A solver kept forgets its last run unless
+        *start* is ``'previous'``. Counts toward neither ``solves`` nor
+        ``solver_loads``, so a benchmark that times this alone leaves them true.
+
+        Returns:
+            The solver, and whether it was loaded again.
+
+        Raises:
+            SpecsolveError: A *start* this model or this solver cannot start
+                from, or a sink that cannot take the built model.
         """
+        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
         self.check_sink(solver_name)
         self._solved = None
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
         reloaded = self._solver is not held
-        if not reloaded and not carry_on:
+        if not reloaded and start != 'previous':
             self._solver.forget()
+        if isinstance(matched, Basis):
+            self._solver.start_from_basis(matched)
+        elif matched is not None:
+            self._solver.start_from_values(matched)
+        self.lap('handoff')
         return self._solver, reloaded
 
     def solve(
@@ -277,18 +295,11 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, refused before the solver loads.
         """
-        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
-        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=start == 'previous')
-        if isinstance(matched, Basis):
-            solver.start_from_basis(matched)
-        elif matched is not None:
-            solver.start_from_values(matched)
-        handoff = self._model.handoff
+        solver, reloaded = self.hand_off(solver_name, solver_options, start=start)
         self._solves += 1
         if reloaded:
             self._solver_loads += 1
-        self.lap('handoff')
-        answer = solver.run(handoff, basis='basis' in outputs)
+        answer = solver.run(self._model.handoff, basis='basis' in outputs)
         self.lap('solve')
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)

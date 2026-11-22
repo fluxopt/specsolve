@@ -717,7 +717,7 @@ name one; the other cases skip it. A `start=` changes only what the solver
 begins from, which moves the solve and not anything timed here;
 `bench/warm_payoff.py` is where a carried basis is weighed.
 
-The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
+The clock stops at `Engine.hand_off`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the

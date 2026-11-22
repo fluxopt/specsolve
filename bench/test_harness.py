@@ -2087,7 +2087,7 @@ def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
 ) -> None:
     """`bench.yml` runs this harness against the base branch's `src/`.
 
-    A base with no `Engine._hand_off` raised in every window cell, which failed
+    A base with no `Engine.hand_off` raised in every window cell, which failed
     the base pass, so the gate never compared anything.
     """
     assert unsupported(verb) is None, f'this checkout has Engine.{method}'

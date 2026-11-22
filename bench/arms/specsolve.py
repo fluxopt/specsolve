@@ -107,7 +107,7 @@ def _loaded(sink: str, model: Any) -> Any:
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
+TIMED_THROUGH = {'window': 'hand_off', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
@@ -151,7 +151,7 @@ def window_setup(
 def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
+    ``update`` rebuilds, and ``hand_off`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
@@ -166,24 +166,12 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
-    """``Engine._hand_off`` as the checkout under test spells it, and whether it loaded the solver from scratch.
-
-    A checkout that still takes ``keep`` closes the held solver itself for a
-    cold window, inside the timed handoff; a later one has no ``keep``, so a
-    cold window closes it here first. A checkout whose engine laps its phases
-    leaves the lap to the solve that calls ``_hand_off``, so it is taken here.
-    """
+    """``Engine.hand_off``, and whether it loaded the solver from scratch; a *cold* window closes the held solver first."""
     engine = model._engine
-    if 'keep' in inspect.signature(engine._hand_off).parameters:
-        _, kept = engine._hand_off(sink, None, 'nothing' if cold else 'solver')
-        return kept == 'nothing'
     if cold and engine._solver is not None:
         engine._solver.close()
         engine._solver = None
-    reloaded = engine._hand_off(sink, None)[1]
-    if hasattr(engine, 'lap'):
-        engine.lap('handoff')
-    return reloaded
+    return engine.hand_off(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
