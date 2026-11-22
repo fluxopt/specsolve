@@ -58,10 +58,10 @@ class Presence:
     joined_on: tuple[str, ...] | None = None
 
     def join_columns(self, term_dims: tuple[str, ...]) -> tuple[str, ...]:
-        """The columns this presence restricts by, for a term over *term_dims*."""
+        """The columns this presence narrows by, for a term over *term_dims*."""
         return self.joined_on if self.joined_on is not None else term_dims
 
-    def restrict(self, table: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
+    def narrow(self, table: pl.LazyFrame, on: Sequence[str]) -> pl.LazyFrame:
         """Keep only the rows of *table* this presence admits.
 
         With no key, every row survives a present scalar and none an absent one.
@@ -188,7 +188,7 @@ def constant_scalar(p: Term) -> pl.LazyFrame:
     return p.table.group_by(p.dims).agg(pl.col(CONSTANT).sum())
 
 
-def absence_restrictions(terms: Sequence[Term]) -> list[Presence]:
+def presences_of(terms: Sequence[Term]) -> list[Presence]:
     """The presence tables a constraint's rows — or a read's — have to be contained in.
 
     Each leaves with its join columns spelled out, since indexing cannot know the term it came from.
@@ -241,21 +241,21 @@ def fan_in(expression: program.Expression) -> FanIn:
 
 
 def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]) -> ExpressionTerms:
-    """Restrict every term to where the *whole* expression exists.
+    """Narrow every term to where the *whole* expression exists.
 
     Needed before a node that is not one-to-one ([`fan_in`][]): the row-level
     intersection at assembly cannot say which input slots behind a row survived.
-    A term lacking a dimension a restriction is joined on is first repeated
+    A term lacking a dimension a presence is joined on is first repeated
     along it, never along a dimension in *along*, which the operator refuses itself
-    ([`refuse_a_term_without_the_dims`][]). A term is never restricted
+    ([`refuse_a_term_without_the_dims`][]). A term is never narrowed
     by its own presence: its rows are inside it by construction.
     """
     absent = [(p, x) for p in (*terms.linear, *terms.quadratic, *terms.constant) for x in p.presences]
     if not absent:
         return terms
 
-    def restrict(p: Term) -> Term:
-        table, dims, restricted = p.table, p.dims, False
+    def narrow(p: Term) -> Term:
+        table, dims, narrowed = p.table, p.dims, False
         for source, presence in absent:
             if source is p:
                 continue
@@ -266,10 +266,10 @@ def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]
             if missing:
                 dims = scope.in_dimension_order((*dims, *missing))
                 table = scope.spread(table, missing).select(*dims, *p.carried)
-            table, restricted = presence.restrict(table, on), True
-        return replace(p, dims=dims, body=table) if restricted else p
+            table, narrowed = presence.narrow(table, on), True
+        return replace(p, dims=dims, body=table) if narrowed else p
 
-    return map_terms(terms, restrict)
+    return map_terms(terms, narrow)
 
 
 def map_terms(
@@ -344,7 +344,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
         joined, _ = _paired(a, c, c.table.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
         if divide:
             for presence in c.presences:
-                joined = presence.restrict(joined, presence.join_columns(c.dims))
+                joined = presence.narrow(joined, presence.join_columns(c.dims))
         value, rhs = pl.col(a.value_column), pl.col(_RHS)
         combined = value / rhs if divide else value * rhs
         out = value_column(kind)

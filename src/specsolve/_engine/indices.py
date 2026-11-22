@@ -15,7 +15,7 @@ import polars as pl
 
 from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
-from specsolve._engine.scope import UNIT, ordinal
+from specsolve._engine.scope import UNIT, position_column
 from specsolve._names import LABEL, POSITION
 
 if TYPE_CHECKING:
@@ -56,13 +56,13 @@ def table(
     where: program.Mask | None,
     index: str,
     start: int,
-    restrictions: Sequence[Presence] = (),
+    presences: Sequence[Presence] = (),
 ) -> pl.DataFrame:
     """The coordinate product of *dims* narrowed by *where*, with a contiguous *index* from *start*.
 
-    The index is row-major over the dimensions' declared ordinals, so it is the
-    solver's own index with no remapping. *restrictions* are the
-    variable-presence semi-joins a constraint row must be contained in; which
+    The index is row-major over the dimensions' positions, so it is the
+    solver's own index with no remapping. *presences* are the
+    variable presences that narrow a constraint's rows; which
     rows they remove is unknown until data is read, so they take the counted
     path.
 
@@ -72,7 +72,7 @@ def table(
         ``([`UNIT`][], index)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
-    if where is not None and not restrictions:
+    if where is not None and not presences:
         free = _free_prefix(dims, where.dims)
         if free:
             factored = _factored(scope, dims, free, where, index, start)
@@ -80,10 +80,10 @@ def table(
                 return factored
 
     surviving = narrowed(scope, dims, where)
-    for restriction in restrictions:
-        surviving = restriction.restrict(surviving, restriction.joined_on or ())
+    for presence in presences:
+        surviving = presence.narrow(surviving, presence.joined_on or ())
 
-    dropped = where is not None or bool(restrictions)
+    dropped = where is not None or bool(presences)
     numbering = _row_major(scope, dims)
     if not dropped:
         numbering = pl.lit(start, dtype=pl.Int64) + numbering
@@ -112,7 +112,7 @@ def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], index: str, start: int
 def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, index: str, start: int) -> pl.DataFrame:
     """[`table`][]'s answer for the coordinates at *positions* in the product of *dims*, ascending, numbered from *start*.
 
-    Each label is read off its dimension at the coordinate's ordinal, so the
+    Each label is read off its dimension at the coordinate's position, so the
     product the coordinates lie in is never formed: a constraint that a
     variable narrowed by its ``where:`` cuts to half its coordinates holds half
     the table, not the whole of it first. Over no dimensions [`table`][] keys
@@ -123,26 +123,26 @@ def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, in
     stride = math.prod(scope.data.cardinality[d] for d in dims)
     for d in dims:
         stride //= scope.data.cardinality[d]
-        ordinal = (positions // stride) % scope.data.cardinality[d]
+        position = (positions // stride) % scope.data.cardinality[d]
         columns.append(
-            scope.data.dimensions[d].pipe(collected).sort(POSITION).get_column(LABEL).gather(ordinal).alias(d)
+            scope.data.dimensions[d].pipe(collected).sort(POSITION).get_column(LABEL).gather(position).alias(d)
         )
     numbered = pl.int_range(start, start + positions.len(), dtype=pl.Int64, eager=True).alias(index)
     return pl.DataFrame([*columns, numbered.set_sorted()])
 
 
-def restricted(
-    indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, restrictions: Sequence[Presence]
+def narrowed_by(
+    indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, presences: Sequence[Presence]
 ) -> pl.DataFrame:
-    """*indexed*, as [`table`][] indexed a ``where`` without *restrictions*, cut to them and numbered again from *start*.
+    """*indexed*, as [`table`][] indexed a ``where`` without *presences*, narrowed by them and numbered again from *start*.
 
-    The table [`table`][] gives with the restrictions, without reading the
+    The table [`table`][] gives with the presences, without reading the
     ``where`` a second time: both number the survivors in position order, and
     *indexed*'s index already runs in it.
     """
     surviving = indexed.lazy()
-    for restriction in restrictions:
-        surviving = restriction.restrict(surviving, restriction.joined_on or ())
+    for presence in presences:
+        surviving = presence.narrow(surviving, presence.joined_on or ())
     return renumbered(in_position_order(surviving.pipe(collected), index), dims, index, start)
 
 
@@ -174,7 +174,11 @@ def _factored(
     head, kept = dims[:free], dims[free:]
     rank = '#rank'
     survivors = (
-        narrowed(scope, kept, where).sort([ordinal(d) for d in kept]).select(*kept).with_row_index(rank).pipe(collected)
+        narrowed(scope, kept, where)
+        .sort([position_column(d) for d in kept])
+        .select(*kept)
+        .with_row_index(rank)
+        .pipe(collected)
     )
     width = survivors.height
     if width == 0:
@@ -205,8 +209,8 @@ def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
 
 
 def _row_major(scope: Scope, dims: tuple[str, ...]) -> pl.Expr:
-    """[`Scope.row_major`][] over a product table, which carries its ordinals."""
-    return scope.row_major(dims, lambda d: pl.col(ordinal(d)))
+    """[`Scope.row_major`][] over a product table, which carries its positions."""
+    return scope.row_major(dims, lambda d: pl.col(position_column(d)))
 
 
 def in_position_order(materialised: pl.DataFrame, position: str) -> pl.DataFrame:

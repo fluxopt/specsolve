@@ -13,21 +13,21 @@
 # negation is still red.
 #
 #   StorageUnit-energy_balance:
-#     structure: three blocks — carried, initial, cyclic — where PyPSA masks one row three ways
+#     structure: three entries — carried, initial, cyclic — where PyPSA masks one row three ways
 StorageUnit-energy_balance:
   negated: the file states the balance with the charge on the left; PyPSA writes −soc there, the same row negated, so its dual is the negative
 Store-energy_balance:
   negated: the file states the balance with the level on the left; PyPSA writes −e there, the same row negated, so its dual is the negative
 operational_limit:
-  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+  structure: one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 primary_energy:
-  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+  structure: one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 tech_capacity_expansion_limit:
-  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+  structure: one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 transmission_expansion_cost_limit:
-  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+  structure: one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 transmission_volume_expansion_limit:
-  structure: one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
+  structure: one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense
 Generator-status:
   blocks: the cap is a row here, where PyPSA bounds the variable at 1 as well — a 0-1 binary, or a share in [0, 1] under the linearized relaxation
 Generator-start_up:
@@ -57,7 +57,7 @@ solver model:
 objective:
   blocks: PyPSA's objective carries its fixed objective_constant variable as a term; the file states no constant, and the objective value is compared net of it
 Generator-p-ramp_limit_down:
-  negated: the initial-snapshot block states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
+  negated: the initial-snapshot entry states −p on the left where PyPSA writes p[t] − p[t−1] ≥ −rd·p_nom — the same row negated, so its dual is the negative
 Line-loss_secants-pos:
   structure: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)
   blocks: one segment dimension for lines and transformers, where PyPSA places secants per component — the component with fewer secants takes the zero cut, loss >= 0, at the segments it lacks (rung 23)

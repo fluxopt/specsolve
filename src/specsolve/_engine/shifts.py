@@ -1,7 +1,7 @@
 """Shifts along one dimension's own order: ``shift``, and ``sum_back``, a sum of shifts.
 
-``shift`` is a pointwise remap of the dimension through its ordinal and
-``sum_back`` a one-to-many one. They share the ordinal arithmetic and the
+``shift`` is a pointwise remap of the dimension through its positions and
+``sum_back`` a one-to-many one. They share the position arithmetic and the
 question of the edge, where the walk runs out of dimension.
 """
 
@@ -30,8 +30,8 @@ if TYPE_CHECKING:
 _OFFSET = '__offset'
 _LAG = '__lag'
 _WIDTH = '__width'
-_ORD_IN = '__ord in__'
-_ORD_OUT = '__ord out__'
+_POSITION_IN = '__position in__'
+_POSITION_OUT = '__position out__'
 
 
 @dataclass(frozen=True)
@@ -52,10 +52,10 @@ class _Order:
         """Rank *dimension* inside each group of *partition*, or along the whole of it."""
         grouping = Grouping.whole(scope.data, dimension) if partition is None else Grouping.of(scope.data, partition)
         incoming = grouping.table.select(
-            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_ORD_IN), *grouping.key, pl.col(GROUP_SIZE)
+            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_POSITION_IN), *grouping.key, pl.col(GROUP_SIZE)
         )
         outgoing = grouping.table.select(
-            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_ORD_OUT), *grouping.key
+            pl.col(LABEL).alias(dimension), pl.col(GROUP_RANK).alias(_POSITION_OUT), *grouping.key
         )
         return cls(grouping, incoming, outgoing)
 
@@ -77,8 +77,8 @@ class _Order:
         kept = [d for d in dims if d != dimension]
         walked = prepared(source.join(self.incoming, on=list(self.grouping.keys), how='inner').drop(dimension))
         return (
-            walked.with_columns(moved.alias(_ORD_OUT))
-            .join(self.outgoing, on=[_ORD_OUT, *self.grouping.key], how='inner')
+            walked.with_columns(moved.alias(_POSITION_OUT))
+            .join(self.outgoing, on=[_POSITION_OUT, *self.grouping.key], how='inner')
             .select(*kept, dimension, *carried)
         )
 
@@ -106,7 +106,7 @@ def translate_rows(
     The condition form of [`translate_term`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
-    return order.remap(table, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
+    return order.remap(table, carried, dims, moved=pl.col(_POSITION_IN) + offset, prepared=lambda f: f)
 
 
 def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Term:
@@ -131,7 +131,7 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
         widest = s.width
     lags = pl.LazyFrame({_LAG: pl.Series(range(min(widest, scope.data.cardinality[s.along])), dtype=pl.Int64)})
 
-    moved = pl.col(_ORD_IN) + pl.col(_LAG)
+    moved = pl.col(_POSITION_IN) + pl.col(_LAG)
     if s.wrap:
         moved = moved % pl.col(GROUP_SIZE)
 
@@ -182,10 +182,10 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
 
     named_offset = isinstance(s.offset, str)
     if named_offset:
-        moved = pl.col(_ORD_IN) + pl.col(_OFFSET)
+        moved = pl.col(_POSITION_IN) + pl.col(_OFFSET)
     else:
         assert not isinstance(s.offset, str)
-        moved = pl.col(_ORD_IN) + s.offset
+        moved = pl.col(_POSITION_IN) + s.offset
     if s.wrap:
         moved = (moved % pl.col(GROUP_SIZE) + pl.col(GROUP_SIZE)) % pl.col(GROUP_SIZE)
 

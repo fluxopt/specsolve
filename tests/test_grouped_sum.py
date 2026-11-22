@@ -330,7 +330,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     """
     with sps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as model:
         tables = model._engine._model.handoff
-        matrix = tables.matrix_block(0, tables.row_count).sort(ROW, COL)
+        matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix[COEFF].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
 
@@ -351,7 +351,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
     )
     with sps.build(spec, BROADCAST_SOURCES) as model:
         tables = model._engine._model.handoff
-        matrix = tables.matrix_block(0, tables.row_count).sort(ROW, COL)
+        matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
         assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
         assert model.solve().termination_condition == 'optimal'
 

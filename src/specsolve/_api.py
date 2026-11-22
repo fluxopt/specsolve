@@ -227,8 +227,9 @@ class Model:
             model.update({'cap_hat': capacity}).solve()
 
         ``model.update(x)`` answers what ``build(spec, sources | x)`` answers,
-        whatever changed. Data that moves a condition renumbers solver indices, so the model
-        is rebuilt and solved cold rather than pushed onto a loaded solver;
+        whatever changed. Data that changes which coordinates a condition admits
+        renumbers solver indices, so the model is rebuilt and solved cold rather
+        than pushed onto a loaded solver;
         [`loads`][specsolve._result.Diagnostics.loads] says which ran.
 
         Results taken before the update keep reading their own tables, and

@@ -263,7 +263,7 @@ def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(
 
 
 def test_terms_that_name_a_later_variable_first_are_placed_without_a_sort(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`late` is declared after `x`, so in file order its entry would lead each row and the share would be sorted."""
+    """`late` is declared after `x`, so in file order its coefficient would lead each row and the share would be sorted."""
     sorts = []
     monkeypatch.setattr(assembly, '_sorted', lambda stacked, keys: sorts.append(keys) or stacked.sort(*keys))
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'late - a * x <= 10'}}}
@@ -338,7 +338,7 @@ def test_a_coefficient_that_is_not_finite_is_refused_by_position_as_by_join(monk
 
 
 def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_whole() -> None:
-    """The door refuses a repeated row, so only a caller of the engine can hold one; unchecked, the gap would read as whatever the array held."""
+    """`tidy_sources` refuses a repeated row, so only a caller of the engine can hold one; unchecked, the gap would read as whatever the array held."""
     program = sps.check(
         {
             'dimensions': {'i': {'dtype': 'int'}},

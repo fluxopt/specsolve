@@ -1,7 +1,7 @@
 """Shared fixtures and schema helpers for specsolve tests.
 
 Everything here is linopy-free and pandas-free at import, so it loads on a bare
-install. A module that needs the oracle imports ``tests.oracle`` or
+install. A module that needs the linopy lane imports ``tests.oracle`` or
 ``tests.differential``, whose ``importorskip`` skips it. A fixture that hands
 out pandas objects imports pandas in its own body.
 """
@@ -265,7 +265,7 @@ def _dispatch_load() -> np.ndarray:
 
 @pytest.fixture
 def dispatch_inputs():
-    """Dispatch data as pandas — the shape the linopy oracle takes."""
+    """Dispatch data as pandas — the shape the linopy lane takes."""
     import pandas as pd
 
     return {
@@ -434,8 +434,8 @@ def recomputed_row_values(engine, result) -> Any:
     """
     tables = engine._model.handoff
     x = np.zeros(tables.column_count)
-    for name, block in engine._model.variables.items():
-        x[block.start : block.start + block.height] = result.primal(name)['value'].to_numpy()
+    for name, indexed in engine._model.variables.items():
+        x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)
     spans = np.diff(tables.row_starts)
@@ -483,7 +483,7 @@ QP = {
         'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
-    #: A linear term beside the quadratic one: a hand-off that passed only ``Q`` drops it.
+    #: A linear term beside the quadratic one: a handoff that passed only ``Q`` drops it.
     'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
 }
 

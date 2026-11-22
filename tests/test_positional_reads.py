@@ -118,7 +118,7 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
         pytest.param(
             {'constraints': {'row': {'dims': ['gapped'], 'where': 'far', 'expression': 'z <= 5'}}},
             [],
-            id='labels-that-are-not-their-own-ordinals-are-joined',
+            id='labels-that-are-not-their-own-positions-are-joined',
         ),
         pytest.param(
             {

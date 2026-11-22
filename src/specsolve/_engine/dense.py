@@ -71,11 +71,11 @@ class CoordinatePositions:
             return pl.col(ROW_MAJOR)
         position: pl.Expr = pl.lit(0, dtype=pl.Int64)
         for d in dims:
-            position = position * self._cardinality[d] + self.ordinal(d)
+            position = position * self._cardinality[d] + self.position_of(d)
         return position
 
-    def ordinal(self, dim: str) -> pl.Expr:
-        """Each coordinate's ordinal along *dim*, one of this one's dimensions."""
+    def position_of(self, dim: str) -> pl.Expr:
+        """Each coordinate's position along *dim*, one of this one's dimensions."""
         after = self.dims[self.dims.index(dim) + 1 :]
         stride = math.prod(self._cardinality[d] for d in after)
         return (pl.col(ROW_MAJOR) // stride) % self._cardinality[dim]
@@ -219,11 +219,11 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
-            a coordinate, which the door's refusal of a repeated row rules out.
+            a coordinate, which [`tidy_sources`][specsolve._sources.tidy_sources]'s refusal of a repeated row rules out.
     """
     dims = scope.program.parameters[name].dims
     cells = math.prod(scope.data.cardinality[d] for d in dims)
-    position = scope.row_major(dims, scope.ordinal_of).alias(ROW_MAJOR)
+    position = scope.row_major(dims, scope.position_of).alias(ROW_MAJOR)
     held = scope.data.parameters[name].select(position, VALUE).pipe(collected)
     at, column = held.get_column(ROW_MAJOR), held.get_column(VALUE)
     if at.len() == cells and (at == pl.int_range(cells, dtype=pl.Int64, eager=True)).all():
@@ -240,7 +240,7 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
 def _columns_by_position(scope: Scope, name: str) -> pl.Series:
     """Variable *name*'s column at each coordinate of its dimensions in row-major order, ``-1`` where it has none."""
     dims = scope.program.variables[name].dims
-    position = scope.row_major(dims, scope.ordinal_of)
+    position = scope.row_major(dims, scope.position_of)
     held = scope.variables[name].table.select(position.alias(ROW_MAJOR), pl.col(COL).cast(pl.Int32)).pipe(collected)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
     return pl.repeat(-1, cells, dtype=pl.Int32, eager=True).scatter(held.get_column(ROW_MAJOR), held.get_column(COL))
@@ -249,21 +249,21 @@ def _columns_by_position(scope: Scope, name: str) -> pl.Series:
 def placed(
     terms: Sequence[tuple[DenseTerm, float]], positions: pl.Series, at: CoordinatePositions
 ) -> tuple[pl.Series, pl.Series | None, pl.DataFrame]:
-    """The matrix entries of *terms*, each a body and its sign, at the coordinates *positions* gives and *at* describes.
+    """The coefficients of *terms*, each a body and its sign, at the coordinates *positions* gives and *at* describes.
 
     A coordinate where a term is ``absent`` keeps no row, and which those are
     is read first, so every term is read only where a row stands.
 
     Returns:
         The positions that keep a row, and which of *positions* they are,
-        ``None`` for all of them. Then the entries as ``(index, COL, COEFF)``
+        ``None`` for all of them. Then the coefficients as ``(index, COL, COEFF)``
         in *index* order, *index* counting the positions kept. A term whose
-        variable has no column at a coordinate holds no entry there. Within
+        variable has no column at a coordinate holds no coefficient there. Within
         a coordinate the terms are laid out by ``reach``, which is column
         order for terms over different variables, so their share is not
-        sorted: each term's entries are read as one block in coordinate
-        order, and the blocks are merged on the coordinate, one that ties
-        leaving in the order of the blocks.
+        sorted: each term's coefficients are read as one run in coordinate
+        order, and the runs are merged on the coordinate, one that ties
+        leaving in the order of the runs.
     """
     kept = None
     there = [_columns_of(body, at) >= 0 for body, _ in terms if body.absent is not None]
@@ -274,7 +274,7 @@ def placed(
 
     index = pl.int_range(positions.len(), dtype=pl.Int64, eager=True).set_sorted()
     coordinates = pl.LazyFrame({'index': index, ROW_MAJOR: positions})
-    blocks = [
+    runs = [
         coordinates.select(
             'index',
             _columns_of(body, at).cast(pl.Int32).alias(COL),
@@ -282,10 +282,10 @@ def placed(
         )
         for body, sign in sorted(terms, key=lambda term: term[0].reach)
     ]
-    entries = reduce(lambda merged, block: merged.merge_sorted(block, key='index'), blocks).pipe(collected)
-    if entries.height and entries.get_column(COL).min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
-        entries = entries.filter(pl.col(COL) >= 0)
-    return positions, kept, entries
+    coefficients = reduce(lambda merged, run: merged.merge_sorted(run, key='index'), runs).pipe(collected)
+    if coefficients.height and coefficients.get_column(COL).min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
+        coefficients = coefficients.filter(pl.col(COL) >= 0)
+    return positions, kept, coefficients
 
 
 def summed(terms: Sequence[tuple[DenseTerm, float]], at: CoordinatePositions) -> pl.Expr:

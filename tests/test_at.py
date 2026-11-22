@@ -121,7 +121,7 @@ def test_one_binary_gates_every_flow_of_its_component():
 def test_at_agrees_with_the_oracle_through_a_reduction():
     """A pullback summed back over `flow` brings two copies of one column index into a row, and they add.
 
-    The oracle is imported in the body so the rest of the module runs on the
+    The linopy lane is imported in the body so the rest of the module runs on the
     bare install.
     """
     from tests.differential import differential
@@ -397,7 +397,7 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
 def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
     """A dimension with no labels gives the lookup nothing to read, so every row that reads it is absent.
 
-    A network with no transformers reads its outage factors this way. The oracle
+    A network with no transformers reads its outage factors this way. The linopy lane
     once indexed the dimension's first label to stand in for the null reads, and
     raised where there is none.
     """

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-6--kvl): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **23962.0** on both sides; structure ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 123 rows · ✔ 42 columns · ✔ 204 nonzeros; duals ✔ 123 rows; **model for model**: 19 blocks equal, 2 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **23962.0** on both sides; structure ≠ `transmission_expansion_cost_limit` 2 vs 1+1 — one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_volume_expansion_limit` 2 vs 1+1 — one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 123 rows · ✔ 42 columns · ✔ 204 nonzeros; duals ✔ 123 rows; **model for model**: 19 entries equal, 2 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

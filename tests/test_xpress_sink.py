@@ -56,7 +56,7 @@ def test_every_port_reaches_its_reference_optimum_on_xpress(port: dict[str, Any]
     """``test_ports.py``'s corpus, solved by the third solver.
 
     The one assertion here no part of this package produced. A sink that
-    mis-loads the matrix — a block boundary off by a row, a sense inverted —
+    mis-loads the matrix — an entry's first row off by one, a sense inverted —
     still reaches *a* number; this is what that number is checked against.
     """
     if port['name'] in OVER_THE_XPRESS_LIMIT:
@@ -127,7 +127,7 @@ def test_solver_options_reach_xpress() -> None:
 
 
 def test_constructing_xpress_loads_the_model_and_stops() -> None:
-    """The hand-off `bench/` measures: a loaded problem, unsolved."""
+    """The handoff `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
