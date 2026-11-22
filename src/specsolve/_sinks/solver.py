@@ -249,22 +249,22 @@ class Solver(ABC):
         """
         answer = self._run(handoff)
         if basis and answer.primal is not None:
-            answer = replace(answer, basis=self._settled(handoff))
+            answer = replace(answer, basis=self._seated(handoff))
         self._check_span('primal', answer.primal, handoff.column_count)
         self._check_span('dual', answer.dual, handoff.row_count)
         self._check_span('activity', answer.activity, handoff.row_count)
         self._check_span('dual ray', answer.dual_ray, handoff.row_count)
         return answer
 
-    def _settled(self, handoff: Handoff) -> Basis | None:
-        """[`_basis`][], [`settled`][] against the model it was read from, after its spans are checked."""
+    def _seated(self, handoff: Handoff) -> Basis | None:
+        """[`_basis`][], [`seated`][] against the model it was read from, after its spans are checked."""
         read = self._basis()
         if read is None:
             return None
         columns, rows = read
         self._check_span('column basis', columns, handoff.column_count)
         self._check_span('row basis', rows, handoff.row_count)
-        return settled(handoff, columns, rows)
+        return seated(handoff, columns, rows)
 
     @abstractmethod
     def _basis(self) -> tuple[np.ndarray, np.ndarray] | None:
@@ -273,7 +273,7 @@ class Solver(ABC):
         Called only after a run that left a primal. ``None`` where it ended at
         no vertex: a mixed-integer model, an interior-point run without
         crossover. A nonbasic row may carry any nonbasic code, and a column at
-        equal bounds either bound's: [`_settled`][] reads both off the model.
+        equal bounds either bound's: [`_seated`][] reads both off the model.
         """
 
     def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:
@@ -368,7 +368,7 @@ def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], n
     return out
 
 
-def settled(handoff: Handoff, columns: np.ndarray, rows: np.ndarray) -> Basis:
+def seated(handoff: Handoff, columns: np.ndarray, rows: np.ndarray) -> Basis:
     """*columns* and *rows*, [`BASIS_STATUSES`][] codes, with each nonbasic one at a bound *handoff* has.
 
     A member reads only basic or not, and which bound a column sits at, and a

@@ -1,4 +1,4 @@
-"""Dense solver indices for a coordinate product narrowed by a condition.
+"""Contiguous solver indices for a coordinate product narrowed by a condition.
 
 ``COL`` is the solver's column index and ``ROW`` its row index, so two
 builds of one model must agree on every solver index
@@ -58,7 +58,7 @@ def table(
     start: int,
     restrictions: Sequence[Presence] = (),
 ) -> pl.DataFrame:
-    """The coordinate product of *dims* narrowed by *where*, with a dense *index* from *start*.
+    """The coordinate product of *dims* narrowed by *where*, with a contiguous *index* from *start*.
 
     The index is row-major over the dimensions' declared ordinals, so it is the
     solver's own index with no remapping. *restrictions* are the

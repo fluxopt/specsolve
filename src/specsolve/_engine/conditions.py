@@ -81,11 +81,11 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
 
 
 def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
-    """How many rows of *atom*'s parameter pass its test, as a one-cell table; a missing row reads as false.
+    """How many rows of *atom*'s parameter it holds at, as a one-cell table; a missing row reads as false.
 
     The parameter is joined onto its own keys, never read by position:
     reading it so means holding its column in order first, a read per
-    parameter outside the one batch every test here shares.
+    parameter outside the one batch every atom here shares.
     """
     keys = tuple(atom.dims)
     base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())

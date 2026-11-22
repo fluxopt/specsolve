@@ -131,7 +131,7 @@ class Scope:
         return self.row_major(dims, self.ordinal_of)
 
     def row_major(self, dims: tuple[str, ...], ordinals: Callable[[str], pl.Expr]) -> pl.Expr:
-        """A coordinate's row-major position in the declared product of *dims*, dense over the full product.
+        """A coordinate's row-major position in the declared product of *dims*, contiguous over the full product.
 
         A solver index, a bound's slot and a set's position all read this one rule, so two
         builds of one model agree on every index. *ordinals* reads a dimension's

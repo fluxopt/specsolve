@@ -596,7 +596,7 @@ def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkey
 
 
 @pytest.mark.parametrize('delay', [pytest.param([0, 0], id='settled-false'), pytest.param([1, 1], id='settled-true')])
-def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_compiles(monkeypatch, delay):
+def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_reads(monkeypatch, delay):
     """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to build.
 
     The false one leaves, and the true one, left alone, stands for the `cases:`. Either kept builds the same model
