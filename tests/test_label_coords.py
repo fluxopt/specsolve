@@ -512,7 +512,7 @@ def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_label
 
 
 def test_a_supplied_relation_agrees_with_the_oracle():
-    """Both lanes read the relation through the one front door, so both see it."""
+    """Both lanes read the relation through `tidy_sources`, so both see it."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -613,7 +613,7 @@ def test_a_supplied_map_does_not_say_which_labels_exist():
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
 def test_a_supplied_relation_is_refused_the_same_way_on_both_lanes(lane):
-    """One defect, one sentence: the checks live in the door both lanes enter."""
+    """One defect, one sentence: the checks live in `tidy_sources`, the one function both lanes read data through."""
     from tests.oracle import specsolve_linopy
 
     build = sps.solve if lane == 'relational' else specsolve_linopy.build

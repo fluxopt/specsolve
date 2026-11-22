@@ -360,14 +360,14 @@ _MAP = {'gen_bus': _tidy(g=['w', 's'], b=['n', 'e'])}
     ],
 )
 def test_a_relation_defect_reads_the_same_on_both_lanes(tmp_path, sources, match):
-    """One wording, not two, from the one door both lanes enter."""
+    """One wording, not two, from `tidy_sources`, which both lanes read data through."""
     path = _written(tmp_path, RELATION_SPEC)
 
     both_lanes_refuse(path, sources, match=match)
 
 
 def test_the_labels_a_declared_map_is_read_against_are_checked_before_the_read(tmp_path):
-    """The front door, not the engine, refuses a labels table without its label column."""
+    """`tidy_sources`, not the engine, refuses a labels table without its label column."""
     spec = {**RELATION_SPEC, 'relations': {'gen_bus': {'key': 'g', 'values': 'b'}}}
     path = _written(tmp_path, spec)
     sources = {**_P_MAX, **_MAP, 'b': _tidy(b=['n', 'e']), 'g': _tidy(gg=['w', 's'])}

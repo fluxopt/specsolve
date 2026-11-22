@@ -202,7 +202,7 @@ def _pointby_coordinate(point: Mapping[str, pl.DataFrame]) -> dict[str, dict[tup
 
 
 def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:
-    """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it.
+    """Both lanes refuse *sources* with one sentence, returned for the cases that pin more of it.
 
     The two are built apart: a ``pytest.raises`` around :func:`differential`
     is satisfied by the linopy build alone.

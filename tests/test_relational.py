@@ -277,7 +277,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below the front door: `Engine.build` takes a *program* and the tables
+    Below `specsolve.build`: `Engine.build` takes a *program* and the tables
     a built model reads, which is the same shape `tidy_sources` hands over — a
     table of labels per dimension, and each map as its own two-column relation.
     """
@@ -1507,13 +1507,13 @@ class TestThePositionalHandoff:
             assert got == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]), 'each coordinate got its own bound'
 
     def test_a_condition_or_a_sparse_bound_keeps_the_join(self, monkeypatch):
-        """Both ways position stops meaning the coordinate, refused by the gate.
+        """Both ways position stops meaning the coordinate, refused by the density check.
 
         A `where` makes the index table a subset of the product, and a parameter
         with a missing row makes the *parameter* one — either way the two sides no
         longer line up row for row, and attaching would pair a coordinate with
         another coordinate's bound. Neither is a shape the join cannot handle, so
-        the gate declines and nothing else changes.
+        the check declines and nothing else changes.
         """
         masked = override(DENSE_BOUND_SPEC, **{'variables.p.where': 't > 0'})
         shuffled = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND, 'cost': FLAT_COST}

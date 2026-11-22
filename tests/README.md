@@ -54,7 +54,7 @@ reach.
 - **A probe moves to `conftest.py` on its second importer.** Not before.
 - **A claim decided at `to_spec` lives in mathspec's own suite** (#1150),
   and nothing there imports a tool — including `specsolve` itself, whose
-  top-level namespace is the runner. The door the claim is *decided at* is the test, not
+  top-level namespace is the runner. The function the claim is *decided at* is the test, not
   the subject it is about: "a stray dimension is refused" is the language's, while
   "`check` reaches that refusal with no sources attached" is `check`'s and belongs
   beside it. The package docstring carries the rule and the two tests that

@@ -179,7 +179,7 @@ where the entries are argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
-a sink has no spelling for cannot reach that sink by any door: `Model.check_sink`,
+a sink has no spelling for cannot reach that sink through any verb: `Model.check_sink`,
 which asks without a solve, and the engine's `solve` and `write` — which ask
 without being asked, a file written without the section being a different model
 that parses and solves.

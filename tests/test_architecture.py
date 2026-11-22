@@ -647,7 +647,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
     import specsolve
     from specsolve._solve_over import build_slice, solve_over
 
-    doors = {
+    functions = {
         'build': specsolve.build,
         'solve': specsolve.solve,
         'write': specsolve.write,
@@ -658,8 +658,8 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'solve_over': solve_over,
         'build_slice': build_slice,
     }
-    assert sources_annotations(doors) == {'Mapping[str, Source]'}, (
-        f'every door takes sources as Mapping[str, Source], and these do not: {sources_annotations(doors)}'
+    assert sources_annotations(functions) == {'Mapping[str, Source]'}, (
+        f'every function that takes sources takes them as Mapping[str, Source], and these do not: {sources_annotations(functions)}'
     )
 
 
@@ -712,11 +712,11 @@ def test_every_table_is_collected_through_one_function():
     )
 
 
-def sources_annotations(doors: dict[str, Any]) -> set[str]:
-    """What each door annotates ``sources`` with — ``tests/test_linopy_lane.py`` asks the same of the lane's."""
+def sources_annotations(functions: dict[str, Any]) -> set[str]:
+    """What each function annotates ``sources`` with — ``tests/test_linopy_lane.py`` asks the same of the lane's."""
     import inspect
 
-    return {str(inspect.signature(door).parameters['sources'].annotation) for door in doors.values()}
+    return {str(inspect.signature(function).parameters['sources'].annotation) for function in functions.values()}
 
 
 def _gen_bus_joins(program: Any) -> tuple[Any, Any]:

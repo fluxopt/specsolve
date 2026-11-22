@@ -28,7 +28,7 @@ flowchart TB
     end
 
     SPEC -->|"the entries to attach against"| SRC
-    SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
+    SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>tidy_sources, the one function both lanes read data through</i>"]
 
     PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the program"| QUERIES
@@ -79,13 +79,13 @@ flowchart TB
 
 - **The language is another package.** `mathspec` reads a file and compiles it
   to a `Program`. It cannot import anything here.
-- **Data enters through one door, and both lanes use it.**
+- **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
   accepts into tidy polars tables, and `_assumptions.py` checks a spec's
   assumptions there.
-- **One gate decides what either lane builds.** `_inputs.as_program` returns a
-  `Program` or raises `LanguageError`. `DataError` is what a source failed to
-  supply. A spec the language accepts and this lane cannot build raises
+- **One function decides what either lane builds.** `_inputs.as_program`, which
+  every verb compiles a spec through, returns a `Program` or raises
+  `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
 
 ## The public API
@@ -205,7 +205,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
-| `_sources.py` | the door: caller data into tidy tables |
+| `_sources.py` | `tidy_sources`: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `_tables.py` | caller tables in, via the Arrow PyCapsule protocol |
@@ -223,7 +223,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
-| `_engine/attaching.py` | the door's tables → `AttachedSources` |
+| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources` |
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
@@ -254,11 +254,12 @@ The names the code uses for its own parts. The names a caller meets are in
   the linopy lane under `tests/linopy_lane/`, which builds a `linopy.Model`
   and is what every build is checked against.
 
-**The door**
+**`tidy_sources`**
 : `_sources.tidy_sources`, the one function both lanes read data through.
 
 **Compiling**
-: Turning a spec into its `Program`, through `_inputs.as_program`.
+: Turning a spec into its `Program`, through `_inputs.as_program`, the one
+  function every verb compiles a spec through.
 
 **Query builder**
 : `QueryBuilder` (`queries.py`): turns a program's expressions into polars lazy

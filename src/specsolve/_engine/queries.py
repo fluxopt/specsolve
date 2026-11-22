@@ -164,7 +164,7 @@ class QueryBuilder:
 
         Position lines up only for a dense parameter over the dimensions of a
         variable without a condition, in order. Height stands in for density because
-        duplicates are refused at the door.
+        duplicates are refused by [`tidy_sources`][specsolve._sources.tidy_sources].
         """
         entry = self.scope.program.parameters[parameter]
         if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
@@ -684,7 +684,7 @@ def _scattered(at: pl.Series, values: pl.Series, size: int) -> np.ndarray[tuple[
     written = np.zeros(size, dtype=bool)
     written[indices] = True
     if not written.all():
-        msg = 'a parameter passed the density gate but does not cover the coordinate product'
+        msg = 'a parameter passed the density check but does not cover the coordinate product'
         raise SpecsolveError(msg)
 
     out = np.empty(size, dtype=np.float64)

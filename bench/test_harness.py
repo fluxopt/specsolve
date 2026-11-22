@@ -1597,7 +1597,7 @@ def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[st
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
-    """A generated model file still has to pass the front door."""
+    """A generated model file still has to pass `to_spec`."""
     from mathspec import to_spec
 
     case = CASES['declarations']

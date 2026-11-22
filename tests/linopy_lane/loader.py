@@ -1,4 +1,4 @@
-"""The crossing into pandas and xarray: the door's tables as this lane's arrays.
+"""The crossing into pandas and xarray: the tables ``tidy_sources`` returns as this lane's arrays.
 
 The language's relation is a table over any number of dimensions, keyed by
 any number of its columns. What this lane builds of it is the **single-valued
@@ -6,8 +6,8 @@ map**: one value column read at the key, so the map is one dense array over
 the key's dimensions and a walk is an ``assign_coords`` and a ``groupby``, or
 a vectorised ``sel``. A relation may carry several value columns and each is
 its own array, since a call names the column it walks.
-:func:`refuse_relations_the_lane_does_not_build` turns the rest away at the
-lane's door, naming the relational lane, which builds every shape the language
+:func:`refuse_relations_the_lane_does_not_build` turns the rest away before
+the lane reads any data, naming the relational lane, which builds every shape the language
 admits.
 """
 

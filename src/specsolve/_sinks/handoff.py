@@ -292,7 +292,7 @@ def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
 def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
     """*value* with each infinity as the finite sentinel the asking solver reads as one.
 
-    A ``NaN`` never arrives: the door refuses one in a parameter and the schema
+    A ``NaN`` never arrives: [`tidy_sources`][specsolve._sources.tidy_sources] refuses one in a parameter and the schema
     one written in the file.
     """
     return (

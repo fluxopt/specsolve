@@ -684,7 +684,7 @@ class Sweep:
 
         The way back to its models is an archive, which holds what rebuilds
         each slice. One solve of the sweep's sources is another question, and
-        for a label sweep one the door refuses.
+        for a label sweep one [`tidy_sources`][specsolve._sources.tidy_sources] refuses.
         """
         no_model = (
             'this sweep has no model behind it, so a quantity the file never named cannot be read from it: a '

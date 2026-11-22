@@ -1,6 +1,6 @@
 """What a caller's ``sources`` become: the tables the engine reads by name.
 
-The door ([`tidy_sources`][specsolve._sources.tidy_sources]) has already read and checked
+[`tidy_sources`][specsolve._sources.tidy_sources] has already read and checked
 every source; this shapes each and encodes the string dimensions.
 """
 
@@ -57,7 +57,7 @@ class AttachedSources:
 
 
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
-    """Shape the door's tables into what *program* is written against.
+    """Shape the tables ``tidy_sources`` returns into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
@@ -149,7 +149,7 @@ def _refuse_a_missing_row(
 ) -> None:
     """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
 
-    The door refuses a duplicate, so a height short of the product is a gap,
+    ``tidy_sources`` refuses a duplicate, so a height short of the product is a gap,
     and only a short table pays for the anti-join that names one.
     """
     if not columns:

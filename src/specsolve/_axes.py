@@ -497,11 +497,11 @@ def _tables_over(
     A parameter over *dim* is cut on its *dim* column, and a relation on every
     column it declares over *dim*. One number is every window's number and is
     not cut. A mapping or a sequence is spread over all of *dim*'s labels first, as
-    the door reads it, so a window cuts the same table a single solve attaches.
+    ``tidy_sources`` reads it, so a window cuts the same table a single solve attaches.
     The strangers are the rows holding a null or a label *dim* does not have. They
-    are found once, and every window keeps them, so the door refuses them as
+    are found once, and every window keeps them, so ``tidy_sources`` refuses them as
     it does for a single solve. A table short of a column it is cut on is left
-    for the door to refuse.
+    for ``tidy_sources`` to refuse.
 
     Raises:
         DataError: A label finer than a microsecond, which the cast that
@@ -531,7 +531,7 @@ def _tables_over(
 def _within(
     table: pl.LazyFrame, columns: Sequence[str], window: Sequence[Label], strangers: pl.DataFrame
 ) -> pl.LazyFrame:
-    """*table*'s rows whose *columns* all hold a label of *window*, and its *strangers* for the door to refuse."""
+    """*table*'s rows whose *columns* all hold a label of *window*, and its *strangers* for ``tidy_sources`` to refuse."""
     inside = table.filter(pl.all_horizontal(pl.col(column).is_in(window) for column in columns))
     return pl.concat([inside, strangers.lazy()]) if strangers.height else inside
 

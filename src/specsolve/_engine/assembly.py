@@ -358,7 +358,7 @@ class Assembly:
         Such an entry numbers its rows row-major over the positions
         ([`indices.table`][specsolve._engine.indices.table]), so a term
         computes its row from its own coordinate rather than joining the entry's rows.
-        The door admits no label outside its dimension, so every coordinate a
+        [`tidy_sources`][specsolve._sources.tidy_sources] admits no label outside its dimension, so every coordinate a
         term carries is a row of the entry, as the join would find.
         """
         return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.position_of)
@@ -468,7 +468,7 @@ class Assembly:
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
     """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
 
-    The door refuses duplicates and strangers, so a parameter's height is the
+    [`tidy_sources`][specsolve._sources.tidy_sources] refuses duplicates and strangers, so a parameter's height is the
     number of coordinates it covers.
     """
     short: dict[str, tuple[int, int]] = {}

@@ -1168,7 +1168,7 @@ def test_a_window_cuts_a_start_keyed_by_date_as_a_single_solve_reads_it():
 
 
 def test_a_window_refuses_labels_that_carry_a_relation_as_a_single_solve_does():
-    """A window replaced the labels table with its own labels, so a column the door refuses there went unseen."""
+    """A window replaced the labels table with its own labels, so a column `tidy_sources` refuses there went unseen."""
     spec = override(
         WINDOW,
         **{'dimensions.season': {'dtype': 'str'}, 'relations.season_of': {'key': 'snapshot', 'values': 'season'}},
@@ -2214,7 +2214,7 @@ def test_a_pooled_sweep_parses_the_spec_once(make_executor, monkeypatch):
     """The spec is parsed once per call, whichever executor runs the slices.
 
     What a worker receives is the document already read, so no slice reads
-    the YAML again. Counted at the language's own front door.
+    the YAML again. Counted at `to_spec`, where the language reads a file.
     """
     from mathspec import _validation as validation
     from mathspec.spec import Spec
@@ -2937,7 +2937,7 @@ def test_one_window_over_the_whole_windowed_dimension_is_the_single_solve():
 def test_a_label_the_dimension_does_not_have_is_refused_under_windows_as_for_a_single_solve():
     """A row whose label the dimension does not have falls in no window, so cutting alone would drop it without a word.
 
-    Every window keeps such rows, and the door refuses them as it does for a
+    Every window keeps such rows, and `tidy_sources` refuses them as it does for a
     single solve.
     """
     sources = span_sources(8)
