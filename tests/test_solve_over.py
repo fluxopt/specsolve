@@ -867,7 +867,7 @@ def _starts(horizons: list[int], total: int) -> list[int]:
     return starts
 
 
-#: Horizon lists whose last entry overshoots what the axis has left — an int that
+#: Horizon lists whose last element overshoots what the axis has left — an int that
 #: does not divide, and a sequence whose tail reaches past the end.
 OVERSHOOTING = [
     pytest.param(5, 12, [5, 5, 2], id='an-int-that-does-not-divide'),
@@ -2612,9 +2612,9 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
     """A name is held per slice that produced it, not per slice, so an export
     cannot count positions: it reads the key off the rows, and a slice with no
     rows of a name — a variable every row of which the slice left absent — has no
-    entry, which is what the spill writes for it."""
+    key, which is what the spill writes for it."""
     index = sweep._by_slice('primal')['p']
-    assert list(index) == ['high', 'low', 'mid'], 'one entry per slice, keyed by its own key'
+    assert list(index) == ['high', 'low', 'mid'], 'one table per slice, keyed by its own key'
     assert all(sweep.key_name not in table.columns for table in index.values()), 'the key column is dropped'
 
     held = sweep._slices['primal']['p'].filter(pl.col(sweep.key_name) != 'low')

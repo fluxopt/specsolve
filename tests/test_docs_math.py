@@ -2,7 +2,7 @@
 
 ``mathspec.to_markdown`` writes inline math as the verbatim pair ``$`…`$``,
 and Arithmatex reads neither that pair nor a ```math fence. The fence is a
-``superfences`` entry in ``mkdocs.yml`` and the pair is
+``superfences`` custom fence in ``mkdocs.yml`` and the pair is
 ``tools.mdx_github_math``.
 """
 

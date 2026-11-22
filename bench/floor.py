@@ -111,19 +111,19 @@ def read(paths: dict[str, str]) -> Raw:
 def arrays(raw: Raw) -> Floor:
     """Cost, bounds and the CSR balance matrix, by tiling one snapshot.
 
-    The pattern is built and sorted by bus once, then broadcast: a ``p`` entry
-    advances by ``n_gen`` per snapshot, an ``f`` entry by ``n_line``.
+    The pattern is built and sorted by bus once, then broadcast: a ``p`` coefficient
+    advances by ``n_gen`` per snapshot, an ``f`` coefficient by ``n_line``.
     """
     n_gen, n_line, n_snap = len(raw.p_max), len(raw.cap), raw.n_snap
     f_block = n_snap * n_gen
 
-    entry_bus = np.concatenate([raw.gen_bus, raw.line_to, raw.line_from])
+    coefficient_bus = np.concatenate([raw.gen_bus, raw.line_to, raw.line_from])
     base_col = np.concatenate([np.arange(n_gen), f_block + np.arange(n_line), f_block + np.arange(n_line)])
     stride = np.concatenate([np.full(n_gen, n_gen), np.full(2 * n_line, n_line)])
     value = np.concatenate([np.ones(n_gen), np.ones(n_line), -np.ones(n_line)])
 
-    order = np.argsort(entry_bus, kind='stable')
-    per_bus = np.bincount(entry_bus, minlength=raw.n_bus)
+    order = np.argsort(coefficient_bus, kind='stable')
+    per_bus = np.bincount(coefficient_bus, minlength=raw.n_bus)
     row_nnz = np.tile(per_bus, n_snap)
     shifted = base_col[order][None, :] + np.arange(n_snap)[:, None] * stride[order][None, :]
 
