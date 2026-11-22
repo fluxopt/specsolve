@@ -237,9 +237,15 @@ class Diagnostics:
     Advisory, all of it: no answer depends on any field.
     """
 
-    #: The shape the build produced: columns, rows, and coefficients.
+    #: How many columns the build produced: one per variable at each coordinate
+    #: it exists at.
     columns: int
+    #: How many rows the build produced: one per constraint at each coordinate
+    #: it is built at. A row left with no term is not built.
     rows: int
+    #: How many coefficients the constraint matrix holds: one per row and
+    #: column a linear term reaches, the terms at one pair summed and a sum of
+    #: exactly zero dropped. A quadratic term is not one.
     nonzeros: int
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
