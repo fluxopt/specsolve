@@ -139,7 +139,7 @@ OSeMOSYS's UTOPIA: what to build and how hard to run it, 1990-2010, to meet thre
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 

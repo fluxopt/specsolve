@@ -44,12 +44,12 @@ def test_a_dense_table_with_one_row_per_coordinate_builds():
         pytest.param(pl.concat([_dense(), _dense().tail(1)]), 'more than one row for a coordinate', id='a-row-twice'),
         pytest.param(
             _dense().with_columns(g=pl.when(pl.int_range(pl.len()) == 7).then(pl.lit('gx')).otherwise('g')),
-            "dimension 'g' that are not coordinates of it: 'gx'",
+            "dimension 'g' that are not labels of it: 'gx'",
             id='a-label-outside-its-dimension',
         ),
         pytest.param(
             _dense().with_columns(t=pl.when(pl.int_range(pl.len()) == 7).then(999).otherwise('t')),
-            "dimension 't' that are not coordinates of it: 999",
+            "dimension 't' that are not labels of it: 999",
             id='a-label-outside-an-integer-dimension',
         ),
         pytest.param(
@@ -70,9 +70,9 @@ def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatc
 
     reads, real = [], reading._labels_of
 
-    def counted(dim, index):
+    def counted(dim, table):
         reads.append(dim)
-        return real(dim, index)
+        return real(dim, table)
 
     monkeypatch.setattr(reading, '_labels_of', counted)
     spec = {

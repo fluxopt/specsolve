@@ -245,12 +245,12 @@ def test_a_variable_nothing_declares_is_a_key_error() -> None:
         answer.reduced_cost('balance')
 
 
-def test_the_frame_is_tidy_over_the_variable_dims() -> None:
+def test_the_table_is_tidy_over_the_variable_dims() -> None:
     with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
-        frame = answer.reduced_cost('p')
-    assert frame.columns == ['g', 'value'], 'the primal frame shape: the dims, then the value'
-    assert frame['g'].to_list() == G, 'rows come back in label order'
-    assert np.isfinite(frame['value'].to_numpy()).all()
+        table = answer.reduced_cost('p')
+    assert table.columns == ['g', 'value'], 'the primal table shape: the dimensions, then the value'
+    assert table['g'].to_list() == G, 'rows come back in label order'
+    assert np.isfinite(table['value'].to_numpy()).all()
 
 
 # ---------------------------------------------------------------------------
@@ -281,8 +281,8 @@ SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
 def test_a_sweep_reads_each_slices_reduced_costs(tmp_path: Path, how: str) -> None:
     """Each slice's reduced costs, keyed by slice, as that slice solved alone reads them."""
     sweep = _swept(tmp_path, spec('minimize', 'sum(p, over=g) >= total'), how)
-    for (scenario,), frame in sweep.reduced_cost('p').partition_by('scenario', as_dict=True).items():
-        assert frame['value'].to_list() == pytest.approx(BY_HAND[scenario], abs=RTOL), (
+    for (scenario,), table in sweep.reduced_cost('p').partition_by('scenario', as_dict=True).items():
+        assert table['value'].to_list() == pytest.approx(BY_HAND[scenario], abs=RTOL), (
             f'slice {scenario!r} is priced at its own marginal generator'
         )
 
