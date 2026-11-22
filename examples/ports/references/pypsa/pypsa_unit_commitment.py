@@ -13,7 +13,7 @@ and run out of band — PyPSA is not a dependency of this project.
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
-**The MILP entry in the corpus.** ``committable=True`` gives each generator a
+**The MILP model in the corpus.** ``committable=True`` gives each generator a
 binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``. One
 bus, no network.
 

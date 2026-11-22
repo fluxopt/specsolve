@@ -507,7 +507,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
             )
             ours = ours.rename(columns={'global_constraint': 'name'})
         keys = [c for c in ours.columns if c != 'ours']
-        entry = per_name.setdefault(
+        record = per_name.setdefault(
             their_name,
             {
                 'rows': 0,
@@ -519,18 +519,18 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         )
         missing = [k for k in keys if k not in theirs.columns]
         if missing:
-            entry['note'] = f'PyPSA has no {missing} coordinate on {their_name}'
-            print(f'  {block_name}: {entry["note"]} (theirs: {list(theirs.columns)})', file=sys.stderr)
+            record['note'] = f'PyPSA has no {missing} coordinate on {their_name}'
+            print(f'  {block_name}: {record["note"]} (theirs: {list(theirs.columns)})', file=sys.stderr)
             continue
         casts = {k: ours[k].dtype for k in keys if k != 'name'} | ({'name': str} if 'name' in keys else {})
         joined = ours.merge(theirs.astype(casts), on=keys, how='inner') if keys else ours.merge(theirs, how='cross')
-        gaps = (joined['ours'] + joined['dual']).abs() if entry['negated'] else (joined['ours'] - joined['dual']).abs()
+        gaps = (joined['ours'] + joined['dual']).abs() if record['negated'] else (joined['ours'] - joined['dual']).abs()
         if len(gaps) and gaps.max() > 1e-6:
             off = joined[gaps > 1e-6].head(3)
             print(f'  {block_name} vs {their_name}:\n{off.to_string(index=False)}', file=sys.stderr)
-        entry['rows'] += len(joined)
-        entry['max_abs_diff'] = round(max(entry['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
-        sign = -1.0 if entry['negated'] else 1.0
+        record['rows'] += len(joined)
+        record['max_abs_diff'] = round(max(record['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
+        sign = -1.0 if record['negated'] else 1.0
         differing.extend((their_name, int(r.row), sign * r.ours, r.dual) for r in joined[gaps > 1e-6].itertuples())
     ranges = slope_ranges(n.model, {row for _, row, _, _ in differing}) if differing else {}
     for their_name, row, ours, theirs in differing:
@@ -540,13 +540,13 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         )
         per_name[their_name]['inside' if inside(ours, ranges[row]) else 'outside'] += 1
     differences = {}
-    for name, entry in per_name.items():
-        entry['matches'] = entry['outside'] == 0 and 'note' not in entry
-        if not entry['matches']:
+    for name, record in per_name.items():
+        record['matches'] = record['outside'] == 0 and 'note' not in record
+        if not record['matches']:
             differences[name] = {
-                'max_abs_diff': entry['max_abs_diff'],
-                **({'note': entry['note']} if 'note' in entry else {}),
-                **({'compared': 'negated'} if entry['negated'] else {}),
+                'max_abs_diff': record['max_abs_diff'],
+                **({'note': record['note']} if 'note' in record else {}),
+                **({'compared': 'negated'} if record['negated'] else {}),
                 'reason': reasons.get(name, {}).get('duals'),
             }
     return {
@@ -646,7 +646,7 @@ def _rows(flat: pd.DataFrame, labels, relabel) -> dict:
     is flipped whole, its sense with it. Coefficients and constants are
     rounded to nine places, as the builders may differ in the last ulp. A
     label with no nonzero coefficient is not a row: linopy's `flat` holds no
-    entry for it, and its LP writer and its row count skip it.
+    row for it, and its LP writer and its row count skip it.
     """
     terms = defaultdict(list)
     meta = {}
@@ -1139,14 +1139,14 @@ def main() -> int:
     used_blocks = {name for st in attached_stamps for name in st['structural'].get('recorded', {})}
     stale = sorted(
         f'{name}.{key}'
-        for name, entry in REASONS.items()
+        for name, noted in REASONS.items()
         for key, used in (
             ('structure', used_structure),
             ('duals', used_duals),
             ('negated', used_negated),
             ('blocks', used_blocks),
         )
-        if key in entry and name not in used
+        if key in noted and name not in used
     )
     found = coverage(stamped)
     known = [line for line in UNTESTED.read_text().splitlines() if line and not line.startswith('#')]

@@ -149,7 +149,7 @@ def shortened(shape: Shape) -> Shape:
 def rescaled(path: str) -> pl.DataFrame:
     """The parameter at *path* with every value one percent larger: new coefficients on the same pattern.
 
-    A zero stays zero, so no entry enters or leaves the matrix; only its numbers move.
+    A zero stays zero, so no coefficient enters or leaves the matrix; only its numbers move.
     """
     return pl.read_parquet(path).with_columns(pl.col('value') * 1.01)
 
@@ -831,7 +831,7 @@ def _ladder(
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    """A case's rungs, one per entry of *snapshots*, below them a tenth and a hundredth of the first.
+    """A case's rungs, one per element of *snapshots*, below them a tenth and a hundredth of the first.
 
     ``3xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
     ``docs/about/benchmarks.md`` that a model whose dense build cannot fit on

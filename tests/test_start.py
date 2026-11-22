@@ -388,7 +388,9 @@ def test_a_nonbasic_row_is_at_the_bound_its_sense_gives() -> None:
         pytest.param([AT_LOWER], [AT_UPPER, BASIC], ([AT_LOWER], [BASIC, BASIC]), id='a-basic-column-dropped'),
     ],
 )
-def test_a_carried_basis_has_one_basic_entry_per_row(columns: list[int], rows: list[int], expected: tuple) -> None:
+def test_a_carried_basis_has_as_many_basic_statuses_as_rows(
+    columns: list[int], rows: list[int], expected: tuple
+) -> None:
     counted = _counted(np.asarray(columns, dtype=np.int8), np.asarray(rows, dtype=np.int8))
     assert ([*counted[0]], [*counted[1]]) == expected, 'a surplus leaves from the columns, a shortfall enters as rows'
 

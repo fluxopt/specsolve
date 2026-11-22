@@ -1,10 +1,10 @@
 """Eager evaluation of the language's built-in operators, on xarray and linopy.
 
-Each entry point takes an operand that is already a value — an ``xr.DataArray``
+Each public function takes an operand that is already a value — an ``xr.DataArray``
 for a parameter, a linopy ``Variable`` or ``LinearExpression`` for anything
 carrying one — and returns the same. Nothing here reads the schema, the program or
 the model: ``builder.py`` evaluates the operands and the keywords, and calls in.
-Each entry point comes first and its own machinery after.
+Each public function comes first and its own machinery after.
 """
 
 from __future__ import annotations
