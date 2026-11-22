@@ -19,26 +19,26 @@ pixi environment carries pypsa, so run it locally with the workflow's own line:
 Per rung, from the same network:
 
 1. **Spec against model** — PyPSA's ``n.optimize.create_model()`` and
-   the oracle's ``tests.linopy_lane.build``, label for label: coefficients, sense, right-hand
+   the linopy lane's ``tests.linopy_lane.build``, label for label: coefficients, sense, right-hand
    side, bounds, integrality, objective terms. No solver, so it covers MIP
    and QP alike. The verdict speaks the index table's words: ``equal`` is
-   the one block PyPSA builds — **done**; ``region`` is the same rows from
-   several ``where:`` blocks — **split**; a difference the file states on
+   the one entry PyPSA builds — **done**; ``region`` is the same rows from
+   several ``where:`` entries — **split**; a difference the file states on
    purpose carries a ``blocks`` reason in ``deviations.yaml`` and comes back
    **recorded**; ``mismatch`` fails the run. A rung whose file
    `tests.linopy_lane` cannot build yet stamps the error instead.
 2. **One solved objective across the fence** — PyPSA's solve against
    specsolve's, both HiGHS, rtol 1e-9 on the generic spine.
-3. **Coverage** — what the relational lane built per block, each
+3. **Coverage** — what the relational lane built per entry, each
    dimension's size, the tables attached non-empty; and, over the ladder, that
-   every block is built, every condition is partially true and every parameter is
+   every entry is built, every condition is partially true and every parameter is
    fed by some rung.
 4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
    snapshot's objective weighting, which is how PyPSA reports them. A
    mixed-integer rung has no duals on our side and stamps why instead.
 5. **Structure** — PyPSA's rows and columns per name, masked labels
-   excluded, against what the relational lane built per block — never
+   excluded, against what the relational lane built per entry — never
    summed. A difference is allowed only with a reason in ``deviations.yaml``;
    one recorded nowhere reds the run, and so does a reason no rung needs.
 
@@ -89,7 +89,7 @@ COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
 PATCHES: dict[str, Path] = {}
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
-sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy oracle in tests/
+sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy lane in tests/
 
 import linopy  # noqa: E402
 import mathspec  # noqa: E402
@@ -192,7 +192,7 @@ def stands_for(description: str | None, model=None) -> str:
     """The PyPSA name a declaration's description opens with, in backticks — the declared pages' convention.
 
     A description may open with several, comma-separated, where PyPSA names
-    one block differently by mode (tangent rows or stacked secants); the one
+    one entry differently by mode (tangent rows or stacked secants); the one
     *model* has is chosen, else the first.
     """
     opening = re.match(r'((?:`[^`]+`(?:, )?)+)', description or '').group(1)
@@ -208,7 +208,7 @@ def stands_for(description: str | None, model=None) -> str:
 
 
 def templated(name: str) -> re.Pattern | None:
-    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one block over the dimension.
+    """The pattern a name with a ``{…}`` placeholder stands for — PyPSA writes one row family per label, the file one entry over the dimension.
 
     Under ``multi_investment_periods`` PyPSA appends ``-period-{p}`` to a
     family it writes per period, so the pattern takes that suffix too.
@@ -219,7 +219,7 @@ def templated(name: str) -> re.Pattern | None:
 
 
 def template_dims(declared, model) -> dict[str, str]:
-    """Block name -> the dimension PyPSA spells into the constraint's name — the one declared dim its constraint has no axis for (a component dim rides its ``name`` axis)."""
+    """Entry name -> the dimension PyPSA spells into the constraint's name — the one declared dim its constraint has no axis for (a component dim rides its ``name`` axis)."""
     out = {}
     for name, block in declared.constraints.items():
         pattern = templated(stands_for(block.description, model))
@@ -300,7 +300,7 @@ def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed:
 
 
 def built_counts(model) -> tuple[dict[str, int], dict[str, int]]:
-    """Rows per constraint block and columns per variable block of one build, before any solve."""
+    """Rows per constraint and columns per variable of one build, before any solve."""
     built = model._engine._model
     return (
         {name: held.height for name, held in built.constraints.items()},
@@ -390,10 +390,10 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
 
 
 def conjunct_verdicts(built_model, program) -> dict[str, str]:
-    """Per block with a ``where:``, what each conjunct of its ``where:`` did on this rung — one character each.
+    """Per entry with a ``where:``, what each conjunct of its ``where:`` did on this rung — one character each.
 
     ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
-    and ``-`` where the rung builds no row of the block at all. Positional:
+    and ``-`` where the rung builds no row of the entry at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
     model = built_model._engine._model
@@ -416,7 +416,7 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
 
 
 def built_by_label(result, templates: dict[str, str]) -> dict[str, dict[str, int]]:
-    """Rows built per label of a templated block's dimension — what each PyPSA row family is held to."""
+    """Rows built per label of a templated entry's dimension — what each PyPSA row family is held to."""
     out = {}
     for name, dim in templates.items():
         counts = result.activity(name).to_pandas().groupby(dim).size()
@@ -440,9 +440,9 @@ def _gc_dual(constraint, label: str) -> pd.DataFrame:
 def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[str, object]:
     """Every constraint's dual, per coordinate: PyPSA's own linopy model against `result.dual`, raw on both sides.
 
-    A block's rows are joined to the PyPSA constraint its description names
+    An entry's rows are joined to the PyPSA constraint its description names
     on (snapshot, name) — PyPSA calls every component coordinate ``name`` —
-    and a global-constraint block on the row's label. An integer variable
+    and a global-constraint entry on the row's label. An integer variable
     leaves the lane without duals, and the stamp says so.
 
     A name the file writes as PyPSA's row negated carries a ``negated:`` reason
@@ -688,8 +688,8 @@ def structure(
     """Row and column counts per PyPSA name, PyPSA's model against what specsolve built — the shape, before the labels.
 
     PyPSA's counts come off its own linopy model, masked labels excluded;
-    ours are the rows and columns built per block, keyed by the PyPSA name the
-    block's description opens with and never summed. A global-constraint row
+    ours are the rows and columns built per entry, keyed by the PyPSA name the
+    entry's description opens with and never summed. A global-constraint row
     is matched through its recorded type.
     """
     theirs_rows = {name: int((c.labels != -1).sum()) for name, c in theirs.constraints.items()}
@@ -724,12 +724,12 @@ def structure(
 
 
 def matched(counts: dict) -> bool:
-    """One PyPSA name, one block, one equal count — anything else is a difference."""
+    """One PyPSA name, one entry, one equal count — anything else is a difference."""
     return len(counts['specsolve']) == 1 and next(iter(counts['specsolve'].values())) == counts['pypsa']
 
 
 def shown(blocks: dict[str, int]) -> str:
-    """A block breakdown as the pages and messages print it — ``3+1+4``, never a sum."""
+    """An entry breakdown as the pages and messages print it — ``3+1+4``, never a sum."""
     return '+'.join(str(count) for count in blocks.values()) or '0'
 
 
@@ -749,7 +749,7 @@ def solver_size(n, built_model) -> dict[str, dict[str, int]]:
 
 
 def explained(stem: str, shape: dict, reasons: dict) -> tuple[dict, list[str]]:
-    """Every name whose count is not one block equal to PyPSA's, with its recorded reason — and those with none.
+    """Every name whose count is not one entry equal to PyPSA's, with its recorded reason — and those with none.
 
     ``deviations.yaml`` maps a PyPSA name to ``{structure: reason}``.
     """
@@ -784,7 +784,7 @@ def _gc_key(their_name: str, key: object) -> object:
 
 
 def compare(theirs, ours, declared, gc_kinds: dict[str, str]) -> dict[str, object]:
-    """Verdicts: which PyPSA names are model-equal, which are the same region in several blocks, which differ.
+    """Verdicts: which PyPSA names are model-equal, which are the same region in several entries, which differ.
 
     A name empty on both sides lands in no bucket. A mismatch with a ``blocks``
     reason in ``deviations.yaml`` comes back under ``recorded``.
@@ -1025,7 +1025,7 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, condition and parameter is exercised.
+    """What the ladder as a whole leaves untested — empty when every entry, condition and parameter is exercised.
 
     A patched file is held only to what its patch declares, as `owned` says.
     """

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa_linearized_uc/#rung-44--the-integer-files-commitment-rows-relaxed): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **7400.0** on both sides; structure ✔ 21 constraints · 8 variables, name for name; size ✔ 191 rows · ✔ 100 columns · ✔ 378 nonzeros; duals — integer model, no duals; **model for model**: 29 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **7400.0** on both sides; structure ✔ 21 constraints · 8 variables, name for name; size ✔ 191 rows · ✔ 100 columns · ✔ 378 nonzeros; duals — integer model, no duals; **model for model**: 29 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

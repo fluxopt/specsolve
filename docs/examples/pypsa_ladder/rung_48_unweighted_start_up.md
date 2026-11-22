@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-48--a-start-and-a-stop-unweighted): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **7325.0** on both sides; structure ✔ 10 constraints · 4 variables, name for name; size ✔ 72 rows · ✔ 36 columns · ✔ 118 nonzeros; duals — integer model, no duals; **model for model**: 11 blocks equal, 0 documented splits, 4 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **7325.0** on both sides; structure ✔ 10 constraints · 4 variables, name for name; size ✔ 72 rows · ✔ 36 columns · ✔ 118 nonzeros; duals — integer model, no duals; **model for model**: 11 entries equal, 0 documented splits, 4 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

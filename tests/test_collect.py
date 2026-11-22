@@ -9,7 +9,7 @@ import specsolve as sps
 from specsolve import _collect as collect
 from specsolve._collect import collected
 from specsolve._engine import assembly
-from specsolve._engine.scope import Scope, ordinal
+from specsolve._engine.scope import Scope, position_column
 from specsolve._names import COL
 
 
@@ -21,15 +21,15 @@ def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
             'store': [f's{k}' for _ in range(snapshots) for k in range(stores)],
         }
     )
-    ordinals = pl.DataFrame({'snapshot': range(snapshots), 'ord': range(snapshots)}).lazy()
+    positions = pl.DataFrame({'snapshot': range(snapshots), 'position': range(snapshots)}).lazy()
     moved = (
         keys.with_row_index('col_index')
         .lazy()
-        .join(ordinals.rename({'ord': 'ord_in'}), on='snapshot')
-        .with_columns(((pl.col('ord_in') + 1) % snapshots).alias('ord_out'))
-        .drop('snapshot', 'ord_in')
-        .join(ordinals.rename({'ord': 'ord_out'}), on='ord_out')
-        .drop('ord_out')
+        .join(positions.rename({'position': 'position_in'}), on='snapshot')
+        .with_columns(((pl.col('position_in') + 1) % snapshots).alias('position_out'))
+        .drop('snapshot', 'position_in')
+        .join(positions.rename({'position': 'position_out'}), on='position_out')
+        .drop('position_out')
     )
     return keys.with_row_index('row').lazy().join(moved, on=['snapshot', 'store']).select('row', 'col_index')
 
@@ -59,7 +59,7 @@ def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
 def test_a_coordinate_product_arrives_in_index_order():
     """The streaming engine picks which side of a cross join it buffers, and the product's order with it.
 
-    A solver index is row-major over the declared ordinals, so a product out of that
+    A solver index is row-major over the positions, so a product out of that
     order has to be sorted before it is numbered.
     """
     spec = {
@@ -70,8 +70,8 @@ def test_a_coordinate_product_arrives_in_index_order():
     with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
         built = model._engine._model
         product = Scope(built.program, built.attached, built.variables).product(('a', 'b')).pipe(collected)
-    ordinals = product.select(ordinal('a'), ordinal('b')).rows()
-    assert ordinals == sorted(ordinals), 'row-major: `a` varies slowest'
+    positions = product.select(position_column('a'), position_column('b')).rows()
+    assert positions == sorted(positions), 'row-major: `a` varies slowest'
 
 
 def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_table_inputs):

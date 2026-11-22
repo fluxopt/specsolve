@@ -20,7 +20,7 @@ from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
-from specsolve._engine.terms import Term, absence_restrictions
+from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import null_bounds_message
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.handoff import SENSE
@@ -71,12 +71,12 @@ class Measured:
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint block.
+    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint.
     coefficients: dict[str, tuple[float, float]] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` bound magnitude, per variable block.
+    #: ``name -> (smallest, largest)`` bound magnitude, per variable.
     bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` right-hand-side magnitude, per constraint
-    #: block, over the rows that survived.
+    #: ``name -> (smallest, largest)`` right-hand-side magnitude, per
+    #: constraint, over the rows that survived.
     rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
     columns: int = 0
@@ -240,7 +240,7 @@ class Assembly:
             place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
             table = held.table
-            place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col(COL)
+            place, col = self.scope.row_major(v.dims, self.scope.position_of), pl.col(COL)
         placed = table.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
@@ -267,10 +267,10 @@ class Assembly:
 
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
-        indexed block narrows to the rows that survived. A constraint whose
+        entry's index narrows to the rows that survived. A constraint whose
         ``where`` admits no row has no query built. One without a ``where`` is
-        indexed only once its restrictions are known, so a sparse absence
-        never meets the full product of its dimensions.
+        indexed only once the presences that narrow it are known, so a sparse
+        absence never meets the full product of its dimensions.
         """
         start = self.n_rows
         if rowless(c, self.attached):
@@ -284,12 +284,12 @@ class Assembly:
         linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
-        restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None or restrictions:
-            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, restrictions)
+        presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
+        if admitted is None or presences:
+            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, presences)
         else:
             indexed = admitted
-        if restrictions:
+        if presences:
             declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
             if declared > indexed.height:
                 self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
@@ -312,7 +312,7 @@ class Assembly:
 
         tables = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not restrictions
+        dense = c.where is None and not presences
         for p, sign in linear:
             if dense and set(p.dims) == set(c.dims):
                 placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
@@ -364,15 +364,15 @@ class Assembly:
         return _stack([], _ROWS), None, None
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+        """The row a coordinate lands on in an entry indexed over the whole product of *dims* from *start*.
 
-        Such a block numbers its rows row-major over the declared ordinals
+        Such an entry numbers its rows row-major over the positions
         ([`indices.table`][specsolve._engine.indices.table]), so a term
-        computes its row from its own coordinate rather than joining the block.
-        The door admits no label outside its dimension, so every coordinate a
-        term carries is a row of the block, as the join would find.
+        computes its row from its own coordinate rather than joining the entry's rows.
+        [`tidy_sources`][specsolve._sources.tidy_sources] admits no label outside its dimension, so every coordinate a
+        term carries is a row of the entry, as the join would find.
         """
-        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
+        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.position_of)
 
     def _quadratic_share(
         self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
@@ -406,12 +406,12 @@ class Assembly:
         kept: pl.Series,
         start: int,
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None, int]:
-        """Rows that kept no variable term are not built, and the block closes up.
+        """Rows that kept no variable term are not built, and the entry's rows close up.
 
         *kept* is read before zeros are pruned, so a row whose every term is
         zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
-        because the dual read-back reads a block by position. Every row either
-        share holds is in *kept*, so each of its entries moves with its row.
+        because the dual read-back reads an entry's rows by position. Every row either
+        share holds is in *kept*, so each of its coefficients moves with its row.
         """
         if kept.len() == rows.height:
             return rows, matrix, qmatrix, start + rows.height
@@ -434,7 +434,7 @@ class Assembly:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
-        ``0``. Rows landing on one column are summed here, because the hand-off
+        ``0``. Rows landing on one column are summed here, because the handoff
         scatter keeps only the last write.
         """
         if o is None:
@@ -479,7 +479,7 @@ class Assembly:
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
     """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
 
-    The door refuses duplicates and strangers, so a parameter's height is the
+    [`tidy_sources`][specsolve._sources.tidy_sources] refuses duplicates and strangers, so a parameter's height is the
     number of coordinates it covers.
     """
     short: dict[str, tuple[int, int]] = {}

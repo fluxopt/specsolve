@@ -1,7 +1,7 @@
 """Native API: YAML → streaming engine → solver, with linopy never imported.
 
 The linopy-free guarantee is asserted in a subprocess so the suite's own
-oracle imports cannot pollute the check. This module is pandas-free; the tests
+linopy-lane imports cannot pollute the check. This module is pandas-free; the tests
 of the bridges out say so with an ``importorskip``.
 """
 
@@ -260,7 +260,7 @@ def test_runtime_is_linopy_free(dispatch_yaml):
 def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispatch_table_inputs, tmp_path, form):
     """One first argument across the five verbs, and it is `to_spec`'s own.
 
-    Asserted per verb: each has its own door.
+    Asserted per verb: each reads its first argument itself.
     """
     spec = {
         'path': dispatch_yaml,
@@ -529,8 +529,8 @@ def test_a_dimension_named_like_a_column_the_build_writes_builds(name):
         assert result.dual('meet').height == 2, 'and the row reads back once per label'
 
 
-@pytest.mark.parametrize('door', ['check', 'build', 'solve', 'archive'], ids=str)
-def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp_path):
+@pytest.mark.parametrize('verb', ['check', 'build', 'solve', 'archive'], ids=str)
+def test_every_verb_refuses_a_case_pair_rather_than_only_the_front_one(verb, tmp_path):
     """A rule only `check` enforced is one `solve` walks past."""
     spec = _named(variables={'P': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}})
     sources = {'t': range(2), 'load': [1.0, 2.0]}
@@ -539,7 +539,7 @@ def test_every_door_refuses_a_case_pair_rather_than_only_the_front_one(door, tmp
         'build': lambda: sps.build(spec, sources),
         'solve': lambda: sps.solve(spec, sources),
         'archive': lambda: sps.solve(spec, sources, archive=tmp_path / 'case.zip'),
-    }[door]
+    }[verb]
     with pytest.raises(sps.errors.SpecsolveError, match='differ only by case'):
         call()
     assert not (tmp_path / 'case.zip').exists(), 'and a refused archive leaves no file behind'
@@ -1091,22 +1091,22 @@ def test_to_dataset_defaults_to_every_variable():
     ],
 )
 def test_a_wrong_model_raises_one_tree(raw: dict[str, object], tmp_path):
-    """Every documented door answers with `SpecsolveError` (#527).
+    """Every documented function answers with `SpecsolveError` (#527).
 
-    `Spec.__init__` is not a door: defining one would run every after-validator
+    `Spec.__init__` is not one: defining one would run every after-validator
     twice, the first time with no context.
     """
-    doors = {
+    functions = {
         'to_spec': lambda: to_spec(raw),
         'sps.check': lambda: sps.check(raw),
         'sps.solve': lambda: sps.solve(raw, {}),
         'sps.write': lambda: sps.write(raw, {}, str(tmp_path / 'm.lp')),
         'Spec.model_validate': lambda: Spec.model_validate(raw),
     }
-    for door, call in doors.items():
+    for name, call in functions.items():
         with pytest.raises(sps.errors.SpecsolveError) as ei:
             call()
-        assert 'errors.pydantic.dev' not in str(ei.value), f"{door} leaks pydantic's envelope"
+        assert 'errors.pydantic.dev' not in str(ei.value), f"{name} leaks pydantic's envelope"
 
 
 def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_table_inputs):

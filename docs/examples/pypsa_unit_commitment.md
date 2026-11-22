@@ -293,7 +293,7 @@ that begins the first snapshot off. `peak` begins off, so the instance pays a
 shut-down it never visibly performs. That asymmetry is PyPSA's, and it is
 worth 50 here.
 
-Two `where` clauses on one constraint block say that the row differs at the
+Two `where` clauses on one constraint say that the row differs at the
 boundary, the shape [storage](storage.md) uses for its initial state of
 charge.
 

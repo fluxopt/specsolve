@@ -41,7 +41,7 @@ COL = f'{RESERVED_PREFIX}col'
 #: The second variable's column index of a quadratic term.
 COL_2 = f'{RESERVED_PREFIX}col_2'
 
-#: The smaller and the larger column index of a quadratic matrix entry.
+#: The smaller and the larger column index of a quadratic coefficient.
 COL_L = f'{RESERVED_PREFIX}col_l'
 COL_R = f'{RESERVED_PREFIX}col_r'
 

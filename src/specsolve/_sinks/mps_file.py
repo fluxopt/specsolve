@@ -73,7 +73,7 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
 
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
     """The matrix in ``(col, row)`` order, and the offsets a column range slices it by."""
-    entries = handoff.matrix_block(0, handoff.row_count).sort(COL, ROW)
+    entries = handoff.matrix_chunk(0, handoff.row_count).sort(COL, ROW)
     counts = np.bincount(entries[COL].to_numpy(), minlength=handoff.column_count)
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
@@ -101,7 +101,7 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     A column's lines occupy ``slots`` consecutive keys — the integer marker, its
-    objective coefficient, each matrix entry at its row index, the closing
+    objective coefficient, each coefficient at its row index, the closing
     marker — so one sort fixes both the column order and the order within a
     column. Every column gets an objective line, coefficient or not: a column
     MPS never names is a column the reader does not have.
