@@ -171,14 +171,14 @@ def test_a_result_hands_back_the_row_its_save_writes(case, tmp_path):
     """`result.record` is the record as a value, so reading it needs no save and no parquet.
 
     The same row whichever side it is read from: the live result, the file
-    `save` wrote, and the result `load_result` reads back off that file.
+    `save` wrote, and the result `read_result` reads back off that file.
     """
     with sps.solve(*CASES[case]) as result:
         record = result.record
         out = result.save(tmp_path / case)
     written = Record(**pl.read_parquet(out / 'record.parquet').row(0, named=True))
     assert record == written, 'the property and the file are one row, not two readings of the solve'
-    assert sps.load_result(out).record == written, 'and a result read back hands back the row it was read from'
+    assert sps.read_result(out).record == written, 'and a result read back hands back the row it was read from'
     assert (record.objective is None) == (not record.has_primal), 'null where nothing was reached, never nan'
 
 

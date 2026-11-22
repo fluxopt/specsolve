@@ -201,7 +201,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `mathspec` (a dependency) | the whole language |
 | `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
-| `_archive.py` | reads an archive back: `load_archive`, `scan_archive` and `load_inputs` |
+| `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
@@ -214,7 +214,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_messages.py` | a wording two modules raise |
 | `_solve_over.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
-| `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `load_sweep` / `scan_sweep` |
+| `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `read_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
@@ -229,7 +229,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned, its save on disk, and `load_result` / `scan_result` |
+| `_result.py` | what a solve returned, its save on disk, and `read_result` / `scan_result` |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |

@@ -92,10 +92,10 @@ def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
     if kept == 'saved':
         with sps.solve(DISPATCH, snapshots(40), outputs=BASIS) as answer:
             answer.save(tmp_path / 'answer')
-        before = sps.load_result(tmp_path / 'answer')
+        before = sps.read_result(tmp_path / 'answer')
     else:
         sps.solve(DISPATCH, snapshots(40), outputs=BASIS, archive=tmp_path / 'run.zip')
-        archive = sps.load_archive(tmp_path / 'run.zip')
+        archive = sps.read_archive(tmp_path / 'run.zip')
         assert isinstance(archive, sps.types.ResultArchive)
         before = archive.result
     _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
@@ -201,7 +201,7 @@ def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_loads(
     from specsolve import _sinks as sinks
 
     sps.solve(DISPATCH, snapshots(40)).save(tmp_path / 'answer')
-    loaded = sps.load_result(tmp_path / 'answer')
+    loaded = sps.read_result(tmp_path / 'answer')
     monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
     with pytest.raises(SpecsolveError, match='no value at any coordinate'):
         sps.solve(KNAPSACK, knapsack_sources(), start=loaded)
@@ -514,7 +514,7 @@ def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path)
     from tests.test_solve_over import WINDOW, WINDOW_AXIS, span_sources
 
     earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
-    archived = sps.load_archive(tmp_path / 'run.zip')
+    archived = sps.read_archive(tmp_path / 'run.zip')
     assert isinstance(archived, sps.types.SweepArchive)
     again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived.sweep)
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
