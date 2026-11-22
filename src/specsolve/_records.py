@@ -197,21 +197,29 @@ class Metrics(NamedTuple):
     #: are the whole call and no step is in two of them. A phase that never
     #: ran writes zero rather than no column.
     #:
-    #: - ``load``: mathspec's load, ``to_spec`` on the spec as given, a path
-    #:   or a mapping, and the program compiled from it. Loading a solver is
-    #:   ``handoff``, which [`solver_loads`][] counts.
-    #: - ``tidy``: each source read into its tidy table, the way
-    #:   [`tidy`][specsolve._api.tidy] returns it.
-    #: - ``attach``: the tidy tables encoded against the program's dimensions,
-    #:   and the spec's ``assumptions:`` checked on them.
+    #: - ``load``: mathspec's load, ``to_spec`` on the spec as given: a path
+    #:   read and parsed, every rule that needs no data checked, and the
+    #:   program compiled. Loading a solver is ``handoff``, which
+    #:   [`solver_loads`][] counts.
+    #: - ``tidy``: the source keys checked against the spec, and each source
+    #:   read into its tidy table, the way [`tidy`][specsolve._api.tidy]
+    #:   returns it.
+    #: - ``attach``: the tidy tables encoded against the program's
+    #:   dimensions, a parameter's missing rows filled or refused, and the
+    #:   spec's ``assumptions:`` checked on them.
     #: - ``build``: every entry into the model's columns, rows and matrix.
-    #: - ``handoff``: the built model, and any ``start=``, into the solver.
+    #: - ``handoff``: a ``start=`` read and matched to this build, the solver
+    #:   checked to take the model, the model loaded into it or its new
+    #:   numbers pushed onto the one held, and the start given. After an
+    #:   update it also holds the held solver's digest of its last model,
+    #:   which decides between the load and the push.
     #: - ``solve``: the solver's own run, up to the vectors it returns.
-    #: - ``readback``: those vectors laid out by coordinate as the result.
-    #:   Its tables are read lazily, so turning one into rows is spent where
-    #:   it is read: in ``archive`` for an archive, in your code otherwise.
-    #: - ``write``: the built model streamed to an LP or MPS file by
-    #:   [`write`][specsolve._api.Model.write].
+    #: - ``readback``: those vectors laid out by coordinate as the result,
+    #:   and when and how it was solved recorded on it. Its tables are read
+    #:   lazily, so turning one into rows is spent where it is read: in
+    #:   ``archive`` for an archive, in your code otherwise.
+    #: - ``write``: the format checked to take the model, and the model
+    #:   streamed to an LP or MPS file by [`write`][specsolve._api.Model.write].
     #: - ``archive``: the spec, the sources and the answer written to disk.
     #:   Every member is timed but this row itself, which is written last:
     #:   writing it and landing the archive are in
@@ -238,7 +246,8 @@ class Metrics(NamedTuple):
     def phases(self) -> pl.DataFrame:
         """The clocks as a table, one row per phase in the order the phases run: ``(phase, seconds)``.
 
-        A phase that never ran is a row of zero.
+        A phase that never ran is a row of zero. Each phase is defined beside
+        its ``*_seconds`` column.
         """
         return pl.DataFrame({'phase': PHASES, 'seconds': [getattr(self, f'{phase}_seconds') for phase in PHASES]})
 

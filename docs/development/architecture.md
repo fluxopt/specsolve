@@ -91,8 +91,9 @@ flowchart TB
 ## The phases
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
-Each phase takes what the one before it produced, as
-[the diagram](../howto/faster.md#find-where-the-time-goes) draws it. The clock
+[`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
+phase covers, and [the diagram](../howto/faster.md#find-where-the-time-goes)
+draws what each hands to the next. The clock
 is one mark: each public call starts it with `Engine.start()`, and
 `Engine.lap(phase)` adds the time since the mark to that phase and moves the
 mark, so the laps tile the call and a step between two named ones is in the
@@ -101,17 +102,17 @@ phase of the one after it. `lap` refuses a name that has no `Metrics` column.
 the return from one call and the entry into the next (50–110 µs, #2180), and
 slows each step to find it in its own phase.
 
-| phase | takes | hands over | lapped in |
-| --- | --- | --- | --- |
-| `load` | the spec as given | `Spec` and its `Program` | `Model.__init__` |
-| `tidy` | the caller's sources | the tidy tables | `Model._fill`, through `_sources.tidied` |
-| `attach` | the tidy tables | `AttachedSources`, assumptions checked | `Model._fill` or `Engine.build` |
-| `build` | `AttachedSources` | `BuiltModel` and its `Handoff` | `Engine.build` |
-| `handoff` | the `Handoff` and a `start=` | a loaded solver | `Engine.solve`, `Model.solve` |
-| `solve` | a loaded solver | `SolveAnswer`, the solver's vectors | `Engine.solve` |
-| `readback` | `SolveAnswer` | `Result`, whose tables are lazy | `Engine.solve`, `Model.solve` |
-| `write` | the `Handoff` | an LP or MPS file | `Engine.write` |
-| `archive` | `Result`, the spec and the tidy tables | the archive on disk | `Model._archive` |
+| phase | lapped in |
+| --- | --- |
+| `load` | `Model.__init__` |
+| `tidy` | `Model._fill` |
+| `attach` | `Model._fill`, or `Engine.build` where no assumption attached the tables |
+| `build` | `Engine.build` |
+| `handoff` | `Engine.hand_off`; `Engine.build` for the held solver's digest |
+| `solve` | `Engine.solve` |
+| `readback` | `Model.solve` |
+| `write` | `Engine.write` |
+| `archive` | `Model._archive` |
 
 **The metrics row is the archive's last member**, written after the zip is
 packed, so `archive_seconds` covers every other member. Writing the row and
