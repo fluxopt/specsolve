@@ -33,11 +33,12 @@ for start in ('previous', None):
     model.solve()
     for numbers in steps:
         model.update(numbers).solve(start=start)
-    print(start, model.diagnostics().seconds['solve'], model.diagnostics().solver_loads)
+    print(start, model.diagnostics().seconds['solve'], model.diagnostics().solver_instances)
 ```
 
-Take the faster one. `solver_loads` equal to the number of solves means each update
-changed which coordinates a `where:` keeps.
+Take the faster one. `solver_instances` equal to the number of solves means
+each update changed which coordinates a `where:` keeps, so each solve took a new
+solver.
 
 **Carrying on usually pays, and can lose by an order of magnitude.** It cut
 wall time by 1.5× to 5.7× on the bench's dispatch and storage models

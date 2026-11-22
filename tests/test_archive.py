@@ -721,7 +721,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'rows',
         'nonzeros',
         'solves',
-        'solver_loads',
+        'solver_instances',
         'load_seconds',
         'tidy_seconds',
         'attach_seconds',
@@ -741,7 +741,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
     written = pl.read_parquet(tmp_path / 'case' / ANSWER_DIR / METRICS_FILE)
     assert written.columns == list(Metrics._fields), "and the file carries the type's columns, in its order"
     assert written.height == 1, 'one solve writes one row'
-    assert (taken.solves, taken.solver_loads) == (1, 1), (
+    assert (taken.solves, taken.solver_instances) == (1, 1), (
         'sps.solve builds the model it solves, so the row covers that one solve and its one load'
     )
     assert taken.build_seconds > 0.0, 'the build ran, so its clock is not the zero that says a phase did not'

@@ -211,7 +211,7 @@ def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         'columns': metrics['columns'][0],
         'rows': metrics['rows'][0],
         'nonzeros': metrics['nonzeros'][0],
-        'loads': int(metrics['solver_loads'].sum()),
+        'loads': int(metrics['solver_instances'].sum()),
         'phases': {
             column.removesuffix('_seconds'): float(metrics[column].sum())
             for column in metrics.columns

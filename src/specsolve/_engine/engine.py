@@ -114,9 +114,9 @@ class Engine:
         #: What the last solve concluded, or ``None`` once a load, a build or
         #: [`close`][] has changed what the solver holds.
         self._solved: SolveStatus | None = None
-        #: How many solves this model has been through, and how many loaded the solver from scratch.
+        #: How many solves this model has been through, and how many solver instances they took.
         self._solves = 0
-        self._solver_loads = 0
+        self._solver_instances = 0
         #: Wall seconds each phase has spent, cumulative across rebuilds.
         self._seconds: dict[str, float] = {}
         #: When the last lap ended, or the call began: where the next lap measures from.
@@ -228,7 +228,7 @@ class Engine:
         numbers pushed onto the one held, as [`loaded`][specsolve._sinks.loaded]
         decides, and the start given. A solver kept forgets its last run unless
         *start* is ``'previous'``. Counts toward neither ``solves`` nor
-        ``solver_loads``, so a benchmark that times this alone leaves them true.
+        ``solver_instances``, so a benchmark that times this alone leaves them true.
 
         Returns:
             The solver, and whether it was loaded again.
@@ -298,7 +298,7 @@ class Engine:
         solver, reloaded = self.handoff(solver_name, solver_options, start=start)
         self._solves += 1
         if reloaded:
-            self._solver_loads += 1
+            self._solver_instances += 1
         answer = solver.run(self._model.handoff, basis='basis' in outputs)
         self.lap('solve')
         self._solved = answer.status
@@ -414,7 +414,7 @@ class Engine:
             ),
             objective_range=measured.objective_range,
             solves=self._solves,
-            solver_loads=self._solver_loads,
+            solver_instances=self._solver_instances,
             seconds=dict(self._seconds),
         )
 

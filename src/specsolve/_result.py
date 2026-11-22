@@ -278,12 +278,13 @@ class Diagnostics:
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
 
-    #: How many times this model has been solved, and how many of those solves
-    #: loaded the solver from scratch instead of pushing values onto one that
-    #: already held it. ``solver_loads == solves`` on an iterating driver means the
-    #: model has a condition on a parameter that varies.
+    #: How many times this model has been solved, and how many solver
+    #: instances those solves took: a new one wherever the solver could not
+    #: keep the model and take its new values. ``solver_instances == solves``
+    #: on an iterating driver means the model has a condition on a parameter
+    #: that varies.
     solves: int
-    solver_loads: int
+    solver_instances: int
 
     #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
     #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
@@ -305,7 +306,7 @@ class Diagnostics:
             rows=self.rows,
             nonzeros=self.nonzeros,
             solves=self.solves,
-            solver_loads=self.solver_loads,
+            solver_instances=self.solver_instances,
             load_seconds=clocks.get('load', 0.0),
             tidy_seconds=clocks.get('tidy', 0.0),
             attach_seconds=clocks.get('attach', 0.0),

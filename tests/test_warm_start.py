@@ -3,7 +3,7 @@
 **The public half** is `solve(start=...)`. A model keeps the solver loaded with
 it between solves, and by default each solve carries on from the last one;
 `start=None` begins from nothing, and an answer given is matched by coordinate.
-`solver_loads` says whether the model was handed over again, and the iteration count
+`solver_instances` says whether the model was handed over again, and the iteration count
 says whether the work survived.
 
 **The sink half** is `Solver.start_from_basis(basis)` and `start_from_values(values)`. A carried basis
@@ -173,14 +173,14 @@ def _matched(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_a_re_solve_with_no_start_begins_from_nothing_on_the_solver_still_loaded(solver_name):
-    """The solver kept shows up as `solver_loads`, the work forgotten as the iteration count."""
+    """The solver kept shows up as `solver_instances`, the work forgotten as the iteration count."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
         scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
         again = model.solve(solver_name=solver_name, start=None)
-        assert model.diagnostics().solver_loads == 1, 'the loaded solver is kept'
+        assert model.diagnostics().solver_instances == 1, 'the loaded solver is kept'
         assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
             'it forgets the work it did, so it repeats the first solve iteration for iteration'
         )
@@ -198,7 +198,7 @@ def test_a_re_solve_carries_on_in_the_solver_by_default(solver_name, monkeypatch
         assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) < scratch, (
             'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
-        assert model.diagnostics().solver_loads == 1, 'carrying on keeps the solver too'
+        assert model.diagnostics().solver_instances == 1, 'carrying on keeps the solver too'
         assert not matched, 'the solver still holds the answer, so nothing is laid onto the build'
         assert carried.objective == pytest.approx(first.objective), 'a start moves the route, never the answer'
 
@@ -222,7 +222,7 @@ def test_the_default_begins_from_nothing_once_an_update_loads_the_solver_again(m
         model.update(dispatch_sources(SNAPSHOTS[:-1]))
         matched = _matched(monkeypatch)
         again = model.solve()
-        assert model.diagnostics().solver_loads == 2, 'the update loaded the solver again'
+        assert model.diagnostics().solver_instances == 2, 'the update loaded the solver again'
     assert not matched, 'the default reads and matches nothing'
     assert again.has_primal
 

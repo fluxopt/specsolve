@@ -176,9 +176,9 @@ class Metrics(NamedTuple):
 
     **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
     for the archive [`specsolve.solve`][] writes and on each slice's row of a
-    sweep, whose clocks are that slice's own share. There [`solver_loads`][] is ``1``
-    where the solver took the slice from scratch and ``0`` where values were
-    pushed onto the model it held. [`load_seconds`][] is on the row of the
+    sweep, whose clocks are that slice's own share. There [`solver_instances`][] is ``1``
+    where the slice took a new solver and ``0`` where its values were pushed
+    onto the solver that held the slice before. [`load_seconds`][] is on the row of the
     slice that built the model, and [`write_seconds`][] and
     [`archive_seconds`][] are zero: a sweep writes no model file, and
     cutting, stitching and archiving the sweep are not one slice's.
@@ -188,10 +188,11 @@ class Metrics(NamedTuple):
     columns: int
     rows: int
     nonzeros: int
-    #: How many solves the row covers, and how many of those loaded the solver
-    #: from scratch. The clocks are cumulative over exactly these solves.
+    #: How many solves the row covers, and how many solver instances they
+    #: took: a new one wherever the solver could not keep the model and take
+    #: its new values. The clocks are cumulative over exactly these solves.
     solves: int
-    solver_loads: int
+    solver_instances: int
     #: Wall-clock seconds in each phase, in the order the phases run. Each
     #: phase starts from what the one before it produced, so together they
     #: are the whole call and no step is in two of them. A phase that never
@@ -199,8 +200,8 @@ class Metrics(NamedTuple):
     #:
     #: - ``load``: mathspec's load, ``to_spec`` on the spec as given: a path
     #:   read and parsed, every rule that needs no data checked, and the
-    #:   program compiled. Loading a solver is ``handoff``, which
-    #:   [`solver_loads`][] counts.
+    #:   program compiled. Creating a solver is ``handoff``, and
+    #:   [`solver_instances`][] counts each one created.
     #: - ``tidy``: the source keys checked against the spec, and each source
     #:   read into its tidy table, the way [`tidy`][specsolve._api.tidy]
     #:   returns it.
@@ -261,7 +262,7 @@ class Metrics(NamedTuple):
 PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
 
 #: The [`Metrics`][] columns a model sums over its solves.
-_CUMULATIVE = ('solves', 'solver_loads', *(f'{phase}_seconds' for phase in PHASES))
+_CUMULATIVE = ('solves', 'solver_instances', *(f'{phase}_seconds' for phase in PHASES))
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
