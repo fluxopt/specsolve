@@ -1,7 +1,7 @@
 """What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
-same pass, every test a ``where`` makes ([`settle`][]). What that read settles
+same pass, every atom of a ``where`` ([`settle`][]). What that read settles
 is answered here: the program a build reads is [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out ([`rowless`][]). Every such decision lives in this module, so
@@ -28,14 +28,14 @@ if TYPE_CHECKING:
 
 
 def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """Each test the ``where`` of a variable, constraint or assumption makes that *attached* decides at every coordinate.
+    """Each atom of the ``where`` of a variable, constraint or assumption that *attached* settles.
 
-    A test is a parameter's bare name or comparison, anywhere in a ``where``, a
-    named condition read through: ``True`` where it holds everywhere,
-    ``False`` where nowhere. A test the data leaves partial is not in the
-    answer. *attached* need not hold the answer yet; this is what computes it.
+    An atom is read anywhere in a ``where``, a named condition read through:
+    ``True`` where it holds everywhere, ``False`` where nowhere. An atom the
+    data leaves partial is not in the answer. *attached* need not hold the
+    answer yet; this is what computes it.
 
-    Each test is read once over its parameter's own table, all in one batch
+    Each atom is read once over its parameter's own table, all in one batch
     and in memory: a model gates hundreds of entries on the same few
     flags, and reading a flag per entry over the product of its dimensions
     was most of the cost of the entries that build nothing. A parameter
@@ -68,36 +68,40 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
 
 
 def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
-    """*compiled* with each variable's and constraint's ``where`` folded over the tests *attached* settled.
+    """*compiled* with each variable's and constraint's ``where`` specialized to the atoms *attached* settled.
 
-    A ``where`` that folds to true is dropped, so the entry takes the
+    A ``where`` the data settles true is dropped, so the entry takes the
     path of one without a ``where``: dense labels, and terms placed on their
-    rows without a join. One that folds to false is kept as that literal, for
+    rows without a join. One it settles false is kept as that literal, for
     [`rowless`][] to skip. The program a build keeps is this one, so readback
     reads the entries it built. Assumptions keep their ``where`` as
     written, since a refusal quotes it; [`rules_out`][] answers for them.
     """
-    tests = attached.settled
+    settled = attached.settled
 
-    def narrowed[D: (program.Variable, program.Constraint)](entries: Mapping[str, D]) -> dict[str, D]:
+    def specialized_entries[D: (program.Variable, program.Constraint)](entries: Mapping[str, D]) -> dict[str, D]:
         out = {}
         for name, entry in entries.items():
             where = entry.where
             if where is None:
                 out[name] = entry
                 continue
-            kept = _folded(where, tests)
+            kept = _specialized_mask(where, settled)
             out[name] = replace(entry, where=None if _holds(kept, value=True) else kept)
         return out
 
-    if not tests:
+    if not settled:
         return compiled
-    return replace(compiled, variables=narrowed(compiled.variables), constraints=narrowed(compiled.constraints))
+    return replace(
+        compiled,
+        variables=specialized_entries(compiled.variables),
+        constraints=specialized_entries(compiled.constraints),
+    )
 
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     """Whether the data settled *where* false at every coordinate, so nothing it gates is read."""
-    return where is not None and _holds(_folded(where, attached.settled), value=False)
+    return where is not None and _holds(_specialized_mask(where, attached.settled), value=False)
 
 
 def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
@@ -105,26 +109,26 @@ def rowless(entry: program.Variable | program.Constraint, attached: AttachedSour
     return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
 
 
-def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:
-    """*mask* with each settled test written as the literal it is; constructing the mask folds what is left."""
-    return program.Mask(_substituted(mask.root, tests))
+def _specialized_mask(mask: program.Mask, settled: Mapping[program.Condition, bool]) -> program.Mask:
+    """*mask* with each settled atom written as the literal it is; constructing the mask simplifies what is left."""
+    return program.Mask(_substituted(mask.root, settled))
 
 
 def _holds(mask: program.Mask, *, value: bool) -> bool:
-    """Whether *mask* folded to the literal *value*."""
+    """Whether *mask* is the literal *value*."""
     return isinstance(mask.root, program.BooleanLiteral) and mask.root.value == value
 
 
-def _substituted(node: program.Condition, tests: Mapping[program.Condition, bool]) -> program.Condition:
-    """*node* rebuilt with each settled test as a literal, a named condition read as its body."""
-    if node in tests:
-        return program.BooleanLiteral(tests[node])
+def _substituted(node: program.Condition, settled: Mapping[program.Condition, bool]) -> program.Condition:
+    """*node* rebuilt with each settled atom as a literal, a named condition read as its body."""
+    if node in settled:
+        return program.BooleanLiteral(settled[node])
     if isinstance(node, program.And):
-        return program.And(_substituted(node.left, tests), _substituted(node.right, tests))
+        return program.And(_substituted(node.left, settled), _substituted(node.right, settled))
     if isinstance(node, program.Or):
-        return program.Or(_substituted(node.left, tests), _substituted(node.right, tests))
+        return program.Or(_substituted(node.left, settled), _substituted(node.right, settled))
     if isinstance(node, program.Not):
-        return program.Not(_substituted(node.operand, tests))
+        return program.Not(_substituted(node.operand, settled))
     if isinstance(node, program.ConditionReference):
-        return _substituted(node.body, tests)
+        return _substituted(node.body, settled)
     return node

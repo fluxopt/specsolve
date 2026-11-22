@@ -282,9 +282,8 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
-  label column as an `Enum` in declared order. They also hold each test of a
-  `where` that the data decides at every coordinate, read once for the
-  assumptions and the build both.
+  label column as an `Enum` in declared order. They also hold each settled atom
+  of a `where`, read once for the assumptions and the build both.
 
 **Term**, **presence** and **region**
 : One additive term of an expression, over its own dimensions: linear,
