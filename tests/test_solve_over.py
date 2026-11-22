@@ -817,9 +817,9 @@ def test_a_window_key_column_never_shadows_the_dimension_it_cut(sweep):
         pytest.param(
             {'horizon': [4, 0], 'lookahead': 0},
             r'at least one label.*\[0\]',
-            id='a-block-keeping-nothing',
+            id='a-horizon-keeping-nothing',
         ),
-        pytest.param({'horizon': [], 'lookahead': 0}, 'horizon is empty', id='no-blocks-at-all'),
+        pytest.param({'horizon': [], 'lookahead': 0}, 'horizon is empty', id='no-horizons-at-all'),
         pytest.param({'horizon': 4, 'lookahead': -1}, 'is negative', id='a-negative-lookahead'),
     ],
 )
@@ -829,67 +829,67 @@ def test_the_window_geometry_is_checked_at_construction(geometry, expected):
         sps.EachWindow('snapshot', **geometry)
 
 
-#: Window blocks that are not all the same size. Between them: a telescoping
+#: Window horizons that are not all the same size. Between them: a telescoping
 #: sequence that coarsens, one that refines, months of unequal length, and a
-#: sequence overshooting the axis so its tail blocks have nothing to cover.
-BLOCKS = [
+#: sequence overshooting the axis so its tail horizons have nothing to cover.
+HORIZONS = [
     pytest.param([1, 2, 3, 6], id='coarsening'),
     pytest.param([6, 3, 2, 1], id='refining'),
     pytest.param([4, 4, 4], id='uniform-spelled-as-a-sequence'),
     pytest.param([5, 7], id='two-unequal-months'),
-    pytest.param([5, 7, 99], id='a-block-past-the-end-of-the-axis'),
+    pytest.param([5, 7, 99], id='a-horizon-past-the-end-of-the-axis'),
 ]
 
 
-@pytest.mark.parametrize('blocks', BLOCKS)
-def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(blocks):
+@pytest.mark.parametrize('horizons', HORIZONS)
+def test_windows_of_unequal_size_cover_every_coordinate_exactly_once(horizons):
     """`horizon` as a sequence keeps those numbers in order, one window each."""
     runs = sps.solve_over(
         WINDOW,
         span_sources(12),
-        sps.EachWindow('snapshot', horizon=blocks, lookahead=2, carry={'soc_initial': 'soc'}),
+        sps.EachWindow('snapshot', horizon=horizons, lookahead=2, carry={'soc_initial': 'soc'}),
     )
     stitched = runs.primal('soc')
 
-    assert stitched['snapshot'].to_list() == list(range(12)), 'every coordinate, once, whatever the block sizes'
-    assert runs.keys == _starts(blocks, 12), 'one window per block, keyed by the coordinate it starts on'
+    assert stitched['snapshot'].to_list() == list(range(12)), 'every coordinate, once, whatever the horizon sizes'
+    assert runs.keys == _starts(horizons, 12), 'one window per horizon, keyed by the coordinate it starts on'
     assert runs.records['termination_condition'].to_list() == ['optimal'] * len(runs), 'every window solved'
 
 
-def _starts(blocks: list[int], total: int) -> list[int]:
-    """Where each window starts — the keys a block list implies, a block past the end contributing none."""
+def _starts(horizons: list[int], total: int) -> list[int]:
+    """Where each window starts — the keys a horizon list implies, a horizon past the end contributing none."""
     starts, at = [], 0
-    for block in blocks:
+    for horizon in horizons:
         if at >= total:
             break
         starts.append(at)
-        at += block
+        at += horizon
     return starts
 
 
-#: Block lists whose last entry overshoots what the axis has left — an int that
+#: Horizon lists whose last entry overshoots what the axis has left — an int that
 #: does not divide, and a sequence whose tail reaches past the end.
 OVERSHOOTING = [
     pytest.param(5, 12, [5, 5, 2], id='an-int-that-does-not-divide'),
     pytest.param(7, 12, [7, 5], id='an-int-larger-than-the-remainder'),
     pytest.param(20, 12, [12], id='an-int-larger-than-the-axis'),
     pytest.param([5, 7, 99], 12, [5, 7], id='a-sequence-reaching-past-the-end'),
-    pytest.param([5, 20], 12, [5, 7], id='a-sequence-whose-last-block-overshoots'),
+    pytest.param([5, 20], 12, [5, 7], id='a-sequence-whose-last-horizon-overshoots'),
 ]
 
 
 @pytest.mark.parametrize(('horizon', 'periods', 'expected'), OVERSHOOTING)
-def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(horizon, periods, expected):
-    """A probe, because no solved sweep can tell `min(block, left)` from `block`.
+def test_the_horizons_partition_the_axis_and_never_claim_more_than_is_left(horizon, periods, expected):
+    """A probe, because no solved sweep can tell `min(horizon, left)` from `horizon`.
 
-    Only the *last* block can overshoot, and its carry is never read, so
+    Only the *last* horizon can overshoot, and its carry is never read, so
     trimming it changes no answer. It keeps each window's horizon true, which the
     stitch and the carry both read.
     """
     axis = sps.EachWindow('snapshot', horizon=horizon, lookahead=0)
 
-    assert axis._blocks(periods) == expected, 'each block is trimmed to what the axis has left'
-    assert sum(axis._blocks(periods)) == periods, 'and together they cover it exactly once'
+    assert axis._horizon_lengths(periods) == expected, 'each horizon is trimmed to what the axis has left'
+    assert sum(axis._horizon_lengths(periods)) == periods, 'and together they cover it exactly once'
 
     slices, stitch = axis._slice(as_program(WINDOW), span_sources(periods), 'snapshot_start')
     horizons = stitch.horizon.group_by('snapshot_start', maintain_order=True).len()['len'].to_list()
@@ -898,8 +898,8 @@ def test_the_blocks_partition_the_axis_and_never_claim_more_than_is_left(horizon
         assert current.horizon_end in current.sources['snapshot'], 'no horizon end is a label its window does not hold'
 
 
-def test_a_block_list_that_stops_short_of_the_axis_is_refused():
-    """The coordinates past the last block would be solved by no window.
+def test_a_horizon_list_that_stops_short_of_the_axis_is_refused():
+    """The coordinates past the last horizon would be solved by no window.
 
     Trimming them silently is the one outcome a sweep must not have: the stitch
     would come back short and read as a complete schedule.
@@ -912,12 +912,12 @@ def test_a_block_list_that_stops_short_of_the_axis_is_refused():
         )
 
 
-def test_the_lookahead_the_model_needs_is_one_number_whatever_the_blocks():
+def test_the_lookahead_the_model_needs_is_one_number_whatever_the_horizons():
     """`Separability.ahead` is one integer for the dimension, so the gate is one check.
 
     `shift(soc, along=snapshot, offset=-1)` reads one label ahead, so a lookahead
-    of zero is refused and one is enough — for uniform blocks and unequal ones
-    alike, since no block size enters the arithmetic.
+    of zero is refused and one is enough — for uniform horizons and unequal ones
+    alike, since no horizon size enters the arithmetic.
     """
     ahead = 'soc == shift(soc, along=snapshot, offset=-1) + charge * 0.9 - discharge'
     reaching = override(WINDOW, **{'constraints.soc_step.expression': ahead})

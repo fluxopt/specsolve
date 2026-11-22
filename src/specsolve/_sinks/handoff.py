@@ -2,7 +2,7 @@
 
 The tables, the scalars a writer needs to size its batching, and the
 projections more than one sink needs — the dense column and row vectors, the
-matrix a block at a time — so two sinks cannot disagree about the model they
+matrix a chunk at a time — so two sinks cannot disagree about the model they
 loaded.
 """
 
@@ -50,7 +50,7 @@ class RowVectors:
 
 
 @dataclass(frozen=True)
-class MatrixBlock:
+class MatrixChunk:
     """One chunk of rows ``[lo, hi)`` and the coefficients those rows own.
 
     ``starts`` is the offset of each row's coefficients within the chunk — what a
@@ -114,7 +114,7 @@ class Handoff:
     read positionally and no sink builds a mapping. **``cols`` carries no
     ``COL`` and ``matrix`` no ``ROW``**: a ``cols`` row's position is its
     index, and a coefficient's row is where it sits between two starts;
-    [`matrix_block`][] spells them back out. ``obj`` keeps its ``COL``, being
+    [`matrix_chunk`][] spells them back out. ``obj`` keeps its ``COL``, being
     sparse, and **carries no order contract**: its row order differs between
     two builds of one model, so anything that reads it must scatter it over the
     column index, as [`dense_columns`][] does.
@@ -138,7 +138,7 @@ class Handoff:
     objective_constant: float
 
     def _spans(self, budget: int | None) -> Iterator[tuple[int, int]]:
-        """The row ranges both block readers walk; ``budget=None`` is one span.
+        """The row ranges both chunk readers walk; ``budget=None`` is one span.
 
         Width is the average row, since a reader pays in nonzeros: 100k rows is
         900k coefficients in one model and 10M in another.
@@ -151,7 +151,7 @@ class Handoff:
     def _span(self, lo: int, hi: int) -> pl.DataFrame:
         """The coefficients rows ``[lo, hi)`` own.
 
-        Both block readers slice through here, so the CSR arithmetic and the
+        Both chunk readers slice through here, so the CSR arithmetic and the
         half-open ``hi`` bound cannot drift between them.
         """
         first = int(self.row_starts[lo])
@@ -249,7 +249,7 @@ class Handoff:
         for members in self.sos.partition_by('set', maintain_order=True):
             yield members.item(0, 'type'), members.get_column(COL), members.get_column('weight')
 
-    def quadratic_blocks(self) -> Iterator[tuple[int, pl.DataFrame]]:
+    def quadratic_rows(self) -> Iterator[tuple[int, pl.DataFrame]]:
         """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` coefficients it owns.
 
         One row at a time, since every API that takes a quadratic constraint
@@ -258,18 +258,18 @@ class Handoff:
         for (row,), entries in self.qmatrix.group_by(ROW, maintain_order=True):
             yield int(row), entries.select(COL_L, COL_R, COEFF)
 
-    def row_blocks(self, budget: int | None) -> Iterator[MatrixBlock]:
+    def row_chunks(self, budget: int | None) -> Iterator[MatrixChunk]:
         """Each chunk of rows with the coefficients it owns — every sink's reader.
 
         A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
         searched. A sink that needs the ``ROW`` indices asks
-        [`matrix_block`][] with the chunk's own range, so its spans and coefficients
+        [`matrix_chunk`][] with the chunk's own range, so its spans and coefficients
         cannot disagree.
         """
         for lo, hi in self._spans(budget):
-            yield MatrixBlock(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
+            yield MatrixChunk(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
 
-    def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
+    def matrix_chunk(self, lo: int, hi: int) -> pl.DataFrame:
         """Rows ``[lo, hi)`` of the matrix with their ``ROW`` indices spelled back out of ``row_starts``."""
         import numpy as np
 

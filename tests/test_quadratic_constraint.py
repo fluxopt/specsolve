@@ -111,9 +111,9 @@ def test_the_activity_is_the_whole_left_hand_side():
     with sps.build(SPEC, SOURCES) as model:
         result = model.solve(solver_name='gurobi', outputs={'activity'})
         recomputed = recomputed_row_values(model._engine, result)
-        block = model._engine._model.constraints['coupled']
+        indexed = model._engine._model.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
-        assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
+        assert reported == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
 
 
@@ -150,14 +150,14 @@ def test_quadratic_entries_take_the_tail_of_the_label_space():
     with sps.build(first, SOURCES) as model:
         tables = model._engine._model.handoff
         assert model._engine._model.constraints['cap'].start == 0, 'the linear entry is built first'
-        assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
+        assert [row for row, _ in tables.quadratic_rows()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
         assert tables.linear_row_count == 1
 
 
 def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
-    """A row with no term closes up the block, and every quadratic entry moves with its row.
+    """A row with no term closes up the entry's rows, and every quadratic coefficient moves with its row.
 
     ``k`` has no value at ``a``, so that row has no term and is not built, and
     ``b`` and ``c`` move up to rows 0 and 1. Each keeps its own pair:

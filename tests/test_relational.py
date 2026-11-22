@@ -712,7 +712,7 @@ class TestTheIndexSpace:
         A solver vector is positional in the solver indices, so an entry's
         share of it is a slice — but only if its indices are a contiguous run and
         the runs tile the whole index. Both are how `indices.table` numbers
-        an entry, and neither is visible from the tables: a block
+        an entry, and neither is visible from the tables: an entry's rows
         that started one late would report a neighbour's numbers under this
         entry's coordinates, with nothing out of range and nothing null.
         """
@@ -753,8 +753,8 @@ class TestTheIndexSpace:
         `pypsa_unit_commitment` names both `start_up`, and linopy — the oracle the
         whole corpus is checked against — keeps variables and constraints in
         separate namespaces, so the model is legal and the read-back has to tell
-        the two apart. `pad` exists to push the variable's block off the
-        constraint's: sharing a start, the wrong block returns plausible numbers
+        the two apart. `pad` exists to push the variable's columns off the
+        constraint's rows: sharing a start, the wrong entry returns plausible numbers
         from the wrong entry rather than a length error.
         """
         spec = {
@@ -1066,7 +1066,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             assert len(terms) == 2
 
             tables = model._engine._model.handoff
-            cells = tables.matrix_block(0, tables.row_count).select(ROW, COL)
+            cells = tables.matrix_chunk(0, tables.row_count).select(ROW, COL)
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
     @pytest.mark.parametrize(

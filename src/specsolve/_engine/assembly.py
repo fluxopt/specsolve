@@ -71,12 +71,12 @@ class Measured:
     sparse: dict[str, tuple[int, int]] = field(default_factory=dict)
     #: ``name -> rows not built``, because every term they had vanished.
     omitted: dict[str, int] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint block.
+    #: ``name -> (smallest, largest)`` coefficient magnitude, per constraint.
     coefficients: dict[str, tuple[float, float]] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` bound magnitude, per variable block.
+    #: ``name -> (smallest, largest)`` bound magnitude, per variable.
     bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
-    #: ``name -> (smallest, largest)`` right-hand-side magnitude, per constraint
-    #: block, over the rows that survived.
+    #: ``name -> (smallest, largest)`` right-hand-side magnitude, per
+    #: constraint, over the rows that survived.
     rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
     columns: int = 0
@@ -266,7 +266,7 @@ class Assembly:
 
         The [`coverage`][] checks run in its table's order, before an aggregate
         can hide a hole. A row is built where either matrix has a term, and the
-        indexed block narrows to the rows that survived. A constraint whose
+        entry's index narrows to the rows that survived. A constraint whose
         ``where`` admits no row has no query built. One without a ``where`` is
         indexed only once the presences that narrow it are known, so a sparse
         absence never meets the full product of its dimensions.
@@ -353,13 +353,13 @@ class Assembly:
         return _stack([], _ROWS), None, None
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
+        """The row a coordinate lands on in an entry indexed over the whole product of *dims* from *start*.
 
-        Such a block numbers its rows row-major over the positions
+        Such an entry numbers its rows row-major over the positions
         ([`indices.table`][specsolve._engine.indices.table]), so a term
-        computes its row from its own coordinate rather than joining the block.
+        computes its row from its own coordinate rather than joining the entry's rows.
         The door admits no label outside its dimension, so every coordinate a
-        term carries is a row of the block, as the join would find.
+        term carries is a row of the entry, as the join would find.
         """
         return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.position_of)
 
@@ -395,12 +395,12 @@ class Assembly:
         kept: pl.Series,
         start: int,
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None, int]:
-        """Rows that kept no variable term are not built, and the block closes up.
+        """Rows that kept no variable term are not built, and the entry's rows close up.
 
         *kept* is read before zeros are pruned, so a row whose every term is
         zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
-        because the dual read-back reads a block by position. Every row either
-        share holds is in *kept*, so each of its entries moves with its row.
+        because the dual read-back reads an entry's rows by position. Every row either
+        share holds is in *kept*, so each of its coefficients moves with its row.
         """
         if kept.len() == rows.height:
             return rows, matrix, qmatrix, start + rows.height

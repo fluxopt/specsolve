@@ -224,7 +224,7 @@ def test_a_row_over_a_dimension_with_no_members_is_not_built_on_either_lane(sens
         assert run.oracle == 20.0, 'both `p` reach their bound — an absent row pins nothing'
 
 
-#: The KVL shape: a block ranging over a dimension the data left with no
+#: The KVL shape: a constraint ranging over a dimension the data left with no
 #: labels, its expression summing over one that has some — PyPSA's
 #: Kirchhoff voltage law on a network with no cycles.
 EMPTY_FOREACH_SPEC = {
@@ -236,11 +236,11 @@ EMPTY_FOREACH_SPEC = {
 }
 
 
-def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either_lane():
+def test_a_constraint_ranging_over_a_dimension_with_no_members_is_not_built_on_either_lane():
     """The rule of the test above, reached from the term the sum keeps.
 
     The sum reduces a full dimension while its term carries the empty one, so
-    every row of the result is empty and neither lane builds the block.
+    every row of the result is empty and neither lane builds the constraint.
     """
     data = {
         't': pd.Index([0, 1], name='t', dtype='int64'),
@@ -257,9 +257,9 @@ def test_a_block_ranging_over_a_dimension_with_no_members_is_not_built_on_either
     }
 
     with differential(EMPTY_FOREACH_SPEC, data) as run:
-        assert 'kvl' not in run.model.constraints, 'a block with no rows was built anyway'
+        assert 'kvl' not in run.model.constraints, 'a constraint with no rows was built anyway'
         assert run.engine.diagnostics().rows == 0, 'the relational lane built a row over an empty dimension'
-        assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an absent block constrains nothing'
+        assert run.oracle == 0.0, 'nothing pins `s` above its lower bound — an absent constraint constrains nothing'
 
 
 BOOL_CONDITION_SPEC = {

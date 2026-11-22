@@ -410,8 +410,8 @@ def recomputed_row_values(engine, result) -> Any:
     """
     tables = engine._model.handoff
     x = np.zeros(tables.column_count)
-    for name, block in engine._model.variables.items():
-        x[block.start : block.start + block.height] = result.primal(name)['value'].to_numpy()
+    for name, indexed in engine._model.variables.items():
+        x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)
     spans = np.diff(tables.row_starts)

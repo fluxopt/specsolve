@@ -226,17 +226,17 @@ class EachWindow:
     key_name: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
-        blocks = [self.horizon] if isinstance(self.horizon, int) else list(self.horizon)
-        if not blocks:
+        horizons = [self.horizon] if isinstance(self.horizon, int) else list(self.horizon)
+        if not horizons:
             raise ValueError('horizon is empty, so no window would keep anything — pass an int, or one size per window')
-        if short := [block for block in blocks if block < 1]:
+        if short := [horizon for horizon in horizons if horizon < 1]:
             raise ValueError(f'every window must keep at least one label (got horizon with {short})')
         if self.lookahead < 0:
             raise ValueError(
                 f'lookahead={self.lookahead} is negative; zero is contiguous windows, and above it overlaps'
             )
         if not isinstance(self.horizon, int):
-            object.__setattr__(self, 'horizon', tuple(blocks))
+            object.__setattr__(self, 'horizon', tuple(horizons))
         object.__setattr__(self, 'carry', dict(self.carry))
 
     def to_dict(self) -> dict[str, object]:
@@ -301,7 +301,7 @@ class EachWindow:
         out: list[Slice] = []
         horizons: list[dict[str, object]] = []
         start = 0
-        for length in self._blocks(len(labels)):
+        for length in self._horizon_lengths(len(labels)):
             window = labels[start : start + length + self.lookahead]
             cut = {
                 name: _within(table, columns, window, strangers) for name, (table, columns, strangers) in tables.items()
@@ -316,29 +316,29 @@ class EachWindow:
             start += length
         return out, Stitch(self.dim, pl.DataFrame(horizons))
 
-    def _blocks(self, total: int) -> list[int]:
+    def _horizon_lengths(self, total: int) -> list[int]:
         """How many labels each window's horizon has, in order, summing to exactly *total*.
 
         An ``int`` repeats, the last window's horizon taking what is left. A sequence that
         stops short of the axis is refused.
         """
         if isinstance(self.horizon, int):
-            blocks = [self.horizon] * -(-total // self.horizon)
+            horizons = [self.horizon] * -(-total // self.horizon)
         else:
-            blocks = list(self.horizon)
-            if sum(blocks) < total:
+            horizons = list(self.horizon)
+            if sum(horizons) < total:
                 raise DataError(
-                    f'horizon keeps {sum(blocks)} label(s) across {len(blocks)} window(s), and '
-                    f"'{self.dim}' has {total} — the last {total - sum(blocks)} would be solved by no window. "
-                    f'List a block for them, or pass an int to repeat one size to the end.'
+                    f'horizon keeps {sum(horizons)} label(s) across {len(horizons)} window(s), and '
+                    f"'{self.dim}' has {total} — the last {total - sum(horizons)} would be solved by no window. "
+                    f'List a horizon for them, or pass an int to repeat one size to the end.'
                 )
         out: list[int] = []
         left = total
-        for block in blocks:
+        for horizon in horizons:
             if left <= 0:
                 break
-            out.append(min(block, left))
-            left -= block
+            out.append(min(horizon, left))
+            left -= horizon
         return out
 
 

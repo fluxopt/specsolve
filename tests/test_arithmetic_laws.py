@@ -169,10 +169,10 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
     )
 
 
-def test_absence_zero_says_at_the_entry_what_two_blocks_said_at_the_rows():
-    """``missing: neutral`` builds the model the two complementary ``where`` blocks build."""
+def test_absence_zero_says_at_the_entry_what_two_entries_said_at_the_rows():
+    """``missing: neutral`` builds the model the two complementary ``where`` entries build."""
     minimise_x = 'sum((-1) * x)'
-    two_blocks = _objective_of(
+    two_entries = _objective_of(
         'x + y >= 60',
         objective=minimise_x,
         dims=['f', 't'],
@@ -184,8 +184,8 @@ def test_absence_zero_says_at_the_entry_what_two_blocks_said_at_the_rows():
     with differential(spec, DATA, lp=True) as run:
         declared = float(run.result.objective)
 
-    assert declared == pytest.approx(two_blocks, rel=RTOL), (
-        'missing: neutral builds the model the two complementary blocks build'
+    assert declared == pytest.approx(two_entries, rel=RTOL), (
+        'missing: neutral builds the model the two complementary entries build'
     )
     assert declared == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL), (
         'f=b keeps its row, and with y worth zero there x carries the whole 60 itself'

@@ -237,7 +237,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
 
     rows = handoff.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
-    (linear,) = handoff.row_blocks(None)
+    (linear,) = handoff.row_chunks(None)
     entries = linear.entries
     p.addRows(
         rowtype=spelling[rows.sense[: linear.height]].tolist(),

@@ -361,8 +361,8 @@ def _same_matrix(engine: Engine, m: Any) -> list[Finding]:
     """
     tables = engine._model.handoff
     findings = []
-    for constraint, block in engine._model.constraints.items():
-        got = _canonical(tables.matrix_block(block.start, block.start + block.height), block.height)
+    for constraint, indexed in engine._model.constraints.items():
+        got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height), indexed.height)
         want = _linopy_matrix(m, constraint)
         if len(got) != len(want) or any(
             len(a) != len(b) or not all(_close(x, y) for x, y in zip(a, b, strict=True))

@@ -1,7 +1,7 @@
 """What the build reports about itself: omissions, clocks, magnitudes, sparsity.
 
 A row that lost every term is not built, and is reported; a range names the
-block that holds an outlier; a parameter short of its dimensions is reported
+constraint that holds an outlier; a parameter short of its dimensions is reported
 rather than judged.
 """
 
@@ -34,8 +34,8 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
-        occupied = sorted(set(tables.matrix_block(0, tables.row_count)[ROW].to_list()))
-        assert occupied == [0, 1], 'the block closes up around the gap'
+        occupied = sorted(set(tables.matrix_chunk(0, tables.row_count)[ROW].to_list()))
+        assert occupied == [0, 1], "the constraint's rows close up around the gap"
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
         with solver(solver_name)(tables) as sink:
             answer = sink.run(tables)
@@ -129,7 +129,7 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
         assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
 
 
-#: Three blocks that differ only in scale. `badly_scaled` spans nine orders of
+#: Three constraints that differ only in scale. `badly_scaled` spans nine orders of
 #: magnitude, `signed` carries `ordinary`'s coefficients negated, and one cost
 #: is negative.
 SCALING = {
@@ -153,7 +153,7 @@ SCALING_SOURCES = {
 }
 
 
-def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
+def test_the_coefficient_range_names_the_constraint_that_holds_the_outlier():
     """The spread of the matrix, per entry, in magnitudes rather than signed extremes."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         spread = model.diagnostics().coefficient_range
@@ -162,7 +162,7 @@ def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
         {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
         {'constraint': 'badly_scaled', 'smallest': 1e-3, 'largest': 1e6},
         {'constraint': 'signed', 'smallest': 1.0, 'largest': 4.0},
-    ], 'one row per block in build order, and `signed` is scaled exactly as `ordinary` is'
+    ], 'one row per constraint in build order, and `signed` is scaled exactly as `ordinary` is'
 
     worst = spread.select((pl.col('largest') / pl.col('smallest')).max()).item()
     assert worst == pytest.approx(1e9), 'the conditioning number to compare against what the solver reports'
@@ -175,7 +175,7 @@ def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
 
     assert seen.objective_range == (0.5, 2.0), 'the objective is read off `obj`, never off the matrix'
     assert 'objective' not in seen.coefficient_range.get_column('constraint').to_list(), (
-        'the objective is not a constraint block and does not appear as one'
+        'the objective is not a constraint and does not appear as one'
     )
 
 
@@ -209,7 +209,7 @@ def test_the_bound_range_names_the_variable_whose_bounds_are_the_outlier():
         seen = model.diagnostics()
 
     assert seen.bound_range.to_dicts() == [{'variable': 'capped', 'smallest': 50.0, 'largest': 1e9}], (
-        'one row per variable block that declared a finite bound, and `free` declared none'
+        'one row per variable that declared a finite bound, and `free` declared none'
     )
     assert seen.coefficient_range.get_column('largest').max() == 1.0, (
         'the matrix is clean, which is what makes the bound range the only place the fault shows'
@@ -224,7 +224,7 @@ def test_a_bound_of_zero_or_infinity_is_not_a_magnitude():
     assert reported == ['capped'], '`free` is lower: 0 with no upper, so it has no finite bound and no row'
 
 
-def test_the_rhs_range_is_read_per_block_like_the_coefficients():
+def test_the_rhs_range_is_read_per_constraint_like_the_coefficients():
     """The fourth range a solver prints, and the last one answerable per entry."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics().rhs_range
@@ -232,7 +232,7 @@ def test_the_rhs_range_is_read_per_block_like_the_coefficients():
     assert seen.to_dicts() == [
         {'constraint': 'small_rhs', 'smallest': 1.0, 'largest': 1.0},
         {'constraint': 'large_rhs', 'smallest': 250000.0, 'largest': 250000.0},
-    ], 'one row per constraint block in build order, magnitudes like every other range'
+    ], 'one row per constraint in build order, magnitudes like every other range'
 
 
 def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
@@ -245,7 +245,7 @@ def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
 
     assert ratio(seen.coefficient_range) == 1.0, 'every coefficient in this model is 1'
     assert ratio(seen.bound_range) == pytest.approx(2e7), 'the bounds are the fault, and only this field says so'
-    assert ratio(seen.rhs_range) == 1.0, 'each block has one right-hand side, so no block spreads'
+    assert ratio(seen.rhs_range) == 1.0, 'each constraint has one right-hand side, so none spreads'
     assert seen.objective_range == (1.0, 2.0), 'costs are a separate axis with a separate repair'
 
 
@@ -256,7 +256,7 @@ def test_a_model_with_no_objective_has_no_objective_range():
         seen = model.diagnostics()
 
     assert seen.objective_range is None, 'no objective is not an objective whose coefficients span nothing'
-    assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
+    assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint is there'
 
 
 #: A coefficient short of its dimensions, and a bound that is not.

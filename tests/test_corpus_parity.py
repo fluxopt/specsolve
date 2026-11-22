@@ -52,10 +52,10 @@ def _same_matrix(name: str, run: Any) -> None:
     operations.
     """
     tables = run.engine._model.handoff
-    for constraint, block in run.engine._model.constraints.items():
-        if not block.height:
+    for constraint, indexed in run.engine._model.constraints.items():
+        if not indexed.height:
             continue
-        got = _canonical(tables.matrix_block(block.start, block.start + block.height))
+        got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height))
         want = _linopy_matrix(run.model, constraint)
         assert [len(r) for r in got] == [len(r) for r in want], (
             f'{name}.{constraint}: the lanes wrote a different number of terms per row'

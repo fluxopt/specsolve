@@ -280,7 +280,7 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
 
     cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
     rows = handoff.dense_rows(gurobipy.GRB.INFINITY)
-    (linear,) = handoff.row_blocks(None)
+    (linear,) = handoff.row_chunks(None)
     entries = linear.entries
     matrix = scipy.sparse.csr_matrix(
         (entries[COEFF].to_numpy(), entries[COL].to_numpy(), np.append(linear.starts, entries.height)),
@@ -326,13 +326,13 @@ def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowV
     import numpy as np
     import scipy.sparse
 
-    for row, pairs in handoff.quadratic_blocks():
+    for row, pairs in handoff.quadratic_rows():
         held, at = np.unique(np.concatenate([pairs[COL_L].to_numpy(), pairs[COL_R].to_numpy()]), return_inverse=True)
         quadratic = scipy.sparse.csr_matrix(
             (pairs[COEFF].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
         )
         on = [columns[col] for col in held]
-        entries = handoff.matrix_block(row, row + 1)
+        entries = handoff.matrix_chunk(row, row + 1)
         linear = [columns[col] for col in entries[COL]]
         m.addMQConstr(
             quadratic,

@@ -132,7 +132,7 @@ though the fifth stream were never there.
 ## How the three take the matrix
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
-the three arrays and `xpress.py` hands `addRows` the same triple a block
+the three arrays and `xpress.py` hands `addRows` the same triple a chunk
 already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
 column, so it transposes the CSR first, which is what the `[gurobi]` extra's
 scipy is for.

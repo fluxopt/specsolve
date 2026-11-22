@@ -310,7 +310,7 @@ def _per_slice(
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
-    """Refuse a block that reads a parameter the sweep carried — its value is not stored per slice."""
+    """Refuse an entry that reads a parameter the sweep carried — its value is not stored per slice."""
     if touched := sorted({name for node in nodes for name in parameters_of(node)} & carried):
         raise SpecsolveError(
             f'this expression reads {touched}, which the sweep carried from one slice into the next, and a '

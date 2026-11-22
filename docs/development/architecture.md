@@ -296,7 +296,7 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Handoff**
 : Everything a sink reads of a built model, and nothing more: the tables, the
-  column and row vectors, the matrix a block at a time (`handoff.py`).
+  column and row vectors, the matrix a chunk at a time (`handoff.py`).
 
 **Collect engine**
 : Which polars engine materialises a table. A build within `IN_MEMORY_REACH`

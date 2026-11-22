@@ -73,7 +73,7 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
 
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
     """The matrix in ``(col, row)`` order, and the offsets a column range slices it by."""
-    entries = handoff.matrix_block(0, handoff.row_count).sort(COL, ROW)
+    entries = handoff.matrix_chunk(0, handoff.row_count).sort(COL, ROW)
     counts = np.bincount(entries[COL].to_numpy(), minlength=handoff.column_count)
     return entries, np.concatenate(([0], np.cumsum(counts)))
 
