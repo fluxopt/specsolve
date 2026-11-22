@@ -143,7 +143,7 @@ class Gurobi(Solver):
     def _change_coefficients(
         self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
     ) -> None:
-        """``chgCoeff``, one call per element, which the ``update`` that [`_push`][] ends with applies.
+        """``chgCoeff``, one call per coefficient, which the ``update`` that [`_push`][] ends with applies.
 
         A row here is a linear constraint, so its index is its ``Constr``'s:
         [`keeps`][specsolve._sinks.solver.Solver.keeps] reloads a model whose

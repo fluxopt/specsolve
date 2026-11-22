@@ -227,7 +227,7 @@ class Highs(Solver):
     def _change_coefficients(
         self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
     ) -> None:
-        """``changeCoeff``, one call per element: HiGHS has no call that takes several."""
+        """``changeCoeff``, one call per coefficient: HiGHS has no call that takes several."""
         h = self._handle
         for row, col, value in zip(rows.tolist(), cols.tolist(), values.tolist(), strict=True):
             _loaded(h, h.changeCoeff(row, col, value), 'a new coefficient')

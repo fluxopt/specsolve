@@ -106,7 +106,7 @@ class Xpress(Solver):
     def _change_coefficients(
         self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
     ) -> None:
-        """``chgMCoef``, every element in one call."""
+        """``chgMCoef``, every coefficient in one call."""
         self._p.chgMCoef(rows, cols, values)
 
     def _push(self, handoff: Handoff) -> None:
