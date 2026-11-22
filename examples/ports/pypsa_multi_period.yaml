@@ -31,7 +31,7 @@ parameters:
     dims: [snapshot]
   period_weight:
     description: >-
-      what one period's costs are worth at the horizon's start — the discount
+      what one period's costs are worth at the start of the first period — the discount
       that makes a 2040 decision comparable with a 2030 one
     dims: [period]
   opex:

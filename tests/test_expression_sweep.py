@@ -1,6 +1,6 @@
 """Every expression to a bounded depth on both lanes, and the rewrites that must not move it.
 
-The AST is closed, so the set of spellings at a given depth is finite and
+The set of program nodes is closed, so the set of spellings at a given depth is finite and
 "every one of them agrees" can be checked rather than sampled. The model is the
 one ``conftest.law_spec`` builds for ``test_arithmetic_laws.py``.
 
@@ -38,7 +38,7 @@ from tests.linopy_lane.loader import OracleCannotBuildError
 if TYPE_CHECKING:
     from tests.expression_space import Node, Rewrite
 
-#: The shared fixture, taken once: `x` total, `y` masked at `f=b`, `w` dense.
+#: The shared fixture, taken once: `x` total, `y` absent at `f=b`, `w` dense.
 DATA = law_data()
 
 #: Every twentieth rewrite joins the depth-two space in the census below — a

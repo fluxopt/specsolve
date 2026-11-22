@@ -1,6 +1,6 @@
 """What every sink reads, and nothing more.
 
-The frames, the scalars a writer needs to size its batching, and the
+The tables, the scalars a writer needs to size its batching, and the
 projections more than one sink needs — the dense column and row vectors, the
 matrix a block at a time — so two sinks cannot disagree about the model they
 loaded.
@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, get_args
 
 import polars as pl
 from mathspec import program
+
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 
 if TYPE_CHECKING:
     import hashlib
@@ -73,7 +75,7 @@ SENSE_CODES: Mapping[program.ConstraintSense, int] = {
     sense: code for code, sense in enumerate(get_args(program.ConstraintSense))
 }
 
-#: The dtype the ``rows`` frame holds a comparison in. Built from
+#: The dtype the ``rows`` table holds a comparison in. Built from
 #: [`SENSE_CODES`][] so a category's index *is* its code.
 SENSE = pl.Enum(list(SENSE_CODES))
 
@@ -85,7 +87,7 @@ class Handoff:
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
     and ``matrix`` in CSR: ``(col, coeff)`` in row-major order, with
     ``row_starts[r] : row_starts[r + 1]`` the half-open span row ``r`` owns.
-    The objective constant lives outside the frames, having no column to
+    The objective constant lives outside the tables, having no column to
     attach to.
 
     ``quad`` is the objective's quadratic part, in ``(col_l, col_r)`` order,
@@ -97,22 +99,22 @@ class Handoff:
 
     ``qmatrix`` is the same form for the *rows* that carry one:
     ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
-    label space, beginning at [`linear_row_count`][] — the engine builds
-    quadratic declarations last — so a sink holding linear and quadratic rows
+    row indices, beginning at [`linear_row_count`][] — the engine builds
+    quadratic entries last — so a sink holding linear and quadratic rows
     in different objects reads its answer back as two runs, not a scatter.
 
     ``sos`` is ``(set, type, col, weight)`` in ``(set, weight)`` order, one row
-    per member. It is the only frame a sink may be unable to ingest — SOS is a
+    per member. It is the only table a sink may be unable to ingest — SOS is a
     *sink capability* — so a solver without the concept refuses a model
     carrying one.
 
     ``cols``, ``rows`` and ``matrix`` arrive in the solver's own order —
-    ``cols`` by column, the other two by row — and ``col`` and ``row`` are
+    ``cols`` by column, the other two by row — and ``COL`` and ``ROW`` are
     dense ``0..n-1``, so they *are* the solver's indices: every dense vector is
     read positionally and no sink builds a mapping. **``cols`` carries no
-    ``col`` and ``matrix`` no ``row``**: a ``cols`` row's position is its
+    ``COL`` and ``matrix`` no ``ROW``**: a ``cols`` row's position is its
     index, and a matrix entry's row is where it sits between two starts;
-    [`matrix_block`][] spells them back out. ``obj`` keeps its ``col``, being
+    [`matrix_block`][] spells them back out. ``obj`` keeps its ``COL``, being
     sparse, and **carries no order contract**: its row order differs between
     two builds of one model, so anything that reads it must scatter it over the
     column index, as [`dense_columns`][] does.
@@ -158,7 +160,7 @@ class Handoff:
     @cached_property
     def linear_row_count(self) -> int:
         """How many rows a sink may load as linear constraints: where the quadratic tail starts, or every row."""
-        return int(self.qmatrix['row'][0]) if self.qmatrix.height else self.row_count
+        return int(self.qmatrix[ROW][0]) if self.qmatrix.height else self.row_count
 
     def dense_columns(self, infinity: float) -> ColumnVectors:
         """The column vectors over the solver's index, ready to hand over unedited.
@@ -181,7 +183,7 @@ class Handoff:
 
     def _dense_cost(self) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:
         """The objective's linear coefficient per column, zero for a column in no term; ``obj`` is sparse and unordered."""
-        return _scattered(self.column_count, self.obj['col'].to_numpy(), self.obj['coeff'].to_numpy(), 0.0)
+        return _scattered(self.column_count, self.obj[COL].to_numpy(), self.obj[COEFF].to_numpy(), 0.0)
 
     def dense_rows(self, infinity: float) -> RowVectors:
         """The row half of [`dense_columns`][], so a chunk of rows is a slice rather than a search.
@@ -193,13 +195,13 @@ class Handoff:
         ``== 0`` that would be an equality the model never stated.
         """
         sided = self.rows.select(
-            'row',
+            ROW,
             pl.col('sense').to_physical().cast(pl.UInt8).alias('op'),
             'rhs',
         )
         if sided.height == self.row_count:
             return RowVectors(sense=sided['op'].to_numpy(), rhs=sided['rhs'].to_numpy())
-        at = sided['row'].to_numpy()
+        at = sided[ROW].to_numpy()
         return RowVectors(
             sense=_scattered(self.row_count, at, sided['op'].to_numpy(), SENSE_CODES['>=']),
             rhs=_scattered(self.row_count, at, sided['rhs'].to_numpy(), -infinity),
@@ -227,15 +229,15 @@ class Handoff:
         return _digest(
             f'{self.column_count} {self.row_count} {self.objective_sense}'.encode(),
             self.cols['vtype'].to_physical().to_numpy(),
-            self.quad['col_l'].to_numpy(),
-            self.quad['col_r'].to_numpy(),
-            self.qmatrix['row'].to_numpy(),
-            self.qmatrix['col_l'].to_numpy(),
-            self.qmatrix['col_r'].to_numpy(),
-            self.qmatrix['coeff'].to_numpy(),
-            self.rows.filter(pl.col('row') >= self.linear_row_count)['rhs'].to_numpy(),
+            self.quad[COL_L].to_numpy(),
+            self.quad[COL_R].to_numpy(),
+            self.qmatrix[ROW].to_numpy(),
+            self.qmatrix[COL_L].to_numpy(),
+            self.qmatrix[COL_R].to_numpy(),
+            self.qmatrix[COEFF].to_numpy(),
+            self.rows.filter(pl.col(ROW) >= self.linear_row_count)['rhs'].to_numpy(),
             self.rows['sense'].to_physical().to_numpy(),
-            self.matrix['col'].to_numpy(),
+            self.matrix[COL].to_numpy(),
             self.row_starts,
             *(self.sos[column].to_numpy() for column in self.sos.columns),
         ).digest()
@@ -247,7 +249,7 @@ class Handoff:
         one. Nothing here is pushed on an update: a set is [`structure`][].
         """
         for members in self.sos.partition_by('set', maintain_order=True):
-            yield members.item(0, 'type'), members.get_column('col'), members.get_column('weight')
+            yield members.item(0, 'type'), members.get_column(COL), members.get_column('weight')
 
     def quadratic_blocks(self) -> Iterator[tuple[int, pl.DataFrame]]:
         """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` entries it owns.
@@ -255,14 +257,14 @@ class Handoff:
         One row at a time, since every API that takes a quadratic constraint
         takes one per call.
         """
-        for (row,), entries in self.qmatrix.group_by('row', maintain_order=True):
-            yield int(row), entries.select('col_l', 'col_r', 'coeff')
+        for (row,), entries in self.qmatrix.group_by(ROW, maintain_order=True):
+            yield int(row), entries.select(COL_L, COL_R, COEFF)
 
     def row_blocks(self, budget: int | None) -> Iterator[MatrixBlock]:
         """Each chunk of rows with the matrix entries it owns — every sink's reader.
 
         A chunk is a ``slice`` by ``row_starts``, so nothing is sorted or
-        searched. A consumer that needs the ``row`` labels asks
+        searched. A sink that needs the ``ROW`` indices asks
         [`matrix_block`][] with the chunk's own range, so its spans and entries
         cannot disagree.
         """
@@ -270,11 +272,11 @@ class Handoff:
             yield MatrixBlock(lo, hi, self._span(lo, hi), self.row_starts[lo:hi] - self.row_starts[lo])
 
     def matrix_block(self, lo: int, hi: int) -> pl.DataFrame:
-        """Rows ``[lo, hi)`` of the matrix with their ``row`` labels spelled back out of ``row_starts``."""
+        """Rows ``[lo, hi)`` of the matrix with their ``ROW`` indices spelled back out of ``row_starts``."""
         import numpy as np
 
-        labels = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
-        return self._span(lo, hi).with_columns(pl.Series('row', labels))
+        rows = np.repeat(np.arange(lo, hi, dtype=np.int64), np.diff(self.row_starts[lo : hi + 1]))
+        return self._span(lo, hi).with_columns(pl.Series(ROW, rows))
 
 
 def _digest(head: bytes, *vectors: np.ndarray) -> hashlib.blake2b:
@@ -305,7 +307,7 @@ def _finite(value: pl.Expr, infinity: float) -> pl.Expr:
 
 
 def _scattered(count: int, at: Ints, values: Any, absent: Any) -> Any:  # pyrefly: ignore[explicit-any] — the dtype is the model's
-    """*values* written at the label each one belongs to, *absent* elsewhere."""
+    """*values* written at the solver index each one belongs to, *absent* elsewhere."""
     import numpy as np
 
     dense = np.full(count, absent, dtype=values.dtype)

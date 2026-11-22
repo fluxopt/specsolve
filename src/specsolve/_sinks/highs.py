@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import (
@@ -121,8 +122,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
             rlb,
             rub,
             handoff.row_starts.astype(np.int32),
-            handoff.matrix['col'].to_numpy(),
-            handoff.matrix['coeff'].to_numpy(),
+            handoff.matrix[COL].to_numpy(),
+            handoff.matrix[COEFF].to_numpy(),
             empty_i,
             empty_i,
             empty_f,
@@ -155,10 +156,10 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 
     if not handoff.quad.height:
         return
-    lower = handoff.quad['col_r'].to_numpy().astype(np.int32, copy=False)
-    upper = handoff.quad['col_l'].to_numpy().astype(np.int32, copy=False)
+    lower = handoff.quad[COL_R].to_numpy().astype(np.int32, copy=False)
+    upper = handoff.quad[COL_L].to_numpy().astype(np.int32, copy=False)
     diagonal = lower == upper
-    values = np.where(diagonal, handoff.quad['coeff'].to_numpy() * 2.0, handoff.quad['coeff'].to_numpy())
+    values = np.where(diagonal, handoff.quad[COEFF].to_numpy() * 2.0, handoff.quad[COEFF].to_numpy())
 
     order = np.lexsort((lower, upper))
     starts = np.zeros(handoff.column_count + 1, dtype=np.int32)

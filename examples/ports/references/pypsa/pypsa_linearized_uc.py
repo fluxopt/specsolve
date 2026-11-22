@@ -42,7 +42,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_linearized_uc.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 
@@ -53,7 +53,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
     Nothing here says the model is relaxed: ``committable=True`` is the same
     switch the integer model uses, and the mode is chosen at ``optimize`` time.
-    Both ``*_time_before`` are 0, so no status is pinned by a prior horizon.
+    Both ``*_time_before`` are 0, so no status is pinned from before the first snapshot.
     """
     n = pypsa.Network()
     n.set_snapshots(tables['snapshot']['snapshot'])

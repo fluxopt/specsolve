@@ -116,6 +116,14 @@ each other on one machine, which is the page's actual claim. What it costs is
 that the whole ladder has to be re-taken in one run rather than a rung at a
 time, or the page mixes two machines.
 
+**One server type is not one machine.** Each run draws a fresh `ccx33`, and two
+of them measured the same code with specsolve 1.24x to 1.75x apart while linopy
+stayed within 9% (#2168). The other libraries do not stand in for specsolve
+here. Every result file records the host, its processor's `/proc/cpuinfo`
+fields, its memory and polars' thread count, and the pull request comment warns
+when the two runs it compares report a different clock, core layout or
+microcode.
+
 The workflow reads the repository variable `BENCH_RUNNER` for its label, so
 pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take
@@ -338,12 +346,12 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`loadModel` seam our own `Gurobi` constructor does, so what separates it from
+`loadModel` hand-off our own `Gurobi` constructor does, so what separates it from
 `specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
 expected answer and not the point: it is the baseline most readers already
-have, and appsi's `set_instance` reaches the same seam our sinks do — the
+have, and appsi's `set_instance` reaches the same hand-off our sinks do — the
 solver's own model, populated, with nothing solved. Nothing of pyomo's is
 switched off that pyomo does not switch off itself; `symbolic_solver_labels`
 is already false by default, which is the cheap side of the same choice
@@ -528,7 +536,7 @@ Two of those are deliberate calls rather than defaults:
   any more — `close()` drops frames this process owns — so the phase is kept as
   a tripwire rather than a cost: if it ever stops reading ~0, something
   acquired a lifetime again.
-Every arm starts from the same parquet files and stops at the same seam, so
+Every arm starts from the same parquet files and stops at the same hand-off, so
 each pays for its own data ingestion. That is the honest unit. The *phases* are
 not comparable one-for-one across arms — a library that defers coefficient
 materialisation to its writer spends nothing in `build` that another spends
@@ -602,7 +610,7 @@ effect from the other. Run the full ladder with `--sizes all`.
 
 **The declaration count is the third swept axis.** Every size rung grows
 `snapshot` and holds its case's declaration count fixed, so a cost paid *per
-declaration* — a labelled frame each, a stack at the end — is sampled at
+declaration* — an indexed frame each, a stack at the end — is sampled at
 whatever counts the cases happen to have. The `declarations` case splits a
 fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and
@@ -618,14 +626,14 @@ beside the rung's data.
 `n008` and `n128` with a `where:` on every declaration, and nothing else
 changed: same units, same snapshots, same parquet, one keyword apart. They are
 there because *how many declarations carry a mask* is an axis of its own — the
-engine compiles a predicate and decides a semi-join per masked declaration,
-before it pays anything per row — and no other case reaches past two. The mask
-is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly positive), so the pair
-builds the identical model and the difference is the price of the `where:`
-alone, with no row-count change mixed into it. The density sweep answers the
-other half of the question, how much a mask *keeps*, and cannot answer this
-one: the mask that isolates the per-declaration cost is the one that keeps
-everything.
+engine builds the query for a predicate and decides a semi-join per masked
+declaration, before it pays anything per row — and no other case reaches past
+two. The mask is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly
+positive), so the pair builds the identical model and the difference is the
+price of the `where:` alone, with no row-count change mixed into it. The density
+sweep answers the other half of the question, how much a mask *keeps*, and
+cannot answer this one: the mask that isolates the per-declaration cost is the
+one that keeps everything.
 
 **A third pairing prices declarations that hold no row.** `n008e` is `n008`
 plus 60 declarations of each kind that holds no row in PyPSA's spec: a variable
@@ -665,7 +673,7 @@ decision rather than an omission.
 nothing about how much headroom is left in it. `bench/floor.py` is what a
 number is read against: it hand-writes **one** model — `transport` — from the
 case's cached parquet straight into numpy arrays and a CSR matrix, no specsolve
-and no expression engine anywhere in the path, and ends at the same seam as
+and no expression engine anywhere in the path, and ends at the same hand-off as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
 the sentence becomes *"we are at Nx the floor"* — a claim about engineering
@@ -701,7 +709,7 @@ parametrized by what the window moves:
 
 Values are not varied, because a push sends whole vectors whatever they hold.
 `one` costs a whole rebuild all the same — `update` reads again only the
-parameter it was given, and builds every declaration — so
+parameter it was given, and builds every entry — so
 it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix's entries move, and the loaded solver takes
@@ -849,7 +857,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve._engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._engine.queries:QueryBuilder._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```

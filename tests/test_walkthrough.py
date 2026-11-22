@@ -44,7 +44,7 @@ def test_walkthrough_claims_hold(output: str) -> None:
     assert 'weighted_sum' in output and 'weighted_sum' not in core, (
         'the macro is what the file wrote and not what the program carries'
     )
-    assert 'row absence' in output and 'not 24' in output, 'a mask removes rows, not values'
+    assert 'row absence' in output and 'not 24' in output, 'a condition removes rows, not values'
     assert 'ok (optimal)' in output
     assert 'degree 3' in output, 'the ceiling still bites — the objective takes 2 and no more'
     assert 'caught by check()' in output, 'and with no data attached, so CI can run it'

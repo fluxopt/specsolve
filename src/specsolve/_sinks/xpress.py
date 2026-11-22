@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve._names import COEFF, COL
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
     AT_LOWER,
@@ -249,8 +250,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         rowtype=spelling[rows.sense[: linear.height]].tolist(),
         rhs=rows.rhs[: linear.height],
         start=np.append(linear.starts, entries.height),
-        colind=entries['col'].to_numpy(),
-        rowcoef=entries['coeff'].to_numpy(),
+        colind=entries[COL].to_numpy(),
+        rowcoef=entries[COEFF].to_numpy(),
     )
 
     _add_sets(p, handoff, xpress)

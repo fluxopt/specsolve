@@ -41,7 +41,7 @@ parameters:
     description: most energy capacity that may be built at a store
     dims: [store]
   e_capital_cost:
-    description: cost of holding one unit of energy capacity over the horizon
+    description: cost of holding one unit of energy capacity over the modelled period
     dims: [store]
   e_initial:
     description: energy in the store before the first snapshot

@@ -1,11 +1,11 @@
 """A random model and random data for it, from one seed.
 
-The generator knows the declarations it made, so every expression it writes
+The generator knows the entries it made, so every expression it writes
 reads names that exist, carries the dimensions it says it carries, and stays
 inside degree two. It does not try to know every rule the loader holds a file
 to: a spec the language refuses is counted as *rejected*, not as a finding, and
 :mod:`tests.fuzz.run` reports the rate so a generator that drifts out of the
-language shows. The data is written against the same declarations, dense where
+language shows. The data is written against the same entries, dense where
 a parameter refuses a missing row and sparse where its ``missing:`` allows one.
 
 Everything is drawn from one ``random.Random(seed)``, so a seed is the whole
@@ -114,7 +114,7 @@ class Generator:
         self.masks: dict[str, tuple[str, frozenset[str]]] = {}
 
     # ------------------------------------------------------------------
-    # declarations
+    # entries
     # ------------------------------------------------------------------
 
     def case(self) -> Case:
@@ -204,10 +204,10 @@ class Generator:
             if not dims and missing != 'refused':
                 missing = 'refused'
             rows = {}
-            for coord in self._product(dims):
+            for coordinate in self._product(dims):
                 if missing != 'refused' and r.random() < 0.3:
                     continue
-                rows[coord] = self._value(dtype)
+                rows[coordinate] = self._value(dtype)
             self.params[f'p{i}'] = Parameter(dims, dtype, missing, rows)
 
     def _value(self, dtype: str) -> Any:
@@ -271,23 +271,23 @@ class Generator:
         return coords
 
     # ------------------------------------------------------------------
-    # masks
+    # conditions
     # ------------------------------------------------------------------
 
     def _named_mask(self, name: str) -> None:
-        frame = frozenset(self._some_dims(at_least=1))
-        text = self._mask(frame)
+        table = frozenset(self._some_dims(at_least=1))
+        text = self._mask(table)
         if text is not None:
-            self.masks[name] = (text, frame)
+            self.masks[name] = (text, table)
 
-    def _atoms(self, frame: frozenset[str]) -> list[str]:
-        """Every predicate the generator writes whose dimensions fit inside *frame*."""
+    def _atoms(self, table: frozenset[str]) -> list[str]:
+        """Every condition the generator writes whose dimensions fit inside *table*."""
         r = self.rng
         atoms = []
         for name, p in self.params.items():
             if not p.dims:
                 continue
-            if set(p.dims) <= frame:
+            if set(p.dims) <= table:
                 if p.dtype == 'bool':
                     atoms += [name, f'NOT {name}']
                 elif p.dtype in ('float', 'int'):
@@ -296,19 +296,19 @@ class Generator:
                         atoms.append(name)
             if p.dtype == 'bool':
                 for d in p.dims:
-                    if set(p.dims) - {d} <= frame:
+                    if set(p.dims) - {d} <= table:
                         atoms.append(f'count({name}, over={d}) {r.choice((">=", "==", "<="))} 1')
-                    if self.dims[d].ordered and set(p.dims) <= frame:
+                    if self.dims[d].ordered and set(p.dims) <= table:
                         atoms.append(f'shift({name}, along={d}, offset={r.choice((1, -1))})')
                 for rel_name, rel in self.relations.items():
                     if (
                         not rel.bare
                         and rel.value in p.dims
                         and rel.key not in p.dims
-                        and (set(p.dims) - {rel.value}) | {rel.key} <= frame
+                        and (set(p.dims) - {rel.value}) | {rel.key} <= table
                     ):
                         atoms.append(f'at({name}, by={rel_name}[{rel.value}])')
-        for d in sorted(frame):
+        for d in sorted(table):
             dim = self.dims[d]
             if dim.ordered:
                 atoms.append(f'position({d}) {r.choice((">", "==", "<"))} {r.choice((0, 1, -1))}')
@@ -317,19 +317,19 @@ class Generator:
                         atoms.append(f'position({d}, within={rel_name}[{rel.value}]) == 0')
             atoms.append(f'{d} != {self._quoted(r.choice(dim.labels))}')
         for name, rel in self.relations.items():
-            if rel.key in frame and (not rel.bare or rel.value in frame):
+            if rel.key in table and (not rel.bare or rel.value in table):
                 atoms.append(name)
         for name, v in self.variables.items():
-            if v.dims and set(v.dims) <= frame:
+            if v.dims and set(v.dims) <= table:
                 atoms.append(name)
         for name, (_, dims) in self.masks.items():
-            if dims <= frame:
+            if dims <= table:
                 atoms += [name, f'NOT {name}']
         return atoms
 
-    def _mask(self, frame: frozenset[str]) -> str | None:
-        """A ``where`` string over no dimension outside *frame*, or None if none fits."""
-        atoms = self._atoms(frame)
+    def _mask(self, table: frozenset[str]) -> str | None:
+        """A ``where`` string over no dimension outside *table*, or None if none fits."""
+        atoms = self._atoms(table)
         if not atoms:
             return None
         mask = self.rng.choice(atoms)

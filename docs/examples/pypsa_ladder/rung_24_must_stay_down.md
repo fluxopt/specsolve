@@ -830,8 +830,8 @@ u_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_24_must_stay_down.yaml', sources) as solution:
-        solution.objective  # 9007.5
+    with sps.solve('differential/pypsa/rungs/rung_24_must_stay_down.yaml', sources) as result:
+        result.objective  # 9007.5
     ```
 
 === "PyPSA"

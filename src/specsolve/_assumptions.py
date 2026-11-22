@@ -1,7 +1,7 @@
 """The data-time check of a model's ``assumptions:``.
 
-A predicate is read by the relational engine's mask walk, so it agrees with
-the rows that are built. Called from
+A condition is read as the relational engine reads a ``where:``, so it
+agrees with the rows that are built. Called from
 [`tidy_sources`][specsolve._sources.tidy_sources], so both lanes pass through it.
 """
 
@@ -13,7 +13,7 @@ from mathspec.program import assumption_message
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import attach
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import Scope
 from specsolve._messages import coordinate_text
 from specsolve.errors import DataError
@@ -33,9 +33,9 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
     Nothing is checked while a parameter is unfilled; attaching refuses that.
 
     Args:
-        program: The lowered spec.
+        program: The compiled spec.
         sources: What [`tidy_sources`][specsolve._sources.tidy_sources] holds once every
-            parameter, relation and index is read.
+            parameter, relation and dimension's labels is read.
 
     Returns:
         The attached *sources* the assumptions were read against, for a build
@@ -59,17 +59,17 @@ def validate_assumptions(program: Program, sources: Mapping[str, pl.LazyFrame]) 
 def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | None:
     """One coordinate the assumption does not hold at, or ``None`` where it holds everywhere.
 
-    A predicate with no value at a coordinate does not hold there. The empty
-    string answers a failing assumption over no dims. One over a dimension
+    A condition with no value at a coordinate does not hold there. The empty
+    string answers a failing assumption over no dimensions. One over a dimension
     without a label has no coordinate to fail at, so it is not read.
     """
     failing = ~assumption.holds
     if assumption.where is not None:
         failing = failing & assumption.where
-    dims = scope.in_declaration_order(failing.dims)
+    dims = scope.in_dimension_order(failing.dims)
     if any(not scope.data.cardinality[d] for d in dims):
         return None
-    offending = masked(scope, dims, failing).head(1).pipe(collected)
+    offending = narrowed(scope, dims, failing).head(1).pipe(collected)
     if not offending.height:
         return None
     row = offending.row(0, named=True)

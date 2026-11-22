@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._names import VALUE
+from specsolve._names import COEFF, COL, VALUE
 from specsolve._sinks.handoff import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
@@ -43,7 +43,7 @@ _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
 
 @dataclass(frozen=True)
 class Basis:
-    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in index order."""
 
     columns: np.ndarray[tuple[int], np.dtype[np.int8]]
     rows: np.ndarray[tuple[int], np.dtype[np.int8]]
@@ -106,12 +106,12 @@ class Solver(ABC):
         #: The options the model was loaded with.
         self._options = dict(solver_options or {})
         self._load(handoff)
-        #: The loaded frames, until [`structure`][] replaces them with their digest.
+        #: The loaded tables, until [`structure`][] replaces them with their digest.
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
         #: The matrix's coefficients the loaded model holds, in entry order, for [`keeps`][] and [`push`][].
-        self._coefficients = handoff.matrix['coeff'].to_numpy()
+        self._coefficients = handoff.matrix[COEFF].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
@@ -146,7 +146,7 @@ class Solver(ABC):
     recorded_options: ClassVar[frozenset[str]]
 
     def structure(self) -> bytes:
-        """The loaded model's digest, read off its frames once, after which the frames are let go."""
+        """The loaded model's digest, read off its tables once, after which the tables are let go."""
         if self._structure is None:
             assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
             self._structure = self._handoff.structure
@@ -163,7 +163,7 @@ class Solver(ABC):
         if self._options != dict(solver_options or {}) or self.structure() != handoff.structure:
             return False
         tail = int(handoff.row_starts[handoff.linear_row_count])
-        return bool(_unmoved(handoff.matrix['coeff'].to_numpy()[tail:], self._coefficients[tail:]).all())
+        return bool(_unmoved(handoff.matrix[COEFF].to_numpy()[tail:], self._coefficients[tail:]).all())
 
     def push(self, handoff: Handoff) -> None:
         """*handoff*'s bounds, costs, right-hand sides and moved coefficients onto the loaded model.
@@ -174,12 +174,12 @@ class Solver(ABC):
         """
         import numpy as np
 
-        new = handoff.matrix['coeff'].to_numpy()
+        new = handoff.matrix[COEFF].to_numpy()
         unmoved = _unmoved(new, self._coefficients)
         if not unmoved.all():
             moved = np.flatnonzero(~unmoved)
             rows = np.searchsorted(handoff.row_starts, moved, side='right') - 1
-            self._change_coefficients(rows, handoff.matrix['col'].to_numpy()[moved], new[moved])
+            self._change_coefficients(rows, handoff.matrix[COL].to_numpy()[moved], new[moved])
             self._coefficients = np.where(unmoved, self._coefficients, new)
         self._push(handoff)
 
@@ -352,7 +352,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: [`close`][] releases it, not the caller.
+        This holder keeps it: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod
@@ -428,8 +428,8 @@ def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tup
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
     """One quantity a solver produced, in its own index — every sink's read-back.
 
-    A series rather than a ``(label, value)`` frame: the read-back takes a
-    declaration's share by slicing.
+    A series rather than an ``(index, value)`` table: the read-back takes an
+    entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)
 

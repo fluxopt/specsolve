@@ -227,7 +227,7 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
 
     Both spellings of `points:`, because they put the length in different
     places: naming a values parameter leaves the unrun breakpoints out of the
-    table, and a boolean mask marks them in a table that may be dense. A count
+    table, and a boolean condition marks them in a table that may be dense. A count
     of the rows that carry a value gets the first right and the second wrong.
     """
     mask = spelling == 'boolean-mask'
@@ -255,10 +255,10 @@ def test_a_ragged_curve_down_to_one_point_is_refused(spelling):
     assert 'unit=b' in str(refusal.value), 'the refusal names the curve that is short, not the block'
 
 
-def test_values_past_the_mask_are_not_part_of_the_curve():
+def test_values_past_the_condition_are_not_part_of_the_curve():
     """`points:` says which breakpoints the curve runs over, and the guard reads it.
 
-    A table may be dense where the mask is not — the row exists, it is simply
+    A table may be dense where the condition is not — the row exists, it is simply
     not on this curve. Judged by which rows carry a value instead, `b`'s
     unmarked third point would count, and it runs backwards *and* bends the
     wrong way.
@@ -315,7 +315,7 @@ def test_a_one_breakpoint_curve_is_refused_rather_than_dropped():
 def test_the_saving_is_columns_paid_for_in_rows():
     """The trade, measured on one model rather than argued.
 
-    `convex` declares a weight per breakpoint per frame row; `lp` declares
+    `convex` declares a weight per breakpoint per coordinate; `lp` declares
     none, and instead writes a row per segment plus two holding the domain.
     So this is columns traded for rows, and the numbers say how much.
     """
@@ -375,10 +375,10 @@ def test_breakpoints_that_do_not_increase_are_refused():
         sps.solve(expanded(spec), _relational(xs=[0.0, 10.0, 10.0, 30.0]))
 
 
-def test_each_curve_of_a_frame_is_checked_on_its_own():
-    """A block carries one curve per frame row, and one bad one is enough.
+def test_each_curve_of_a_block_is_checked_on_its_own():
+    """A block carries one curve per coordinate, and one bad one is enough.
 
-    The guard broadcasts over the dims the values carry and walks the
+    The guard broadcasts over the dimensions the values carry and walks the
     breakpoints of each row, so a concave curve hidden among convex ones is
     refused on its own account — which is the shape a per-unit corpus arrives
     in.
@@ -475,7 +475,7 @@ def _per_unit_points(short, mask=False):
 
     Under the boolean spelling the curve tables stay **dense** — every unit
     carries all three breakpoints — which is the shape that separates reading
-    the mask from counting the rows that have a value.
+    the condition from counting the rows that have a value.
     """
     run = [('a', 0), ('a', 1), ('a', 2), *([('b', 0)] if short else [('b', 0), ('b', 1)])]
     rows = [('a', 0), ('a', 1), ('a', 2), ('b', 0), ('b', 1), ('b', 2)] if mask else run

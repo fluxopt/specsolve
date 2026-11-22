@@ -21,6 +21,7 @@ import pytest
 
 import specsolve as sps
 from specsolve._engine import assembly
+from specsolve._names import COEFF, ROW
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
@@ -55,11 +56,11 @@ def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
     with sps.build(expanded(port['spec']), given) as model:
         handoff = model._engine._model.handoff
         numbers = (
-            handoff.matrix['coeff'],
+            handoff.matrix[COEFF],
             handoff.cols['lb'],
             handoff.cols['ub'],
-            handoff.quad['coeff'],
-            handoff.rows['row'],
+            handoff.quad[COEFF],
+            handoff.rows[ROW],
             handoff.rows['rhs'],
         )
         return (

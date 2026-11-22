@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve.errors import LanguageError, SpecsolveError
 
 SPEC = {
@@ -58,9 +58,9 @@ def evaluate(expression: str | dict) -> pl.DataFrame:
 
 
 def test_a_scalar_expression_is_the_arithmetic_the_data_implies():
-    frame = evaluate('total_cost')
-    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dims is a single value row'
-    assert frame.item() == pytest.approx(635.0), 'sum(dispatch * cost) is 10·1 + 2·50 + 20·1 + 3·50 + 5·1 + 7·50 = 635'
+    table = evaluate('total_cost')
+    assert table.columns == ['value'] and table.height == 1, 'an expression with no dimensions is a single value row'
+    assert table.item() == pytest.approx(635.0), 'sum(dispatch * cost) is 10·1 + 2·50 + 20·1 + 3·50 + 5·1 + 7·50 = 635'
 
 
 def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
@@ -71,11 +71,11 @@ def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
 
 
 def test_a_grouped_sum_relabels_through_a_relation():
-    frame = evaluate('by_node').sort('snapshot', 'node')
-    assert frame.columns == ['snapshot', 'node', 'value'], (
+    table = evaluate('by_node').sort('snapshot', 'node')
+    assert table.columns == ['snapshot', 'node', 'value'], (
         'sum(over=generator, by=bus[node]) replaces generator with the node it maps to'
     )
-    got = {(s, n): v for s, n, v in frame.iter_rows()}
+    got = {(s, n): v for s, n, v in table.iter_rows()}
     assert got == pytest.approx(
         {(0, 'n1'): 10.0, (0, 'n2'): 2.0, (1, 'n1'): 20.0, (1, 'n2'): 3.0, (2, 'n1'): 5.0, (2, 'n2'): 7.0}
     ), 'each generator sits alone on its node, so the grouped value is its own dispatch'
@@ -85,21 +85,21 @@ def test_a_grouped_sum_relabels_through_a_relation():
     ('name', 'dims'),
     [
         pytest.param('cost_by_gen', {'snapshot', 'generator'}, id='no-reduction'),
-        pytest.param('served', {'snapshot'}, id='one-dim-summed-away'),
+        pytest.param('served', {'snapshot'}, id='one-dimension-summed-away'),
         pytest.param('total_cost', set(), id='everything-summed-away'),
     ],
 )
-def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(name, dims):
-    frame = evaluate(name)
-    assert set(frame.columns) - {'value'} == dims, (
-        'the returned frame answers over the dims the expression still ranges over after its sums'
+def test_the_table_carries_exactly_the_dims_the_expression_survives_over(name, dims):
+    table = evaluate(name)
+    assert set(table.columns) - {'value'} == dims, (
+        'the returned table answers over the dimensions the expression still ranges over after its sums'
     )
 
 
 def test_an_expression_the_file_never_named_reads_the_same_arithmetic():
     got = dict(zip(*evaluate('sum(dispatch, over=generator)').sort('snapshot'), strict=True))
     assert got == pytest.approx({0: 12.0, 1: 23.0, 2: 12.0}), (
-        'evaluate lowers an undeclared expression against the variable-free spec and reads it as arithmetic'
+        'evaluate compiles an undeclared expression against the variable-free spec and reads it as arithmetic'
     )
 
 
@@ -139,18 +139,18 @@ def test_a_spec_that_declares_a_decision_is_refused_and_names_solve(decision, na
     assert names in str(caught.value), 'the refusal names the decision it found, so the author sees what to drop'
 
 
-def test_only_the_expression_asked_for_is_compiled(monkeypatch):
-    compiled = []
-    original = Compiler.expression
+def test_only_the_expression_asked_for_is_queried(monkeypatch):
+    queried = []
+    original = QueryBuilder.expression
 
     def counting(self, expr, context, **kwargs):
-        compiled.append(context)
+        queried.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(Compiler, 'expression', counting)
+    monkeypatch.setattr(QueryBuilder, 'expression', counting)
     evaluate('served')
-    assert compiled == ["named expression 'served'"], (
-        'four expressions are declared and one is asked for, so exactly that one compiles'
+    assert queried == ["named expression 'served'"], (
+        'four expressions are declared and one is asked for, so exactly that one is queried'
     )
 
 
@@ -158,8 +158,8 @@ def test_a_quotient_is_absent_where_its_divisor_is_zero():
     """With no solve the data is the only source of a zero, and the quotient has no row there; before #1775 it read `inf`."""
     spec = {**SPEC, 'parameters': {**SPEC['parameters'], 'weight': {'dims': ['generator']}}}
     data = sources() | {'weight': pl.DataFrame({'generator': GENERATORS, 'value': [2.0, 0.0]})}
-    frame = sps.evaluate(spec, data, 'cost / weight')
-    assert dict(zip(frame['generator'], frame['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
+    table = sps.evaluate(spec, data, 'cost / weight')
+    assert dict(zip(table['generator'], table['value'], strict=True)) == pytest.approx({'wind': 0.5}), (
         'gas divides by zero, so it has no row'
     )
 
@@ -173,7 +173,7 @@ def test_a_quotient_is_absent_where_its_divisor_is_zero():
     ],
 )
 def test_an_operand_that_is_a_sum_is_taken_whole(expression, expected):
-    """`sum(cost)` is 51, and a power or a quotient reads that total rather than each summand.
+    """`sum(cost)` is 51, and a power or a quotient reads that total rather than each term of the sum.
 
     Before #1777 `sum(cost) ** 2` read 1² + 50².
     """
