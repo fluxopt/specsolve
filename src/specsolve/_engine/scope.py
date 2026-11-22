@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._engine import positional
+from specsolve._engine import dense
 from specsolve._names import LABEL, POSITION, VALUE
 
 if TYPE_CHECKING:
@@ -56,7 +56,7 @@ class Scope:
     program: program.Program
     data: AttachedSources
     variables: Mapping[str, Indexed]
-    #: Each column read by position, by what it holds and its name; [`positional`][specsolve._engine.positional] fills it.
+    #: Each column read by position, by what it holds and its name; [`dense`][specsolve._engine.dense] fills it.
     by_position: dict[tuple[str, str], pl.Series] = field(default_factory=dict)
 
     def absent(self, parameter: str) -> bool:
@@ -103,23 +103,23 @@ class Scope:
         dimensions keeps every row of *table*, reading null where the parameter
         has no row, which a cross join with its empty table would not. A
         parameter with a row at every coordinate, and enough of them to be
-        [worth reading][specsolve._engine.positional.worth_reading], is read at
-        each row's [`position`][Scope.position] instead, which is what a left
+        [worth reading][specsolve._engine.dense.worth_reading], is read at
+        each row's [`row_major_position`][Scope.row_major_position] instead, which is what a left
         or an inner join of it finds, unless *by_position* is false.
         """
         entry = self.program.parameters[parameter]
         assert not set(entry.dims) - set(table_dims), f'{subject} has dimensions outside {list(table_dims)}'
-        reads = by_position and how in ('left', 'inner') and positional.worth_reading(self, parameter)
-        position = self.position(entry.dims) if reads else None
+        reads = by_position and how in ('left', 'inner') and dense.worth_reading(self, parameter)
+        position = self.row_major_position(entry.dims) if reads else None
         if position is not None:
-            return table.with_columns(pl.lit(positional.column(self, parameter)).gather(position).alias(alias))
+            return table.with_columns(pl.lit(dense.column(self, parameter)).gather(position).alias(alias))
         values = self.data.parameters[parameter].rename({VALUE: alias})
         if not entry.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: values.collect_schema()[alias]})
             values = pl.concat([values, null]).head(1)
         return join_on(table, values, entry.dims, how, maintain_order)
 
-    def position(self, dims: tuple[str, ...]) -> pl.Expr | None:
+    def row_major_position(self, dims: tuple[str, ...]) -> pl.Expr | None:
         """A table row's [`row_major`][Scope.row_major] position over *dims*, read off its dimension columns alone.
 
         ``None`` where a dimension's labels are neither an ``Enum`` nor a run of

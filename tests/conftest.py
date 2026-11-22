@@ -124,11 +124,11 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def nothing_by_position(put: Callable[[object, str, object], None] = setattr) -> None:
     """Every read by position switched off. *put* sets an attribute: a test passes ``monkeypatch.setattr`` to have it undone."""
-    from specsolve._engine import positional
+    from specsolve._engine import dense
 
-    put(positional, 'constant', lambda *args: None)
-    put(positional, 'variable', lambda *args: None)
-    put(positional, 'readable', lambda *args: False)
+    put(dense, 'constant', lambda *args: None)
+    put(dense, 'variable', lambda *args: None)
+    put(dense, 'readable', lambda *args: False)
 
 
 @pytest.fixture

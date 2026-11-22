@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Literal, NoReturn, assert_never
 import polars as pl
 from mathspec import program
 
-from specsolve._engine import positional
-from specsolve._engine.positional import Positional
+from specsolve._engine import dense
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.scope import join_on
 from specsolve._names import COEFF, COL, COL_2, CONSTANT
 from specsolve.errors import SpecsolveError
@@ -80,7 +80,7 @@ class Term:
     """One additive term of an expression, over its own dimensions."""
 
     dims: tuple[str, ...]
-    body: pl.LazyFrame | Positional
+    body: pl.LazyFrame | DenseTerm
     kind: Kind
 
     presences: tuple[Presence, ...] = ()
@@ -106,7 +106,7 @@ class Term:
     @property
     def table(self) -> pl.LazyFrame:
         """The term as the join path reads it, whichever way it is held."""
-        return self.body.table if isinstance(self.body, Positional) else self.body
+        return self.body.table if isinstance(self.body, DenseTerm) else self.body
 
     @property
     def value_column(self) -> str:
@@ -303,7 +303,7 @@ def negate(p: Term) -> Term:
     def tidy() -> pl.LazyFrame:
         return p.table.with_columns(-pl.col(p.value_column))
 
-    return replace(p, body=positional.negated(p.body, tidy) if isinstance(p.body, Positional) else tidy())
+    return replace(p, body=dense.negated(p.body, tidy) if isinstance(p.body, DenseTerm) else tidy())
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
@@ -322,7 +322,7 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
     so carried over unspelled it would name columns the table does not hold.
     One already spelled out travels as the object it is, which is how a body
     held by position knows the presence is still its own
-    ([`Positional.stands_for`][specsolve._engine.positional.Positional.stands_for]).
+    ([`DenseTerm.stands_for`][specsolve._engine.dense.DenseTerm.stands_for]).
     """
     return tuple(x if x.joined_on is not None else Presence(x.table, p.dims) for x in p.presences)
 
@@ -350,9 +350,9 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
         out = value_column(kind)
         return joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
 
-    body: pl.LazyFrame | Positional
-    if not divide and isinstance(a.body, Positional) and isinstance(c.body, Positional):
-        body = positional.product(a.body, c.body, tidy)
+    body: pl.LazyFrame | DenseTerm
+    if not divide and isinstance(a.body, DenseTerm) and isinstance(c.body, DenseTerm):
+        body = dense.product(a.body, c.body, tidy)
     else:
         body = tidy()
     if kind != 'constant':

@@ -24,10 +24,10 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
-from specsolve._engine import positional
+from specsolve._engine import dense
 from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.conditions import Carrier, falsy_if_null, narrowed, query_condition
-from specsolve._engine.positional import Positional
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
@@ -91,9 +91,9 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _held(values: positional.Values | None, table: pl.LazyFrame) -> pl.LazyFrame | Positional:
+def _held(values: dense.Values | None, table: pl.LazyFrame) -> pl.LazyFrame | DenseTerm:
     """A constant leaf's body: held by position where *values* reads it there, *table* otherwise."""
-    return table if values is None else Positional(values, lambda: table)
+    return table if values is None else DenseTerm(values, lambda: table)
 
 
 def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
@@ -178,9 +178,9 @@ class QueryBuilder:
         entry = self.scope.program.parameters[parameter]
         if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
-        if not positional.readable(self.scope, parameter):
+        if not dense.readable(self.scope, parameter):
             return None
-        return table.with_columns(positional.values(self.scope, parameter).alias(alias))
+        return table.with_columns(dense.values(self.scope, parameter).alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -362,7 +362,7 @@ class QueryBuilder:
         def ev(e: program.Expression) -> ExpressionTerms:
             if isinstance(e, program.Constant):
                 table = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
-                return ExpressionTerms((), (Term((), _held(positional.constant(float(e.value)), table), 'constant'),))
+                return ExpressionTerms((), (Term((), _held(dense.constant(float(e.value)), table), 'constant'),))
             if isinstance(e, program.ParameterReference):
                 return ExpressionTerms((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
@@ -432,7 +432,7 @@ class QueryBuilder:
         table = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
         present = table.select(*dims) if dims else table.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
-        take = None if presences else positional.parameter(self.scope, name)
+        take = None if presences else dense.parameter(self.scope, name)
         return Term(dims, _held(take, table), 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
@@ -444,14 +444,14 @@ class QueryBuilder:
 
     def _variable_body(
         self, name: str, table: pl.LazyFrame, presences: tuple[Presence, ...]
-    ) -> pl.LazyFrame | Positional:
+    ) -> pl.LazyFrame | DenseTerm:
         """A variable's body at unit coefficient: held by position where its columns are, *table* otherwise."""
-        columns = positional.variable(self.scope, name)
+        columns = dense.variable(self.scope, name)
         if columns is None:
             return table
         held = self.scope.variables[name]
         absent = presences[0] if presences else None
-        return Positional(positional.unit, lambda: table, columns, held.start + held.height - 1, absent)
+        return DenseTerm(dense.unit, lambda: table, columns, held.start + held.height - 1, absent)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""

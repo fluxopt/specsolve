@@ -179,7 +179,7 @@ under the `specsolve_` prefix a dimension cannot take. Parameters are
 constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
 **A term over data with a row at every coordinate is also held by position**
-(`positional.py`). A coordinate's row-major position is then the key, and an
+(`dense.py`). A coordinate's row-major position is then the key, and an
 alignment is an index rather than a join. Such a term still carries its tidy
 table, so an operator with no positional arm reads the table and the term is a
 table from there on. Negation, a product with a constant term, a constraint's
@@ -236,7 +236,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
-| `_engine/positional.py` | data read by position instead of joined, where it has a value at every coordinate of its dimensions |
+| `_engine/dense.py` | data read by position instead of joined, where it has a value at every coordinate of its dimensions |
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |

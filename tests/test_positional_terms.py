@@ -1,7 +1,7 @@
 """A constraint whose terms are read by position is the model the joins build.
 
 Where a parameter has a row at every coordinate and a variable a column at
-most of them, a term is held by position (`_engine/positional.py`) and a constraint
+most of them, a term is held by position (`_engine/dense.py`) and a constraint
 places it on its rows by index. Each case here is built both ways and the
 written models compared, and each says which way the constraint was placed.
 """
@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, coverage, positional
+from specsolve._engine import assembly, coverage, dense
 from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
@@ -54,7 +54,7 @@ SPEC = {
 }
 
 #: `i` has 40 labels so that `rare`, true at one coordinate of 80, leaves a
-#: variable narrowed by it past `positional.CELLS_PER_COLUMN` coordinates per column.
+#: variable narrowed by it past `dense.CELLS_PER_COLUMN` coordinates per column.
 LABELS = list(range(40))
 PAIR = ['p', 'q']
 SOURCES = {
@@ -356,10 +356,10 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
         consecutive={'i': 0},
         given={},
     )
-    values = positional.parameter(Scope(program, data, {}), 'a')
+    values = dense.parameter(Scope(program, data, {}), 'a')
     assert values is not None, 'a table of three rows over three labels is taken for whole'
     with pytest.raises(SpecsolveError, match='does not cover'):
-        values(positional.Coordinates(('i',), {'i': 3}))
+        values(dense.CoordinatePositions(('i',), {'i': 3}))
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:

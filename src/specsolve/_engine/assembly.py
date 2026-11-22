@@ -16,8 +16,8 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._collect import collected, in_memory
-from specsolve._engine import coverage, indices, positional
-from specsolve._engine.positional import Positional
+from specsolve._engine import coverage, dense, indices
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
@@ -218,10 +218,10 @@ class Assembly:
             cells = math.prod(self.attached.cardinality[d] for d in dims)
             return pl.int_range(cells, dtype=pl.Int64, eager=True)
         position = self.scope.row_major(dims, self.scope.ordinal_of) if dims else pl.lit(0, dtype=pl.Int64)
-        return indexed.select(position.alias(positional.POSITION), ROW).get_column(positional.POSITION)
+        return indexed.select(position.alias(dense.ROW_MAJOR), ROW).get_column(dense.ROW_MAJOR)
 
     def _placed_by_position(
-        self, linear: list[tuple[Positional, float]], dims: tuple[str, ...], indexed: pl.DataFrame | None, start: int
+        self, linear: list[tuple[DenseTerm, float]], dims: tuple[str, ...], indexed: pl.DataFrame | None, start: int
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.Series]:
         """[`_placed_by_join`][]'s entries for terms held by position, the indexed rows they keep, and their positions.
 
@@ -232,8 +232,8 @@ class Assembly:
         of *dims*. Where the terms then drop some, the rows are indexed from
         the coordinates kept and the whole product is never a table.
         """
-        positions, kept, entries = positional.placed(
-            linear, self._positions(dims, indexed), positional.Coordinates(dims, self.attached.cardinality)
+        positions, kept, entries = dense.placed(
+            linear, self._positions(dims, indexed), dense.CoordinatePositions(dims, self.attached.cardinality)
         )
         if indexed is None and kept is None:
             indexed = indices.table(self.scope, dims, None, ROW, start)
@@ -245,7 +245,7 @@ class Assembly:
 
     def _sides_by_position(
         self,
-        constant: list[tuple[Positional, float]],
+        constant: list[tuple[DenseTerm, float]],
         c: program.Constraint,
         indexed: pl.DataFrame,
         positions: pl.Series | None,
@@ -257,11 +257,11 @@ class Assembly:
         at each, so no row is owed one and there is no coverage to check.
         """
         positions = self._positions(c.dims, indexed) if positions is None else positions
-        total = positional.summed(constant, positional.Coordinates(c.dims, self.attached.cardinality))
+        total = dense.summed(constant, dense.CoordinatePositions(c.dims, self.attached.cardinality))
         sides = {
             ROW: indexed.get_column(ROW),
             'sense': pl.repeat(c.sense, indexed.height, dtype=_DTYPES['sense'], eager=True),
-            'rhs': pl.DataFrame({positional.POSITION: positions}).with_columns(total.alias('rhs')).get_column('rhs'),
+            'rhs': pl.DataFrame({dense.ROW_MAJOR: positions}).with_columns(total.alias('rhs')).get_column('rhs'),
         }
         return pl.DataFrame(sides, schema={column: _DTYPES[column] for column in _ROWS})
 
@@ -368,7 +368,7 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         by_position = [
-            (p.body, sign) for p, sign in linear if isinstance(p.body, Positional) and p.body.stands_for(p.presences)
+            (p.body, sign) for p, sign in linear if isinstance(p.body, DenseTerm) and p.body.stands_for(p.presences)
         ]
         whole_by_position = bool(linear) and len(by_position) == len(linear)
         restrictions = absence_restrictions(
@@ -400,7 +400,7 @@ class Assembly:
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        sides = [(p.body, sign) for p, sign in constant if isinstance(p.body, Positional)]
+        sides = [(p.body, sign) for p, sign in constant if isinstance(p.body, DenseTerm)]
         if len(sides) == len(constant):
             rows = self._sides_by_position(sides, c, indexed, positions)
         else:
