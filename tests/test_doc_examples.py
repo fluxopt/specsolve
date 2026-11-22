@@ -266,7 +266,7 @@ def test_yaml_block_validates(block: Block) -> None:
             f'{block.where} does not validate:\n{exc}\n\n'
             'If the block is not meant to be a complete model — a section shown '
             'on its own still has to resolve its cross-references, so a lone '
-            '`parameters:` must declare the dims it names — annotate the fence '
+            '`parameters:` must declare the dimensions it names — annotate the fence '
             'instead:\n'
             '  <!-- doctest: wrap=<section> -->  a single entry of that section\n'
             '  <!-- doctest: skip -->            not a model, or wrong on purpose'

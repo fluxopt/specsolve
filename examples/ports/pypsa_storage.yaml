@@ -1,6 +1,6 @@
 description: >-
   PyPSA linear optimal power flow with a storage unit carrying energy between
-  snapshots. Non-cyclic — the horizon starts at the initial
+  snapshots. Non-cyclic — the level starts at the initial
   state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 dimensions:

@@ -80,17 +80,17 @@ solves with HiGHS.
 
 ## The contract
 
-A sink takes a `Handoff` and nothing else: the frames `cols`
+A sink takes a `Handoff` and nothing else: the tables `cols`
 (col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs), `matrix`
 (row, col, coeff) and `sos` (set, type, col, weight), plus the counts it
 chunks by and the objective's sense and constant — those last two live outside
-the frames because a constant has no column to attach to.
+the tables because a constant has no column to attach to.
 
 A sink never learns how the handoff was filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
 `lp_file.py`, not another method on `Engine`.
 
-The one thing sinks may share is a *projection* of those frames, never a step
+The one thing sinks may share is a *projection* of those tables, never a step
 of the work — `Handoff.dense_columns`, which every solver reads — or a
 family's one shared module, which holds no member's own answer: `solver.py` is the
 lifecycle without a solver in it, `text.py` the renderings without a
@@ -104,7 +104,7 @@ column of the matrix — so `mps_file` sorts the matrix into `(col, row)` order
 once and builds its own offsets from the result. That sort is the writer's
 peak, and it is the only place in `sinks/` where the format, rather than the
 engine, decides the order. The engine holds no column index because this is
-its one consumer, and building one on every build to serve it would be paid by
+its one reader, and building one on every build to serve it would be paid by
 every caller who never writes a file.
 
 ## The one uneven stream
@@ -168,7 +168,7 @@ model to a reader holding both.
 
 Either way it declares what it can ingest, and stream — nothing here may
 materialise the model a second time — and nothing above changes. No method on the engine, no branch in `_api.py`,
-no name on the Python surface.
+no name in the public API.
 
 ## What a sink can ingest
 
@@ -190,7 +190,7 @@ Two runs of one model produce the same bytes
 ([#109](https://github.com/fluxopt/specsolve/issues/109)). It is not free and it
 is easy to lose: a parallel join hands back a group in whatever order it
 finished it, so a sink that gathers a row's terms and *then* orders the rows
-has already lost the order within one. `lp_file` emits one frame of lines
+has already lost the order within one. `lp_file` emits one table of lines
 carrying its own sort key instead, and sorts once. The solvers are ordered for
 a different reason — `searchsorted` requires it, and the CSR `indptr` it
 produces is only a row's extent if the rows it indexes are sorted.

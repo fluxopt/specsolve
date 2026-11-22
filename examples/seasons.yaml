@@ -1,5 +1,5 @@
 description: >-
-  A store that cycles inside each season rather than across the horizon, with
+  A store that cycles inside each season rather than across the modelled period, with
   seasons of different lengths — one balance row says it, because the wrap is
   the season's own and no level is carried from one season into the next.
 

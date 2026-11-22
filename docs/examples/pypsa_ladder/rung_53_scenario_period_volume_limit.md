@@ -695,8 +695,8 @@ S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_53_scenario_period_volume_limit.yaml', sources) as solution:
-        solution.objective  # 15005.0
+    with sps.solve('differential/pypsa/rungs/rung_53_scenario_period_volume_limit.yaml', sources) as result:
+        result.objective  # 15005.0
     ```
 
 === "PyPSA"

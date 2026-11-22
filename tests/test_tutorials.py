@@ -185,7 +185,7 @@ def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, An
     assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'
 
 
-def test_integrality_is_a_declaration_and_costs_the_duals(lifecycle: tuple[dict[str, Any], str]) -> None:
+def test_integrality_is_declared_and_costs_the_duals(lifecycle: tuple[dict[str, Any], str]) -> None:
     """The relax page's claim: a domain edit is a rebuild, and a MILP has no prices."""
     namespace, printed = lifecycle
     assert namespace['milp'].has_primal, 'the integer solve still answers'

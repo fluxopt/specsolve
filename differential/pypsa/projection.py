@@ -146,10 +146,10 @@ def _surviving(expressions: dict[str, Any], dead: set[str]) -> dict[str, dict[st
 def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built.
 
-    A cased quantity is kept whole, because only its regions' masks may say
-    whether a region applies. Expressions and named masks keep the file's
+    A cased quantity is kept whole, because only its regions' conditions may say
+    whether a region applies. Expressions and named conditions keep the file's
     order, so the output is stable across processes. A variable a kept
-    quantity or mask names is declared as written, even where the rung builds
+    quantity or condition names is declared as written, even where the rung builds
     no column for it.
     """
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}

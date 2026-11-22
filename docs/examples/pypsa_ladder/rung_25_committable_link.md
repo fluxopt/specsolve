@@ -1370,8 +1370,8 @@ f_{\xi,t,l} - \mathit{Link\_previous\_p}_{\xi,t,l} \le \mathit{Link\_ramp\_up\_a
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_25_committable_link.yaml', sources) as solution:
-        solution.objective  # 13982.0
+    with sps.solve('differential/pypsa/rungs/rung_25_committable_link.yaml', sources) as result:
+        result.objective  # 13982.0
     ```
 
 === "PyPSA"
