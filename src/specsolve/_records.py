@@ -191,9 +191,16 @@ class Metrics(NamedTuple):
     cutting, stitching and archiving the sweep are not one slice's.
     """
 
-    #: The shape the build produced, in the solver's own vocabulary.
+    #: How many columns the build produced: one per variable at each coordinate
+    #: it exists at.
     columns: int
+    #: How many rows the build produced: one per constraint at each coordinate
+    #: it is built at. A row with no term is not built; one whose terms sum
+    #: to zero is.
     rows: int
+    #: How many coefficients the constraint matrix holds: one per row and
+    #: column a linear term reaches, the terms at one pair summed and a sum of
+    #: exactly zero dropped. A quadratic term is not one.
     nonzeros: int
     #: How many solves the row covers. The clocks are cumulative over exactly
     #: these solves.
