@@ -1,6 +1,6 @@
 """What a caller's ``sources`` become: the tables the engine reads by name.
 
-The door ([`tidy_sources`][specsolve._sources.tidy_sources]) has already read and checked
+[`tidy_sources`][specsolve._sources.tidy_sources] has already read and checked
 every source; this shapes each and encodes the string dimensions.
 """
 
@@ -31,14 +31,14 @@ class AttachedSources:
 
     ``parameters`` are tidy ``(dims…, value)``, a ``float`` parameter's value
     a ``Float64`` whatever column it arrived in, and a parameter that declares
-    a value for a missing row filled with it; ``dimensions`` are ``(val, ord)``;
+    a value for a missing row filled with it; ``dimensions`` are ``(LABEL, POSITION)``;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
     a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
     cached table heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its ordinal. ``seconds`` is how long attaching took, for the
+    ``first`` is its position. ``seconds`` is how long attaching took, for the
     build these are handed to, which did not run the attach itself.
     """
 
@@ -57,7 +57,7 @@ class AttachedSources:
 
 
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
-    """Shape the door's tables into what *program* is written against.
+    """Shape the tables ``tidy_sources`` returns into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
@@ -69,7 +69,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     """
     started = perf_counter()
     with in_memory():
-        dimensions = {d: _ordinal_table(d, sources[d]).pipe(collected) for d in program.dimensions}
+        dimensions = {d: _position_table(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
         parameters = {name: sources[name].pipe(collected) for name in program.parameters}
 
@@ -149,7 +149,7 @@ def _refuse_a_missing_row(
 ) -> None:
     """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
 
-    The door refuses a duplicate, so a height short of the product is a gap,
+    ``tidy_sources`` refuses a duplicate, so a height short of the product is a gap,
     and only a short table pays for the anti-join that names one.
     """
     if not columns:
@@ -188,8 +188,8 @@ def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
     return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
 
 
-def _ordinal_table(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
-    """A dimension's ``(val, ord)`` from its labels, a label's ordinal being its row."""
+def _position_table(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
+    """A dimension's ``(LABEL, POSITION)`` from its labels, a label's position being its row."""
     return labels.with_row_index(POSITION).select(pl.col(d).alias(LABEL), pl.col(POSITION).cast(pl.Int64))
 
 

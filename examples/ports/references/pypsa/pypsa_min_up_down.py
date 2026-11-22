@@ -24,8 +24,8 @@ The three units carry different window lengths — 3, 2 and 1.
 
 ``up_time_before`` and ``down_time_before`` are both set to 0, against PyPSA's
 default of 1 and 0. The default says the unit was already running before the
-first snapshot, which emits a further block pinning the status on for the
-remainder of its minimum up time. With both at 0 that block does not appear,
+first snapshot, which emits a further constraint pinning the status on for the
+remainder of its minimum up time. With both at 0 that constraint does not appear,
 every unit is **off** before the first snapshot, and the first snapshot's
 transition rows are the mirror of the ones ``pypsa_unit_commitment`` ports: a
 unit committed in the first snapshot pays for a start and nothing is charged for

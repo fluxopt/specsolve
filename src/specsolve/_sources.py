@@ -1,4 +1,4 @@
-"""Attach runtime data to a compiled program — the one door both lanes enter.
+"""Attach runtime data to a compiled program: [`tidy_sources`][], the one function both lanes read data through.
 
 Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
 plain-Python shape become the tidy tables both lanes read by name. Every check
@@ -229,10 +229,10 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
 
 def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
-    """*dim*'s labels as the door reads them out of *data*, in label order.
+    """*dim*'s labels as [`tidy_sources`][] reads them out of *data*, in label order.
 
     Raises:
-        DataError: No labels for *dim*, or labels the door refuses.
+        DataError: No labels for *dim*, or labels [`tidy_sources`][] refuses.
     """
     if dim not in data:
         raise DataError(_no_labels_source_message(dim))
@@ -756,8 +756,8 @@ def _row_major_positions(
     position = pl.lit(0, dtype=pl.UInt64)
     for d in dims:
         labels = known[d]
-        ordinals = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, ordinals, default=None)
+        label_positions = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        position = position * labels.len() + pl.col(d).replace_strict(labels, label_positions, default=None)
     return table.select(position).to_series()
 
 

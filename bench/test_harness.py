@@ -1408,7 +1408,7 @@ def test_an_empty_fragment_never_blanks_the_page() -> None:
 
 def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
     """A build-only number is not comparable across libraries: one that defers
-    its coefficients to its writer pays at the hand-off instead."""
+    its coefficients to its writer pays at the handoff instead."""
     table = report.marginal([_loop('dispatch', 'specsolve', 1200), _loop('dispatch', 'linopy', 1200)])
     assert 'specsolve: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
     assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
@@ -1597,7 +1597,7 @@ def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[st
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
-    """A generated model file still has to pass the front door."""
+    """A generated model file still has to pass `to_spec`."""
     from mathspec import to_spec
 
     case = CASES['declarations']

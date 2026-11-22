@@ -1,4 +1,4 @@
-"""Degree 1, checked against the oracle lane itself.
+"""Degree 1, checked against the linopy lane itself.
 
 The linopy lane refuses what the relational lane refuses, in the same words
 (hard rule 3). The rule lives in ``mathspec.degree``, and both lanes ask it.

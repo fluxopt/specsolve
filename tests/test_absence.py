@@ -302,7 +302,7 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
 
-#: One rule per block, so the two regimes are two named constraints.
+#: One rule per entry, so the two regimes are two named constraints.
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {

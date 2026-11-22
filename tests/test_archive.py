@@ -320,7 +320,7 @@ def test_a_directory_that_already_holds_something_is_refused(
     ],
 )
 def test_a_compiled_program_is_not_a_model_any_verb_takes(verb, dispatch_yaml: Path, dispatch_table_inputs) -> None:
-    """Compiling has no inverse, so a Program is refused at the door, before anything is built."""
+    """Compiling has no inverse, so a Program is refused by `as_program`, before anything is built."""
     with pytest.raises(sps.errors.SpecsolveError, match='compiled Program is not a spec this takes'):
         verb(sps.check(dispatch_yaml), dispatch_table_inputs)
 
@@ -1698,7 +1698,7 @@ def _by_scenario(names: list[str]) -> pl.DataFrame:
 def test_a_sweep_refuses_a_compiled_program_before_it_solves_a_slice(
     dispatch_yaml: Path, dispatch_table_inputs
 ) -> None:
-    """A sweep refuses it at the same door, and before the first slice is taken."""
+    """A sweep refuses it in the same `as_program`, and before the first slice is taken."""
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     with pytest.raises(sps.errors.SpecsolveError, match='was compiled from'):
         sps.solve_over(sps.check(dispatch_yaml), sources, sps.EachLabel('scenario'), archive='never.zip')
