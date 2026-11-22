@@ -107,7 +107,7 @@ def _answer(agreed: Read, expression: str | Mapping[str, Any]) -> pl.DataFrame |
 
     That refusal is #1137's: a ``sum`` or ``shift`` along a dimension a
     constant term of the expression does not carry. The linopy lane reads it,
-    so it is a gap already settled, not a disagreement.
+    so it is a gap already known, not a disagreement.
     """
     try:
         return agreed(expression)
