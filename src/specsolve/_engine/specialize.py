@@ -105,17 +105,19 @@ def specialized(compiled: program.Program, attached: AttachedSources) -> program
         return None if _holds(kept, value=True) else kept
 
     def bound(b: program.Expression | None) -> program.Expression | None:
-        return None if b is None else _regions_folded(b, settled)
+        return None if b is None else _regions_specialized(b, settled)
 
     variables = {
         n: replace(v, where=where(v), lower=bound(v.lower), upper=bound(v.upper)) for n, v in compiled.variables.items()
     }
     constraints = {
-        n: replace(c, where=where(c), lhs=_regions_folded(c.lhs, settled), rhs=_regions_folded(c.rhs, settled))
+        n: replace(
+            c, where=where(c), lhs=_regions_specialized(c.lhs, settled), rhs=_regions_specialized(c.rhs, settled)
+        )
         for n, c in compiled.constraints.items()
     }
     o = compiled.objective
-    objective = None if o is None else replace(o, expression=_regions_folded(o.expression, settled))
+    objective = None if o is None else replace(o, expression=_regions_specialized(o.expression, settled))
     return replace(compiled, variables=variables, constraints=constraints, objective=objective)
 
 
@@ -154,18 +156,18 @@ def _substituted(node: program.Condition, settled: Mapping[program.Condition, bo
     return node
 
 
-def _regions_folded(e: program.Expression, settled: Mapping[program.Condition, bool]) -> program.Expression:
-    """*e* with each ``cases:`` region folded as [`specialized`][] says, a named expression rewritten where it is read."""
+def _regions_specialized(e: program.Expression, settled: Mapping[program.Condition, bool]) -> program.Expression:
+    """*e* with each ``cases:`` region specialized as [`specialized`][] says, a named expression rewritten where it is read."""
     if isinstance(e, program.Cases):
         regions = tuple(
-            program.Region(when, _regions_folded(r.value, settled))
+            program.Region(when, _regions_specialized(r.value, settled))
             for r in e.regions
             if not _holds(when := _specialized_mask(r.when, settled), value=False)
         )
         if len(regions) == 1 and _holds(regions[0].when, value=True):
             return regions[0].value
         return replace(e, regions=regions)
-    return _rebuilt(e, lambda child: _regions_folded(child, settled))
+    return _rebuilt(e, lambda child: _regions_specialized(child, settled))
 
 
 def _rebuilt(e: program.Expression, f: Callable[[program.Expression], program.Expression]) -> program.Expression:
