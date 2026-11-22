@@ -27,8 +27,7 @@ flowchart TB
 Each arrow is one phase, and each box is what that phase produces.
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each phase.
 
-Read the clocks as a table, one row per phase. `share` is the phase's part of
-the whole call:
+Read the clocks as a table, one row per phase:
 
 ```python
 with sps.build('dispatch.yaml', sources) as model:
@@ -39,27 +38,27 @@ with sps.build('dispatch.yaml', sources) as model:
 One run of the dispatch example prints:
 
 ```text
-┌──────────┬──────────┬──────────┐
-│ phase    ┆ seconds  ┆ share    │
-│ ---      ┆ ---      ┆ ---      │
-│ str      ┆ f64      ┆ f64      │
-╞══════════╪══════════╪══════════╡
-│ load     ┆ 0.001004 ┆ 0.016171 │
-│ tidy     ┆ 0.003334 ┆ 0.053681 │
-│ attach   ┆ 0.001061 ┆ 0.017076 │
-│ build    ┆ 0.008889 ┆ 0.14312  │
-│ handoff  ┆ 0.012137 ┆ 0.195406 │
-│ solve    ┆ 0.001125 ┆ 0.018113 │
-│ readback ┆ 0.006706 ┆ 0.107964 │
-│ write    ┆ 0.0      ┆ 0.0      │
-│ archive  ┆ 0.027854 ┆ 0.448469 │
-└──────────┴──────────┴──────────┘
+┌──────────┬──────────┐
+│ phase    ┆ seconds  │
+│ ---      ┆ ---      │
+│ str      ┆ f64      │
+╞══════════╪══════════╡
+│ load     ┆ 0.001004 │
+│ tidy     ┆ 0.003334 │
+│ attach   ┆ 0.001061 │
+│ build    ┆ 0.008889 │
+│ handoff  ┆ 0.012137 │
+│ solve    ┆ 0.001125 │
+│ readback ┆ 0.006706 │
+│ write    ┆ 0.0      │
+│ archive  ┆ 0.027854 │
+└──────────┴──────────┘
 ```
 
 This model has 144 columns, so writing the archive is most of its time. On a
-model of 300,000 columns, `solve` took 92 to 94 percent of the call
-([#2180](https://github.com/fluxopt/specsolve/pull/2180)). A
-phase that never ran, here `write`, reads zero.
+model of 300,000 columns, `solve` took 2.4 s of a 2.5 to 2.6 s call
+([#2180](https://github.com/fluxopt/specsolve/pull/2180)). A phase that never
+ran, here `write`, reads zero.
 
 An archive keeps the same table, so you can read it later or on another
 machine:

@@ -256,7 +256,7 @@ def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs,
 
 
 def test_the_phases_table_reads_the_clocks_in_the_order_they_run(dispatch_yaml, dispatch_table_inputs, tmp_path):
-    """The table a report pastes: one row per phase, its seconds, and its share of the whole."""
+    """The table a report pastes: one row per phase and its seconds."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case.zip')
     taken = sps.read_archive(tmp_path / 'case.zip').metrics
     table = taken.phases
@@ -265,4 +265,3 @@ def test_the_phases_table_reads_the_clocks_in_the_order_they_run(dispatch_yaml, 
     assert table['seconds'].to_list() == [getattr(taken, f'{phase}_seconds') for phase in PHASES], (
         "each row's seconds are its Metrics column"
     )
-    assert table['share'].sum() == pytest.approx(1.0), 'the shares split the whole call'
