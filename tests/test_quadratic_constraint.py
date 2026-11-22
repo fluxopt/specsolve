@@ -330,7 +330,7 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
     assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
-def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
+def test_the_highs_handoff_refuses_one_even_when_reached_directly():
     """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""

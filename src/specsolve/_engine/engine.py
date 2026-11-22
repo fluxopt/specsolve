@@ -215,7 +215,7 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
-    def hand_off(
+    def handoff(
         self,
         solver_name: str,
         solver_options: Mapping[str, object] | None,
@@ -295,7 +295,7 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, refused before the solver loads.
         """
-        solver, reloaded = self.hand_off(solver_name, solver_options, start=start)
+        solver, reloaded = self.handoff(solver_name, solver_options, start=start)
         self._solves += 1
         if reloaded:
             self._solver_loads += 1

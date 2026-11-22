@@ -107,7 +107,7 @@ def _loaded(sink: str, model: Any) -> Any:
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': 'hand_off', 'read': '_answered'}
+TIMED_THROUGH = {'window': 'handoff', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
@@ -151,7 +151,7 @@ def window_setup(
 def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds, and ``hand_off`` is what ``solve`` does before the run: it
+    ``update`` rebuilds, and ``handoff`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
@@ -166,12 +166,12 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
-    """``Engine.hand_off``, and whether it loaded the solver from scratch; a *cold* window closes the held solver first."""
+    """``Engine.handoff``, and whether it loaded the solver from scratch; a *cold* window closes the held solver first."""
     engine = model._engine
     if cold and engine._solver is not None:
         engine._solver.close()
         engine._solver = None
-    return engine.hand_off(sink, None)[1]
+    return engine.handoff(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.

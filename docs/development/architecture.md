@@ -108,7 +108,7 @@ slows each step to find it in its own phase.
 | `tidy` | `Model._fill` |
 | `attach` | `Model._fill`, or `Engine.build` where no assumption attached the tables |
 | `build` | `Engine.build` |
-| `handoff` | `Engine.hand_off`; `Engine.build` for the held solver's digest |
+| `handoff` | `Engine.handoff`; `Engine.build` for the held solver's digest |
 | `solve` | `Engine.solve` |
 | `readback` | `Model.solve` |
 | `write` | `Engine.write` |
