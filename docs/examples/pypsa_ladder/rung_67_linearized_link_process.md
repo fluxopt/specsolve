@@ -1867,8 +1867,8 @@ z_{\xi,t - 1,j} - z_{\xi,t,j} - \mathrm{Process\_shut\_down\_rate}_{\xi,j} \cdot
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_67_linearized_link_process.yaml', sources) as solution:
-        solution.objective  # 47777.333333
+    with sps.solve('differential/pypsa/rungs/rung_67_linearized_link_process.yaml', sources) as result:
+        result.objective  # 47777.333333
     ```
 
 === "PyPSA"

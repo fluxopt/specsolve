@@ -2,7 +2,7 @@
 
 Run by ``run.mjs`` inside Pyodide, never by pytest. The polars there has no
 streaming engine and no parquet. Before pyarrow: a solve and a sweep from
-frames, the sweep over an axis read from JSON, and an archive refused by name.
+tables, the sweep over an axis read from JSON, and an archive refused by name.
 After: the sweep archived as a zip and read back, and solved again from it.
 """
 

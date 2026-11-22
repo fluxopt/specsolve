@@ -79,7 +79,7 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -154,7 +154,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **The centre is in the connection's name and in nothing else.** This problem
 sets no per-centre demand, only a total of 180 t, so no constraint reads where a
-connection ends. A `destination` coordinate would be a declaration nothing
+connection ends. A `destination` coordinate would be an entry nothing
 consumes, and the language warns about that, so it is not written. The pairing
 is still visible where it matters: two connections out of `d2` differing only in
 mode, which is what a `(depot, centre)` table cannot hold.

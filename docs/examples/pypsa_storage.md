@@ -4,13 +4,13 @@
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **15253.178322993519**, matched to `rtol=1e-09`.
 
-Non-cyclic: the horizon starts at `soc_initial` and its end is free.
+Non-cyclic: the level starts at `soc_initial` and ends free.
 [Cyclic storage](pypsa_cyclic_storage.md) closes that loop, kept separate so
 it can fail on its own.
 
 The battery sits at `south`, beside the expensive oil generator. It displaces
 oil entirely: every snapshot runs oil at zero. It drains to empty by the third
-snapshot, which is what a free end of horizon buys.
+snapshot, which is what a free final level buys.
 
 ## The model
 
@@ -18,7 +18,7 @@ snapshot, which is what a free end of horizon buys.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow with a storage unit carrying energy between snapshots. Non-cyclic — the horizon starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
+PyPSA linear optimal power flow with a storage unit carrying energy between snapshots. Non-cyclic — the level starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 #### Sets
 
@@ -137,14 +137,14 @@ p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\math
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
       PyPSA linear optimal power flow with a storage unit carrying energy between
-      snapshots. Non-cyclic — the horizon starts at the initial
+      snapshots. Non-cyclic — the level starts at the initial
       state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
     dimensions:
@@ -314,10 +314,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_storage.yaml', sources) as solution:
-        solution.objective  # 15253.178322993519
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_storage.yaml', sources) as result:
+        result.objective  # 15253.178322993519
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

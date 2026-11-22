@@ -58,7 +58,7 @@ parameters:
     dims: [link]
   energy_cap:
     description: >-
-      energy a carrier may deliver over the whole horizon, for the carriers that
+      energy a carrier may deliver over every snapshot, for the carriers that
       have such a limit
     dims: [carrier]
     missing: absent
@@ -118,7 +118,7 @@ constraints:
 
   carrier_energy:
     description: >-
-      a carrier with an energy limit delivers no more than it over the horizon —
+      a carrier with an energy limit delivers no more than it over every snapshot —
       the generators are grouped onto the carrier they burn, which is the
       selection PyPSA makes by querying its own table
     dims: [carrier]

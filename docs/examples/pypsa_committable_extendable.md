@@ -47,7 +47,7 @@ PyPSA's committable unit whose capacity is also being built: the minimum output 
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
 | $`\mathrm{big\_m}`$ | `big_m` over $`\mathcal{G}`$, `absent` where the data has no row — a bound on the output of a committed unit, large enough never to bind on its own — the capacity ceiling times the availability, and present only for the units that are committed at all |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
 
 #### Variables
@@ -113,7 +113,7 @@ p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot p^{\mathrm{nom}}_{g} - \mathrm{
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -152,7 +152,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: cost of one unit of output
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       load:
         description: demand to be met
@@ -213,9 +213,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_committable_extendable.yaml', sources) as solution:
-        solution.objective  # 21700.0
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_committable_extendable.yaml', sources) as result:
+        result.objective  # 21700.0
     ```
 
 === "PyPSA"
@@ -293,7 +293,7 @@ is why the relaxation above is taken on the port's own model instead.
 
 ## What it exercises
 
-A variable masked by the presence of a parameter (`where: big_m` on `status`), a
+A variable whose condition is the presence of a parameter (`where: big_m` on `status`), a
 constant on the right of a `>=` row that only exists where that parameter does,
 and the one product in PyPSA's committable set that needs a linearisation
 constant rather than a rewrite.

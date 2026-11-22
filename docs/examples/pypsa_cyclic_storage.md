@@ -1,6 +1,6 @@
 # PyPSA LOPF — cyclic storage
 
-[Storage units](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*.
+[Storage units](pypsa_storage.md) with the snapshots closed into a cycle: the first snapshot's state of charge carries over from the *last*.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **17228.77962151063**, matched to `rtol=1e-09`.
 
@@ -19,12 +19,11 @@ and drops that row, `edge='wrap'` puts it onto the last.
 +    expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') * (1 - standing_loss) + ...
 ```
 
-`soc_initial` leaves the instance with it: a cyclic horizon has no seed to
-give. In PyPSA the same change is `cyclic_state_of_charge=True`.
+`soc_initial` leaves the instance with it: a cycle has no seed to give. In PyPSA the same change is `cyclic_state_of_charge=True`.
 
 Closing the loop costs money: **17228.78** against **15253.18** without it. The
-battery can no longer end the horizon empty, so it has to buy back what it
-spends.
+battery can no longer end the last snapshot empty, so it has to buy back what
+it spends.
 
 ## The model
 
@@ -38,7 +37,7 @@ PyPSA linear optimal power flow whose storage is closed into a cycle — the fir
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, cyclic at the horizon |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
@@ -144,7 +143,7 @@ p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\math
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -156,7 +155,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     dimensions:
       snapshot:
-        description: dispatch periods, cyclic at the horizon
+        description: dispatch periods, the last wrapping to the first
         dtype: int
         ordered: true
       bus:
@@ -285,7 +284,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       energy_balance:
         description: >-
           the level carried into a snapshot, decayed, plus what was stored and less
-          what was taken — and it wraps at the horizon, so the first snapshot
+          what was taken — and it wraps at the last snapshot, so the first snapshot
           inherits from the last
         dims: [snapshot, storage]
         expression: >-
@@ -300,10 +299,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_cyclic_storage.yaml', sources) as solution:
-        solution.objective  # 17228.77962151063
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_cyclic_storage.yaml', sources) as result:
+        result.objective  # 17228.77962151063
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

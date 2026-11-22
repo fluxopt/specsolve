@@ -1046,8 +1046,8 @@ z_{\xi,t,j} = \mathrm{z}^{\mathrm{set}}_{\xi,t,j} \qquad \forall\, \xi \in \Xi,\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_17_process.yaml', sources) as solution:
-        solution.objective  # 9730.0
+    with sps.solve('differential/pypsa/rungs/rung_17_process.yaml', sources) as result:
+        result.objective  # 9730.0
     ```
 
 === "PyPSA"
