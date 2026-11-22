@@ -49,7 +49,7 @@ from specsolve._sinks.handoff import ranges
 from specsolve._sinks.highs import Highs
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, by_coord, override, solve_written_file
+from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, override, primal_by_coordinate, solve_written_file
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, specsolve_linopy, transport_linopy_objective, xr
 
@@ -501,7 +501,7 @@ class TestWhatBindRefusesAndWhatItTakes:
 
 
 #: A `line` whose two endpoints are *both* multi-valued for one label.
-TWO_BAD_COORDS_SPEC = {
+TWO_BAD_COORDINATES_SPEC = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {}},
     'relations': {
         'from': {'key': 'line', 'values': 'bus'},
@@ -630,7 +630,7 @@ class TestTheIndexSpace:
         data = {'t': labels, 'cap': pl.DataFrame({'t': list(cap), 'value': list(cap.values())})}
 
         with sps.solve(spec, data) as result:
-            x = by_coord(result, 'x', 't')
+            x = primal_by_coordinate(result, 'x', 't')
 
         assert list(x) == labels, 'read-back follows label order'
         for label, bound in cap.items():
@@ -837,7 +837,7 @@ class TestTheIndexSpace:
         }
 
         with pytest.raises(DataError) as exc:
-            sps.solve(TWO_BAD_COORDS_SPEC, data)
+            sps.solve(TWO_BAD_COORDINATES_SPEC, data)
 
         message = str(exc.value)
         assert 'l1' in message and 'l2' in message, f'both offenders must be named; got: {message}'
@@ -1183,7 +1183,7 @@ class TestWhatReachesTheSolverAsAnEntry:
             'size_ub': pd.Series({'fixed': 10.0, 'sized': 50.0}),
         }
         with differential(PINNED_SPEC, data, lp=True) as run:
-            rate = by_coord(run.result, 'rate', 'f')
+            rate = primal_by_coordinate(run.result, 'rate', 'f')
             assert rate['fixed'] == pytest.approx(8.0, rel=RTOL), 'pinned at 10, so the envelope is 0.8 * 10'
             assert rate['sized'] == pytest.approx(40.0, rel=RTOL), 'free to 50, so the envelope is 0.8 * 50'
 

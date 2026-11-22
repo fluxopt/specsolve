@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from tests.conftest import by_coord, override, raw_of
+from tests.conftest import override, primal_by_coordinate, raw_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -68,7 +68,7 @@ def test_a_pullback_through_a_self_map_reads_the_representative():
         assert run.oracle == pytest.approx(1 * 1.0 + 1 * 2.0 + 3 * 3.0, rel=RTOL), (
             'each snapshot capped at its representative price, both lanes agreeing'
         )
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert built[0] == pytest.approx(1.0), 'represented by itself, at price 1'
     assert built[1] == pytest.approx(1.0), "represented by snapshot 0, so capped at 0's price"
@@ -96,7 +96,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
         assert run.oracle == pytest.approx(4 * 2.0 + 5 * 3.0, rel=RTOL), (
             'the pair sharing a representative fills the dearer of the two, and snapshot 2 fills its bound'
         )
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert built[1] == pytest.approx(4.0), "the whole of representative 0's cap, at the dearer price of the pair"
     assert built[2] == pytest.approx(5.0), 'its own group, held by its bound rather than by its cap'
@@ -112,7 +112,7 @@ def test_a_where_reads_a_self_map_at_its_key():
         },
     )
     with differential(spec, _inputs()) as run:
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert sorted(built) == [0, 1], 'the two snapshots the map sends to 0'
 

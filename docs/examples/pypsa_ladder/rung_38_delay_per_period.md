@@ -633,8 +633,8 @@ z_{\xi,t,j} \le \overline{\mathrm{z}}_{\xi,t,j} \cdot \mathrm{z}^{\mathrm{nom}}_
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_38_delay_per_period.yaml', sources) as solution:
-        solution.objective  # 12918.75
+    with sps.solve('differential/pypsa/rungs/rung_38_delay_per_period.yaml', sources) as result:
+        result.objective  # 12918.75
     ```
 
 === "PyPSA"

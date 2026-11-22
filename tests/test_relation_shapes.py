@@ -29,7 +29,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError, DimensionError
-from tests.conftest import by_coord, solve_written_file
+from tests.conftest import primal_by_coordinate, solve_written_file
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,7 +45,9 @@ def _solved(spec: dict[str, Any], sources: dict[str, Any], tmp_path: Path) -> tu
         result = model.solve()
         assert result.is_ok, f'the relational lane reached no solution: {result.status}'
         objective = result.objective
-        primals = {name: by_coord(result, name, *spec['variables'][name]['dims']) for name in spec['variables']}
+        primals = {
+            name: primal_by_coordinate(result, name, *spec['variables'][name]['dims']) for name in spec['variables']
+        }
     assert solve_written_file(tmp_path / 'model.lp') == pytest.approx(objective, rel=RTOL), (
         'the written LP file re-solves to a different objective than the lane reached'
     )

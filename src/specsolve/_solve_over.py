@@ -169,13 +169,13 @@ def solve_over(
         )
     if archive is not None or spill_to is not None:
         parquet.require('archive=' if archive is not None else 'spill_to=')
-    document = as_spec(spec)
+    spec = as_spec(spec)
     sources = _materialised(sources)
     out = None if archive is None else Path(archive)
     if out is not None:
         check_the_target(out)
     asked = checked_outputs(outputs)
-    program = check(document)
+    program = check(spec)
     plan = carry_plan(program, axis)
     key_name = _key_column(axis, program)
 
@@ -193,14 +193,14 @@ def solve_over(
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
     starts = slice_starts(start, axis, slices, program)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, document)
+    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, spec)
     if executor is None:
-        answered = _serially(document, slices, solving, plan, spill, starts)
+        answered = _serially(spec, slices, solving, plan, spill, starts)
     else:
-        answered = _pooled(executor, shared_filesystem, document, slices, solving, spill, starts)
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, document)
+        answered = _pooled(executor, shared_filesystem, spec, slices, solving, spill, starts)
+    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, spec)
     if out is not None:
-        _archive_the_sweep(out, document, program, axis, sources, folded, slices[0].sources)
+        _archive_the_sweep(out, spec, program, axis, sources, folded, slices[0].sources)
     return folded
 
 
@@ -244,9 +244,9 @@ def build_slice(
         DataError: As [`solve_over`][] raises it.
     """
     axis = _as_axis(over)
-    document = as_spec(spec)
+    spec = as_spec(spec)
     sources = _materialised(sources)
-    program = check(document)
+    program = check(spec)
     plan = carry_plan(program, axis)
     _check_the_carry(plan, axis, sources, program)
     axis._check_the_program(program, sources)
@@ -259,11 +259,11 @@ def build_slice(
         )
     position = keys.index(key)
     if sweep is None or position == 0:
-        return build(document, slices[position].sources)
+        return build(spec, slices[position].sources)
     carried = sorted({rule.variable for rule in plan.values()})
     left = partial(_left_in, sweep, carried, isinstance(axis, EachWindow), key)
     *_, current = as_built(slices[position - 1 : position + 1], plan, left)
-    return build(document, current.sources)
+    return build(spec, current.sources)
 
 
 def _as_axis(over: Axis | Mapping[str, Any]) -> Axis:  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
@@ -394,7 +394,7 @@ def _check_the_carry(
 
 
 def _serially(
-    document: Spec,
+    spec: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     plan: Mapping[str, CarryRule],
@@ -432,7 +432,7 @@ def _serially(
             else:
                 with _named_slice(current.key, position, len(slices)):
                     if model is None:
-                        model, before = build(document, current.sources), None
+                        model, before = build(spec, current.sources), None
                     else:
                         before = model.diagnostics()
                         model.update(current.sources)
@@ -461,7 +461,7 @@ def _named_slice(key: Label, position: int, count: int) -> Generator[None, None,
 def _pooled(
     executor: Executor,
     shared_filesystem: bool | None,
-    document: Spec,
+    spec: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     spill: Spill | None,
@@ -482,7 +482,7 @@ def _pooled(
         if spill is not None and spill.done(position)
         else executor.submit(
             _run_slice,
-            document,
+            spec,
             _encode(current.sources, memo, shared_filesystem=shared) if crosses else dict(current.sources),
             crosses,
             solving,
@@ -517,14 +517,14 @@ def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
 
 
 def _run_slice(
-    document: Spec,
+    spec: Spec,
     encoded: dict[str, Any],  # pyrefly: ignore[explicit-any] — what crossed to the worker
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     start: Start | Literal['previous'] | None,
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
-    with build(document, _decode(encoded)) as model, model.solve(**call, start=start) as result:
+    with build(spec, _decode(encoded)) as model, model.solve(**call, start=start) as result:
         answer = _answers(result, _slice_metrics(model.diagnostics(), None))
         if not encode_out:
             return answer

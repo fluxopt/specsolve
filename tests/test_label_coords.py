@@ -15,7 +15,7 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
-from tests.conftest import by_coord
+from tests.conftest import primal_by_coordinate
 
 
 def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
@@ -123,8 +123,8 @@ def test_a_dimension_grouped_into_draws_no_advice():
 
 def test_a_map_arrives_under_its_own_name():
     sources = {'load': _load(), 'snapshot': _snapshots(), 'period': _periods(), 'period_of': _period_of()}
-    with sps.solve(_spec(), sources) as solution:
-        assert solution.objective == pytest.approx(6.0)
+    with sps.solve(_spec(), sources) as result:
+        assert result.objective == pytest.approx(6.0)
 
     with pytest.raises(DataError, match="no data provided for relation 'period_of'"):
         sps.build(_spec(), {'load': _load(), 'snapshot': _snapshots(), 'period': _periods()})
@@ -183,8 +183,8 @@ def _unused_target_sources() -> dict:
 )
 def test_a_relation_may_target_a_dimension_nothing_spans_yet(month, extra):
     """#488: the first build after declaring a relation, before its constraint exists."""
-    with sps.solve(_unused_target_spec(month), _unused_target_sources() | extra) as solution:
-        assert solution.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
+    with sps.solve(_unused_target_spec(month), _unused_target_sources() | extra) as result:
+        assert result.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
 
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
@@ -506,7 +506,7 @@ def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_label
     here rewrites a table someone else generated.
     """
     with sps.solve(SUPPLIED, _SUPPLIED_SOURCES) as result:
-        built = by_coord(result, 'p', 'generator')
+        built = primal_by_coordinate(result, 'p', 'generator')
         assert result.objective == pytest.approx(13.0)
     assert built['g3'] == pytest.approx(0.0), 'a generator in no row of the map is a generator on no bus'
 

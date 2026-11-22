@@ -228,11 +228,11 @@ def _call_snippet(name: str) -> str:
     handed = f"to_spec('{path}').expand()" if written.piecewise or written.sos else f"'{path}'"
     lines = [
         '# sources: parameter name -> table or parquet path',
-        f'with sps.solve({handed}, sources) as solution:',
-        f'    solution.objective  # {entry["objective"]!r}',
+        f'with sps.solve({handed}, sources) as result:',
+        f'    result.objective  # {entry["objective"]!r}',
     ]
     if entry.get('duals'):
-        lines.append(f"    solution.dual('{next(iter(entry['duals']))}')")
+        lines.append(f"    result.dual('{next(iter(entry['duals']))}')")
     return '\n'.join(lines) + '\n'
 
 

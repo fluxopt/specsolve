@@ -153,8 +153,8 @@ def specsolve_tab(stem: str, projection: dict, record: dict) -> str:
     prep = prep_slice(declared)
     call = (
         f'{prep}\n\n'
-        f"with sps.solve('differential/pypsa/rungs/{stem}.yaml', sources) as solution:\n"
-        f'    solution.objective  # {record["parity"]["specsolve_objective"]!r}'
+        f"with sps.solve('differential/pypsa/rungs/{stem}.yaml', sources) as result:\n"
+        f'    result.objective  # {record["parity"]["specsolve_objective"]!r}'
     )
     return (
         '=== "specsolve"\n\n'

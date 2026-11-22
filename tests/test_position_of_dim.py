@@ -18,7 +18,7 @@ import yaml as pyyaml
 
 import specsolve as sps
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from tests.conftest import EXAMPLES_DIR, by_coord, relation, schema_of
+from tests.conftest import EXAMPLES_DIR, primal_by_coordinate, relation, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -406,8 +406,8 @@ def test_the_seasons_page_number():
     """
     with differential(SEASONS, _seasons_sources()) as run:
         assert run.oracle == pytest.approx(74.0, rel=RTOL), 'winter 50 and summer 24, agreed by both lanes'
-        released = by_coord(run.result, 'release', 'snapshot')
-        held = by_coord(run.result, 'soc', 'snapshot')
+        released = primal_by_coordinate(run.result, 'release', 'snapshot')
+        held = primal_by_coordinate(run.result, 'soc', 'snapshot')
 
     assert released[3] == pytest.approx(10.0), "winter's inflow leaves at winter's own best price"
     assert held[4] == pytest.approx(0.0), 'and winter closes where it opened, handing summer nothing'
@@ -469,7 +469,7 @@ def test_a_filled_partitioned_edge_builds_every_row():
     """`edge=0` per group: the row survives and its first snapshot starts empty."""
     spec = _partitioned('edge=0, within=season_of[season]')
     with differential(spec, _seasons_sources()) as run:
-        held = by_coord(run.result, 'soc', 'snapshot')
+        held = primal_by_coordinate(run.result, 'soc', 'snapshot')
     with sps.build(pyyaml.safe_load(spec), _seasons_sources()) as built:
         assert built.diagnostics().omissions.is_empty(), 'a filled edge builds every row'
     assert held[5] == pytest.approx(0.0), "summer's first snapshot starts from the 0 its own edge was filled with"
@@ -483,7 +483,7 @@ def test_the_axis_wrap_is_a_different_model():
     """
     with differential(_partitioned("edge='wrap'"), _seasons_sources()) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the whole axis as one cycle, worth 6 more to winter'
-        held = by_coord(run.result, 'soc', 'snapshot')
+        held = primal_by_coordinate(run.result, 'soc', 'snapshot')
     assert held[1] == pytest.approx(6.0), "winter's first snapshot opens on what summer left"
 
     with differential(_partitioned("edge='wrap', within=season_of[season]"), _seasons_sources()) as run:
@@ -519,7 +519,7 @@ def test_coordinates_in_no_group_translate_from_nothing(edge, omissions):
 
     spec = _partitioned(edge)
     with differential(spec, sources) as run:
-        held = by_coord(run.result, 'soc', 'snapshot')
+        held = primal_by_coordinate(run.result, 'soc', 'snapshot')
     with sps.build(pyyaml.safe_load(spec), sources) as built:
         omitted = {r['constraint']: r['rows_not_built'] for r in built.diagnostics().omissions.to_dicts()}
 

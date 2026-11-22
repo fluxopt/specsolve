@@ -18,7 +18,7 @@ from mathspec.errors import DimensionError
 import specsolve as sps
 from specsolve._sources import attachable, tidy_sources
 from specsolve.errors import DataError, SpecsolveError
-from tests.conftest import EXAMPLES_DIR, by_coord, expanded, override, raw_of, schema_of
+from tests.conftest import EXAMPLES_DIR, expanded, override, primal_by_coordinate, raw_of, schema_of
 from tests.differential import differential
 from tests.oracle import pd, specsolve_linopy
 from tests.piecewise_models import CHP_YAML, GATED_YAML, NONCONVEX_YAML, SOS2_SPEC, TWO_DIM_YAML, curve_table
@@ -64,7 +64,7 @@ def test_the_solution_sits_on_the_curve_not_on_its_hull(nonconvex_inputs):
     with differential(NONCONVEX_YAML, data) as run:
         assert run.oracle == pytest.approx(expected, rel=1e-6), 'ON the curve, not on the hull'
 
-        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        cost = primal_by_coordinate(run.result, 'op_cost', 'snapshot')
         for s, load_v in data['load'].items():
             assert cost[s] == pytest.approx(curve(load_v, data['bp_x'], data['bp_y']), abs=1e-6)
 
@@ -104,8 +104,8 @@ def test_three_links_all_track_the_same_curve_position():
     }
 
     with differential(CHP_YAML, data) as run:
-        fuel = by_coord(run.result, 'fuel', 'snapshot')
-        heat = by_coord(run.result, 'heat', 'snapshot')
+        fuel = primal_by_coordinate(run.result, 'fuel', 'snapshot')
+        heat = primal_by_coordinate(run.result, 'heat', 'snapshot')
         for s, load_v in load.items():
             assert fuel[s] == pytest.approx(curve(load_v, power_bp, fuel_bp), abs=1e-6)
             assert heat[s] == pytest.approx(curve(load_v, power_bp, heat_bp), abs=1e-6)
@@ -122,7 +122,7 @@ def test_activity_gates_the_curve_off(nonconvex_inputs):
     data = {**data, 'on_flag': on_flag}
 
     with differential(GATED_YAML, data) as run:
-        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        cost = primal_by_coordinate(run.result, 'op_cost', 'snapshot')
         for s in on_flag.index:
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
             assert cost[s] == pytest.approx(expected, abs=1e-6)
@@ -167,8 +167,8 @@ def test_breakpoints_may_vary_along_another_dim():
     expanded(example, 'piecewise')
 
     with differential(example, data) as run:
-        p = by_coord(run.result, 'p', 'snapshot', 'generator')
-        cost = by_coord(run.result, 'op_cost', 'snapshot', 'generator')
+        p = primal_by_coordinate(run.result, 'p', 'snapshot', 'generator')
+        cost = primal_by_coordinate(run.result, 'op_cost', 'snapshot', 'generator')
         for (s, g), pv in p.items():
             expected = curve(pv, _of(bp_x, g), _of(bp_y, g))
             assert cost[(s, g)] == pytest.approx(expected, abs=1e-5)
@@ -215,7 +215,7 @@ def test_the_sos2_method_reaches_the_curve_the_binaries_reach(nonconvex_inputs):
 
     with differential(SOS2_SPEC, data) as run:
         assert run.result.objective == pytest.approx(on_curve, rel=1e-6), 'ON the curve, not on the hull'
-        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        cost = primal_by_coordinate(run.result, 'op_cost', 'snapshot')
         for s, load_v in data['load'].items():
             assert cost[s] == pytest.approx(curve(load_v, data['bp_x'], data['bp_y']), abs=1e-6)
 
@@ -240,7 +240,7 @@ def test_the_sos2_method_gates_off_like_the_binaries_do(nonconvex_inputs):
     on_flag = pd.Series([1.0, 0.0] * 6, index=pd.RangeIndex(12, name='snapshot'))
 
     with differential(gated, {**data, 'on_flag': on_flag}) as run:
-        cost = by_coord(run.result, 'op_cost', 'snapshot')
+        cost = primal_by_coordinate(run.result, 'op_cost', 'snapshot')
         for s in on_flag.index:
             expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on_flag[s] else 0.0
             assert cost[s] == pytest.approx(expected, abs=1e-6)
@@ -817,7 +817,7 @@ def test_a_gate_that_does_not_exist_leaves_the_curve_ungated(nonconvex_inputs, m
     assert not omitted, 'every coordinate gets a convexity row — gated by the variable, or ungated at 1'
 
     result = model.solve()
-    cost = by_coord(result, 'op_cost', 'snapshot')
+    cost = primal_by_coordinate(result, 'op_cost', 'snapshot')
     for s, is_gated in enumerate(gated):
         expected = 0.0 if is_gated else curve(data['load'][s], data['bp_x'], data['bp_y'])
         assert cost[s] == pytest.approx(expected, abs=1e-6), (
@@ -859,7 +859,7 @@ def test_a_narrowed_gate_declaring_its_absence_pins_the_curve_off(nonconvex_inpu
     )
 
     result = model.solve()
-    cost = by_coord(result, 'op_cost', 'snapshot')
+    cost = primal_by_coordinate(result, 'op_cost', 'snapshot')
     for s, on in enumerate(gated):
         expected = curve(data['load'][s], data['bp_x'], data['bp_y']) if on else 0.0
         assert cost[s] == pytest.approx(expected, abs=1e-6), 'the curve is off where the gate does not exist'

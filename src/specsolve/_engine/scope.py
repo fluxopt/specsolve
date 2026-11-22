@@ -57,12 +57,12 @@ class Scope:
     data: AttachedSources
     variables: Mapping[str, Indexed]
 
-    def absent(self, param: str) -> bool:
-        """Whether *param* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
-        entry = self.program.parameters[param]
+    def absent(self, parameter: str) -> bool:
+        """Whether *parameter* declares ``missing: absent`` and the data is short of a row, so a read of it carries a presence."""
+        entry = self.program.parameters[parameter]
         if entry.missing != 'absent':
             return False
-        return self.data.parameter_rows[param] < math.prod(self.data.cardinality[d] for d in entry.dims)
+        return self.data.parameter_rows[parameter] < math.prod(self.data.cardinality[d] for d in entry.dims)
 
     def product(self, dims: tuple[str, ...]) -> pl.LazyFrame:
         """Cross join of the dimension tables: labels and ordinals, nothing else.
@@ -85,23 +85,23 @@ class Scope:
     def parameter_join(
         self,
         table: pl.LazyFrame,
-        param: str,
+        parameter: str,
         table_dims: tuple[str, ...],
         alias: str,
         subject: str,
         how: JoinStrategy = 'left',
         maintain_order: MaintainOrderJoin | None = None,
     ) -> pl.LazyFrame:
-        """Join *param* onto *table*, its value column renamed to *alias*.
+        """Join *parameter* onto *table*, its value column renamed to *alias*.
 
         A parameter over a dimension *table* lacks would be reduced over it, so
         that is refused, naming *subject*. A left join of a parameter over no
         dimensions keeps every row of *table*, reading null where the parameter
         has no row, which a cross join with its empty table would not.
         """
-        entry = self.program.parameters[param]
+        entry = self.program.parameters[parameter]
         assert not set(entry.dims) - set(table_dims), f'{subject} has dimensions outside {list(table_dims)}'
-        values = self.data.parameters[param].rename({VALUE: alias})
+        values = self.data.parameters[parameter].rename({VALUE: alias})
         if not entry.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: values.collect_schema()[alias]})
             values = pl.concat([values, null]).head(1)

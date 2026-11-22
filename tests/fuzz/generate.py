@@ -204,10 +204,10 @@ class Generator:
             if not dims and missing != 'refused':
                 missing = 'refused'
             rows = {}
-            for coord in self._product(dims):
+            for coordinate in self._product(dims):
                 if missing != 'refused' and r.random() < 0.3:
                     continue
-                rows[coord] = self._value(dtype)
+                rows[coordinate] = self._value(dtype)
             self.params[f'p{i}'] = Parameter(dims, dtype, missing, rows)
 
     def _value(self, dtype: str) -> Any:

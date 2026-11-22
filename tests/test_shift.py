@@ -17,9 +17,9 @@ from specsolve.errors import LanguageError
 from tests.conftest import (
     DISPATCH_SPEC,
     EXAMPLES_DIR,
-    by_coord,
     narrowed_operand_spec,
     override,
+    primal_by_coordinate,
     relation,
     schema_of,
 )
@@ -516,7 +516,7 @@ def test_the_fill_a_product_wants_is_one_not_zero():
     """
     data = {'t': [0, 1, 2], 'eff': pd.Series({0: 2.0, 1: 4.0, 2: 5.0})}
     with differential(FILL_IDENTITY_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 't')
+        x = primal_by_coordinate(run.result, 'x', 't')
         assert x[0] == pytest.approx(10.0), 't=0: the fill is 1, so the bound is 10/1'
         assert x[1] == pytest.approx(5.0), 't=1: eff[0] = 2, so 10/2'
         assert x[2] == pytest.approx(2.5), 't=2: eff[1] = 4, so 10/4'
@@ -782,7 +782,7 @@ def test_roll_and_filled_shift_re_index_a_parameter_not_only_a_variable(op, expe
     """
     data = {'t': [0, 1, 2], 'dt': pd.Series({0: 5.0, 1: 6.0, 2: 7.0})}
     with differential(_reindexed_parameter_spec(op), data, lp=True) as run:
-        x = by_coord(run.result, 'x', 't')
+        x = primal_by_coordinate(run.result, 'x', 't')
         for t, want in expected.items():
             assert x[t] == pytest.approx(want, abs=1e-9), f'{op} at t={t}'
 

@@ -80,7 +80,7 @@ def table(
 
     surviving = narrowed(scope, dims, where)
     for restriction in restrictions:
-        surviving = restriction.restrict(surviving, restriction.keyed_by or ())
+        surviving = restriction.restrict(surviving, restriction.joined_on or ())
 
     dropped = where is not None or bool(restrictions)
     numbering = _row_major(scope, dims)

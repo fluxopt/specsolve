@@ -38,18 +38,18 @@ from tests.conftest import (
 
 
 @pytest.fixture
-def dispatch_solution(dispatch_yaml, dispatch_table_inputs):
+def dispatch_result(dispatch_yaml, dispatch_table_inputs):
     """The dispatch model solved on the native lane, closed after the test."""
     sources = dispatch_table_inputs
     with sps.solve(dispatch_yaml, sources) as result:
         yield result
 
 
-def test_solve(dispatch_solution, dispatch_table_inputs):
+def test_solve(dispatch_result, dispatch_table_inputs):
     sources = dispatch_table_inputs
-    assert dispatch_solution.is_ok
-    assert np.isfinite(dispatch_solution.objective)
-    balance = dispatch_solution.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
+    assert dispatch_result.is_ok
+    assert np.isfinite(dispatch_result.objective)
+    balance = dispatch_result.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
     assert np.allclose(balance['value'], sources['load']['value'])
 
 
@@ -553,22 +553,22 @@ def test_write_suffix_dispatch(dispatch_yaml, dispatch_table_inputs, tmp_path):
         sps.write(dispatch_yaml, sources, tmp_path / 'm.nc')
 
 
-def test_a_solution_saves_every_kind_it_answered_with(dispatch_solution, dispatch_yaml, tmp_path):
+def test_a_solution_saves_every_kind_it_answered_with(dispatch_result, dispatch_yaml, tmp_path):
     """Every kind the solve answered with, tidy, as `<kind>/<name>.parquet`."""
-    assert dispatch_solution.is_ok
-    out = dispatch_solution.save(tmp_path / 'solution')
+    assert dispatch_result.is_ok
+    out = dispatch_result.save(tmp_path / 'solution')
     assert out == tmp_path / 'solution'
     table = pl.read_parquet(out / 'primal' / 'p.parquet')
     assert set(table.columns) == {'snapshot', 'generator', 'value'}
-    assert table.height == dispatch_solution.primal('p').height
+    assert table.height == dispatch_result.primal('p').height
     assert {p.stem for p in (out / 'dual').iterdir()} == set(sps.check(dispatch_yaml).constraints), (
         'one dual file per constraint'
     )
 
 
-def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
+def test_a_saved_solution_says_how_it_terminated(dispatch_result, tmp_path):
     """The record beside the tables, as the row a sweep writes per slice."""
-    out = dispatch_solution.save(tmp_path / 'solution')
+    out = dispatch_result.save(tmp_path / 'solution')
     record = pl.read_parquet(out / 'record.parquet')
     assert record.columns == [
         'status',
@@ -587,15 +587,15 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_solution, tmp_path):
     ], 'the columns a sweep writes per slice, the slice null'
     assert record.height == 1, 'one solve, one row'
     assert record.row(0, named=True) == {
-        'status': dispatch_solution.status,
-        'termination_condition': dispatch_solution.termination_condition,
-        'objective': dispatch_solution.objective,
-        'has_primal': dispatch_solution.has_primal,
-        'solved_at': dispatch_solution.solved_at,
+        'status': dispatch_result.status,
+        'termination_condition': dispatch_result.termination_condition,
+        'objective': dispatch_result.objective,
+        'has_primal': dispatch_result.has_primal,
+        'solved_at': dispatch_result.solved_at,
         'specsolve_run': None,
         'slice_axis': None,
         'slice': None,
-        **dispatch_solution.provenance._asdict(),
+        **dispatch_result.provenance._asdict(),
     }, 'the row carries what the result itself reports, not a second reading of the solve'
 
 
@@ -634,14 +634,14 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
 
 def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """An answer asked for its activities saves each row's left-hand side, and loads it back."""
-    with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}) as solution:
-        out = solution.save(tmp_path / 'solution')
+    with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}) as result:
+        out = result.save(tmp_path / 'solution')
         constraints = set(sps.check(dispatch_yaml).constraints)
         assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
         loaded = sps.load_result(out)
         for name in constraints:
-            assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(solution.activity(name))
-            assert loaded.activity(name).equals(solution.activity(name))
+            assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(result.activity(name))
+            assert loaded.activity(name).equals(result.activity(name))
 
 
 def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
@@ -670,21 +670,21 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     ], 'the whole kind for the duals, one name for the expression, each with the sentence the reader gives'
 
 
-def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_solution, dispatch_yaml, tmp_path):
+def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_result, dispatch_yaml, tmp_path):
     """Every reader answers what it answered, off the directory rather than a session."""
-    loaded = sps.load_result(dispatch_solution.save(tmp_path / 'solution'))
+    loaded = sps.load_result(dispatch_result.save(tmp_path / 'solution'))
 
     assert (loaded.status, loaded.termination_condition) == (
-        dispatch_solution.status,
-        dispatch_solution.termination_condition,
+        dispatch_result.status,
+        dispatch_result.termination_condition,
     ), 'the outcome as recorded, on both axes'
-    assert loaded.objective == dispatch_solution.objective
+    assert loaded.objective == dispatch_result.objective
     assert loaded.has_primal
     program = sps.check(dispatch_yaml)
     for name in program.variables:
-        assert loaded.primal(name).equals(dispatch_solution.primal(name))
+        assert loaded.primal(name).equals(dispatch_result.primal(name))
     for name in program.constraints:
-        assert loaded.dual(name).equals(dispatch_solution.dual(name))
+        assert loaded.dual(name).equals(dispatch_result.dual(name))
 
 
 def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
@@ -718,8 +718,8 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
 
 def test_a_solve_that_left_no_values_loads_back_and_still_has_none(tmp_path):
     """A run that did not solve is an answer, and reads back as that answer."""
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
-        loaded = sps.load_result(solution.save(tmp_path / 'infeasible'))
+    with sps.solve(*CASES['INFEASIBLE']) as result:
+        loaded = sps.load_result(result.save(tmp_path / 'infeasible'))
     assert loaded.termination_condition == 'infeasible'
     assert not loaded.has_primal, 'the record says the solve produced none, so no reader is offered any'
     assert loaded.objective != loaded.objective, 'nan, as the solve reported it'
@@ -727,21 +727,21 @@ def test_a_solve_that_left_no_values_loads_back_and_still_has_none(tmp_path):
         loaded.primal('p')
 
 
-def test_a_scanned_result_saved_where_it_was_scanned_keeps_its_files(dispatch_solution, tmp_path):
+def test_a_scanned_result_saved_where_it_was_scanned_keeps_its_files(dispatch_result, tmp_path):
     """A save clears what the directory held, and a scanned result had yet to read the files it cleared."""
-    saved = dispatch_solution.save(tmp_path / 'answer')
+    saved = dispatch_result.save(tmp_path / 'answer')
     with sps.scan_result(saved) as scanned:
         assert scanned.save(saved) == saved
     with sps.load_result(saved) as loaded:
-        assert loaded.primal('p').equals(dispatch_solution.primal('p')), 'every value is still there'
+        assert loaded.primal('p').equals(dispatch_result.primal('p')), 'every value is still there'
 
 
-def test_a_result_saved_over_a_sweep_leaves_none_of_the_sweep(dispatch_solution, dispatch_yaml, tmp_path):
+def test_a_result_saved_over_a_sweep_leaves_none_of_the_sweep(dispatch_result, dispatch_yaml, tmp_path):
     """A save removed what a saved result holds and left a saved sweep's own files beside the new answer."""
     from tests.test_solve_over import DISPATCH, scenario_sources
 
     out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario')).save(tmp_path / 'answer')
-    dispatch_solution.save(out)
+    dispatch_result.save(out)
     held = sorted(path.name for path in out.iterdir())
     assert held == ['dual', 'format.json', 'primal', 'record.parquet', 'spec.yaml'], (
         'the answer of one solve, and no key, manifest or per-slice record of the sweep'
@@ -755,12 +755,12 @@ def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
         sps.load_result(empty)
 
 
-def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispatch_solution, tmp_path):
+def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispatch_result, tmp_path):
     """`load_result` holds the values when it returns; `scan_result` reads each table when asked."""
-    saved = dispatch_solution.save(tmp_path / 'solution')
+    saved = dispatch_result.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
     scanned = sps.scan_result(saved)
-    expected = dispatch_solution.primal('p')
+    expected = dispatch_result.primal('p')
     assert scanned.primal('p').equals(expected), 'both read the same answer while the directory is there'
     shutil.rmtree(saved)
 
@@ -769,12 +769,12 @@ def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispa
         scanned.primal('p')
 
 
-def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_solution, tmp_path):
+def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_result, tmp_path):
     """A scan returns what the file holds at the read; a load, what it held at the load."""
-    saved = dispatch_solution.save(tmp_path / 'solution')
+    saved = dispatch_result.save(tmp_path / 'solution')
     loaded = sps.load_result(saved)
     scanned = sps.scan_result(saved)
-    was = dispatch_solution.primal('p')
+    was = dispatch_result.primal('p')
     was.with_columns(pl.col('value') * 2).write_parquet(saved / 'primal' / 'p.parquet')
 
     assert scanned.primal('p')['value'].to_list() == (was['value'] * 2).to_list(), 'the scan reads the file it finds'
@@ -933,14 +933,14 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         assert first.objective != pytest.approx(second.objective)
 
 
-def test_primal_is_a_table_and_to_pandas_is_the_bridge(dispatch_solution):
+def test_primal_is_a_table_and_to_pandas_is_the_bridge(dispatch_result):
     """A polars DataFrame is the shape results come in; `to_pandas` converts the same table."""
-    table = dispatch_solution.primal('p')
+    table = dispatch_result.primal('p')
     assert isinstance(table, pl.DataFrame)
     assert table.columns == ['snapshot', 'generator', 'value']
 
     pandas = pytest.importorskip('pandas')
-    converted = dispatch_solution.to_pandas('p')
+    converted = dispatch_result.to_pandas('p')
     assert isinstance(converted, pandas.DataFrame)
     assert list(converted.columns) == table.columns
     assert len(converted) == table.height
@@ -955,7 +955,7 @@ def test_primal_is_a_table_and_to_pandas_is_the_bridge(dispatch_solution):
         pytest.param('xarray', 'to_dataset', id='to_dataset-without-xarray'),
     ],
 )
-def test_a_bridge_out_names_the_package_to_install(dispatch_solution, absent, bridge):
+def test_a_bridge_out_names_the_package_to_install(dispatch_result, absent, bridge):
     """A bridge out of a bare install says which package to add.
 
     The message says the package is the caller's to install. On an install
@@ -966,7 +966,7 @@ def test_a_bridge_out_names_the_package_to_install(dispatch_solution, absent, br
         mock.patch.dict(sys.modules, {absent: None}),
         pytest.raises(ModuleNotFoundError, match=f'pip install {named}'),
     ):
-        getattr(dispatch_solution, bridge)('p')
+        getattr(dispatch_result, bridge)('p')
 
 
 def test_no_operator_registry_on_this_package():
@@ -977,11 +977,11 @@ def test_no_operator_registry_on_this_package():
     assert not hasattr(sps, 'register')
 
 
-def test_solution_to_dataarray(dispatch_solution):
+def test_solution_to_dataarray(dispatch_result):
     """`to_dataarray` is the bridge to labelled array math."""
     pytest.importorskip('xarray')
-    arr = dispatch_solution.to_dataarray('p')
-    tidy = dispatch_solution.to_pandas('p')
+    arr = dispatch_result.to_dataarray('p')
+    tidy = dispatch_result.to_pandas('p')
 
     assert arr.name == 'p', "named for the variable, not 'value' — the tidy column it came from"
     assert sorted(arr.dims) == ['generator', 'snapshot']
@@ -992,11 +992,11 @@ def test_solution_to_dataarray(dispatch_solution):
     )
 
 
-def test_solution_to_dataset(dispatch_solution):
+def test_solution_to_dataset(dispatch_result):
     """Several variables at once, each keeping its own dimensions."""
     pytest.importorskip('xarray')
-    ds = dispatch_solution.to_dataset('p')
-    tidy = dispatch_solution.to_pandas('p')
+    ds = dispatch_result.to_dataset('p')
+    tidy = dispatch_result.to_pandas('p')
 
     assert list(ds.data_vars) == ['p']
     assert sorted(ds['p'].dims) == ['generator', 'snapshot']
@@ -1004,19 +1004,19 @@ def test_solution_to_dataset(dispatch_solution):
     assert float(ds['p'].sel(snapshot=first['snapshot'], generator=first['generator'])) == pytest.approx(first['value'])
 
 
-def test_every_bridge_takes_a_kind(dispatch_solution, dispatch_yaml):
+def test_every_bridge_takes_a_kind(dispatch_result, dispatch_yaml):
     """`to_pandas`, `to_dataarray` and `to_dataset` take `kind=`, one per call, `primal` by default."""
     pytest.importorskip('xarray')
     constraint = next(iter(sps.check(dispatch_yaml).constraints))
-    tidy = dispatch_solution.to_pandas(constraint, 'dual')
-    assert tidy['value'].tolist() == dispatch_solution.dual(constraint)['value'].to_list()
-    array = dispatch_solution.to_dataarray(constraint, 'dual')
+    tidy = dispatch_result.to_pandas(constraint, 'dual')
+    assert tidy['value'].tolist() == dispatch_result.dual(constraint)['value'].to_list()
+    array = dispatch_result.to_dataarray(constraint, 'dual')
     assert array.name == constraint
-    assert set(dispatch_solution.to_dataset(kind='dual').data_vars) == set(sps.check(dispatch_yaml).constraints), (
+    assert set(dispatch_result.to_dataset(kind='dual').data_vars) == set(sps.check(dispatch_yaml).constraints), (
         'all of one kind by default, as to_dataset() is all of the variables'
     )
     with pytest.raises(sps.errors.SpecsolveError, match='primal, dual, expression'):
-        dispatch_solution.to_pandas('p', 'objective')
+        dispatch_result.to_pandas('p', 'objective')
 
 
 def test_a_dataset_of_expressions_holds_every_one_this_data_evaluates():

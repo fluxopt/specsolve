@@ -170,11 +170,11 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
         DataError: A source that is missing, unreadable, or the wrong shape,
             or a divisor with no value where the expression divides.
     """
-    document = as_spec(spec)
-    program = as_program(document)
+    spec = as_spec(spec)
+    program = as_program(spec)
     _refuse_a_decision(program)
     tidied = tidy_sources(program, sources)
-    return expressions_of(program, tidied, lambda written: expression_node(document, written)).value(expression)
+    return expressions_of(program, tidied, lambda written: expression_node(spec, written)).value(expression)
 
 
 class Model:

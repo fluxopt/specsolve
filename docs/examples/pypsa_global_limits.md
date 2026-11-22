@@ -306,9 +306,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
 
     ```python
     # sources: parameter name -> table or parquet path
-    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as solution:
-        solution.objective  # 127211.66666666666
-        solution.dual('nodal_balance')
+    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as result:
+        result.objective  # 127211.66666666666
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
