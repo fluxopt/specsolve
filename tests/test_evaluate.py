@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve.errors import LanguageError, SpecsolveError
 
 SPEC = {
@@ -139,18 +139,18 @@ def test_a_spec_that_declares_a_decision_is_refused_and_names_solve(decision, na
     assert names in str(caught.value), 'the refusal names the decision it found, so the author sees what to drop'
 
 
-def test_only_the_expression_asked_for_is_compiled(monkeypatch):
-    compiled = []
-    original = Compiler.expression
+def test_only_the_expression_asked_for_is_queried(monkeypatch):
+    queried = []
+    original = QueryBuilder.expression
 
     def counting(self, expr, context, **kwargs):
-        compiled.append(context)
+        queried.append(context)
         return original(self, expr, context, **kwargs)
 
-    monkeypatch.setattr(Compiler, 'expression', counting)
+    monkeypatch.setattr(QueryBuilder, 'expression', counting)
     evaluate('served')
-    assert compiled == ["named expression 'served'"], (
-        'four expressions are declared and one is asked for, so exactly that one compiles'
+    assert queried == ["named expression 'served'"], (
+        'four expressions are declared and one is asked for, so exactly that one is queried'
     )
 
 

@@ -31,7 +31,7 @@ flowchart TB
     SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
 
     PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
-    PLAN -->|"the program"| COMP
+    PLAN -->|"the program"| QUERIES
     SRC --> ATTACH
     PLAN -->|"the program, the same one"| BUILD
     SRC --> LOAD
@@ -40,7 +40,7 @@ flowchart TB
         direction TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
-            COMP["compiler.py<br/>program → lazy queries · reads nothing"] --> ENGINE
+            QUERIES["queries.py<br/>program → lazy queries · reads nothing"] --> ENGINE
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
@@ -154,7 +154,7 @@ absence is pushed into the operand first
 | `Translate` | `shift(x, along=d, offset=n)` | one-to-one | a remap through the dimension's `POSITION`, modulo its size under `wrap` |
 | `WindowSum` | `sum_back(x, along=d, window=w)` | one-to-many | a row lands at every position whose window reaches it — no aggregate |
 | `Cases` | a named expression's `cases:` block | one-to-one | each region's value cut to its own condition and the lists of terms concatenated |
-| `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, compiled where the name stands |
+| `ExpressionReference` | the name of an `expressions:` entry | one-to-one | its body, queried where the name stands |
 
 **The engine only builds.** Every refusal about the shape of a file is made
 upstream. The engine raises `DataError` about the data, and `SpecsolveError`
@@ -167,7 +167,7 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 ## The relational lane
 
 **The spine is one module per box**: `attaching.py`, `specialize.py`,
-`compiler.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
+`queries.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
 lifecycle. `scope.py` sits under them all.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
@@ -216,11 +216,11 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
 | `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `load_sweep` / `scan_sweep` |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
-| `_engine/compiler.py` | program → lazy queries |
+| `_engine/queries.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
-| `_engine/terms.py` | the terms an expression compiles to: linear, quadratic or constant |
+| `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
@@ -260,12 +260,17 @@ The names the code uses for its own parts. The names a caller meets are in
 **Compiling**
 : Turning a spec into its `Program`, through `_inputs.as_program`.
 
+**Query builder**
+: `QueryBuilder` (`queries.py`): turns a program's expressions into polars lazy
+  queries, as an expression's linear, quadratic and constant terms
+  (`ExpressionTerms`).
+
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
   label column as an `Enum` in declared order.
 
 **Term**, **presence** and **region**
-: One additive term of a compiled expression, over its own dimensions: linear,
+: One additive term of an expression, over its own dimensions: linear,
   quadratic or constant; where the variable under it exists; the part of a
   `cases:` block it covers (`terms.py`).
 
@@ -322,7 +327,7 @@ is the full list.
 
 **Add an operator:** first
 [in mathspec](https://mathspec.readthedocs.io/en/latest/contributing/#adding-an-operator),
-landed and tagged. Then here: the oracle's linopy call, the compiler case, the
+landed and tagged. Then here: the oracle's linopy call, the query builder's case, the
 engine, and a differential test through a solver and the LP writer.
 [The nightly canary](https://github.com/fluxopt/specsolve/blob/main/.github/workflows/canary.yml)
 checks the two halves have not drifted.

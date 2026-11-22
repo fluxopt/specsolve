@@ -26,13 +26,13 @@ from mathspec import program
 
 from specsolve._collect import collected
 from specsolve._engine.attaching import refuse_a_negative_window
-from specsolve._engine.conditions import Carrier, compile_condition, falsy_if_null, narrowed
+from specsolve._engine.conditions import Carrier, falsy_if_null, narrowed, query_condition
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
 from specsolve._engine.terms import (
     PRESENT,
-    CompiledExpression,
+    ExpressionTerms,
     Presence,
     Term,
     absence_restrictions,
@@ -103,7 +103,7 @@ def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
 
 @dataclass(frozen=True)
 class Solution:
-    """What a solve left, for a compiler reading a named expression at it.
+    """What a solve left, for a query builder reading a named expression at it.
 
     ``dual`` is ``None`` where the solve left no duals, and ``no_duals`` then
     says why, which is what reading one raises.
@@ -116,11 +116,11 @@ class Solution:
 
 
 @dataclass(frozen=True)
-class Compiler:
+class QueryBuilder:
     """Turn program nodes into polars queries over the model's tidy tables.
 
-    ``solution`` is set on the compiler a read builds and on no other: with it
-    every variable and every ``dual(c)`` compiles to a value.
+    ``solution`` is set on the builder a read makes and on no other: with it
+    every variable and every ``dual(c)`` turns into a value.
     """
 
     scope: Scope
@@ -183,8 +183,8 @@ class Compiler:
 
     def expression(
         self, expr: program.Expression, context: str, *, admits_quadratic: bool = False, reported: bool = False
-    ) -> CompiledExpression:
-        """Compile an expression into linear, quadratic and constant terms.
+    ) -> ExpressionTerms:
+        """Turn an expression into its linear, quadratic and constant terms.
 
         *admits_quadratic* is the position's ceiling: whether it may hold a
         product of two variables, as the objective and a quadratic constraint
@@ -194,7 +194,7 @@ class Compiler:
         maintains order; the code that reads a table verifies order there.
         """
 
-        def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+        def product(a: ExpressionTerms, b: ExpressionTerms) -> ExpressionTerms:
             """``a * b``, every pairing of both operands' terms formed once, both mixed products included.
 
             A variable meets the other factor's constants added up
@@ -204,10 +204,10 @@ class Compiler:
             other factor carries no variable ([`Term.parameters`][]).
             """
             assert not ((a.quadratic and b.linear) or (b.quadratic and a.linear) or (a.quadratic and b.quadratic)), (
-                f'in {context}: a product of degree 3 reached the compiler'
+                f'in {context}: a product of degree 3 reached the query builder'
             )
             assert admits_quadratic or not (a.linear and b.linear), (
-                f'in {context}: a quadratic product in a position compiled as affine'
+                f'in {context}: a quadratic product in an affine position'
             )
             a_one, b_one = _one_coefficient(a.constant), _one_coefficient(b.constant)
             quadratic = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
@@ -225,9 +225,9 @@ class Compiler:
                 for x in a.constant
                 for c in b.constant
             )
-            return CompiledExpression(linear, constant, quadratic)
+            return ExpressionTerms(linear, constant, quadratic)
 
-        def quotient(e: program.Divide) -> CompiledExpression:
+        def quotient(e: program.Divide) -> ExpressionTerms:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
 
             *a* is repeated along the dimensions of *b* it lacks first: joined across
@@ -235,33 +235,35 @@ class Compiler:
             drop the quotient rather than leave the null its refusal looks for.
             """
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
-            assert not (b.linear or b.quadratic), f'in {context}: a divisor carrying a variable reached the compiler'
+            assert not (b.linear or b.quadratic), (
+                f'in {context}: a divisor carrying a variable reached the query builder'
+            )
             assert len(b.constant) == 1, 'a variable-free divisor is added up to one term'
             inv = self._read_divisor(b.constant[0]) if reported else b.constant[0]
             a = map_terms(a, lambda p: spread_term(self.scope, p, inv.dims))
             linear = tuple(times_constant(t, inv, t.kind, divide=True) for t in a.linear)
             quadratic = tuple(times_constant(q, inv, 'quadratic', divide=True) for q in a.quadratic)
             constant = tuple(times_constant(x, inv, 'constant', divide=True) for x in a.constant)
-            return CompiledExpression(linear, constant, quadratic)
+            return ExpressionTerms(linear, constant, quadratic)
 
-        def power(e: program.Power) -> CompiledExpression:
+        def power(e: program.Power) -> ExpressionTerms:
             """``a ** b``, where neither side carries a variable; each side is added up first."""
             a = self._added_up(ev(e.base), e.base, absent='zero')
             b = self._added_up(ev(e.exponent), e.exponent, absent='zero')
             assert not (a.linear or a.quadratic or b.linear or b.quadratic), (
-                f'in {context}: a power over variables reached the compiler'
+                f'in {context}: a power over variables reached the query builder'
             )
             assert len(a.constant) == 1 and len(b.constant) == 1, 'a variable-free operand is added up to one term'
-            return CompiledExpression((), (to_the_power(a.constant[0], b.constant[0]),))
+            return ExpressionTerms((), (to_the_power(a.constant[0], b.constant[0]),))
 
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Term], Term],
             reads: tuple[str, ...],
             acts: tuple[str, ...],
-            inner: CompiledExpression | None = None,
-        ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand, *inner* where the caller compiled it.
+            inner: ExpressionTerms | None = None,
+        ) -> ExpressionTerms:
+            """One shape operator applied to its operand's terms, *inner* where the caller already holds them.
 
             *reads* are the dimensions the rewrite keys each term by, and *acts*
             those among them it moves or sums along. A term lacking one is
@@ -283,7 +285,7 @@ class Compiler:
                 inner = propagate_absence(inner, self.scope, acted_along(e))
             return map_terms(inner, rewrite)
 
-        def region(r: program.Region) -> CompiledExpression:
+        def region(r: program.Region) -> ExpressionTerms:
             """One region's value, kept only where that region applies."""
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
             truth = narrowed(self.scope, on, r.when).select(*on) if on else None
@@ -315,7 +317,7 @@ class Compiler:
                 filters by its own constant instead.
                 """
                 if truth is None:
-                    carrier, condition = compile_condition(self.scope, p.table, r.when, p.dims)
+                    carrier, condition = query_condition(self.scope, p.table, r.when, p.dims)
                     table = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
                     return replace(p, table=table, presences=presences, region=both_regions(p.region, r.when))
@@ -329,7 +331,7 @@ class Compiler:
 
             return map_terms(ev(r.value), kept)
 
-        def cases(e: program.Cases) -> CompiledExpression:
+        def cases(e: program.Cases) -> ExpressionTerms:
             """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted.
 
             A region worth the literal zero adds nothing, so it builds no
@@ -337,32 +339,32 @@ class Compiler:
             cannot follow, and be owed at every row it lands on.
             """
             built = [region(r) for r in e.regions if not _zero(r.value)]
-            return CompiledExpression(
+            return ExpressionTerms(
                 tuple(f for c in built for f in c.linear),
                 tuple(f for c in built for f in c.constant),
                 tuple(f for c in built for f in c.quadratic),
             )
 
-        def ev(e: program.Expression) -> CompiledExpression:
+        def ev(e: program.Expression) -> ExpressionTerms:
             if isinstance(e, program.Constant):
                 table = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
-                return CompiledExpression((), (Term((), table, 'constant'),))
+                return ExpressionTerms((), (Term((), table, 'constant'),))
             if isinstance(e, program.ParameterReference):
-                return CompiledExpression((), (self._parameter_term(e.name),))
+                return ExpressionTerms((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
                 if self.solution is None:
-                    return CompiledExpression((self._variable_term(e.name),), ())
-                return CompiledExpression((), (self._solved_term(e.name),))
+                    return ExpressionTerms((self._variable_term(e.name),), ())
+                return ExpressionTerms((), (self._solved_term(e.name),))
             if isinstance(e, program.Dual):
                 assert self.solution is not None, (
                     f'in {context}: a dual reached a build — the language keeps one out of the math'
                 )
-                return CompiledExpression((), (self._dual_term(e.constraint),))
+                return ExpressionTerms((), (self._dual_term(e.constraint),))
             if isinstance(e, program.Negate):
                 return map_terms(ev(e.operand), negate)
             if isinstance(e, program.Add):
                 a, b = ev(e.left), ev(e.right)
-                return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
+                return ExpressionTerms(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
                 return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
@@ -431,7 +433,7 @@ class Compiler:
         return (Presence(_presence(self.scope.variables[name], dims, COL), dims),) if propagates else ()
 
     def _solved_term(self, name: str) -> Term:
-        """A variable at its primal — the constant term a read compiles it to, carrying the presence its linear term would.
+        """A variable at its primal — the constant term a read turns it into, carrying the presence its linear term would.
 
         Under ``missing: neutral`` it is filled with zero over the full product,
         because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
@@ -479,7 +481,7 @@ class Compiler:
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
 
-    def _factor(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
+    def _factor(self, terms: ExpressionTerms, operand: program.Expression) -> ExpressionTerms:
         """A product's factor with each constant term added up to one value per coordinate ([`_totalled`][]).
 
         A sum leaves one row per term of the sum for the aggregate at assembly.
@@ -487,13 +489,13 @@ class Compiler:
         term there, so a factor with a reduction under it is added up first.
         """
         if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
-            return compiled
-        return replace(compiled, constant=tuple(replace(p, table=_totalled(p)) for p in compiled.constant))
+            return terms
+        return replace(terms, constant=tuple(replace(p, table=_totalled(p)) for p in terms.constant))
 
     def _added_up(
-        self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
-    ) -> CompiledExpression:
-        """*compiled* as one constant term with one value per coordinate — a divisor, or a power's base or exponent.
+        self, terms: ExpressionTerms, operand: program.Expression, *, absent: Literal['zero', 'spreads']
+    ) -> ExpressionTerms:
+        """*terms* as one constant term with one value per coordinate — a divisor, or a power's base or exponent.
 
         A sum reaches ``/`` and ``**`` still holding one row per term of the sum
         ([`_sum_term`][]), so an operand with a reduction under it is totalled
@@ -509,20 +511,20 @@ class Compiler:
         than divided by an invented zero. An operand carrying a variable passes
         through, for the program-boundary assert behind it.
         """
-        if compiled.linear or compiled.quadratic:
-            return compiled
-        terms = compiled.constant
-        if len(terms) == 1 and terms[0].region is None:
+        if terms.linear or terms.quadratic:
+            return terms
+        constant = terms.constant
+        if len(constant) == 1 and constant[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
-                return compiled
-            return CompiledExpression((), (replace(terms[0], table=_totalled(terms[0])),))
-        dims, restrictions = self.scope.spanned(terms), absence_restrictions(terms)
+                return terms
+            return ExpressionTerms((), (replace(constant[0], table=_totalled(constant[0])),))
+        dims, restrictions = self.scope.spanned(constant), absence_restrictions(constant)
         carrier = narrowed(self.scope, dims, None)
         for restriction in restrictions:
             carrier = restriction.restrict(carrier, restriction.keyed_by or ())
-        added = self.summed_onto(terms, carrier, absent='hole' if self.solution is not None else absent)
-        parameters = frozenset[str]().union(*(p.parameters for p in terms))
-        return CompiledExpression(
+        added = self.summed_onto(constant, carrier, absent='hole' if self.solution is not None else absent)
+        parameters = frozenset[str]().union(*(p.parameters for p in constant))
+        return ExpressionTerms(
             (), (Term(dims, added, 'constant', presences=tuple(restrictions), parameters=parameters),)
         )
 
@@ -538,8 +540,8 @@ class Compiler:
         term has a value; ``spreads``, null where any term has none inside
         the ``cases:`` region it was built under ([`_zero_outside`][]).
         """
-        assert terms, 'an expression compiles to at least one term'
-        assert all(p.kind == 'constant' for p in terms), 'a read compiles every variable to its value'
+        assert terms, 'an expression has at least one term'
+        assert all(p.kind == 'constant' for p in terms), 'a read turns every variable into its value'
         columns = [f'__term {i}__' for i in range(len(terms))]
         for p, column in zip(terms, columns, strict=True):
             carrier = join_on(carrier, constant_scalar(p).rename({CONSTANT: column}), p.dims, 'left')

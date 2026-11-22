@@ -1,8 +1,8 @@
-"""An entry that holds no row is not compiled, and the model is the one without it.
+"""An entry that holds no row is not queried, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
 most entries span a dimension without a label or a `where` that admits
-nothing. Compiling one costs every query its plan needs and builds nothing.
+nothing. Querying one costs every query its plan needs and builds nothing.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ import pytest
 
 import specsolve as sps
 from specsolve import _assumptions
-from specsolve._engine import compiler as compiler_module
 from specsolve._engine import conditions, indices
+from specsolve._engine import queries as queries_module
 from specsolve._names import ROW
 
 if TYPE_CHECKING:
@@ -48,11 +48,11 @@ SOURCES = {
 
 
 def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
-    """Which constraints were compiled, which variables had their bounds compiled, which dimensions were indexed by a query, and which an assumption was read over."""
+    """Which constraints were queried, which variables had their bounds queried, which dimensions were indexed by a query, and which an assumption was read over."""
     seen: dict[str, set] = {'constraint': set(), 'variable': set(), 'indexed': set(), 'assumption': set()}
     expression, bounds, table, narrowed = (
-        compiler_module.Compiler.expression,
-        compiler_module.Compiler.bounds,
+        queries_module.QueryBuilder.expression,
+        queries_module.QueryBuilder.bounds,
         indices.table,
         _assumptions.narrowed,
     )
@@ -74,8 +74,8 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         seen['assumption'].update(dims)
         return narrowed(scope, dims, where)
 
-    monkeypatch.setattr(compiler_module.Compiler, 'expression', spied_expression)
-    monkeypatch.setattr(compiler_module.Compiler, 'bounds', spied_bounds)
+    monkeypatch.setattr(queries_module.QueryBuilder, 'expression', spied_expression)
+    monkeypatch.setattr(queries_module.QueryBuilder, 'bounds', spied_bounds)
     monkeypatch.setattr(indices, 'table', spied_table)
     monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
@@ -92,15 +92,15 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
         pytest.param('assumption', 'e', id='an-assumption-over-a-dimension-without-a-label'),
     ],
 )
-def test_an_entry_that_holds_no_row_is_not_compiled(monkeypatch, kind, name):
+def test_an_entry_that_holds_no_row_is_not_queried(monkeypatch, kind, name):
     seen = _read(monkeypatch)
-    assert name not in seen[kind], f'{name} holds no row, yet the build compiled it'
+    assert name not in seen[kind], f'{name} holds no row, yet the build queried it'
 
 
-def test_an_entry_that_holds_a_row_is_still_compiled(monkeypatch):
+def test_an_entry_that_holds_a_row_is_still_queried(monkeypatch):
     seen = _read(monkeypatch)
-    assert seen['constraint'] == {'live'}, 'only `live` holds a row, and it has to be compiled'
-    assert seen['variable'] == {'x'}, 'only `x` holds a column, and its bounds have to be compiled'
+    assert seen['constraint'] == {'live'}, 'only `live` holds a row, and it has to be queried'
+    assert seen['variable'] == {'x'}, 'only `x` holds a column, and its bounds have to be queried'
 
 
 def test_a_model_with_entries_that_hold_no_row_is_the_model_without_them(tmp_path: Path):

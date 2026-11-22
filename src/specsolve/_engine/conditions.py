@@ -71,16 +71,16 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
     on = tuple(d for d in dims if d in where.dims)
     if on and len(on) < len(dims) and where.dims <= set(dims):
         keyed = scope.product(on)
-        carrier, condition = compile_condition(scope, keyed, where, on)
+        carrier, condition = query_condition(scope, keyed, where, on)
         if carrier is keyed:
             return out.filter(falsy_if_null(condition))
         surviving = carrier.filter(falsy_if_null(condition)).select(*on)
         return out.join(surviving, on=list(on), how='semi')
-    carrier, condition = compile_condition(scope, out, where, dims)
+    carrier, condition = query_condition(scope, out, where, dims)
     return carrier.filter(falsy_if_null(condition))
 
 
-def compile_condition(
+def query_condition(
     scope: Scope, table: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """The table with the condition's parameters joined, and the boolean expression.
@@ -249,19 +249,19 @@ def compile_condition(
 def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:
     """One side of a comparison of expressions as ``(dims…, CONSTANT)``, and the dimensions it is keyed by.
 
-    Read by the expression compiler, so it cannot drift from the rows. Its terms
+    Read by the query builder, so it cannot drift from the rows. Its terms
     are added so that a null spreads, which [`falsy_if_null`][] reads as false.
     """
-    # in-function: the compiler imports this module
-    from specsolve._engine.compiler import Compiler
+    # in-function: the query builder imports this module
+    from specsolve._engine.queries import QueryBuilder
 
-    compiler = Compiler(scope)
-    compiled = compiler.expression(side, 'a where comparing expressions')
-    assert not (compiled.linear or compiled.quadratic), (
+    builder = QueryBuilder(scope)
+    terms = builder.expression(side, 'a where comparing expressions')
+    assert not (terms.linear or terms.quadratic), (
         'a where compares expressions the language keeps every variable out of'
     )
-    dims = scope.spanned(compiled.constant)
-    added = compiler.summed_onto(compiled.constant, narrowed(scope, dims, None), absent='spreads')
+    dims = scope.spanned(terms.constant)
+    added = builder.summed_onto(terms.constant, narrowed(scope, dims, None), absent='spreads')
     return added.select(*dims, CONSTANT), dims
 
 

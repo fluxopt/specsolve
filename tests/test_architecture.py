@@ -590,7 +590,7 @@ def test_no_sink_reaches_a_sibling():
     )
 
 
-def test_every_plan_node_is_handled_by_the_compiler():
+def test_every_plan_node_is_handled_by_the_query_builder():
     """An operator is not done until every module that walks its union names it."""
     from typing import get_args
 
@@ -598,7 +598,7 @@ def test_every_plan_node_is_handled_by_the_compiler():
 
     engine_dir = PKG / '_engine'
     walkers = [
-        ('program', program.Expression, engine_dir / 'compiler.py'),
+        ('program', program.Expression, engine_dir / 'queries.py'),
         ('program', program.Expression, ORACLE / 'builder.py'),
         ('program', program.Condition, engine_dir / 'conditions.py'),
         ('program', program.Condition, ORACLE / 'where.py'),
@@ -874,8 +874,8 @@ def test_every_module_is_documented_somewhere():
 
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
-    ('_engine/conditions.py', 'specsolve._engine.compiler'): (
-        'the same comparison on the relational lane, and the compiler reads this module for the condition '
+    ('_engine/conditions.py', 'specsolve._engine.queries'): (
+        'the same comparison on the relational lane, and the query builder reads this module for the condition '
         'walk and the carrier both of its walks join on'
     ),
 }

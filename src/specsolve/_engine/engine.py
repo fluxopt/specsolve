@@ -28,7 +28,7 @@ from specsolve._engine.assembly import (
     short_parameters,
 )
 from specsolve._engine.attaching import AttachedSources, attach
-from specsolve._engine.compiler import Compiler, Solution
+from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
@@ -461,8 +461,8 @@ class Engine:
             return Expressions()
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
-        compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
-        return readback.expressions(compiler, model.program.expressions, lower)
+        builder = QueryBuilder(Scope(model.program, model.attached, dict(model.variables)), solution)
+        return readback.expressions(builder, model.program.expressions, lower)
 
     def reconstruct(
         self,
@@ -549,10 +549,10 @@ def expressions_of(
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
-        The readers, each of which compiles on call.
+        The readers, each of which builds its query on call.
     """
-    compiler = Compiler(Scope(program, attach(program, sources), {}))
-    return readback.expressions(compiler, program.expressions, lower)
+    builder = QueryBuilder(Scope(program, attach(program, sources), {}))
+    return readback.expressions(builder, program.expressions, lower)
 
 
 def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:

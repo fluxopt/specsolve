@@ -1,4 +1,4 @@
-"""The terms an expression compiles to — linear, quadratic or constant — and the arithmetic over them.
+"""The terms an expression turns into — linear, quadratic or constant — and the arithmetic over them.
 
 Column conventions:
 
@@ -75,7 +75,7 @@ Kind = Literal['linear', 'quadratic', 'constant']
 
 @dataclass(frozen=True)
 class Term:
-    """One additive term of a compiled expression, over its own dimensions."""
+    """One additive term of an expression, over its own dimensions."""
 
     dims: tuple[str, ...]
     table: pl.LazyFrame
@@ -124,7 +124,7 @@ def refuse_a_term_without_the_dims(p: Term, dims: list[str], context: str, opera
     if p.kind == 'constant':
         raise SpecsolveError(
             f'in {context}: {operator} acts along {dims}, which a constant term of the expression '
-            f'does not carry, and specsolve cannot build that. A constant term compiles to its own '
+            f'does not carry, and specsolve cannot build that. A constant term becomes its own '
             f'table, so a term with no rows for {dims} has no slots for the operator to act on — '
             f'and under a condition, which slots those are is known only to the rows. Declare the '
             f'parameter over {dims} and supply it there: the model is the same and the number is unchanged.'
@@ -166,7 +166,7 @@ def carried_columns(kind: Kind) -> list[str]:
 
 
 @dataclass(frozen=True)
-class CompiledExpression:
+class ExpressionTerms:
     """An expression as the terms it adds up, each kind apart."""
 
     linear: tuple[Term, ...]
@@ -233,7 +233,7 @@ def fan_in(expression: program.Expression) -> FanIn:
     assert_never(expression)
 
 
-def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequence[str]) -> CompiledExpression:
+def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]) -> ExpressionTerms:
     """Restrict every term to where the *whole* expression exists.
 
     Needed before a node that is not one-to-one ([`fan_in`][]): the row-level
@@ -243,9 +243,9 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
     ([`refuse_a_term_without_the_dims`][]). A term is never restricted
     by its own presence: its rows are inside it by construction.
     """
-    absent = [(p, x) for p in (*compiled.linear, *compiled.quadratic, *compiled.constant) for x in p.presences]
+    absent = [(p, x) for p in (*terms.linear, *terms.quadratic, *terms.constant) for x in p.presences]
     if not absent:
-        return compiled
+        return terms
 
     def restrict(p: Term) -> Term:
         table, dims = p.table, p.dims
@@ -262,21 +262,21 @@ def propagate_absence(compiled: CompiledExpression, scope: Scope, along: Sequenc
             table = presence.restrict(table, on)
         return p if table is p.table else replace(p, dims=dims, table=table)
 
-    return map_terms(compiled, restrict)
+    return map_terms(terms, restrict)
 
 
 def map_terms(
-    compiled: CompiledExpression,
+    terms: ExpressionTerms,
     rewrite: Callable[[Term], Term],
-) -> CompiledExpression:
+) -> ExpressionTerms:
     """Apply *rewrite* to every term, keeping the kinds apart.
 
     A rewrite sees one term at a time; a node needing them together is global and refused at load.
     """
-    return CompiledExpression(
-        tuple(rewrite(p) for p in compiled.linear),
-        tuple(rewrite(p) for p in compiled.constant),
-        tuple(rewrite(p) for p in compiled.quadratic),
+    return ExpressionTerms(
+        tuple(rewrite(p) for p in terms.linear),
+        tuple(rewrite(p) for p in terms.constant),
+        tuple(rewrite(p) for p in terms.quadratic),
     )
 
 
