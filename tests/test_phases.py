@@ -25,8 +25,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-#: What one slowed step sleeps. A step no phase clocks loses all of it.
-DELAY = 0.1
+#: What one slowed step sleeps. A step no phase clocks loses all of it. Above
+#: what an unslowed phase reaches on a busy runner: the archive took up to
+#: 0.18 s on the floors job while the suite ran beside it (#2187).
+DELAY = 0.3
 
 #: Wall time no phase holds. The laps tile each call, so what is left is the
 #: return from one call and the entry into the next: 50 to 110 µs (#2180).
