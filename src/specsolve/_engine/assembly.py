@@ -288,7 +288,7 @@ class Assembly:
         if admitted is None:
             indexed = indices.table(self.scope, c.dims, None, ROW, start, presences)
         elif presences:
-            indexed = indices.restricted(admitted, c.dims, ROW, start, presences)
+            indexed = indices.narrowed_by(admitted, c.dims, ROW, start, presences)
         else:
             indexed = admitted
         if presences:

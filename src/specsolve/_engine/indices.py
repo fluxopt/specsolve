@@ -99,18 +99,18 @@ def table(
     return materialised.select(*(dims or (UNIT,)), pl.col(index).set_sorted())
 
 
-def restricted(
-    indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, restrictions: Sequence[Presence]
+def narrowed_by(
+    indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, presences: Sequence[Presence]
 ) -> pl.DataFrame:
-    """*indexed*, as [`table`][] indexed a ``where`` without *restrictions*, cut to them and numbered again from *start*.
+    """*indexed*, as [`table`][] indexed a ``where`` without *presences*, narrowed by them and numbered again from *start*.
 
-    The table [`table`][] gives with the restrictions, without reading the
+    The table [`table`][] gives with the presences, without reading the
     ``where`` a second time: both number the survivors in position order, and
     *indexed*'s index already runs in it.
     """
     surviving = indexed.lazy()
-    for restriction in restrictions:
-        surviving = restriction.narrow(surviving, restriction.joined_on or ())
+    for presence in presences:
+        surviving = presence.narrow(surviving, presence.joined_on or ())
     kept = in_position_order(surviving.pipe(collected), index).drop(index)
     return kept.with_row_index(index, offset=start).select(
         *(dims or (UNIT,)), pl.col(index).cast(pl.Int64).set_sorted()

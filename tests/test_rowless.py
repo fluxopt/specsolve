@@ -151,8 +151,8 @@ def test_a_constraint_without_a_where_is_indexed_only_inside_its_presences(monke
     )
 
 
-def test_a_constraint_with_a_where_and_restrictions_reads_its_where_once(monkeypatch):
-    """The `where` indexes the rows, and the restrictions only cut them: reading it again for the cut cost the whole read twice."""
+def test_a_constraint_with_a_where_and_presences_reads_its_where_once(monkeypatch):
+    """The `where` indexes the rows, and the presences only narrow them: reading it again to narrow them cost the whole read twice."""
     spec = {
         **SPARSE_SPEC,
         'parameters': {**SPARSE_SPEC['parameters'], 'on': {'dims': ['g'], 'dtype': 'bool'}},
