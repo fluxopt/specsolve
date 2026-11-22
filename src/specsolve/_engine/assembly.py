@@ -113,7 +113,7 @@ class Assembly:
         self.builder = QueryBuilder(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
-        #: How many special-ordered sets have been numbered, dense ``0..n-1`` across the model.
+        #: How many special-ordered sets have been numbered, contiguous ``0..n-1`` across the model.
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
@@ -232,7 +232,7 @@ class Assembly:
 
         A set and a weight are the two halves of a coordinate's row-major
         position, split at the ``along`` dimension; a variable with a condition
-        renumbers the sets densely. The stream leaves grouped by set and
+        renumbers the sets contiguously. The stream leaves grouped by set and
         ascending in weight, so a sink reads a set's edges off the neighbouring
         row.
         """
@@ -255,9 +255,9 @@ class Assembly:
 
         position = pl.col('#set position')
         grouped = placed if placed.get_column('#set position').is_sorted() else placed.sort('#set position', 'weight')
-        dense = position if v.where is None else (position != position.shift(1)).fill_null(True).cum_sum() - 1
+        contiguous = position if v.where is None else (position != position.shift(1)).fill_null(True).cum_sum() - 1
         built = grouped.select(
-            (dense + self.n_sets).cast(_DTYPES['set']).alias('set'),
+            (contiguous + self.n_sets).cast(_DTYPES['set']).alias('set'),
             pl.lit(s.sos_type, dtype=_DTYPES['type']).alias('type'),
             COL,
             'weight',
@@ -528,7 +528,7 @@ def numbers_only(
     attached: AttachedSources,
     changed: Collection[str],
 ) -> bool:
-    """Whether *changed* moves only numbers [`refilled`][] can read again, so *built* keeps its indices.
+    """Whether *changed* changes only numbers [`spliced_model`][] can read again, so *built* keeps its indices.
 
     Every name must be a parameter that no build reads for which columns, rows
     or matrix entries exist, nor for a quadratic row
@@ -544,12 +544,14 @@ def numbers_only(
     structural = _structural_parameters(compiled) | specialized_on(compiled)
     if not set(changed) <= set(plan.parameters) or set(changed) & structural:
         return False
-    if any(name in measured.omitted for name in _fed(plan.constraints, changed, _constraint_parameters)):
+    if any(name in measured.omitted for name in _entries_reading(plan.constraints, changed, _constraint_parameters)):
         return False
     return all(_same_coordinates(built.attached, attached, name, plan.parameters[name].dims) for name in changed)
 
 
-def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[str], measured: Measured) -> BuiltModel:
+def spliced_model(
+    built: BuiltModel, attached: AttachedSources, changed: Collection[str], measured: Measured
+) -> BuiltModel:
     """*built* with every bound, constant side, linear coefficient and objective that reads *changed* read again.
 
     The hand-off a full build of the same data gives, where [`numbers_only`][]
@@ -574,13 +576,13 @@ def refilled(built: BuiltModel, attached: AttachedSources, changed: Collection[s
     obj, quad, constant = handoff.obj, handoff.quad, handoff.objective_constant
 
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
-        for name in _fed(plan.variables, changed, _bound_parameters):
+        for name in _entries_reading(plan.variables, changed, _bound_parameters):
             held = built.variables[name]
             if not held.height:
                 continue
             share = assembly._columns(name, plan.variables[name], held.table)
             cols = _spliced(cols, held.start, held.start + held.height, share)
-        for name in _fed(plan.constraints, changed, _constraint_parameters):
+        for name in _entries_reading(plan.constraints, changed, _constraint_parameters):
             held = built.constraints[name]
             if not held.height:
                 continue
@@ -673,7 +675,9 @@ def _constraint_parameters(c: program.Constraint) -> frozenset[str]:
     return program.parameters_of(c.lhs, c.rhs)
 
 
-def _fed[D](entries: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]) -> list[str]:
+def _entries_reading[D](
+    entries: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]
+) -> list[str]:
     """The names of *entries* that *reads* says read a name in *changed*, in the order they are written."""
     return [name for name, d in entries.items() if reads(d) & set(changed)]
 
@@ -774,7 +778,7 @@ def _collapsed(
     change something. The stack is rechunked first, because ``shift(1)``
     crosses chunk boundaries that ``is_sorted`` does not. A cancelling pair
     becomes a zero only at the aggregate, so the prune runs again there.
-    Unordered, a repeat is probed over *space*, the dense index count.
+    Unordered, a repeat is probed over *space*, the contiguous index count.
     """
     pruned = _pruned(stacked.rechunk())
     dropped = pruned.height != stacked.height
@@ -787,7 +791,7 @@ def _collapsed(
             stacked = _sorted(stacked, keys)
             repeated = stacked.select(tied.any()).item()
     else:
-        assert space is not None and len(keys) == 1, 'an unordered probe counts one dense integer key'
+        assert space is not None and len(keys) == 1, 'an unordered probe counts one contiguous integer key'
         repeated = _repeats_an_index(stacked.get_column(keys[0]), space)
     if not repeated:
         return stacked, dropped
@@ -833,7 +837,7 @@ def _ordered_rows(matrix: pl.DataFrame) -> pl.Series:
 
 
 def _repeats_an_index(keys: pl.Series, count: int) -> bool:
-    """Whether any of *keys* occurs twice, over a dense ``0..count-1`` space.
+    """Whether any of *keys* occurs twice, over a contiguous ``0..count-1`` space.
 
     *count* must exceed every index; a stale one raises out of bounds rather
     than answering wrong.

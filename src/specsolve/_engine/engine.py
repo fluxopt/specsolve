@@ -27,8 +27,8 @@ from specsolve._engine.assembly import (
     Measured,
     declares_quadratic,
     numbers_only,
-    refilled,
     short_parameters,
+    spliced_model,
 )
 from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.queries import QueryBuilder, Solution
@@ -150,7 +150,7 @@ class Engine:
         *changed*, the names whose sources differ from the last build's, a
         change of numbers alone ([`numbers_only`][]) reads again only the
         bounds, constant sides, linear coefficients and objective they feed
-        ([`refilled`][]); anything else builds in full. The held solver reads its
+        ([`spliced_model`][]); anything else builds in full. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         tables. A build that raises leaves no model rather than half of one.
@@ -167,7 +167,7 @@ class Engine:
         if held is not None and changed and numbers_only(program, held, previous, attached, changed):
             self._measured = copy.deepcopy(previous)
             with _clocked(self._seconds, 'build'):
-                self._built = refilled(held, attached, changed, self._measured)
+                self._built = spliced_model(held, attached, changed, self._measured)
             return
         self._measured.sparse = short_parameters(program, attached)
         assembly = Assembly(specialized(program, attached), attached, self._measured)

@@ -1,7 +1,7 @@
 """What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
-same pass, every test a ``where`` or a ``cases:`` region makes ([`settle`][]).
+same pass, every atom of a ``where`` or a ``cases:`` region ([`settle`][]).
 What that read settles is answered here: the program a build reads is
 [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
@@ -30,17 +30,17 @@ if TYPE_CHECKING:
 
 
 def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """Each test *compiled*'s conditions make that *attached* decides at every coordinate.
+    """Each atom of *compiled*'s conditions that *attached* settles.
 
     The conditions are the ``where`` of every variable, constraint and
     assumption, and of every ``cases:`` region the rows and bounds read.
 
-    A test is a parameter's bare name or comparison, anywhere in a ``where``, a
-    named condition read through: ``True`` where it holds everywhere,
-    ``False`` where nowhere. A test the data leaves partial is not in the
-    answer. *attached* need not hold the answer yet; this is what computes it.
+    An atom is read anywhere in a ``where``, a named condition read through:
+    ``True`` where it holds everywhere, ``False`` where nowhere. An atom the
+    data leaves partial is not in the answer. *attached* need not hold the
+    answer yet; this is what computes it.
 
-    Each test is read once over its parameter's own table, all in one batch
+    Each atom is read once over its parameter's own table, all in one batch
     and in memory: a model gates hundreds of entries on the same few
     flags, and reading a flag per entry over the product of its dimensions
     was most of the cost of the entries that build nothing. A parameter
@@ -82,12 +82,12 @@ def specialized_on(compiled: program.Program) -> frozenset[str]:
 
 
 def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
-    """*compiled* with each ``where`` and ``cases:`` region it builds rows from folded over the tests *attached* settled.
+    """*compiled* with each ``where`` and ``cases:`` region it builds rows from specialized to the atoms *attached* settled.
 
-    A variable's or constraint's ``where`` that folds to true is dropped, so
+    A variable's or constraint's ``where`` the data settles true is dropped, so
     the entry takes the path of one without a ``where``: dense labels,
-    and terms placed on their rows without a join. One that folds to false is
-    kept as that literal, for [`rowless`][] to skip. A region that folds to
+    and terms placed on their rows without a join. One it settles false is
+    kept as that literal, for [`rowless`][] to skip. A region it settles
     false is dropped from its ``cases:``, and one left alone holding true
     stands for its ``cases:``: a build places a term on its rows by the
     term's own dimensions, and a sum spreads a term along what it sums, so
@@ -99,34 +99,36 @@ def specialized(compiled: program.Program, attached: AttachedSources) -> program
     stay as written too: a read takes its dimensions from its terms, and a
     region may be the only one over a dimension.
     """
-    tests = attached.settled
-    if not tests:
+    settled = attached.settled
+    if not settled:
         return compiled
 
     def where(entry: program.Variable | program.Constraint) -> program.Mask | None:
         if entry.where is None:
             return None
-        kept = _folded(entry.where, tests)
+        kept = _specialized_mask(entry.where, settled)
         return None if _holds(kept, value=True) else kept
 
     def bound(b: program.Expression | None) -> program.Expression | None:
-        return None if b is None else _regions_folded(b, tests)
+        return None if b is None else _regions_specialized(b, settled)
 
     variables = {
         n: replace(v, where=where(v), lower=bound(v.lower), upper=bound(v.upper)) for n, v in compiled.variables.items()
     }
     constraints = {
-        n: replace(c, where=where(c), lhs=_regions_folded(c.lhs, tests), rhs=_regions_folded(c.rhs, tests))
+        n: replace(
+            c, where=where(c), lhs=_regions_specialized(c.lhs, settled), rhs=_regions_specialized(c.rhs, settled)
+        )
         for n, c in compiled.constraints.items()
     }
     o = compiled.objective
-    objective = None if o is None else replace(o, expression=_regions_folded(o.expression, tests))
+    objective = None if o is None else replace(o, expression=_regions_specialized(o.expression, settled))
     return replace(compiled, variables=variables, constraints=constraints, objective=objective)
 
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     """Whether the data settled *where* false at every coordinate, so nothing it gates is read."""
-    return where is not None and _holds(_folded(where, attached.settled), value=False)
+    return where is not None and _holds(_specialized_mask(where, attached.settled), value=False)
 
 
 def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
@@ -144,43 +146,43 @@ def _conditions(compiled: program.Program) -> list[program.Mask]:
     return [*(e.where for e in entries if e.where is not None), *regions]
 
 
-def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:
-    """*mask* with each settled test written as the literal it is; constructing the mask folds what is left."""
-    return program.Mask(_substituted(mask.root, tests))
+def _specialized_mask(mask: program.Mask, settled: Mapping[program.Condition, bool]) -> program.Mask:
+    """*mask* with each settled atom written as the literal it is; constructing the mask simplifies what is left."""
+    return program.Mask(_substituted(mask.root, settled))
 
 
 def _holds(mask: program.Mask, *, value: bool) -> bool:
-    """Whether *mask* folded to the literal *value*."""
+    """Whether *mask* is the literal *value*."""
     return isinstance(mask.root, program.BooleanLiteral) and mask.root.value == value
 
 
-def _substituted(node: program.Condition, tests: Mapping[program.Condition, bool]) -> program.Condition:
-    """*node* rebuilt with each settled test as a literal, a named condition read as its body."""
-    if node in tests:
-        return program.BooleanLiteral(tests[node])
+def _substituted(node: program.Condition, settled: Mapping[program.Condition, bool]) -> program.Condition:
+    """*node* rebuilt with each settled atom as a literal, a named condition read as its body."""
+    if node in settled:
+        return program.BooleanLiteral(settled[node])
     if isinstance(node, program.And):
-        return program.And(_substituted(node.left, tests), _substituted(node.right, tests))
+        return program.And(_substituted(node.left, settled), _substituted(node.right, settled))
     if isinstance(node, program.Or):
-        return program.Or(_substituted(node.left, tests), _substituted(node.right, tests))
+        return program.Or(_substituted(node.left, settled), _substituted(node.right, settled))
     if isinstance(node, program.Not):
-        return program.Not(_substituted(node.operand, tests))
+        return program.Not(_substituted(node.operand, settled))
     if isinstance(node, program.ConditionReference):
-        return _substituted(node.body, tests)
+        return _substituted(node.body, settled)
     return node
 
 
-def _regions_folded(e: program.Expression, tests: Mapping[program.Condition, bool]) -> program.Expression:
-    """*e* with each ``cases:`` region folded as [`specialized`][] says, a named expression rewritten where it is read."""
+def _regions_specialized(e: program.Expression, settled: Mapping[program.Condition, bool]) -> program.Expression:
+    """*e* with each ``cases:`` region specialized as [`specialized`][] says, a named expression rewritten where it is read."""
     if isinstance(e, program.Cases):
         regions = tuple(
-            program.Region(when, _regions_folded(r.value, tests))
+            program.Region(when, _regions_specialized(r.value, settled))
             for r in e.regions
-            if not _holds(when := _folded(r.when, tests), value=False)
+            if not _holds(when := _specialized_mask(r.when, settled), value=False)
         )
         if len(regions) == 1 and _holds(regions[0].when, value=True):
             return regions[0].value
         return replace(e, regions=regions)
-    return _rebuilt(e, lambda child: _regions_folded(child, tests))
+    return _rebuilt(e, lambda child: _regions_specialized(child, settled))
 
 
 def _rebuilt(e: program.Expression, f: Callable[[program.Expression], program.Expression]) -> program.Expression:

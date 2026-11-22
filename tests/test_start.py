@@ -20,7 +20,7 @@ import pytest
 import specsolve as sps
 from specsolve._engine.readback import _counted
 from specsolve._sinks.handoff import SENSE_CODES
-from specsolve._sinks.solver import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC, settled
+from specsolve._sinks.solver import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC, seated
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
@@ -347,7 +347,7 @@ INF = np.inf
 
 
 def _handoff(lb: list[float], ub: list[float], senses: list[str]) -> Any:
-    """The two projections [`settled`][] reads, and nothing else."""
+    """The two projections [`seated`][] reads, and nothing else."""
     return SimpleNamespace(
         dense_columns=lambda _: SimpleNamespace(lb=np.asarray(lb), ub=np.asarray(ub)),
         dense_rows=lambda _: SimpleNamespace(sense=np.asarray([SENSE_CODES[s] for s in senses], dtype=np.int64)),
@@ -368,13 +368,13 @@ def _handoff(lb: list[float], ub: list[float], senses: list[str]) -> Any:
     ],
 )
 def test_a_nonbasic_column_is_put_at_a_bound_the_model_has(status: int, lb: float, ub: float, expected: str) -> None:
-    columns = settled(_handoff([lb], [ub], []), np.asarray([status]), np.asarray([], dtype=np.int8)).columns
+    columns = seated(_handoff([lb], [ub], []), np.asarray([status]), np.asarray([], dtype=np.int8)).columns
     assert BASIS_STATUSES[columns[0]] == expected
 
 
 def test_a_nonbasic_row_is_at_the_bound_its_sense_gives() -> None:
     nonbasic = np.asarray([AT_LOWER, AT_LOWER, AT_UPPER, BASIC])
-    rows = settled(_handoff([], [], ['<=', '>=', '==', '<=']), np.asarray([], dtype=np.int8), nonbasic).rows
+    rows = seated(_handoff([], [], ['<=', '>=', '==', '<=']), np.asarray([], dtype=np.int8), nonbasic).rows
     assert [BASIS_STATUSES[code] for code in rows] == ['at_upper', 'at_lower', 'fixed', 'basic'], (
         'a <= row binds at its upper side, a >= row at its lower, an == row at both, and a basic row stays'
     )

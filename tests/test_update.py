@@ -349,11 +349,11 @@ def _same_diagnostics(got: Any, want: Any, where: str) -> None:
 
 
 def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monkeypatch):
-    """Each real-valued parameter of a port, its numbers moved alone, gives the hand-off and diagnostics a fresh build gives.
+    """Each real-valued parameter of a port, its numbers changed alone, gives the hand-off and diagnostics a fresh build gives.
 
     Whichever way the update went: a parameter that feeds only bounds,
     constant sides, linear coefficients and the objective is read again on the old indices
-    ([`refilled`][specsolve._engine.assembly.refilled]), and any other is
+    ([`spliced_model`][specsolve._engine.assembly.spliced_model]), and any other is
     built in full. A change the fresh build refuses is left out; the model
     goes back to the port's own numbers after each.
     """
@@ -363,14 +363,14 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
 
     spec = expanded(port['spec'])
     given = _declared(port_sources(port['name']), spec.program)
-    refilled = engine_module.refilled
+    real = engine_module.spliced_model
     took: list[str] = []
 
     def spy(built: Any, attached: Any, changed: Any, measured: Any) -> Any:
         took.extend(changed)
-        return refilled(built, attached, changed, measured)
+        return real(built, attached, changed, measured)
 
-    monkeypatch.setattr(engine_module, 'refilled', spy)
+    monkeypatch.setattr(engine_module, 'spliced_model', spy)
     with sps.build(spec, given) as model:
         for name, value in given.items():
             if not (isinstance(value, pl.DataFrame) and value.schema.get('value') == pl.Float64):
@@ -420,7 +420,7 @@ COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
 
 
 @pytest.mark.parametrize(
-    ('entries', 'change', 'refilled', 'loads'),
+    ('entries', 'change', 'spliced', 'loads'),
     [
         pytest.param({}, {'cap': [8.0, 9.0]}, True, 1, id='a bound'),
         pytest.param({}, {'demand': [5.0]}, True, 1, id='a constant side'),
@@ -455,12 +455,12 @@ COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
         pytest.param({}, {'generator': ROLE_GENERATORS}, False, 1, id='a dimension'),
     ],
 )
-def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_can_move(
-    monkeypatch, entries, change, refilled, loads
+def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_can_change(
+    monkeypatch, entries, change, spliced, loads
 ):
     """Numbers that feed bounds, constant sides, linear coefficients and costs, at the coordinates they had, skip the build.
 
-    A parameter a `where` reads moves which columns or rows exist; so do new
+    A parameter a `where` reads changes which columns or rows exist; so do new
     coordinates or new labels. Each of those builds in full. Either way the
     hand-off is a fresh build's. A coefficient falling to zero takes its
     matrix entry with it, on the old indices, and the entries after it move up.
@@ -474,15 +474,15 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
         else value
         for name, value in change.items()
     }
-    real = engine_module.refilled
+    real = engine_module.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | new) as reference:
         model.solve()
         model.update(new)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
         assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
-        assert bool(took) is refilled, f'the update {"skipped" if took else "ran"} the build'
+        assert bool(took) is spliced, f'the update {"skipped" if took else "ran"} the build'
         assert model.diagnostics().loads == loads, f'the solver was loaded {model.diagnostics().loads} times'
 
 
@@ -492,9 +492,9 @@ def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
 
     spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p * p, over=generator) <= demand'})
     change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 2.0]))}
-    real = engine_module.refilled
+    real = engine_module.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'eff on a quadratic row')
@@ -570,9 +570,9 @@ def test_a_parameter_that_picks_which_entries_exist_is_built_again(monkeypatch, 
     """
     from specsolve._engine import engine as engine_module
 
-    real = engine_module.refilled
+    real = engine_module.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
@@ -590,9 +590,9 @@ def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
     spec = override(ROLES, **{'parameters.cap.missing': 'absent'})
     before = ROLE_DATA | {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})}
     change = {'cap': pl.DataFrame({'generator': ['b'], 'value': [8.0]})}
-    real = engine_module.refilled
+    real = engine_module.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'refilled', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'cap moved to b')
@@ -1077,7 +1077,7 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
 
 
 #: `cap` never exceeds 100, so `idle` holds no column and `unmet` no row; `floor`
-#: and `ceiling` feed only them, so moving their numbers refills without a build.
+#: and `ceiling` feed only them, so changing their numbers splices them without a build.
 IDLE = {
     'dimensions': {'g': {}},
     'parameters': {'cap': {'dims': ['g']}, 'floor': {'dims': ['g']}, 'ceiling': {'dims': ['g']}},
@@ -1100,8 +1100,8 @@ def _idle_data(floor: float, ceiling: float) -> dict[str, object]:
     }
 
 
-def test_a_refill_reads_nothing_for_an_entry_without_an_index(monkeypatch):
-    """A variable or constraint that holds nothing has no share to splice, so the refill queries none of it."""
+def test_a_splice_reads_nothing_for_an_entry_without_an_index(monkeypatch):
+    """A variable or constraint that holds nothing has no share to splice, so the splice queries none of it."""
     from specsolve._engine import assembly as assembly_module
 
     read: list[str] = []
@@ -1120,10 +1120,10 @@ def test_a_refill_reads_nothing_for_an_entry_without_an_index(monkeypatch):
         monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
         model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
-    assert not {'idle', 'unmet'} & set(read), f'the refill read {sorted(set(read))}, which hold no index'
+    assert not {'idle', 'unmet'} & set(read), f'the splice read {sorted(set(read))}, which hold no index'
 
 
-#: `on` is 1 at every generator, so the data settles every test of it true and the build folds it away.
+#: `on` is 1 at every generator, so the data settles every atom of it true and the build drops it.
 FLAGGED = {
     'a constraint where': {
         'constraints.floor': {'dims': ['generator'], 'where': 'on > 0', 'expression': 'p >= 1'},
@@ -1140,12 +1140,12 @@ FLAGGED = {
 
 
 @pytest.mark.parametrize('overrides', [pytest.param(v, id=k) for k, v in FLAGGED.items()])
-def test_a_flag_the_build_folded_away_builds_again_when_it_moves(overrides):
-    """`on` drops from 1 to 0 at every generator, so the flag the build folded true now folds false.
+def test_a_flag_the_build_settled_builds_again_when_it_changes(overrides):
+    """`on` drops from 1 to 0 at every generator, so the flag the build settled true now settles false.
 
-    The update moves only numbers at the coordinates `on` had. It took the
-    refill, which read the program the build kept: the one the old `on`
-    folded, which no longer names `on` at all, so the floor kept its rows and
+    The update changes only numbers at the coordinates `on` had. It took the
+    splice, which read the program the build kept: the one the old `on`
+    specialized, which no longer names `on` at all, so the floor kept its rows and
     the objective its old prices.
     """
     spec = override(ROLES, **overrides)
