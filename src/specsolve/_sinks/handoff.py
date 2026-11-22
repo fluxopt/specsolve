@@ -60,7 +60,7 @@ class MatrixChunk:
 
     lo: int
     hi: int
-    entries: pl.DataFrame
+    coefficients: pl.DataFrame
     starts: Ints
 
     @property
@@ -257,8 +257,8 @@ class Handoff:
         One row at a time, since every API that takes a quadratic constraint
         takes one per call.
         """
-        for (row,), entries in self.qmatrix.group_by(ROW, maintain_order=True):
-            yield int(row), entries.select(COL_L, COL_R, COEFF)
+        for (row,), coefficients in self.qmatrix.group_by(ROW, maintain_order=True):
+            yield int(row), coefficients.select(COL_L, COL_R, COEFF)
 
     def row_chunks(self, budget: int | None) -> Iterator[MatrixChunk]:
         """Each chunk of rows with the coefficients it owns — every sink's reader.

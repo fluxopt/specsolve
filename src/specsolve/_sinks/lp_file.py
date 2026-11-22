@@ -116,14 +116,14 @@ def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
         )
 
     rows = handoff.rows.lazy().filter(pl.col(ROW) >= lo)
-    entries = handoff.matrix_chunk(lo, handoff.row_count).lazy()
+    coefficients = handoff.matrix_chunk(lo, handoff.row_count).lazy()
     pairs = handoff.qmatrix.lazy().with_row_index('at')
     zero = pl.lit(0)
     return (
         pl.concat(
             [
                 _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col(ROW)), pl.lit(':'))),
-                _keyed(entries, 1, pl.col(COL), _term(pl.col(COEFF), pl.col(COL))),
+                _keyed(coefficients, 1, pl.col(COL), _term(pl.col(COEFF), pl.col(COL))),
                 _keyed(rows, 2, zero, pl.lit('+ [')),
                 _keyed(pairs, 3, pl.col('at'), _pair(pl.col(COEFF))),
                 _keyed(rows, 4, zero, pl.concat_str(pl.lit('] '), _footer())),
@@ -183,7 +183,7 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     )
 
 
-def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _constraint_lines(handoff: Handoff, lo: int, hi: int, coefficients: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
@@ -198,7 +198,7 @@ def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame)
         return chunk_key(pl.col(ROW), lo, slots, within)
 
     rows = handoff.rows.lazy().filter(pl.col(ROW).is_between(lo, hi, closed='left'))
-    matrix = entries.lazy()
+    matrix = coefficients.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
         pl.concat_str(pl.lit('c').alias('c'), digits(pl.col(ROW)), pl.lit(':').alias('colon')).alias('line'),

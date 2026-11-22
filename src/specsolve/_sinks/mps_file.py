@@ -40,7 +40,7 @@ EMIT_BUDGET = 500_000
 def write_mps_file(handoff: Handoff, path: str | Path) -> None:
     """Write the model as MPS text."""
     path = Path(path)
-    entries, starts = _column_major(handoff)
+    coefficients, starts = _column_major(handoff)
 
     with open(path, 'wb') as f:
         f.write(b'NAME\n')
@@ -53,7 +53,7 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
         f.write(b'COLUMNS\n')
         width = handoff.matrix.height / max(1, handoff.column_count)
         for lo, hi in ranges(handoff.column_count, EMIT_BUDGET, width):
-            owned = entries.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
+            owned = coefficients.slice(int(starts[lo]), int(starts[hi] - starts[lo]))
             append_lines(_column_lines(handoff, lo, hi, owned), f)
 
         f.write(b'RHS\n')
@@ -73,13 +73,13 @@ def write_mps_file(handoff: Handoff, path: str | Path) -> None:
 
 def _column_major(handoff: Handoff) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
     """The matrix in ``(col, row)`` order, and the offsets a column range slices it by."""
-    entries = handoff.matrix_chunk(0, handoff.row_count).sort(COL, ROW)
-    counts = np.bincount(entries[COL].to_numpy(), minlength=handoff.column_count)
-    return entries, np.concatenate(([0], np.cumsum(counts)))
+    coefficients = handoff.matrix_chunk(0, handoff.row_count).sort(COL, ROW)
+    counts = np.bincount(coefficients[COL].to_numpy(), minlength=handoff.column_count)
+    return coefficients, np.concatenate(([0], np.cumsum(counts)))
 
 
 def _row_lines(handoff: Handoff) -> pl.LazyFrame:
-    """One ``ROWS`` entry per constraint row, after the objective's ``N``."""
+    """One ``ROWS`` line per constraint row, after the objective's ``N``."""
     return handoff.rows.lazy().select(
         pl.concat_str(
             pl.lit(' '),
@@ -97,7 +97,7 @@ def _rhs_lines(handoff: Handoff) -> pl.LazyFrame:
     )
 
 
-def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _column_lines(handoff: Handoff, lo: int, hi: int, coefficients: pl.DataFrame) -> pl.LazyFrame:
     """Every ``COLUMNS`` line for columns ``[lo, hi)``, one sorted stream.
 
     A column's lines occupy ``slots`` consecutive keys — the integer marker, its
@@ -121,7 +121,7 @@ def _column_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> 
         pl.concat_str(name, pl.lit(' obj '), number(pl.col(COEFF).fill_null(0.0))).alias('line'),
     )
     terms = (
-        entries.lazy()
+        coefficients.lazy()
         .with_columns(pl.col(COL).cast(pl.Int64))
         .select(
             _key(pl.col(ROW).cast(pl.Int64) + 2),

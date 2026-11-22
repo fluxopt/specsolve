@@ -7,7 +7,7 @@
 # a difference recorded nowhere here, and on a reason no rung needs any more;
 # the ladder index shows each one beside the count it explains.
 #
-# `negated` is the one entry that is checked rather than excused: it says the
+# `negated` is the one key that is checked rather than excused: it says the
 # file writes PyPSA's row negated, so the runner compares our dual against the
 # negative of theirs at the same tolerance. A difference that survives the
 # negation is still red.

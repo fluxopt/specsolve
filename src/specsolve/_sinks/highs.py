@@ -83,7 +83,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
 
     if handoff.qmatrix.height:
         raise SpecsolveError(
-            'HiGHS has no quadratic-constraint concept at all — no entry point takes one — and '
+            'HiGHS has no quadratic-constraint concept at all — no method of its API takes one — and '
             f'this model has {handoff.row_count - handoff.linear_row_count} such rows. Solving through '
             'sps.solve() '
             'refuses this earlier and names the sinks that do take it; constructing Highs '
@@ -227,13 +227,13 @@ class Highs(Solver):
     def _change_coefficients(
         self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
     ) -> None:
-        """``changeCoeff``, one call per entry: HiGHS has no call that takes several."""
+        """``changeCoeff``, one call per element: HiGHS has no call that takes several."""
         h = self._handle
         for row, col, value in zip(rows.tolist(), cols.tolist(), values.tolist(), strict=True):
             _loaded(h, h.changeCoeff(row, col, value), 'a new coefficient')
 
     def _push(self, handoff: Handoff) -> None:
-        """Send only the entries that differ from what the model holds: HiGHS spends its time per entry sent, moved or not."""
+        """Send only the elements that differ from what the model holds: HiGHS spends its time per element sent, moved or not."""
         import highspy
         import numpy as np
 

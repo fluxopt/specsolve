@@ -180,7 +180,7 @@ no name in the public API.
 `capabilities.py` is the second axis of [the
 ceiling](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself) —
 what a sink takes, as against what the language may say — and its docstring is
-where the entries are argued. One descriptor per sink, declared in the sink's
+where each rule is argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
