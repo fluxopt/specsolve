@@ -7,9 +7,26 @@ first ones keep the answer, the later ones change it.
 ## Find where the time goes
 
 A model is clocked in nine phases, from the spec as you give it to the archive
-on disk. Each phase starts from what the one before it handed over, so the
-phases add up to the whole call.
-[`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each one.
+on disk. Each phase starts from what the one before it produced, so the
+phases add up to the whole call:
+
+```mermaid
+flowchart TB
+    SPEC["the spec<br/>a YAML file or a mapping"] -->|load| PROGRAM["the checked spec and its program"]
+    DATA[("your sources<br/>parquet files and tables")] -->|tidy| TIDY["the tidy tables<br/>as sps.tidy returns them"]
+    PROGRAM --> ATTACHED
+    TIDY -->|attach| ATTACHED["the data on the program<br/>assumptions checked"]
+    ATTACHED -->|build| BUILT["the built model<br/>columns, rows and matrix"]
+    BUILT -->|write| FILE["an LP or MPS file"]
+    BUILT -->|handoff| LOADED["the solver, holding the model<br/>and any start="]
+    LOADED -->|solve| VALUES["the solver's values and duals"]
+    VALUES -->|readback| RESULT["the Result<br/>by coordinate"]
+    RESULT -->|archive| ARCHIVE[("the archive on disk<br/>metrics.parquet written last")]
+```
+
+Each arrow is one phase, named as its key in `seconds` and its column in an
+archive's `metrics.parquet`, and each box is what that phase produces.
+[`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each phase.
 
 ```python
 with sps.build('dispatch.yaml', sources) as model:

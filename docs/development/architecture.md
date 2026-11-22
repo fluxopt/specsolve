@@ -91,7 +91,8 @@ flowchart TB
 ## The phases
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
-Each phase takes what the one before it handed over. `Engine.clocked(phase)`
+Each phase takes what the one before it produced, as
+[the diagram](../howto/faster.md#find-where-the-time-goes) draws it. `Engine.clocked(phase)`
 adds a block's wall time to its phase, and refuses a name that has no
 `Metrics` column. `tests/test_phases.py` holds the phases' sum to the wall time
 of a call, and slows each step to find it in its own phase.

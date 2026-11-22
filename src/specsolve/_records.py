@@ -193,12 +193,13 @@ class Metrics(NamedTuple):
     solves: int
     loads: int
     #: Wall-clock seconds in each phase, in the order the phases run. Each
-    #: phase starts from what the one before it handed over, so together they
+    #: phase starts from what the one before it produced, so together they
     #: are the whole call and no step is in two of them. A phase that never
     #: ran writes zero rather than no column.
     #:
-    #: - ``load``: the spec as given, a path or a mapping, into the checked
-    #:   spec and the program compiled from it.
+    #: - ``load``: mathspec's load, ``to_spec`` on the spec as given, a path
+    #:   or a mapping, and the program compiled from it. Loading a solver is
+    #:   ``handoff``, which [`loads`][] counts.
     #: - ``tidy``: each source read into its tidy table, the way
     #:   [`tidy`][specsolve._api.tidy] returns it.
     #: - ``attach``: the tidy tables encoded against the program's dimensions,
