@@ -575,8 +575,8 @@ def test_a_parameter_passed_in_another_column_order_is_catalogued_as_its_tidy_ta
 def _held_files(archive: Path) -> set[str]:
     """Every source, and every table of the answer, as its path inside *archive*: a file, or a sweep's directory."""
     held = [*(archive / 'sources').glob('*.parquet')]
-    held += [entry for kind in KINDS for entry in (archive / ANSWER_DIR / kind).glob('*')]
-    return {entry.relative_to(archive).as_posix() for entry in held}
+    held += [path for kind in KINDS for path in (archive / ANSWER_DIR / kind).glob('*')]
+    return {path.relative_to(archive).as_posix() for path in held}
 
 
 def _columns_of(held: Path) -> set[str]:
@@ -1557,7 +1557,7 @@ def test_every_recorded_option_is_one_the_solver_knows(name: str, package: str, 
 
 @pytest.mark.parametrize('name', sorted(SOLVERS))
 def test_every_recorded_option_is_written_casefolded(name: str) -> None:
-    """A caller's option is casefolded before the lookup, so a list entry with a capital never matches.
+    """A caller's option is casefolded before the lookup, so a list element with a capital never matches.
 
     Xpress takes a control in all upper case too, so the check against the solver passes `TIMELIMIT`.
     """

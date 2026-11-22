@@ -58,7 +58,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | Symbol | Meaning |
 |---|---|
 | $`\mathit{gen}`$ | `gen` over $`\mathcal{G}`$ — output of a generator |
-| $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
+| $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence value, so it needs no variable of its own. |
 
 #### Variable domains
 
@@ -149,7 +149,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
       p:
         description: >-
           the one decision per link, PyPSA's p — what it draws at its input. Every
-          other end's flow is that draw scaled by its incidence entry, so it needs
+          other end's flow is that draw scaled by its incidence value, so it needs
           no variable of its own.
         dims: [link]
         bounds:
@@ -238,10 +238,10 @@ finding the input, numbering the outputs, padding the narrow links with `''`
 and a filler efficiency no equation reads. The wide schema demands that
 reshape of any tidy source; the specsolve tab attaches the incidence table as it
 stands. PyPSA fixes the input's share at `-1`, so the pivot asserts it. In
-rows that constant is data: an input entry of `-1.05` models a link burning 5%
+rows that constant is data: an input value of `-1.05` models a link burning 5%
 of its draw in station load, with no new column and no new construct.
 
-**When a link end needs a name of its own, the incidence entry stops being
+**When a link end needs a name of its own, the incidence value stops being
 enough.** A per-end variable or bound (a heat-offtake cap on the CHP's heat
 port alone), a value pulled through an end's bus with `at(..., by=…)`, or a
 link touching the same bus twice all need the ends as a dimension with leg

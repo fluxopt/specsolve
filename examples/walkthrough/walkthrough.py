@@ -2,7 +2,7 @@
 
 docs/development/architecture.md describes the pipeline; this script executes it one
 stage at a time and prints the artifact each stage produces, through the same
-entry points ``sps.solve`` takes internally.
+functions ``sps.solve`` calls internally.
 
     pixi run python examples/walkthrough/walkthrough.py
 

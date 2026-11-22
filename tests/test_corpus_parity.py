@@ -102,9 +102,9 @@ def _linopy_matches_the_recorded_duals(name: str, run: Any) -> None:
     _check_recorded_duals(name, PORT_REFERENCES[name], run)
 
 
-def _check_recorded_duals(name: str, entry: dict[str, Any], run: Any) -> None:
-    """*entry*'s recorded duals against the linopy lane, split out so a probe can pass a wrong one."""
-    recorded = entry.get('duals')
+def _check_recorded_duals(name: str, reference: dict[str, Any], run: Any) -> None:
+    """*reference*'s recorded duals against the linopy lane, split out so a probe can pass a wrong one."""
+    recorded = reference.get('duals')
     if not recorded:
         return
     for constraint, table in recorded.items():
@@ -113,8 +113,8 @@ def _check_recorded_duals(name: str, entry: dict[str, Any], run: Any) -> None:
         got = _tidy(run.model.constraints[constraint].dual, dims, want)
         want = want.with_columns(pl.col(d).cast(got.schema[d]) for d in dims).sort(dims)
         assert got[dims].equals(want[dims]), f'{name}.{constraint}: the linopy dual is keyed differently'
-        assert got['value'].to_list() == pytest.approx(want['value'].to_list(), rel=entry['rtol'], abs=1e-9), (
-            f'{name}.{constraint}: the linopy lane disagrees with {entry["provenance"]}'
+        assert got['value'].to_list() == pytest.approx(want['value'].to_list(), rel=reference['rtol'], abs=1e-9), (
+            f'{name}.{constraint}: the linopy lane disagrees with {reference["provenance"]}'
         )
 
 
@@ -133,7 +133,7 @@ def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
     """A recording one step from the truth is refused.
 
     ``monthly_budget``'s dual is a short vector with distinct values, so a
-    perturbed entry cannot coincide with another.
+    perturbed element cannot coincide with another.
     """
     name = 'monthly_budget'
     recorded = PORT_REFERENCES[name].get('duals')
@@ -141,10 +141,10 @@ def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
 
     constraint, table = next(iter(recorded.items()))
     wrong = {**table, 'value': [v + 1.0 for v in table['value']]}
-    entry = {**PORT_REFERENCES[name], 'duals': {constraint: wrong}}
+    reference = {**PORT_REFERENCES[name], 'duals': {constraint: wrong}}
 
     with differential(port_spec(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
-        _check_recorded_duals(name, entry, run)
+        _check_recorded_duals(name, reference, run)
 
 
 #: PyPSA's secant loss mode on ``pypsa_losses``' own network — its default, where

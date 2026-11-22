@@ -93,8 +93,8 @@ class Stitch:
         return stitched if isinstance(table, pl.LazyFrame) else stitched.pipe(collected)  # pyrefly: ignore[bad-return]  — the branch matches the frame's own kind
 
 
-def bulleted(entries: Mapping[str, str]) -> str:
-    return '\n'.join(f'  {label}: {reason}' for label, reason in entries.items())
+def bulleted(reasons: Mapping[str, str]) -> str:
+    return '\n'.join(f'  {label}: {reason}' for label, reason in reasons.items())
 
 
 @dataclass(frozen=True)

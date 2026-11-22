@@ -91,15 +91,15 @@ def test_the_convention_is_actually_in_use():
     assert len(urls) >= 15, f'expected the docs to link out to the repo; found {len(urls)}'
 
 
-def _nav_pages(entries: list[Any]) -> list[str]:
+def _nav_pages(items: list[Any]) -> list[str]:
     """Every page the nav points at, depth first, as `mkdocs.yml` spells it.
 
-    An entry is a bare path or a one-key mapping whose value is a path or a
+    An item is a bare path or a one-key mapping whose value is a path or a
     deeper list. A value that does not end in `.md`, or is a URL, is not a page of this tree.
     """
     found: list[str] = []
-    for entry in entries:
-        target = entry if isinstance(entry, str) else next(iter(entry.values()))
+    for item in items:
+        target = item if isinstance(item, str) else next(iter(item.values()))
         if isinstance(target, list):
             found.extend(_nav_pages(target))
         elif isinstance(target, str) and target.endswith('.md') and '://' not in target:
@@ -107,8 +107,8 @@ def _nav_pages(entries: list[Any]) -> list[str]:
     return found
 
 
-def test_every_page_under_docs_has_a_nav_entry():
-    """Every page has a nav entry and every nav entry has a page; the build checks neither.
+def test_every_page_under_docs_has_a_nav_item():
+    """Every page has a nav item and every nav item has a page; the build checks neither.
 
     `README.md` is the folder view GitHub renders and belongs in no nav.
     """
@@ -116,7 +116,7 @@ def test_every_page_under_docs_has_a_nav_entry():
     nav = set(_nav_pages(config['nav']))
     pages = {page.relative_to(DOCS).as_posix() for page in _pages()} - {'README.md'}
     assert pages == nav, (
-        f'pages with no nav entry in mkdocs.yml: {sorted(pages - nav)}; nav entries with no page: {sorted(nav - pages)}'
+        f'pages with no nav item in mkdocs.yml: {sorted(pages - nav)}; nav items with no page: {sorted(nav - pages)}'
     )
 
 
@@ -233,8 +233,8 @@ def test_the_plan_table_names_every_expression_node():
     assert shown == declared, f'the table calls these {shown}, the query builder answers {declared}'
 
 
-#: A ``:::`` entry, which mkdocstrings renders from the named object's docstring.
-API_ENTRY = re.compile(r'^::: (\S+)$', re.MULTILINE)
+#: A ``:::`` directive, which mkdocstrings renders from the named object's docstring.
+API_DIRECTIVE = re.compile(r'^::: (\S+)$', re.MULTILINE)
 
 
 def _exported() -> set[str]:
@@ -246,19 +246,19 @@ def _exported() -> set[str]:
     }
 
 
-def test_every_name_the_package_exports_has_an_entry_on_the_api_page():
-    """The reference is the docstrings, so a name without an entry has no reference at all."""
-    rendered = set(API_ENTRY.findall((DOCS / 'reference' / 'api.md').read_text()))
+def test_every_name_the_package_exports_has_a_directive_on_the_api_page():
+    """The reference is the docstrings, so a name without a directive has no reference at all."""
+    rendered = set(API_DIRECTIVE.findall((DOCS / 'reference' / 'api.md').read_text()))
     missing = sorted(_exported() - rendered)
-    assert not missing, f'exported names with no ::: entry on reference/api.md: {missing}'
+    assert not missing, f'exported names with no ::: directive on reference/api.md: {missing}'
 
 
-def test_every_entry_on_the_api_page_is_an_exported_name():
-    """An entry at an internal path publishes a name the package does not export."""
-    rendered = set(API_ENTRY.findall((DOCS / 'reference' / 'api.md').read_text()))
+def test_every_directive_on_the_api_page_is_an_exported_name():
+    """A directive at an internal path publishes a name the package does not export."""
+    rendered = set(API_DIRECTIVE.findall((DOCS / 'reference' / 'api.md').read_text()))
     internal = sorted(rendered - _exported())
     assert not internal, (
-        f'::: entries on reference/api.md that specsolve, specsolve.types and specsolve.errors do not export: '
+        f'::: directives on reference/api.md that specsolve, specsolve.types and specsolve.errors do not export: '
         f'{internal}'
     )
 

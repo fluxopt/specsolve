@@ -133,5 +133,5 @@ def _from_pandas(table: pd.DataFrame) -> pl.LazyFrame:
 
 
 def _is_missing(value: object) -> bool:
-    """Whether an object-array entry is pandas' rendering of "no value"."""
+    """Whether an object-array element is pandas' rendering of "no value"."""
     return value is None or (isinstance(value, float) and value != value)
