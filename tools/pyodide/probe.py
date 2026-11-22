@@ -89,7 +89,7 @@ def without_pyarrow() -> str:
 def with_pyarrow() -> str:
     archived = sps.solve_over(SPEC, _by_scenario(), sps.EachLabel('scenario'), archive='/tmp/study.zip')
     assert _objectives(archived) == EXPECTED, 'the archived sweep answers as the one in memory did'
-    study = sps.load_archive('/tmp/study.zip', '/tmp/study')
+    study = sps.read_archive('/tmp/study.zip', '/tmp/study')
     assert _objectives(study.sweep) == EXPECTED, 'the archive reads back through pyarrow'
     assert study.sweep.primal('p').equals(archived.primal('p')), 'every value it wrote'
     again = sps.solve_over(study.spec, study.sources, study.axis)

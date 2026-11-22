@@ -118,8 +118,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : `model.update(sources)` puts new numbers on a built model in place. A change
   to a [structural parameter](#how-it-runs) builds again.
 
-**`load_…`** · **`scan_…`**
-: `load_…` reads a saved answer whole. `scan_…` reads each table when asked,
+**`read_…`** · **`scan_…`**
+: `read_…` reads a saved answer whole. `scan_…` reads each table when asked,
   so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
 

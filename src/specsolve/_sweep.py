@@ -1,6 +1,6 @@
 """What a sweep returns: the answer over the model's own coordinates, a record per slice, and its spill on disk.
 
-[`load_sweep`][] and [`scan_sweep`][] read one back. The caller-facing rules
+[`read_sweep`][] and [`scan_sweep`][] read one back. The caller-facing rules
 are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
@@ -637,7 +637,7 @@ class Sweep:
         sweep, with [`primal`][]'s shape. A declared name is read from what
         the sweep holds, live or off disk. Anything else is valued at each
         slice's own solution with no re-solve, which needs the spec, sources
-        and axis the sweep [`load_archive`][specsolve._archive.load_archive]
+        and axis the sweep [`read_archive`][specsolve._archive.read_archive]
         hands back carries; a Sweep a live solve returned retains no model. An
         expression over a parameter the sweep **carried** is refused, that
         value being a previous slice's answer rather than stored data.
@@ -689,7 +689,7 @@ class Sweep:
         no_model = (
             'this sweep has no model behind it, so a quantity the file never named cannot be read from it: a '
             'sweep holds the values of each slice without the models that solved them. Solve it with '
-            "archive=, and sps.load_archive(path).sweep reads any expression at each slice's solution; a name "
+            "archive=, and sps.read_archive(path).sweep reads any expression at each slice's solution; a name "
             'the spec declares is readable either way.'
         )
         if not isinstance(expression, str):
@@ -900,7 +900,7 @@ def _nothing_to_read(kind: str, name: str, held: Mapping[str, object], records: 
     )
 
 
-def load_sweep(directory: str | Path) -> Sweep:
+def read_sweep(directory: str | Path) -> Sweep:
     """Read back a sweep [`Sweep.save`][] wrote, or one ``solve_over(spill_to=)`` spilled.
 
     Every slice's tables are in memory when this returns, so the sweep owes
@@ -924,14 +924,14 @@ def load_sweep(directory: str | Path) -> Sweep:
 def scan_sweep(directory: str | Path) -> Sweep:
     """The sweep under *directory*, its tables left where they lie; *directory* has to outlive it.
 
-    [`load_sweep`][]'s other half, and what a sweep solved with ``spill_to=``
+    [`read_sweep`][]'s other half, and what a sweep solved with ``spill_to=``
     already is: only the record is read until a reader asks for a name.
     [`Sweep.primal`][] and its siblings read that name into memory;
     [`Sweep.scan`][] hands it back as a `polars.LazyFrame`, for a name too
     large to hold.
 
     Raises:
-        LayoutError: As [`load_sweep`][] raises it.
+        LayoutError: As [`read_sweep`][] raises it.
     """
     under = Path(directory)
     opened = _opened_sweep(under)
@@ -946,7 +946,7 @@ def _opened_sweep(under: Path) -> Sweep:
     if not manifest.is_file():
         raise LayoutError(
             f'{str(under)!r} holds no {MANIFEST_FILE!r}, so it is not a sweep save() or spill_to= wrote. A '
-            f'single solve writes no manifest and is read by load_result.'
+            f'single solve writes no manifest and is read by read_result.'
         )
     check_format(under)
     found = json.loads(manifest.read_text())

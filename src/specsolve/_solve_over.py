@@ -109,7 +109,7 @@ def solve_over(
             slices already there, which is how an interrupted sweep resumes.
         archive: Where to write the model, the sources the sweep was cut from,
             the axis that cut them and every slice's answer, so that
-            ``sps.load_archive`` gives all four back and the sweep runs again
+            ``sps.read_archive`` gives all four back and the sweep runs again
             from the file alone. A ``.zip`` suffix packs it into one file;
             anything else is a directory. The answer is in the layout
             *spill_to* writes, one file per slice of each name under
