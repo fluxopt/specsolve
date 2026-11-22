@@ -576,7 +576,7 @@ def test_a_parameter_that_picks_which_coefficients_exist_is_built_again(monkeypa
     with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
         model.update(change)
         _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
-    assert not took, 'a parameter that decides which entries exist was read again on the old indices'
+    assert not took, 'a parameter that decides which coefficients exist was read again on the old indices'
 
 
 def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
