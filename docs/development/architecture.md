@@ -257,8 +257,8 @@ The names the code uses for its own parts. The names a caller meets are in
 **`tidy_sources`**
 : `_sources.tidy_sources`, the one function both lanes read data through.
 
-**Compiling**
-: Turning a spec into its `Program`, through `_inputs.as_program`, the one
+**Compile**
+: Turn a spec into its `Program`, through `_inputs.as_program`, the one
   function every verb compiles a spec through.
 
 **Query builder**
