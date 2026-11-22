@@ -1,7 +1,7 @@
 """A quadratic objective: the one position the language takes degree 2 in.
 
 The claim is not "it solves" but that **four spellings of one quadratic form
-agree**: the engine's one entry per unordered pair, a Hessian's halved form
+agree**: the engine's one coefficient per unordered pair, a Hessian's halved form
 with its doubled diagonal, the LP section's uniform doubling, and linopy's own
 `QuadraticExpression`. A conversion error in any of them still solves and
 answers something else, which is why nearly every test here is differential.
@@ -75,7 +75,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
     ],
 )
 def test_both_lanes_and_the_lp_file_reach_one_optimum(expression):
-    """An off-diagonal Hessian entry that doubled, an LP coefficient that did
+    """An off-diagonal Hessian coefficient that doubled, an LP coefficient that did
     not, a pair counted twice — each still solves, and each moves the optimum."""
     with differential(spec(expression), SOURCES, lp=True):
         pass
@@ -135,7 +135,7 @@ def test_a_square_spreads_where_a_linear_cost_would_fill_the_cheapest_first():
 
 
 def test_a_pair_is_stored_once_whichever_order_it_was_written():
-    """``x·y`` and ``y·x`` are one entry of one matrix — two rows survive a
+    """``x·y`` and ``y·x`` are one coefficient of one matrix — two rows survive a
     symmetric Hessian and not the LP section, which would carry the term twice
     at half weight."""
     written = quad_of('sum(p * q, over=g)')
@@ -167,7 +167,7 @@ def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
 
 def test_a_zero_quadratic_coefficient_states_nothing_and_is_dropped():
     """Same rule as the matrix: absence already says it, and a nonzero costs
-    the solver a Hessian entry to presolve away."""
+    the solver a Hessian coefficient to presolve away."""
     zeroed = {**SOURCES, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 3.0]})}
     assert quad_of('sum(p * p * weight, over=g)', zeroed).height == 1
 

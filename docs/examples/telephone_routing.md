@@ -169,4 +169,4 @@ model built to prove them. This is the outside witness.
 
 Integrality is the source's. A multi-commodity flow is not integral by nature,
 and the book says so before observing that this instance's relaxation happens to
-be. A MILP has no dual solution, so the entry records none.
+be. A MILP has no dual solution, so the record holds none.

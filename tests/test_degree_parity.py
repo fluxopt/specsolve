@@ -14,7 +14,7 @@ from tests.conftest import dispatch_spec_path
 from tests.oracle import specsolve_linopy  # skips the module without the oracle
 
 
-#: One entry per way the degree rule can be broken at build time on both lanes.
+#: One case per way the degree rule can be broken at build time on both lanes.
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
