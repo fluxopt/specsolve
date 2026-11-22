@@ -62,7 +62,7 @@ The `sum` over `generator` fits `p` to one row per snapshot. Put it back.
 
 ## Attach the data
 
-The numbers come in a `dict` called **`sources`**, one entry for each name
+The numbers come in a `dict` called **`sources`**, one key for each name
 the file declares. A parameter is a table with its dimensions and a `value`
 column. A dimension is a list of labels:
 

@@ -405,7 +405,7 @@ def recomputed_row_values(engine, result) -> Any:
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
     built tables and the primal alone. Scattered rather than ``reduceat``-ed: a
-    purely quadratic row owns no linear entries, and ``reduceat`` repeats the
+    purely quadratic row owns no linear coefficients, and ``reduceat`` repeats the
     previous row on an empty span.
     """
     tables = engine._model.handoff
