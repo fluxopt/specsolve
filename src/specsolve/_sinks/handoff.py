@@ -110,7 +110,7 @@ class Handoff:
 
     ``cols``, ``rows`` and ``matrix`` arrive in the solver's own order —
     ``cols`` by column, the other two by row — and ``COL`` and ``ROW`` are
-    dense ``0..n-1``, so they *are* the solver's indices: every dense vector is
+    contiguous ``0..n-1``, so they *are* the solver's indices: every dense vector is
     read positionally and no sink builds a mapping. **``cols`` carries no
     ``COL`` and ``matrix`` no ``ROW``**: a ``cols`` row's position is its
     index, and a matrix entry's row is where it sits between two starts;

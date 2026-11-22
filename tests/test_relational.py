@@ -527,7 +527,7 @@ class TestTheIndexSpace:
     def test_a_narrowed_variable_is_indexed_in_dimension_order(self):
         """A column index is the solver's own column, so its order is the contract.
 
-        Column indices are dense ``0..n-1`` over the coordinates the condition leaves, assigned
+        Column indices are contiguous ``0..n-1`` over the coordinates the condition leaves, assigned
         row-major on the dimensions' declared ordinals. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
@@ -582,7 +582,7 @@ class TestTheIndexSpace:
         with sps.build(spec, sources) as model:
             indexed = model._engine._model.variables['p'].table.collect()
 
-        assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be dense and ascending'
+        assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be contiguous and ascending'
         assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
@@ -710,7 +710,7 @@ class TestTheIndexSpace:
         """What reading a solve back by position rests on.
 
         A solver vector is positional in the solver indices, so an entry's
-        share of it is a slice — but only if its indices are a dense run and
+        share of it is a slice — but only if its indices are a contiguous run and
         the runs tile the whole index. Both are how `indices.table` numbers
         an entry, and neither is visible from the tables: a block
         that started one late would report a neighbour's numbers under this
@@ -743,7 +743,7 @@ class TestTheIndexSpace:
                     start, height = held[name].start, held[name].height
                     assert start == at, f'{name} does not start where the previous entry ended'
                     numbered = held[name].table.select(index).collect().to_series()
-                    assert sorted(numbered) == list(range(start, start + height)), f'{name} is not a dense run'
+                    assert sorted(numbered) == list(range(start, start + height)), f'{name} is not a contiguous run'
                     at += height
                 assert at == total, 'the runs do not tile the index'
 
