@@ -290,7 +290,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
     The digest reads the pattern *and* the coefficients, and every update a
-    model can express moves both — solver indices are dense, so a condition that changes
+    model can express moves both — solver indices are contiguous, so a condition that changes
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
