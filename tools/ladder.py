@@ -202,10 +202,10 @@ def _verdict(record: dict) -> str:
         )
     priced = _cell_duals(parity)
     proof = (
-        f'**model for model**: {len(structural["equal"])} blocks equal, {len(structural["region"])} documented splits'
+        f'**model for model**: {len(structural["equal"])} entries equal, {len(structural["region"])} documented splits'
         + (f', {len(structural["recorded"])} recorded deviations' if structural.get('recorded') else '')
         if 'equal' in structural
-        else f'objective only — the linopy oracle (`tests/linopy_lane`) stops at `{structural["error"]}`'
+        else f'objective only — the linopy lane (`tests/linopy_lane`) stops at `{structural["error"]}`'
     )
     shape = parity['structure']['per_name']
     differing = parity['structure']['differences']
@@ -295,7 +295,7 @@ def _cell_duals(parity: dict) -> str:
 
 
 def _counts(blocks: dict[str, int]) -> str:
-    """A name's built blocks as the pages print them — ``3+1+4``, one figure per block, never a sum."""
+    """A name's built entries as the pages print them — ``3+1+4``, one figure per entry, never a sum."""
     return '+'.join(str(count) for count in blocks.values()) or '0'
 
 
@@ -369,7 +369,7 @@ def index(stamped: dict) -> str:
         ' projected onto what its network builds, shown as specsolve builds it beside the PyPSA code that builds the'
         " same network, and compared with PyPSA four ways. The `PyPSA parity` workflow regenerates every page's"
         ' sources from the pinned mathspec on each run and fails on a diff.\n\n'
-        '**objective** — one number, both solves · **structure** — the same constraint and variable names, one block each · **size** — the same solver rows, columns and nonzeros'
+        '**objective** — one number, both solves · **structure** — the same constraint and variable names, one entry each · **size** — the same solver rows, columns and nonzeros'
         " · **duals** — every constraint's dual, per row · **linopy lane** — the two linopy models, label for label."
         ' ✔ identical · ≠ differs, with the recorded reason · ◌ not comparable yet.\n\n'
         '| rung | objective | structure | size | duals | linopy lane |\n| --- | --- | --- | --- | --- | --- |\n'
@@ -380,15 +380,15 @@ def index(stamped: dict) -> str:
         '| column | specsolve | PyPSA | identical means |\n'
         '| --- | --- | --- | --- |\n'
         '| **objective** | `result.objective` | `n.objective + n.objective_constant` | equal, relative 1e-9 |\n'
-        '| **structure** | `len(result.activity(block))`, `len(result.primal(variable))` | rows and columns of'
-        ' `n.model` per name, masked labels excluded | one block per PyPSA name, equal count — a split counts as a'
+        '| **structure** | `len(result.activity(constraint))`, `len(result.primal(variable))` | rows and columns of'
+        ' `n.model` per name, masked labels excluded | one entry per PyPSA name, equal count — a split counts as a'
         ' difference |\n'
         '| **size** | `diagnostics()` rows, columns, nonzeros | `n.model.solver_model` rows, columns, nonzeros |'
         ' the model handed to HiGHS is the same size on both sides |\n'
-        "| **duals** | `result.dual(block)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
+        "| **duals** | `result.dual(constraint)` | `n.model.constraints[name].dual` | every row's dual equal, absolute"
         " 1e-6, or inside the range of duals PyPSA's model admits on that row — against the negative where the"
         ' file writes the row negated; an integer model has none |\n'
-        '| **linopy lane** | the test oracle, `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
+        '| **linopy lane** | `tests/linopy_lane` | `n.optimize.create_model()` | label for label:'
         ' coefficients, sense, right-hand side, bounds, integrality, objective terms |\n\n'
         "Both sides solve one object, the network the rung's script builds — PyPSA directly, specsolve through the"
         " rung's own spec attached to the tables `prep.py` makes of it."
@@ -409,8 +409,8 @@ def index(stamped: dict) -> str:
         " Ours counts as equal if it lies in that range, and PyPSA's must lie there too, or the run stops. The"
         " count is shown as `inside PyPSA's range`.\n\n"
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
-        'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
-        " each rung's page, and over the whole ladder that every block is built by some rung, every condition is"
+        'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per entry, on'
+        " each rung's page, and over the whole ladder that every entry is built by some rung, every condition is"
         ' partially true somewhere and every parameter is fed somewhere. The runner fails on a gap not listed in'
         ' `differential/pypsa/untested.txt`, and on a listed one a rung now closes; the rungs that would close them'
         ' are [mathspec#830](https://github.com/energy-models/mathspec/issues/830).\n\n'

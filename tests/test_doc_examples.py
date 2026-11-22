@@ -41,7 +41,7 @@ from specsolve._result import Result
 try:
     from tests import linopy_lane
 except ModuleNotFoundError:
-    linopy_lane = None  # bare install, no oracle
+    linopy_lane = None  # bare install, no linopy lane
 
 REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
@@ -81,7 +81,7 @@ def _unresolvable(code: str) -> set[str]:
     return {root for root in ROOT_NAMES - set(ROOTS) if f'{root}.' in code}
 
 
-_EXTRA = 'needs the linopy oracle to check {}'
+_EXTRA = 'needs the linopy lane to check {}'
 
 #: A fence may be ``` or ~~~, three or more, indented (inside a list item), and
 #: may carry an info string after the language (```python title="a.py").

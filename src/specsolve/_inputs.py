@@ -1,6 +1,6 @@
-"""What a spec and its sources may arrive as, and the one door every verb compiles a spec through.
+"""What a spec and its sources may arrive as, and [`as_program`][], the one function every verb compiles a spec through.
 
-An expression the file never named passes the same door: [`expression_node`][] splices
+An expression the file never named passes through it too: [`expression_node`][] splices
 it into the spec as a named one and compiles the whole spec again. This sits
 above both lanes because nothing
 in the engine or a sink may see the spec as written

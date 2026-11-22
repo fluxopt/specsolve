@@ -59,7 +59,7 @@ def _defined(col: pl.Expr, dtype: program.ParameterDtype) -> pl.Expr:
 
 
 def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
-    """The coordinate product over *dims* where *where* holds, with the ordinals a caller sorts by.
+    """The coordinate product over *dims* where *where* holds, with the positions a caller sorts by.
 
     A joining condition that reads only some of *dims*, and none outside them, is
     evaluated over their product and semi-joined; every other shape filters the
@@ -118,10 +118,10 @@ def query_condition(
         """A condition reading a dimension outside *dims* — refused at load, asserted here."""
         assert dimension in dims, f'where-comparison on {reading} is outside the dimensions {list(dims)}'
 
-    def join_ordinal(dimension: str) -> str:
+    def join_position(dimension: str) -> str:
         refuse_outside_table(f"dimension '{dimension}'", dimension)
         return carrier.once(
-            f'__where ord {dimension}__',
+            f'__where position {dimension}__',
             lambda f, alias: f.join(
                 scope.data.dimensions[dimension].select(pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)),
                 on=dimension,
@@ -130,7 +130,7 @@ def query_condition(
         )
 
     def join_group_offset(p: program.DimensionPosition) -> str:
-        """One column: the row's ordinal minus its own group's target ordinal."""
+        """One column: the row's position minus its own group's target position."""
         assert p.partition is not None, 'an ungrouped position counts along the whole dimension and asks for no table'
         grouping = Grouping.of(scope.data, p.partition)
         for dim in grouping.keys:
@@ -139,7 +139,7 @@ def query_condition(
         target = pl.lit(p.position) if p.position >= 0 else pl.col(GROUP_SIZE) + p.position
         offset = pl.col(GROUP_RANK) - target
         return carrier.once(
-            f'__where ord {p.name} by {p.partition.name}__',
+            f'__where position {p.name} by {p.partition.name}__',
             lambda f, alias: f.join(
                 grouping.table.select(pl.col(LABEL).alias(p.name), *grouping.joined, offset.alias(alias)),
                 on=list(grouping.keys),
@@ -205,8 +205,8 @@ def query_condition(
         if isinstance(p, program.DimensionPosition):
             if p.partition is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
-            at = _position_ordinal(p, scope.data.cardinality[p.name])
-            return _COLUMN_COMPARISONS[p.op](pl.col(join_ordinal(p.name)), pl.lit(at))
+            at = _resolved_position(p, scope.data.cardinality[p.name])
+            return _COLUMN_COMPARISONS[p.op](pl.col(join_position(p.name)), pl.lit(at))
         if isinstance(p, program.RelationComparison):
             column = pl.col(join_relation(p.name, p.dims, p.column))
             if isinstance(p.value, str):
@@ -322,7 +322,7 @@ def _certain_names(mask: program.Mask) -> frozenset[str]:
 
 
 def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> None:
-    """Refuse a position no coordinate of some group occupies, as [`_position_ordinal`][] does ungrouped.
+    """Refuse a position no coordinate of some group occupies, as [`_resolved_position`][] does ungrouped.
 
     A coordinate in no group is not in the grouping's table, so it is never counted short.
     """
@@ -339,8 +339,8 @@ def falsy_if_null(condition: pl.Expr) -> pl.Expr:
     return condition.fill_null(value=False)
 
 
-def _position_ordinal(p: program.DimensionPosition, cardinality: int) -> int:
-    """*p*'s position as an ordinal into a dimension of *cardinality* labels, negative from the end.
+def _resolved_position(p: program.DimensionPosition, cardinality: int) -> int:
+    """*p*'s position from 0 in a dimension of *cardinality* labels, where *p* may count negative from the end.
 
     Out of range is an error: a boundary clause that seeds no row leaves the recurrence unanchored.
     """
