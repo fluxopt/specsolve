@@ -560,7 +560,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
@@ -964,7 +964,7 @@
           "tech_capacity_expansion_limit": {
             "kind": "rows",
             "pypsa": 5,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_tech_capacity_expansion_limit_eq": 1,
               "GlobalConstraint_tech_capacity_expansion_limit_lb": 2,
@@ -974,7 +974,7 @@
           "transmission_expansion_cost_limit": {
             "kind": "rows",
             "pypsa": 2,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_transmission_expansion_cost_limit_eq": 1,
               "GlobalConstraint_transmission_expansion_cost_limit_lb": 1
@@ -1439,7 +1439,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
@@ -1798,7 +1798,7 @@
           "operational_limit": {
             "kind": "rows",
             "pypsa": 3,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_operational_limit_eq": 1,
               "GlobalConstraint_operational_limit_lb": 1,
@@ -1808,7 +1808,7 @@
           "primary_energy": {
             "kind": "rows",
             "pypsa": 3,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_primary_energy_eq": 1,
               "GlobalConstraint_primary_energy_lb": 1,
@@ -2181,7 +2181,7 @@
           "transmission_expansion_cost_limit": {
             "kind": "rows",
             "pypsa": 2,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_transmission_expansion_cost_limit_lb": 1,
               "GlobalConstraint_transmission_expansion_cost_limit_ub": 1
@@ -2190,7 +2190,7 @@
           "transmission_volume_expansion_limit": {
             "kind": "rows",
             "pypsa": 2,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_transmission_volume_expansion_limit_eq": 1,
               "GlobalConstraint_transmission_volume_expansion_limit_lb": 1
@@ -3460,7 +3460,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
@@ -9154,7 +9154,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "StorageUnit-energy_balance": "the file states the balance with the charge on the left; PyPSA writes \u2212soc there, the same row negated, so its dual is the negative",
           "Store-energy_balance": "the file states the balance with the level on the left; PyPSA writes \u2212e there, the same row negated, so its dual is the negative"
         },
@@ -13282,7 +13282,7 @@
           "primary_energy": {
             "kind": "rows",
             "pypsa": 2,
-            "reason": "one block per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
+            "reason": "one entry per sense \u2014 ==, <=, >= \u2014 where PyPSA writes one row per labelled constraint whatever its sense",
             "specsolve": {
               "GlobalConstraint_primary_energy_eq": 1,
               "GlobalConstraint_primary_energy_ub": 1
@@ -14366,7 +14366,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative",
           "Process-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
@@ -14964,7 +14964,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {

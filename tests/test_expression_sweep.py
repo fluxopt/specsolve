@@ -86,7 +86,7 @@ def _answer(node: Node) -> Answer:
         with differential(row_spec(node), DATA) as run:
             return Answer(value=float(run.result.objective))
     except OracleCannotBuildError as exc:
-        return Answer(skipped=f'the oracle cannot build it: {str(exc).splitlines()[0]}', refused=True)
+        return Answer(skipped=f'the linopy lane cannot build it: {str(exc).splitlines()[0]}', refused=True)
     except SpecsolveError as exc:
         if 'specsolve cannot build' not in str(exc):
             raise

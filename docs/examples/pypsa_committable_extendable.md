@@ -285,7 +285,7 @@ Generator-com-p-current:       +1 Generator-p[2, flex] - 0 Generator-status[2, f
 Generator-com-partly-start-up: +1 Generator-p[2, flex] - 1 Generator-p[1, flex] - 0 Generator-status[2, flex] <= -0.0
 ```
 
-The tightening block PyPSA adds where start-up and shut-down costs match is
+The tightening constraint PyPSA adds where start-up and shut-down costs match is
 built from the `p_nom` **column**, which is 0 for a unit not yet built. Every
 coefficient collapses and the rows read `p <= 0`. Filed as
 [#989](https://github.com/fluxopt/specsolve/issues/989) to report upstream. That
