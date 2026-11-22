@@ -187,7 +187,7 @@ def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame)
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
-    term at its column index, sense — so one sort settles both the row order and
+    term at its column index, sense — so one sort fixes both the row order and
     the order within a row. The anti-join gives a termless row the ``+0 x0`` a
     parser needs. The terms are sorted although they arrive sorted, so the union
     sort merges runs rather than permuting them.

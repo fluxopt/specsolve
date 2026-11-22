@@ -41,7 +41,7 @@ flowchart TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             QUERIES["queries.py<br/>program → lazy queries · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already decides"]
+            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
@@ -178,7 +178,7 @@ under the `specsolve_` prefix a dimension cannot take. Parameters are
 `(dims…, value)`. A variable table is `(dims…, COL)`. A linear expression is `(dims…, COL, COEFF)` plus a
 constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
-**Solver indices are dense `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
+**Solver indices are contiguous `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position. Where an update changes only such numbers,
@@ -226,7 +226,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | the door's tables → `AttachedSources` |
-| `_engine/specialize.py` | what the data decides before an entry is built |
+| `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
@@ -267,11 +267,26 @@ The names the code uses for its own parts. The names a caller meets are in
   queries, as an expression's linear, quadratic and constant terms
   (`ExpressionTerms`).
 
+**Atom**
+: One leaf of a condition, as mathspec's `Mask.atoms` gives them: a comparison,
+  a defined test, a relation read. A `where:` joins its atoms with `AND`, `OR`
+  and `NOT`.
+
+**Specialize**
+: Rewrite the program with what the data [settled](../reference/glossary.md#how-it-runs):
+  a settled atom becomes its literal, and an entry it empties holds no row
+  (`specialize.py`).
+
+**Splice** and **push**
+: An update that changes numbers only splices them into the built model's
+  tables, in place of a build; a loaded solver then takes them pushed, in place
+  of a reload.
+
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
-  label column as an `Enum` in declared order. They also hold each test of a
-  `where` or a `cases:` region that the data decides at every coordinate,
-  read once for the assumptions and the build both.
+  label column as an `Enum` in declared order. They also hold each settled atom
+  of a `where` or a `cases:` region, read once for the assumptions and the
+  build both.
 
 **Term**, **presence** and **region**
 : One additive term of an expression, over its own dimensions: linear,
