@@ -1,7 +1,36 @@
 # Making a solve faster
 
-How to solve a model that takes too long, and what each way costs. Try them in
-this order: the first ones keep the answer, the later ones change it.
+How to solve a model that takes too long, and what each way costs. Find where
+the time goes first, then try the ways in the order of the table below: the
+first ones keep the answer, the later ones change it.
+
+## Find where the time goes
+
+A model is clocked in nine phases, from the spec as you give it to the archive
+on disk. Each phase starts from what the one before it handed over, so the
+phases add up to the whole call.
+[`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each one.
+
+```python
+with sps.build('dispatch.yaml', sources) as model:
+    model.solve(archive='runs/dispatch.zip')
+    model.diagnostics().seconds  # seconds per phase, keyed load, tidy, …, archive
+```
+
+An archive records the same clocks, one column per phase:
+
+```python
+sps.read_archive('runs/dispatch.zip').metrics.solve_seconds
+```
+
+| Where the time goes | What to try |
+|---|---|
+| `solve` | [start from an earlier answer](#start-from-an-earlier-answer), [accept a gap](#accept-a-gap), and the ways after it |
+| `build` and `handoff`, again on every `update` | [keep the model loaded](#keep-the-model-loaded) |
+| `build` on many small models | [build many small models faster](#build-many-small-models-faster) |
+| `build` on a large model | [make the model smaller](#make-the-model-smaller) |
+
+## The ways
 
 | Way | Keeps the optimum | What it costs |
 |---|---|---|

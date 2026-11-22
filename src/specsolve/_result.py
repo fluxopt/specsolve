@@ -285,12 +285,11 @@ class Diagnostics:
     solves: int
     loads: int
 
-    #: Cumulative wall-clock seconds per phase, keyed by the phase's name:
-    #: ``attach`` (the caller's sources onto the program), ``build`` (entries
-    #: into the model tables), ``handoff`` (the built model into a solver),
-    #: ``solve`` (the solver's own run), ``write`` (the built model to a
-    #: file). A phase that never ran has no key; one that ran again holds the
-    #: sum.
+    #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
+    #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
+    #: ``handoff``, ``solve``, ``readback``, ``write`` and ``archive``, as
+    #: [`Metrics`][specsolve._records.Metrics] defines each. A phase that
+    #: never ran has no key; one that ran again holds the sum.
     seconds: Mapping[str, float]
 
     def metrics(self) -> Metrics:
@@ -307,11 +306,15 @@ class Diagnostics:
             nonzeros=self.nonzeros,
             solves=self.solves,
             loads=self.loads,
+            load_seconds=clocks.get('load', 0.0),
+            tidy_seconds=clocks.get('tidy', 0.0),
             attach_seconds=clocks.get('attach', 0.0),
             build_seconds=clocks.get('build', 0.0),
             handoff_seconds=clocks.get('handoff', 0.0),
             solve_seconds=clocks.get('solve', 0.0),
+            readback_seconds=clocks.get('readback', 0.0),
             write_seconds=clocks.get('write', 0.0),
+            archive_seconds=clocks.get('archive', 0.0),
         )
 
 

@@ -11,7 +11,7 @@ The lane is described in docs/development/architecture.md.
 from __future__ import annotations
 
 import warnings
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -32,6 +32,7 @@ from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
+from specsolve._records import PHASES
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -127,6 +128,15 @@ class Engine:
             raise SpecsolveError(_no_built_model('to hand over'))
         return self._built
 
+    def clocked(self, phase: str) -> AbstractContextManager[None]:
+        """Add the block's wall time to *phase*, one of ``PHASES``, on failure too.
+
+        The steps outside the engine clock themselves here, so
+        [`diagnostics`][] holds every phase of the model's life.
+        """
+        assert phase in PHASES, f'{phase!r} is not a phase, so no Metrics column would carry its clock'
+        return _clocked(self._seconds, phase)
+
     # ------------------------------------------------------------------
     # build
     # ------------------------------------------------------------------
@@ -137,8 +147,8 @@ class Engine:
         """Attach *sources*, then build every entry into the model tables.
 
         *attached* is *sources* already attached, as reading the assumptions
-        left them, and is not attached again; the time that attach took is
-        recorded either way. A second call rebuilds over the same object. The held solver reads its
+        left them, and is not attached again; whoever attached it clocked it.
+        A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         tables. A build that raises leaves no model rather than half of one.
@@ -149,12 +159,11 @@ class Engine:
         self._solved = None
         self._measured = Measured()
         if attached is None:
-            attached = attach(program, sources)
-        self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
-        self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(program, attached, self._measured)
-        with _clocked(self._seconds, 'build'):
-            self._built = assembly.run()
+            with self.clocked('attach'):
+                attached = attach(program, sources)
+        with self.clocked('build'):
+            self._measured.sparse = short_parameters(program, attached)
+            self._built = Assembly(program, attached, self._measured).run()
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables
@@ -177,7 +186,7 @@ class Engine:
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
         self.check_sink(suffix)
-        with _clocked(self._seconds, 'write'):
+        with self.clocked('write'):
             chosen.write(self._model.handoff, path)
 
     def check_sink(self, sink: str) -> None:
@@ -207,7 +216,7 @@ class Engine:
         """
         self.check_sink(solver_name)
         self._solved = None
-        with _clocked(self._seconds, 'handoff'):
+        with self.clocked('handoff'):
             held = self._solver
             self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
             reloaded = self._solver is not held
@@ -258,21 +267,23 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, refused before the solver loads.
         """
-        carry_on = start == 'previous'
-        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
-        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
-        if isinstance(matched, Basis):
-            solver.start_from_basis(matched)
-        elif matched is not None:
-            solver.start_from_values(matched)
+        with self.clocked('handoff'):
+            matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
+        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=start == 'previous')
+        with self.clocked('handoff'):
+            if isinstance(matched, Basis):
+                solver.start_from_basis(matched)
+            elif matched is not None:
+                solver.start_from_values(matched)
         handoff = self._model.handoff
         self._solves += 1
         if reloaded:
             self._loads += 1
-        with _clocked(self._seconds, 'solve'):
+        with self.clocked('solve'):
             answer = solver.run(handoff, basis='basis' in outputs)
         self._solved = answer.status
-        return self._answered(answer, solver_name, lower, outputs)
+        with self.clocked('readback'):
+            return self._answered(answer, solver_name, lower, outputs)
 
     def _matched_start(
         self, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str

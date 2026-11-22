@@ -108,16 +108,17 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
     """
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         built = model.diagnostics().seconds
-        assert set(built) == {'attach', 'build'}, (
-            'a model only built has spent time attaching sources and building tables, nowhere else'
+        assert set(built) == {'load', 'tidy', 'attach', 'build'}, (
+            'a model only built has spent time loading the spec, reading and attaching sources and building '
+            'tables, nowhere else'
         )
         assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
 
         model.solve()
         model.write(tmp_path / 'model.lp')
         ran = model.diagnostics().seconds
-        assert set(ran) == {'attach', 'build', 'handoff', 'solve', 'write'}, (
-            'a solve adds the handoff and the solver run, a write adds the file stream'
+        assert set(ran) == {'load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write'}, (
+            'a solve adds the handoff, the solver run and the readback, a write adds the file stream'
         )
         assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
 

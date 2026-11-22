@@ -722,11 +722,15 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'nonzeros',
         'solves',
         'loads',
+        'load_seconds',
+        'tidy_seconds',
         'attach_seconds',
         'build_seconds',
         'handoff_seconds',
         'solve_seconds',
+        'readback_seconds',
         'write_seconds',
+        'archive_seconds',
         RUN,
         'slice_axis',
         'slice',
@@ -785,23 +789,6 @@ def test_an_archive_whose_metrics_are_short_of_a_column_is_refused_by_name(
     with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['write_seconds'\]") as excinfo:
         sps.read_archive(tmp_path / 'case')
     assert 'solve the model again' in str(excinfo.value), 'and the message names the way out'
-
-
-def test_every_phase_a_build_clocks_has_a_column_to_travel_in(
-    dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
-) -> None:
-    """A phase added to the engine and not to `Metrics` would be dropped in silence."""
-    with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
-        model.write(tmp_path / 'model.lp')
-        model.solve()
-        clocked = set(model.diagnostics().seconds)
-
-    assert clocked == {'attach', 'build', 'write', 'handoff', 'solve'}, (
-        'this model entered every phase a build clocks, or the check below passes on the ones it missed'
-    )
-    assert not {f'{phase}_seconds' for phase in clocked} - set(Metrics._fields), (
-        f'every phase the engine clocks has a Metrics column, and {clocked} does not'
-    )
 
 
 def test_an_updated_model_archives_the_data_it_actually_answered(
