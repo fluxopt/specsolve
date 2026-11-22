@@ -24,21 +24,52 @@ flowchart TB
     RESULT -->|archive| ARCHIVE[("the archive on disk<br/>metrics.parquet written last")]
 ```
 
-Each arrow is one phase, named as its key in `seconds` and its column in an
-archive's `metrics.parquet`, and each box is what that phase produces.
+Each arrow is one phase, and each box is what that phase produces.
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each phase.
+
+Read the clocks as a table, one row per phase. `share` is the phase's part of
+the whole call:
 
 ```python
 with sps.build('dispatch.yaml', sources) as model:
     model.solve(archive='runs/dispatch.zip')
-    model.diagnostics().seconds  # seconds per phase, keyed load, tidy, …, archive
+    print(model.diagnostics().metrics().phases)
 ```
 
-An archive records the same clocks, one column per phase:
+One run of the dispatch example prints:
+
+```text
+┌──────────┬──────────┬──────────┐
+│ phase    ┆ seconds  ┆ share    │
+│ ---      ┆ ---      ┆ ---      │
+│ str      ┆ f64      ┆ f64      │
+╞══════════╪══════════╪══════════╡
+│ load     ┆ 0.001004 ┆ 0.016171 │
+│ tidy     ┆ 0.003334 ┆ 0.053681 │
+│ attach   ┆ 0.001061 ┆ 0.017076 │
+│ build    ┆ 0.008889 ┆ 0.14312  │
+│ handoff  ┆ 0.012137 ┆ 0.195406 │
+│ solve    ┆ 0.001125 ┆ 0.018113 │
+│ readback ┆ 0.006706 ┆ 0.107964 │
+│ write    ┆ 0.0      ┆ 0.0      │
+│ archive  ┆ 0.027854 ┆ 0.448469 │
+└──────────┴──────────┴──────────┘
+```
+
+This model has 144 columns, so writing the archive is most of its time. On a
+model of 300,000 columns, `solve` took 92 to 94 percent of the call
+([#2180](https://github.com/fluxopt/specsolve/pull/2180)). A
+phase that never ran, here `write`, reads zero.
+
+An archive keeps the same table, so you can read it later or on another
+machine:
 
 ```python
-sps.read_archive('runs/dispatch.zip').metrics.solve_seconds
+print(sps.read_archive('runs/dispatch.zip').metrics.phases)
 ```
+
+The archive's `archive` row is a little shorter than the model's. The archive
+cannot time writing its own last file.
 
 | Where the time goes | What to try |
 |---|---|
@@ -46,6 +77,48 @@ sps.read_archive('runs/dispatch.zip').metrics.solve_seconds
 | `build` and `handoff`, again on every `update` | [keep the model loaded](#keep-the-model-loaded) |
 | `build` on many small models | [build many small models faster](#build-many-small-models-faster) |
 | `build` on a large model | [make the model smaller](#make-the-model-smaller) |
+
+## Report a slow phase
+
+Open an issue at
+[github.com/fluxopt/specsolve/issues](https://github.com/fluxopt/specsolve/issues)
+when one phase takes longer than you expect for the size of your model. The
+clocks tell a maintainer where to look, and an archive lets them run your
+model again. Write the report in five steps:
+
+1. **Solve the model with an archive.** One file then holds the spec, the
+   data, the answer and the clocks.
+
+    ```python
+    sps.solve('model.yaml', sources, archive='runs/slow.zip')
+    ```
+
+2. **Paste the phases, the model's size and the versions.**
+
+    ```python
+    archive = sps.read_archive('runs/slow.zip')
+    print(archive.metrics.phases)
+    print(archive.metrics.columns, archive.metrics.rows, archive.metrics.nonzeros)
+    print(archive.result.provenance)
+    ```
+
+    The provenance names the solver, its version and options, and the
+    specsolve and mathspec versions.
+
+3. **Say which phase is slow, and why you expected less.** The best evidence
+   is the same model at two sizes. "`build` took 2 s at 1,000 snapshots and
+   90 s at 10,000" shows a phase that grows faster than the model.
+
+4. **Attach the archive if you may share the data.** Anyone can solve it again
+   from the file alone, with `sps.solve(archive.spec, archive.sources)`. If you
+   may not, attach the spec and give the number of labels in each dimension.
+
+5. **Name the machine.** Give its cores, its memory and its operating system,
+   and say whether other work ran during the solve.
+
+A slow `solve` is the solver's own run. Try the ways below before you report
+it. Report it when another tool hands the same solver the same model and it
+solves faster.
 
 ## The ways
 

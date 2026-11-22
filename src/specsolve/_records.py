@@ -234,6 +234,19 @@ class Metrics(NamedTuple):
     slice_axis: str | None = None
     slice: str | None = None
 
+    @property
+    def phases(self) -> pl.DataFrame:
+        """The clocks as a table, one row per phase in the order the phases run: ``(phase, seconds, share)``.
+
+        ``share`` is the phase's part of the sum of every phase, so the rows
+        say where the time went. A phase that never ran is a row of zero.
+        """
+        seconds = [getattr(self, f'{phase}_seconds') for phase in PHASES]
+        total = sum(seconds)
+        return pl.DataFrame(
+            {'phase': PHASES, 'seconds': seconds, 'share': [spent / total if total else 0.0 for spent in seconds]}
+        )
+
     def since(self, earlier: Metrics) -> Metrics:
         """This row less *earlier*'s counts and clocks: the share of the solves between the two."""
         return self._replace(**{name: getattr(self, name) - getattr(earlier, name) for name in _CUMULATIVE})

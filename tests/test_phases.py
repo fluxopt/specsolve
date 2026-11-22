@@ -251,3 +251,16 @@ def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs,
         after = model.diagnostics().seconds
     grown = {phase: after.get(phase, 0.0) - before.get(phase, 0.0) for phase in PHASES}
     assert all(spent < DELAY for spent in grown.values()), f'the wait before the call is in a phase: {grown}'
+
+
+def test_the_phases_table_reads_the_clocks_in_the_order_they_run(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    """The table a report pastes: one row per phase, its seconds, and its share of the whole."""
+    sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case.zip')
+    taken = sps.read_archive(tmp_path / 'case.zip').metrics
+    table = taken.phases
+
+    assert table['phase'].to_list() == list(PHASES), 'one row per phase, in the order the phases run'
+    assert table['seconds'].to_list() == [getattr(taken, f'{phase}_seconds') for phase in PHASES], (
+        "each row's seconds are its Metrics column"
+    )
+    assert table['share'].sum() == pytest.approx(1.0), 'the shares split the whole call'
