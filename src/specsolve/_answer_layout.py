@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 #: The layout a result and a sweep write to disk, and an archive under its
 #: ``answer/``. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 5
+ANSWER_LAYOUT = 6
 FORMAT_FILE = 'format.json'
 
 
@@ -112,7 +112,7 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
     return row_type(**columns)
 
 
-#: The three files beside the frames: how the solve terminated, what reaching
+#: The three files beside the tables: how the solve terminated, what reaching
 #: it cost, and the reasons behind whatever is deliberately not there.
 RECORD_FILE = 'record.parquet'
 #: The spec an answer came from, as the YAML it round-trips to.
@@ -120,14 +120,14 @@ SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
 #: A saved sweep's manifest, its keys as their own type, and the coordinates
-#: each window owns.
+#: of each window's horizon.
 MANIFEST_FILE = 'sweep.json'
 KEYS_FILE = 'keys.parquet'
-OWNED_FILE = 'owned.parquet'
+HORIZON_FILE = 'horizon.parquet'
 
 
 def consolidated(under: Path, file: str) -> pl.DataFrame:
-    """The table a sweep writes one file per slice of, under the directory named for *file*, as one frame in slice order.
+    """The table a sweep writes one file per slice of, under the directory named for *file*, as one table in slice order.
 
     ``record/`` holds what a single solve writes as ``record.parquet``.
 
@@ -157,7 +157,7 @@ def clear_the_answer(directory: Path) -> None:
     per_slice = (file.removesuffix('.parquet') for file in (RECORD_FILE, METRICS_FILE))
     for held in (*KINDS, *per_slice):
         shutil.rmtree(directory / held, ignore_errors=True)
-    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, OWNED_FILE)
+    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, HORIZON_FILE)
     for member in whole:
         (directory / member).unlink(missing_ok=True)
 
@@ -175,7 +175,7 @@ def read_spec(directory: Path) -> Spec | None:
     return to_spec(held) if held.is_file() else None
 
 
-#: How an answer's writer puts one frame at one path: [`write_whole`][], or
+#: How an answer's writer puts one table at one path: [`write_whole`][], or
 #: the writer an archive hands it.
 type FrameWriter = Callable[[pl.DataFrame | pl.LazyFrame, Path], None]
 
@@ -212,12 +212,12 @@ def read_reasons(directory: Path) -> tuple[str | None, dict[str, dict[str, str]]
 def saved_frames(under: Path, *, eager: bool) -> dict[str, pl.LazyFrame]:
     """Every ``<name>.parquet`` under *under*, keyed by name; empty where *under* does not exist.
 
-    An archive's [`RUN`][] column is left on disk, so a frame read out of one
-    equals the frame the solve returned.
+    An archive's [`RUN`][] column is left on disk, so a table read out of one
+    equals the table the solve returned.
 
     Args:
         under: One kind's directory.
-        eager: Read each frame into memory now, rather than as a
+        eager: Read each table into memory now, rather than as a
             `polars.scan_parquet` collected at the first read.
     """
     if not under.is_dir():

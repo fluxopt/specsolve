@@ -346,12 +346,12 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`loadModel` seam our own `Gurobi` constructor does, so what separates it from
+`loadModel` hand-off our own `Gurobi` constructor does, so what separates it from
 `specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
 expected answer and not the point: it is the baseline most readers already
-have, and appsi's `set_instance` reaches the same seam our sinks do — the
+have, and appsi's `set_instance` reaches the same hand-off our sinks do — the
 solver's own model, populated, with nothing solved. Nothing of pyomo's is
 switched off that pyomo does not switch off itself; `symbolic_solver_labels`
 is already false by default, which is the cheap side of the same choice
@@ -536,7 +536,7 @@ Two of those are deliberate calls rather than defaults:
   any more — `close()` drops frames this process owns — so the phase is kept as
   a tripwire rather than a cost: if it ever stops reading ~0, something
   acquired a lifetime again.
-Every arm starts from the same parquet files and stops at the same seam, so
+Every arm starts from the same parquet files and stops at the same hand-off, so
 each pays for its own data ingestion. That is the honest unit. The *phases* are
 not comparable one-for-one across arms — a library that defers coefficient
 materialisation to its writer spends nothing in `build` that another spends
@@ -610,7 +610,7 @@ effect from the other. Run the full ladder with `--sizes all`.
 
 **The declaration count is the third swept axis.** Every size rung grows
 `snapshot` and holds its case's declaration count fixed, so a cost paid *per
-declaration* — a labelled frame each, a stack at the end — is sampled at
+declaration* — an indexed frame each, a stack at the end — is sampled at
 whatever counts the cases happen to have. The `declarations` case splits a
 fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and
@@ -673,7 +673,7 @@ decision rather than an omission.
 nothing about how much headroom is left in it. `bench/floor.py` is what a
 number is read against: it hand-writes **one** model — `transport` — from the
 case's cached parquet straight into numpy arrays and a CSR matrix, no specsolve
-and no expression engine anywhere in the path, and ends at the same seam as
+and no expression engine anywhere in the path, and ends at the same hand-off as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
 the sentence becomes *"we are at Nx the floor"* — a claim about engineering

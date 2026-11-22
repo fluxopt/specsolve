@@ -1,9 +1,9 @@
-"""What an objective sums, when its terms do not carry the same dims.
+"""What an objective sums, when its terms do not carry the same dimensions.
 
 An objective is scalar or the file does not load, so every reduction in it is
-one somebody wrote. ``sum(a) + sum(b)`` totals each term over its own dims,
+one somebody wrote. ``sum(a) + sum(b)`` totals each term over its own dimensions,
 while ``sum(a + b)`` broadcasts and counts each once per coordinate of the
-other. The two differ only when the terms' dims differ, as in a sparse
+other. The two differ only when the terms' dimensions differ, as in a sparse
 ``(snapshot, node, tech)`` variable beside a dense ``(snapshot, node,
 carrier)`` one (#197).
 """
@@ -16,7 +16,7 @@ from mathspec import to_spec
 from tests.differential import differential
 from tests.oracle import pd  # through the guard: a bare import would beat it
 
-#: Two variables pinned to 1 on disjoint dims, so the objective is arithmetic
+#: Two variables pinned to 1 on disjoint dimensions, so the objective is arithmetic
 #: with no optimisation left in it: whatever comes out is what was summed.
 DISJOINT_SPEC = {
     'dimensions': {
@@ -61,11 +61,11 @@ def data():
         pytest.param('sum(x * a * c) + sum(y * b * c)', 6400.0, id='a-factor-in-each-term'),
         pytest.param('sum((x * a + y * b) * c)', 13200.0, id='a-factor-over-the-broadcast-group'),
         pytest.param('(sum(x * a) + sum(y * b)) / 2', 16.0, id='a-divisor-applied-to-the-group'),
-        pytest.param('sum(x * a, over=i) + sum(y * b, over=j)', 32.0, id='the-dims-named-one-at-a-time'),
+        pytest.param('sum(x * a, over=i) + sum(y * b, over=j)', 32.0, id='the-dimensions-named-one-at-a-time'),
     ],
 )
 def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expected):
-    """Two readings, both sayable, and the bracket is what picks.
+    """Two readings, both in the language, and the bracket is what picks.
 
     ``differential`` asserts the two lanes agree; these pairs pin the right
     number. 32 against 66, and 6400 against 13200, differ only in where the
@@ -77,7 +77,7 @@ def test_where_the_sum_is_written_decides_what_it_counts(data, expression, expec
 
 
 #: #1046's model: a bracketed addition under a product, its branches on
-#: different dims. The two readings differ by a factor of |j| on the first
+#: different dimensions. The two readings differ by a factor of |j| on the first
 #: term.
 BRACKETED_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
@@ -98,7 +98,7 @@ BRACKETED_SPEC = {
     ],
 )
 def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, expected):
-    """#1046: ``c * (x + y)`` carrying dims is refused, so both readings are written down.
+    """#1046: ``c * (x + y)`` carrying dimensions is refused, so both readings are written down.
 
     30 per unit of ``x[0]`` where the sum closes outside the bracket, 10 where
     it closes around each term.
@@ -110,7 +110,7 @@ def test_a_bracketed_addition_under_a_product_means_what_it_prints(expression, e
 
 
 def test_an_objective_carrying_dims_is_refused_with_the_wrapper_named():
-    """An objective that carries dims is a load error that asks for a `sum` around each term."""
+    """An objective that carries dimensions is a load error that asks for a `sum` around each term."""
     from specsolve.errors import DimensionError
 
     spec = {**DISJOINT_SPEC, 'objective': {'sense': 'minimize', 'expression': 'x * a + y * b'}}

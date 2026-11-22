@@ -1,4 +1,4 @@
-"""The rows an answer records beside its frames: how the solve terminated, what it took, and what produced it.
+"""The rows an answer records beside its tables: how the solve terminated, what it took, and what produced it.
 
 One [`Record`][] and one [`Metrics`][] per solve, with the same columns whoever
 writes them: a result, a sweep's slice, or an archive.
@@ -191,8 +191,8 @@ class Metrics(NamedTuple):
     solves: int
     loads: int
     #: Wall-clock seconds in each phase a build clocks, in the order they run:
-    #: the caller's sources onto the plan, the declarations into the model
-    #: frames, the built model into a solver, the solver's own run, and the
+    #: the caller's sources onto the program, the entries into the model
+    #: tables, the built model into a solver, the solver's own run, and the
     #: built model streamed to an LP or MPS file. A phase that never ran writes
     #: zero rather than no column. [`write_seconds`][] is
     #: [`write`][specsolve._api.Model.write]'s clock, not the archive's: what

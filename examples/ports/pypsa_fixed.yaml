@@ -27,7 +27,7 @@ parameters:
     description: most capacity that may stand at a generator once built
     dims: [generator]
   capital_cost:
-    description: cost of holding one unit of capacity over the horizon
+    description: cost of holding one unit of capacity over the modelled period
     dims: [generator]
   marginal_cost:
     description: cost of one unit of output

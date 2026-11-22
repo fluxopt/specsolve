@@ -409,7 +409,7 @@ def marginal(loop_rows: list[Row]) -> str:
         '',
         '**Read down a column, not across the row.** The build is not the same '
         'work in every library — one that defers materialising its coefficients '
-        'to its writer spends almost nothing here and pays it at the seam — so '
+        'to its writer spends almost nothing here and pays it at the hand-off — so '
         'these columns carry no ratios. The tables above measure to a common '
         'artifact and are where a comparison belongs.',
         '',

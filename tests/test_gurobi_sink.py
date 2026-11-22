@@ -147,7 +147,7 @@ def test_solver_options_reach_gurobi() -> None:
 
 
 # ---------------------------------------------------------------------------
-# the seams: the build without the search, and choosing a sink at all
+# the hand-offs: the build without the search, and choosing a sink at all
 # ---------------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ def test_solver_options_land_on_the_environment() -> None:
 
 
 def test_constructing_gurobi_loads_the_model_and_stops() -> None:
-    """`bench/`'s seam: the hand-off with no search behind it, so what it
+    """What `bench/` measures: the hand-off with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
     with sps.build(*CASES['MIP']) as model:
         tables = model._engine._model.handoff
@@ -210,7 +210,7 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
     """An environment started for a load that raises is disposed before the error leaves.
 
     Otherwise a model the sink refuses part way — a bad option value, a
-    matrix Gurobi rejects — would hold a licence until the collector found the
+    matrix Gurobi refuses — would hold a licence until the collector found the
     half-built model. The load fails either before the model exists or while
     the SOS and quadratic rows go onto it.
     """
@@ -314,7 +314,7 @@ def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
 
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
-    which makes the build seam a complete hand-off rather than a model plus a
+    which makes the build a complete hand-off rather than a model plus a
     number to remember."""
     with sps.build(*CASES['MAX']) as model, Gurobi(model._engine._model.handoff) as solver:
         assert solver.handle.ObjCon == pytest.approx(5.0)

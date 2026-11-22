@@ -147,7 +147,7 @@ r_{o} \le \mathrm{tranche\_frac}_{\mathrm{tranche\_of}(o)} \cdot \mathrm{p}^{\ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -292,7 +292,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/reserves.yaml', sources) as solution:
         solution.objective  # 915.0
         solution.dual('balance')

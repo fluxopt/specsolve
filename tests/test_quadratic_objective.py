@@ -187,7 +187,7 @@ def test_the_lp_section_doubles_every_coefficient(tmp_path):
 
 
 def test_a_quadratic_term_is_absent_where_either_factor_is():
-    """Masked on one factor only, which is what makes the presence a
+    """A `where:` on one factor only, which is what makes the presence a
     conjunction rather than a copy: the term vanishes where ``q`` does."""
     masked = spec('sum(p * p + p * q + q * q, over=g)')
     masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
@@ -203,7 +203,7 @@ def test_a_quadratic_term_is_absent_where_either_factor_is():
 
 def test_absence_under_a_quadratic_term_reaches_its_siblings():
     """The conjunction where it is observable: a reduction sums where the whole
-    summand exists, so a coordinate at which ``q`` is absent contributes
+    term exists, so a coordinate at which ``q`` is absent contributes
     neither the product nor the lone ``p`` beside it. Carrying only the left
     factor's presence keeps that ``p`` — one term heavier, and it still
     solves."""

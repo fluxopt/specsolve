@@ -29,7 +29,7 @@ __all__ = ['as_frame', 'is_dense_array', 'is_multi_indexed', 'to_pandas']
 
 
 def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
-    """A polars frame as pandas, column by column, without pyarrow."""
+    """A polars table as pandas, column by column, without pyarrow."""
     import pandas as pd
 
     encoded = [name for name, kind in table.schema.items() if kind in (pl.Categorical, pl.Enum)]
@@ -39,13 +39,13 @@ def to_pandas(table: pl.DataFrame) -> pd.DataFrame:
 
 
 def as_frame(obj: Source, dims: Sequence[str] = ()) -> pl.LazyFrame | None:
-    """One source as a lazy frame: a parquet path scanned, or an in-memory table normalised.
+    """One source as a lazy table: a parquet path scanned, or an in-memory table normalised.
 
     The one place a string is read as a parquet path. *dims* names the columns
     a pandas index becomes.
 
     Returns:
-        The frame, or ``None`` where *obj* is not table-shaped.
+        The table, or ``None`` where *obj* is not table-shaped.
     """
     import sys
 
@@ -97,10 +97,10 @@ def _series_to_frame(series: pd.Series, dims: Sequence[str]) -> pd.DataFrame | N
     """A pandas Series with its one index level promoted to a column.
 
     A named level keeps its name: renaming it to *dims* would transpose the
-    data when two dims share a label space.
+    data when two dimensions share a label space.
 
     Returns:
-        The tidy frame, or ``None`` where the declaration is not one dimension.
+        The tidy table, or ``None`` where the entry is not over one dimension.
     """
     if len(dims) != 1:
         return None
@@ -114,7 +114,7 @@ _POLARS_DATETIMES = frozenset({'datetime64[ms]', 'datetime64[us]', 'datetime64[n
 
 
 def _from_pandas(frame: pd.DataFrame) -> pl.LazyFrame:
-    """A pandas frame, column by column, without pyarrow.
+    """A pandas table, column by column, without pyarrow.
 
     Object arrays go through a list so numpy's ``nan`` becomes a null rather
     than a string. A datetime in a unit polars does not read, such as the

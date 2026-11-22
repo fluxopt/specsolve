@@ -25,7 +25,7 @@ STEPS = (
     ('specsolve._engine.assembly', 'Assembly', '_build_variable'),
     ('specsolve._engine.assembly', 'Assembly', '_build_constraint'),
     ('specsolve._engine.assembly', 'Assembly', '_build_objective'),
-    ('specsolve._engine.labels', None, 'frame'),
+    ('specsolve._engine.indices', None, 'frame'),
     ('specsolve._engine.attaching', None, 'attach'),
 )
 

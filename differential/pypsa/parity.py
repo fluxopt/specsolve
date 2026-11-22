@@ -31,7 +31,7 @@ Per rung, from the same network:
    specsolve's, both HiGHS, rtol 1e-9 on the generic spine.
 3. **Coverage** — what the relational lane built per block, each
    dimension's size, the tables attached non-empty; and, over the ladder, that
-   every block is built, every mask is partially true and every parameter is
+   every block is built, every condition is partially true and every parameter is
    fed by some rung.
 4. **Prices across the fence** — PyPSA's ``buses_t.marginal_price`` against
    the relational lane's ``Bus_nodal_balance`` duals, per unit of the
@@ -77,7 +77,7 @@ HERE = Path(__file__).resolve().parent
 RECORDS = HERE / 'references.json'
 #: What the corpus leaves untested, one line per gap as `coverage` prints it — energy-models/mathspec#830.
 UNTESTED = HERE / 'untested.txt'
-#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and masks per rung.
+#: The stamps `coverage` reads and nothing on disk does: the full file's rows, columns, tables and conditions per rung.
 UNCOMMITTED = frozenset({'built_rows', 'built_columns', 'attached_nonempty', 'dims', 'conjuncts'})
 TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
@@ -100,7 +100,7 @@ from slopes import inside, slope_ranges  # noqa: E402
 from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test needs no pypsa
 
 import specsolve as sps  # noqa: E402
-from specsolve._engine.predicates import masked  # noqa: E402
+from specsolve._engine.conditions import narrowed  # noqa: E402
 from specsolve._engine.scope import Scope  # noqa: E402
 from specsolve._sources import tidy_sources  # noqa: E402
 
@@ -313,18 +313,18 @@ def fed(sources: dict[str, object]) -> list[str]:
 
 
 def _keyed_model(model) -> dict[str, object]:
-    """One build as label-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
+    """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
     built = model._engine._model
     handoff = built.handoff
 
     def keys(held: dict) -> dict[int, tuple]:
         out = {}
-        for name, labelled in held.items():
-            frame = labelled.frame.collect()
-            label = 'var_label' if 'var_label' in frame.columns else 'row'
-            dims = [c for c in frame.columns if c != label]
+        for name, indexed in held.items():
+            frame = indexed.frame.collect()
+            index = 'col_index' if 'col_index' in frame.columns else 'row'
+            dims = [c for c in frame.columns if c != index]
             for row in frame.iter_rows(named=True):
-                out[row[label]] = (name, *(str(row[d]) for d in dims))
+                out[row[index]] = (name, *(str(row[d]) for d in dims))
         return out
 
     columns, rows = keys(built.variables), keys(built.constraints)
@@ -389,10 +389,10 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
 
 
 def conjunct_verdicts(built_model, program) -> dict[str, str]:
-    """Per masked block, what each conjunct of its ``where:`` did on this rung — one character each.
+    """Per block with a ``where:``, what each conjunct of its ``where:`` did on this rung — one character each.
 
     ``t`` it held at every coordinate, ``f`` at none, ``b`` at some of them,
-    and ``-`` where the rung builds no frame for the block at all. Positional:
+    and ``-`` where the rung builds no row of the block at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
     model = built_model._engine._model
@@ -403,9 +403,9 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
         if where is None:
             continue
         dims = tuple(getattr(block, 'dims', ()) or ())
-        whole = masked(scope, dims, None).select(pl.len()).collect().item()
+        whole = narrowed(scope, dims, None).select(pl.len()).collect().item()
         held = [
-            masked(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
+            narrowed(scope, dims, mathspec.program.Mask(conjunct)).select(pl.len()).collect().item()
             for conjunct in where.conjuncts
         ]
         verdicts[name] = ''.join(
@@ -1024,7 +1024,7 @@ def _is_float(value: object) -> bool:
 
 
 def coverage(stamped: dict[str, dict]) -> list[str]:
-    """What the ladder as a whole leaves untested — empty when every block, mask and parameter is exercised.
+    """What the ladder as a whole leaves untested — empty when every block, condition and parameter is exercised.
 
     A patched file is held only to what its patch declares, as `owned` says.
     """
@@ -1052,7 +1052,7 @@ def coverage(stamped: dict[str, dict]) -> list[str]:
                     0 < c < math.prod(stamp['dims'][d] for d in block.dims)
                     for c, stamp in zip(counts, stamps, strict=True)
                 ):
-                    gaps.append(f'{name}: {block_name} is always all-or-nothing, so its mask is untested')
+                    gaps.append(f'{name}: {block_name} is always all-or-nothing, so its condition is untested')
         fed = set().union(*(stamp['attached_nonempty'] for stamp in stamps))
         gaps.extend(
             f'{name}: no rung feeds {unfed}'

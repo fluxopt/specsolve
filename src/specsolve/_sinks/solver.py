@@ -43,7 +43,7 @@ _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
 
 @dataclass(frozen=True)
 class Basis:
-    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in index order."""
 
     columns: np.ndarray[tuple[int], np.dtype[np.int8]]
     rows: np.ndarray[tuple[int], np.dtype[np.int8]]
@@ -106,7 +106,7 @@ class Solver(ABC):
         #: The options the model was loaded with.
         self._options = dict(solver_options or {})
         self._load(handoff)
-        #: The loaded frames, until [`structure`][] replaces them with their digest.
+        #: The loaded tables, until [`structure`][] replaces them with their digest.
         self._handoff: Handoff | None = handoff
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
@@ -146,7 +146,7 @@ class Solver(ABC):
     recorded_options: ClassVar[frozenset[str]]
 
     def structure(self) -> bytes:
-        """The loaded model's digest, read off its frames once, after which the frames are let go."""
+        """The loaded model's digest, read off its tables once, after which the tables are let go."""
         if self._structure is None:
             assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
             self._structure = self._handoff.structure
@@ -334,7 +334,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: [`close`][] releases it, not the caller.
+        This holder keeps it: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod
@@ -410,7 +410,7 @@ def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tup
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
     """One quantity a solver produced, in its own index — every sink's read-back.
 
-    A series rather than a ``(label, value)`` frame: the read-back takes a
-    declaration's share by slicing.
+    A series rather than an ``(index, value)`` table: the read-back takes an
+    entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)

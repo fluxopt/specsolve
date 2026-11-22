@@ -18,7 +18,7 @@ from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
 #: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
-BROADCAST_MASK_SPEC = {
+BROADCAST_CONDITION_SPEC = {
     'dimensions': {
         'node': {'dtype': 'str'},
         'tech': {'dtype': 'str'},
@@ -41,7 +41,7 @@ BROADCAST_MASK_SPEC = {
 
 
 def _grid(dims, labels, values):
-    """The full product of *labels* as a tidy frame, one row per coordinate."""
+    """The full product of *labels* as a tidy table, one row per coordinate."""
     frame = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
     return frame.assign(value=values)
 
@@ -100,7 +100,7 @@ def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint)
         pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
     ],
 )
-def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
+def test_a_neutral_hole_under_a_sum_is_one_term_fewer(constraint, objective):
     """Inside a sum a missing `neutral` row contributes nothing, so the row is built from the rows the data has.
 
     `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
@@ -111,9 +111,9 @@ def test_a_neutral_hole_under_a_sum_is_one_summand_fewer(constraint, objective):
 
 
 def test_a_where_is_the_escape_from_the_constant_side_check():
-    """Masking the coordinate answers the question, so it is not refused.
+    """Leaving the coordinate absent answers the question, so it is not refused.
 
-    The check is keyed to the rows a declaration builds, not to the coordinate
+    The check is keyed to the rows an entry builds, not to the coordinate
     product.
     """
     masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': 'c'})
@@ -148,7 +148,7 @@ def test_a_sparse_coefficient_beside_a_constant_term_is_still_a_zero():
 
 
 #: `south` is a load-only bus: both generators sit on `north`, so the group
-#: behind `south`'s constant side has no members at all.
+#: behind `south`'s constant side has no labels at all.
 GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
     'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
@@ -174,9 +174,9 @@ def _grouped_constant_sources(capacity=('g1', 'g2')):
 
 
 def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
-    """A group with no members holds the empty sum, which is a value.
+    """A group with no labels holds the empty sum, which is a value.
 
-    `capacity` covers every generator it has, and a group with no members
+    `capacity` covers every generator it has, and a group with no labels
     contributes nothing.
     """
     with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
@@ -186,7 +186,7 @@ def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
 
-#: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
+#: The same with a dimension the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
     'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int', 'ordered': True}},
@@ -238,7 +238,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
 
 
 def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
-    """A combination of two groups that no member sits at holds the empty sum."""
+    """A combination of two groups that no label sits at holds the empty sum."""
     sources = {
         'bus': ['north', 'south'],
         'technology': ['wind', 'solar'],
@@ -257,8 +257,8 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_neutral_member_with_no_value_is_one_summand_fewer_through_a_group():
-    """A group short of a member's value sums the members it has, when the parameter is `neutral`.
+def test_a_neutral_member_with_no_value_is_one_term_fewer_through_a_group():
+    """A group short of a label's value sums the labels it has, when the parameter is `neutral`.
 
     Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
@@ -286,9 +286,9 @@ ABSENT_VARIABLE_SPEC = {
 def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     """Absence propagates into the comparison; it does not zero the term.
 
-    With ``size`` masked out, ``x - relmax * size <= 0`` drops its row rather
+    With ``size`` absent, ``x - relmax * size <= 0`` drops its row rather
     than building ``x <= 0`` (linopy v1 §6, §12), so ``x`` at ``f=b`` is bounded
-    only by its own declaration.
+    only by its own entry.
     """
     data = {
         'f': ['a', 'b'],
@@ -369,7 +369,7 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'the row survived the missing coefficient and pins x'
 
 
-SCALAR_MASKED_SPEC = {
+SCALAR_NARROWED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
@@ -381,17 +381,17 @@ SCALAR_MASKED_SPEC = {
 }
 
 
-def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
+def test_an_absent_scalar_variable_drops_the_row_that_uses_it():
     """Law 7 holds at no dimension either (#340), and on the bare install."""
     data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
-    with sps.solve(SCALAR_MASKED_SPEC, data) as sol:
+    with sps.solve(SCALAR_NARROWED_SPEC, data) as sol:
         assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
         assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
 
-def test_a_mask_survives_a_broadcast_into_a_reduction():
-    """A mask keeps its own dims through a product that widens them (#345)."""
+def test_a_condition_survives_a_broadcast_into_a_reduction():
+    """A condition keeps its own dimensions through a product that widens them (#345)."""
     data = {
         'node': ['n1', 'n2'],
         'tech': ['t1', 't2'],
@@ -403,5 +403,5 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
         'installed': _grid(['node', 'tech'], [['n1', 'n2'], ['t1', 't2']], [100.0] * 4),
     }
 
-    with differential(BROADCAST_MASK_SPEC, data) as run:
+    with differential(BROADCAST_CONDITION_SPEC, data) as run:
         assert run.result.objective == pytest.approx(100.0, rel=RTOL)

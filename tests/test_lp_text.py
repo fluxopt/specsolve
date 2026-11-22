@@ -176,7 +176,7 @@ def test_a_solver_reads_back_every_number_the_file_holds(suffix: str, tmp_path: 
     }
     for name, expected in ROUND_TRIP_NUMBERS.items():
         assert [_bits(x) for x in read[name]] == [_bits(x) for x in expected], (
-            f'{name} must read back bit for bit, in label order: {read[name]} != {expected}'
+            f'{name} must read back bit for bit, in index order: {read[name]} != {expected}'
         )
 
 
@@ -244,10 +244,10 @@ def test_one_model_writes_the_same_bytes_every_time(tmp_path: Path) -> None:
 def test_chunking_the_constraint_section_leaves_the_bytes_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The seams are invisible — chunking bounds the writer's peak, not its output.
+    """The chunk boundaries are invisible — chunking bounds the writer's peak, not its output.
 
     The suite's models fit inside one `EMIT_BUDGET`, so a budget of a few
-    nonzeros forces a seam every handful of rows.
+    nonzeros forces a chunk boundary every handful of rows.
     """
     schema, data = _scaled_dispatch(n_generators=5, n_snapshots=40)
 

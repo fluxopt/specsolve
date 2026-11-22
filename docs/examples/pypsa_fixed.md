@@ -33,7 +33,7 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$, `absent` where the data has no row — the capacity a generator is to hold, for the generators whose capacity is already decided |
 | $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
@@ -95,7 +95,7 @@ p_{t,g} = \mathrm{p}^{\mathrm{set}}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -129,7 +129,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: most capacity that may stand at a generator once built
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       marginal_cost:
         description: cost of one unit of output
@@ -197,7 +197,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_fixed.yaml', sources) as solution:
         solution.objective  # 49900.0
         solution.dual('nodal_balance')
@@ -252,10 +252,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **Two partial tables, at different ranks.** `p_set` is sparse over *(snapshot,
 generator)*, two rows and both `chp`, and `p_nom_set` over *(generator)*
-alone. The mask is the entire feature, so a model that pinned everything would
+alone. The condition is the entire feature, so a model that pinned everything would
 prove nothing. Both constraints carry `where:` naming the parameter, the
 language's spelling for *the rows this table has*. PyPSA spells the same thing
-as `NaN` in a widened frame and tests `~isnull()`.
+as `NaN` in a widened table and tests `~isnull()`.
 
 **The capacity fixing needs a capacity variable.** Every generator here is
 extendable, including the two whose capacity is pinned. A non-extendable

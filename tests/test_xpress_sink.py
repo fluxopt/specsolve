@@ -43,7 +43,7 @@ xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress
     ],
 )
 def test_xpress_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
-    """The shared cases: a maximisation, an objective constant and an integrality, each stated outside the frames."""
+    """The shared cases: a maximisation, an objective constant and an integrality, each stated outside the tables."""
     assert_agrees_with_highs('xpress', name, variable, constraint, has_duals=has_duals)
 
 
@@ -127,7 +127,7 @@ def test_solver_options_reach_xpress() -> None:
 
 
 def test_constructing_xpress_loads_the_model_and_stops() -> None:
-    """The seam `bench/` measures: a loaded problem, unsolved."""
+    """The hand-off `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff

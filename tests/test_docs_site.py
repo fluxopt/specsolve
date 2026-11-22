@@ -184,7 +184,7 @@ def _gen_bus_lookup(program: Any) -> Any:
 
 
 def test_the_plan_table_names_every_expression_node():
-    """`The plan, node for node` is a copy of two dispatches, so something checks it.
+    """`The program, node for node` is a copy of two dispatches, so something checks it.
 
     The fan-in cell is read back off :func:`fan_in`, because the compiler acts
     on that column.
@@ -194,7 +194,7 @@ def test_the_plan_table_names_every_expression_node():
     from specsolve._engine.terms import fan_in
 
     page = (DOCS / 'development' / 'architecture.md').read_text()
-    section = page.split('## The plan, node for node')[1].split('## The relational lane')[0]
+    section = page.split('## The program, node for node')[1].split('## The relational lane')[0]
     rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| ([^|]*) \|', section, re.MULTILINE))
 
     x = program.VariableReference('x', dims=('g', 't'))
@@ -225,7 +225,7 @@ def test_the_plan_table_names_every_expression_node():
         'the instances below stand for every expression node, so a node added to the language is one here too'
     )
     assert set(rows) == set(nodes), (
-        f"the table shows {sorted(rows)} against the plan's {sorted(nodes)} — "
+        f"the table shows {sorted(rows)} against the program's {sorted(nodes)} — "
         f'every expression node needs the two readings it becomes'
     )
     shown = {name: cell.strip() for name, cell in rows.items()}

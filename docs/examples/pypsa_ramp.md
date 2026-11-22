@@ -95,7 +95,7 @@ p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\math
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -196,7 +196,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_ramp.yaml', sources) as solution:
         solution.objective  # 18200.0
         solution.dual('nodal_balance')
@@ -250,8 +250,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the
 row there drops on its own. That is the boundary PyPSA wants, and no `where`
 states it. `edge='wrap'` would put the last snapshot onto the first and build
-a different model, and a gate such as `snapshot > 0` would hardcode the index
-origin. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
+a different model, and a gate such as `snapshot > 0` would hardcode the first
+label. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
 it by name.
 
 ## What it exercises

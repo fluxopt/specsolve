@@ -51,7 +51,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathrm{link\_p\_max\_pu}`$ | `link_p_max_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry forwards |
 | $`\mathrm{link\_p\_min\_pu}`$ | `link_p_min_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry backwards, negative by convention |
 | $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
-| $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
+| $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions allowed across every snapshot |
 
 #### Variables
 
@@ -161,7 +161,7 @@ g_{t,i} \ge \mathit{link\_p\_nom}_{i} \cdot \mathrm{link\_p\_min\_pu}_{i} \qquad
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -267,7 +267,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dims: [cycle, line]
         missing: neutral
       co2_limit:
-        description: emissions the whole horizon is allowed
+        description: emissions allowed across every snapshot
         dims: []
 
     variables:
@@ -341,7 +341,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: >-
           PyPSA's primary-energy constraint — a generator's emissions are its
           output divided by its efficiency, priced at its carrier's rate, and the
-          horizon's total stays inside the budget
+          total over every snapshot stays inside the budget
         dims: []
         expression: >-
           sum(sum(p * at(co2_per_mwh, by=gen_carrier[carrier]) / efficiency, over=generator), over=snapshot)
@@ -358,7 +358,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_ac_dc.yaml', sources) as solution:
         solution.objective  # 18441021.477729216
         solution.dual('nodal_balance')

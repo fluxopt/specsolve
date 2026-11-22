@@ -87,7 +87,7 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -186,7 +186,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_link_delay.yaml', sources) as solution:
         solution.objective  # 4311.111111111111
         solution.dual('nodal_balance')
@@ -257,9 +257,9 @@ positions contribute.
 The refusal is right here. PyPSA zeroes those positions rather than leaving them
 absent, and the two readings build different models.
 
-**Both ends of the horizon show.** Shipments of 44.44 leave in snapshots 0 and 1
+**Both ends of the modelled period show.** Shipments of 44.44 leave in snapshots 0 and 1
 and arrive as 40 in snapshots 2 and 3. Nothing is shipped in snapshots 4 and 5,
-because it would arrive after the horizon ends and be lost. The prices say the
+because it would arrive after the last snapshot and be lost. The prices say the
 same thing: `port_b` pays 100 while it waits, then 11.11, the cheap unit's 10
 divided by the ship's 0.9.
 

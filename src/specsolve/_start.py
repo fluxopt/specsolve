@@ -2,7 +2,7 @@
 
 [`read_start`][] reads one start for one build, and [`slice_starts`][] cuts
 one for each slice of a sweep before any slice is built. Laying a start onto
-a build's labels is the engine's
+a build's solver indices is the engine's
 ([`matched_basis`][specsolve._engine.readback.matched_basis],
 [`matched_values`][specsolve._engine.readback.matched_values]).
 """
@@ -34,10 +34,10 @@ if TYPE_CHECKING:
 
 
 class Start(TypedDict, total=False):
-    """What a solve starts from, given as tables: under the name of each reader, a table per declaration in that reader's shape.
+    """What a solve starts from, given as tables: under the name of each reader, a table per entry in that reader's shape.
 
     Each table is ``(dims…, value)`` and is matched by coordinate, so it may
-    leave out declarations and coordinates. ``primal`` gives values, and
+    leave out entries and coordinates. ``primal`` gives values, and
     ``variable_basis`` and ``constraint_basis`` give a basis status in
     [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
     earlier [`Result`][] is the same, from the tables it carries. Given to
@@ -59,19 +59,19 @@ class Start(TypedDict, total=False):
 
 
 def read_start(
-    start: Start, program: Program, indexes: Mapping[str, pl.LazyFrame]
+    start: Start, program: Program, labels: Mapping[str, pl.LazyFrame]
 ) -> dict[str, dict[str, pl.LazyFrame]]:
-    """*start*'s tables, each read and checked as a parameter's source is, over its declaration's dims.
+    """*start*'s tables, each read and checked as a parameter's source is, over its entry's dimensions.
 
     Every shape a parameter takes is read, from a parquet path to one number
-    for every coordinate; *indexes* holds each dimension's labels under its
+    for every coordinate; *labels* holds each dimension's labels under its
     own name. ``primal`` holds numbers, and ``variable_basis`` and
     ``constraint_basis`` hold basis statuses in their words.
 
     Raises:
         SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
             status outside the five words.
-        DataError: A table a parameter over the same dims would be refused
+        DataError: A table a parameter over the same dimensions would be refused
             for.
     """
     refuse_unknown_start(start, program)
@@ -82,7 +82,7 @@ def read_start(
         read[reader] = {}
         for name, obj in tables.items():
             kind = _kind(reader, per)
-            frame = read_values(kind, name, declared[name].dims, obj, indexes, dtype)
+            frame = read_values(kind, name, declared[name].dims, obj, labels, dtype)
             if reader != 'primal':
                 _refuse_unknown_statuses(kind, name, frame)
             read[reader][name] = frame
@@ -105,19 +105,19 @@ def refuse_unknown_start_word(start: object) -> None:
 
 
 def refuse_unknown_start(start: Start, program: Program) -> None:
-    """Refuse a *start* keyed by no reader [`Start`][] takes, or naming no declaration its reader reads.
+    """Refuse a *start* keyed by no reader [`Start`][] takes, or naming no entry its reader reads.
 
     Asked of the names alone, so a sweep asks it before a slice is built.
 
     Raises:
         SpecsolveError: A key that names no reader, or a name the reader has
-            no declaration for.
+            no entry for.
     """
     readers = tuple(Start.__annotations__)
     by_reader = _by_reader(start)
     if unknown := sorted(set(by_reader) - set(readers)):
         raise SpecsolveError(
-            f'start= takes, under the name of the reader that returns it, a table per declaration: '
+            f'start= takes, under the name of the reader that returns it, a table per entry: '
             f'{", ".join(map(repr, readers))}, and not {", ".join(map(repr, unknown))}.'
         )
     for reader, tables in by_reader.items():
@@ -132,7 +132,7 @@ def _by_reader(start: Start) -> Mapping[str, Mapping[str, Source]]:
 
 
 def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable] | Mapping[str, Constraint]]:
-    """What *reader* holds a table per, and those declarations by name."""
+    """What *reader* holds a table per, and those entries by name."""
     if reader == 'constraint_basis':
         return 'constraint', program.constraints
     return 'variable', program.variables

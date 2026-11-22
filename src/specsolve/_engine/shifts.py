@@ -70,7 +70,7 @@ class _Order:
     ) -> pl.LazyFrame:
         """*source* with the walked dimension moved by *moved*.
 
-        *dims* is the caller's, since a presence frame need not carry the
+        *dims* is the caller's, since a presence table need not carry the
         term's. *prepared* adds the operator's extra join between the two keyed sides.
         """
         dimension = self.grouping.dimension
@@ -84,10 +84,10 @@ class _Order:
 
 
 def walked_dims(scope: Scope, s: program.Translate | program.WindowSum) -> tuple[str, ...]:
-    """The dims a walk keys each row of its operand by.
+    """The dimensions a walk keys each row of its operand by.
 
-    The dimension walked, a partition's joined dims, and a named offset's or
-    width's own dims, less the ones a partition groups into, which it reads
+    The dimension walked, a partition's joined dimensions, and a named offset's
+    or width's own dimensions, less the ones a partition groups into, which it reads
     under the group column ([`_named_amount`][]).
     """
     amount = s.offset if isinstance(s, program.Translate) else s.width
@@ -103,7 +103,7 @@ def translate_rows(
 ) -> pl.LazyFrame:
     """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
-    The predicate form of [`translate_term`][]: a missing row already reads as false.
+    The condition form of [`translate_term`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
     return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
@@ -113,11 +113,11 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     """A one-to-many remap of the dimension: a row at *o* contributes at every ``o + lag`` inside the window.
 
     The lag table is built to the widest window the data asks for. A window
-    is a sum, so the operand's presence does not travel: an absent slot is one
-    summand fewer, and a window of only absent slots is an empty sum whose row
-    stands. The absence it reports is a coordinate with no window at all: one
-    a partition places in no group, or one a ``missing: absent`` width has no
-    row for ([`_widths_defined`][]).
+    is a sum, so the operand's presence does not travel: an absent slot leaves
+    the sum one term fewer, and a window of only absent slots is an empty sum
+    whose row stands. The absence it reports is a coordinate with no window at
+    all: one a partition places in no group, or one a ``missing: absent`` width
+    has no row for ([`_widths_defined`][]).
     """
     if s.along not in p.dims:
         refuse_a_term_without_the_dims(p, [s.along], context, f'sum_back(along={s.along!r})')
@@ -155,7 +155,7 @@ def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
 
     Read off the order's table, which holds only the coordinates a partition
     places, and through the group column for a per-group width, which no
-    frame carries.
+    table carries.
     """
     grouping = order.grouping
     widths, keys = _named_amount(scope, order, name, _WIDTH)
@@ -170,7 +170,7 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
 
     Every fill over a constant is written, ``0`` included, so the slot has a
     value. Over a linear term a fill writes nothing: the vacated slot contributes no
-    term, and lowering refuses every nonzero fill over a variable.
+    term, and the program admits no nonzero fill over a variable.
     *over_a_variable* says whether the whole operand carries a variable, which
     decides where a fill stands ([`_Edge.vacated`][]).
     """
@@ -190,7 +190,7 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         moved = (moved % pl.col(GROUP_SIZE) + pl.col(GROUP_SIZE)) % pl.col(GROUP_SIZE)
 
     def offsetted(frame: pl.LazyFrame) -> pl.LazyFrame:
-        """A per-entity offset is one more equi-join, on keys the frame already carries."""
+        """A per-entity offset is one more equi-join, on keys *frame* already carries."""
         if edge.offsets is None:
             return frame
         offsets, keys = edge.offsets
@@ -236,14 +236,14 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
 class _Edge:
     """The edge of an acyclic shift along an [`_Order`][]: which coordinates it vacates, and what keys them.
 
-    Keyed by the translated dimension, a named offset's own dims and the
-    partition's joined dims, each once: under either, whether a coordinate is
+    Keyed by the translated dimension, a named offset's own dimensions and the
+    partition's joined dimensions, each once: under either, whether a coordinate is
     the edge depends on the rest of the key. A grouped dimension is not a key.
     """
 
     order: _Order
     shift: program.Translate
-    #: The dims a per-entity offset varies over — empty where it is a number.
+    #: The dimensions a per-entity offset varies over — empty where it is a number.
     offset_dims: tuple[str, ...]
     #: A named offset's values and the keys the order's table reads them by, or ``None`` for a number.
     offsets: tuple[pl.LazyFrame, list[str]] | None
@@ -313,9 +313,9 @@ class _Edge:
 
 
 def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[pl.LazyFrame, list[str]]:
-    """A named offset's or width's values, and the keys a frame reads them by.
+    """A named offset's or width's values, and the keys a table reads them by.
 
-    A per-group amount is read under the group column, since no frame carries
+    A per-group amount is read under the group column, since no table carries
     the grouped dimension.
     """
     dims = scope.program.parameters[name].dims

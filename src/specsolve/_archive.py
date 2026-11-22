@@ -1,6 +1,6 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
-[`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
+[`load_archive`][] reads it whole; [`scan_archive`][] leaves the tables on
 disk; [`load_inputs`][] reads the spec and the data without the answer.
 ``archive=`` on the verbs that solve writes one, through
 [`specsolve._archive_layout`][].
@@ -32,7 +32,7 @@ from specsolve._archive_layout import (
 )
 from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
-from specsolve._inputs import lower_expression, lowered
+from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
 from specsolve._records import Metrics
 from specsolve._result import load_result, scan_result
@@ -145,7 +145,7 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
 
 
 def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back whole: the sources as tables, the answer's frames in memory.
+    """Read an archive back whole: the sources as tables, the answer's tables in memory.
 
     Args:
         path: The archive, a ``.zip`` or the directory one was written to.
@@ -184,7 +184,7 @@ def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[
 
 
 def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
+    """Read an archive back off disk: the sources as paths, each table read at the call that asks for it.
 
     As [`load_archive`][], except that *into* is required for a zip, and kept,
     since the members have to outlive the value; a zip with no *into* raises
@@ -298,7 +298,7 @@ def _per_slice(
     off that slice's saved primal. From the seed alone it is another model
     wherever a ``where`` reads the carried parameter.
     """
-    program = lowered(spec)
+    program = as_program(spec)
     solved = {key: frames for _, key, frames in sweep._frames_by_slice(('primal', 'dual'))}
     slices, _ = axis._slice(program, sources, sweep.key_name)
     for current in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
@@ -331,7 +331,7 @@ def _sweep_evaluator(
     key_dtype = sweep.records.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
-        _refuse_carried(carried, [lower_expression(spec, expression)])
+        _refuse_carried(carried, [expression_node(spec, expression)])
         pieces = [
             with_key(evaluate_one(expression), sweep.key_name, key, key_dtype)
             for key, evaluate_one in _per_slice(sweep, spec, sources, axis)

@@ -40,7 +40,7 @@ import pypsa
 
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_growth_limit.json'
 
-#: The lifetime every generator gets, long enough that nothing retires inside the horizon.
+#: The lifetime every generator gets, long enough that nothing retires inside the modelled period.
 LIFETIME = 60
 
 

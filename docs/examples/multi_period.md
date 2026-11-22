@@ -39,7 +39,7 @@ within_cap:
 `at` and `sum(by=)` take the same argument: the relation names one table, and
 the operator says which direction it is walked.
 
-A per-period **parameter** needs neither: join it onto the snapshot index
+A per-period **parameter** needs neither: join it onto the snapshot labels
 before the model sees it. `p_nom` is a **variable**, which no join can reach,
 so the pullback is a construct in the language.
 
@@ -110,7 +110,7 @@ p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -177,12 +177,12 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     objective:
       sense: minimize
-      description: weighted operating cost over the horizon, plus what the capacity costs to hold
+      description: weighted operating cost over every snapshot, plus what the capacity costs to hold
       expression: sum(p * opex * weight) + sum(p_nom * capex)
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/multi_period.yaml', sources) as solution:
         solution.objective  # 10020.0
         solution.dual('balance')

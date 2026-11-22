@@ -15,7 +15,7 @@ own objects. Nothing here imports specsolve.
 
 Storage with ``cyclic_state_of_charge``. The first
 snapshot's state of charge carries over from the *last* rather than from a
-seed, so the horizon closes on itself and there is no
+seed, so the snapshots close into a cycle and there is no
 ``state_of_charge_initial``.
 """
 

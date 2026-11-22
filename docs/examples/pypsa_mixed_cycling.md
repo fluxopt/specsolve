@@ -1,7 +1,7 @@
 # pypsa_mixed_cycling
 
 PyPSA's `cyclic_state_of_charge` is a per-unit flag, so one network runs both
-regimes at once: a unit that must end each horizon where it began, beside one
+regimes at once: a unit that must end the modelled period where it began, beside one
 handed a level it may simply spend.
 
 ## The problem
@@ -9,7 +9,7 @@ handed a level it may simply spend.
 [Storage units](pypsa_storage.md) seeds every storage from
 `state_of_charge_initial`; [cyclic storage](pypsa_cyclic_storage.md) closes
 every storage on itself. A real PyPSA model has both in the same
-`StorageUnit` frame, because the flag is a column:
+`StorageUnit` table, because the flag is a column:
 
 ```python
 n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
@@ -17,8 +17,8 @@ n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
 
 The two regimes are **one rule and a different predecessor**. A cyclic unit's
 first snapshot carries from its last. A seeded unit's first snapshot carries
-from a level in the data. Here that is three blocks under complementary masks,
-and the masks are the flag itself:
+from a level in the data. Here that is three blocks under complementary conditions,
+and the conditions are the flag itself:
 
 | Block | Where | What carries into the first snapshot |
 |---|---|---|
@@ -38,7 +38,7 @@ writes the row instead.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
+PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end the modelled period where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
 
 #### Sets
 
@@ -53,7 +53,7 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit closes its own horizon. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
+| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit ends the modelled period where it began. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of generation |
 | $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — how fast a storage unit may charge or discharge |
@@ -138,14 +138,14 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
       PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
-      network runs both regimes at once: a unit that must end each horizon where it
+      network runs both regimes at once: a unit that must end the modelled period where it
       began, beside one handed a level it may simply spend. The two are one rule
       under complementary masks, and the seeded unit's boundary row is what a cyclic
       one does not have. Optimum 4800.0, from PyPSA itself.
@@ -178,7 +178,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     parameters:
       cyclic:
         description: >-
-          whether a unit closes its own horizon. PyPSA's flag, and the one column
+          whether a unit ends the modelled period where it began. PyPSA's flag, and the one column
           that decides which of the two balance rules a unit obeys
         dims: [storage]
         dtype: bool
@@ -241,8 +241,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
       energy_balance_cyclic:
         description: >-
-          a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-          from its last and it ends every horizon where it began
+          a cyclic unit's level wraps at the last snapshot, so its first snapshot inherits
+          from its last and it ends the modelled period where it began
         dims: [snapshot, storage]
         where: "cyclic"
         expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + p_store - p_dispatch
@@ -270,7 +270,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/pypsa_mixed_cycling.yaml', sources) as solution:
         solution.objective  # 4800.0
         solution.dual('nodal_balance')
@@ -354,5 +354,5 @@ energy worth anything.
 
 *A data column choosing between two boundary regimes.* Neither storage model
 has that shape: the two differ by one deleted `where`, and each is uniform. It
-needs no language feature: three blocks, complementary masks, and the dropped
+needs no language feature: three blocks, complementary conditions, and the dropped
 row visible in `omissions`.

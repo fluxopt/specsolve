@@ -10,7 +10,7 @@ __all__ = ['append_lines', 'chunk_key', 'digits', 'number']
 
 
 def append_lines(frame: pl.LazyFrame, f: IO[bytes]) -> None:
-    """Append a one-column frame to *f*, one raw line per row.
+    """Append a one-column table to *f*, one raw line per row.
 
     Polars writes through the caller's handle, so an ``f.write()`` between two
     calls lands between them. ``maintain_order`` is stated because its default

@@ -133,7 +133,7 @@ class Case:
 
 
 def shortened(shape: Shape) -> Shape:
-    """*shape* one snapshot shorter: the next window of a horizon whose length moved.
+    """*shape* one snapshot shorter: a later window of a rolling horizon, its length moved.
 
     Every rung carries ``snapshot``, and a build one snapshot shorter has
     other counts, so no loaded solver can take it by value.

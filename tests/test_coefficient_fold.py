@@ -63,8 +63,8 @@ def _written(constraint: dict, path: Path) -> str:
 @pytest.mark.parametrize(
     'constraint',
     [
-        pytest.param({'dims': ['i'], 'expression': 'x * (a - b) <= 10'}, id='a-difference-over-one-set-of-dims'),
-        pytest.param({'dims': ['i', 'j'], 'expression': 'y * (a + c) <= 10'}, id='terms-over-different-dims'),
+        pytest.param({'dims': ['i'], 'expression': 'x * (a - b) <= 10'}, id='a-difference-over-one-set-of-dimensions'),
+        pytest.param({'dims': ['i', 'j'], 'expression': 'y * (a + c) <= 10'}, id='terms-over-different-dimensions'),
         pytest.param({'dims': ['i'], 'expression': 'x * (a + d) <= 10'}, id='a-term-absent-at-a-coordinate'),
         pytest.param({'dims': ['i'], 'expression': 'x * (capped + b) <= 10'}, id='terms-from-regions-of-cases'),
         pytest.param({'dims': ['i'], 'expression': 'x * (s + r) <= 10'}, id='scalars'),
@@ -81,7 +81,7 @@ def test_a_folded_coefficient_writes_the_model_the_distributed_product_writes(
 
 
 def test_a_variable_times_a_difference_stacks_one_term_per_cell(monkeypatch) -> None:
-    """Distributed, the row stacked one frame per parameter and summed the copies at assembly."""
+    """Distributed, the row stacked one table per parameter and summed the copies at assembly."""
     stacked = []
     share = assembly.Assembly._matrix_share
 
@@ -93,7 +93,7 @@ def test_a_variable_times_a_difference_stacks_one_term_per_cell(monkeypatch) -> 
     monkeypatch.setattr(assembly.Assembly, '_matrix_share', spied)
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a - b) <= 10'}}}
     sps.build(spec, SOURCES).close()
-    assert stacked == [1], f'x * (a - b) stacked {stacked} frames, not one'
+    assert stacked == [1], f'x * (a - b) stacked {stacked} tables, not one'
 
 
 def test_a_divisor_hole_under_a_folded_coefficient_is_still_refused() -> None:

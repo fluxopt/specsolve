@@ -59,7 +59,7 @@ def evaluate(expression: str | dict) -> pl.DataFrame:
 
 def test_a_scalar_expression_is_the_arithmetic_the_data_implies():
     frame = evaluate('total_cost')
-    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dims is a single value row'
+    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dimensions is a single value row'
     assert frame.item() == pytest.approx(635.0), 'sum(dispatch * cost) is 10·1 + 2·50 + 20·1 + 3·50 + 5·1 + 7·50 = 635'
 
 
@@ -85,21 +85,21 @@ def test_a_grouped_sum_relabels_through_a_relation():
     ('name', 'dims'),
     [
         pytest.param('cost_by_gen', {'snapshot', 'generator'}, id='no-reduction'),
-        pytest.param('served', {'snapshot'}, id='one-dim-summed-away'),
+        pytest.param('served', {'snapshot'}, id='one-dimension-summed-away'),
         pytest.param('total_cost', set(), id='everything-summed-away'),
     ],
 )
-def test_the_frame_carries_exactly_the_dims_the_expression_survives_over(name, dims):
+def test_the_table_carries_exactly_the_dims_the_expression_survives_over(name, dims):
     frame = evaluate(name)
     assert set(frame.columns) - {'value'} == dims, (
-        'the returned frame answers over the dims the expression still ranges over after its sums'
+        'the returned table answers over the dimensions the expression still ranges over after its sums'
     )
 
 
 def test_an_expression_the_file_never_named_reads_the_same_arithmetic():
     got = dict(zip(*evaluate('sum(dispatch, over=generator)').sort('snapshot'), strict=True))
     assert got == pytest.approx({0: 12.0, 1: 23.0, 2: 12.0}), (
-        'evaluate lowers an undeclared expression against the variable-free spec and reads it as arithmetic'
+        'evaluate compiles an undeclared expression against the variable-free spec and reads it as arithmetic'
     )
 
 
@@ -173,7 +173,7 @@ def test_a_quotient_is_absent_where_its_divisor_is_zero():
     ],
 )
 def test_an_operand_that_is_a_sum_is_taken_whole(expression, expected):
-    """`sum(cost)` is 51, and a power or a quotient reads that total rather than each summand.
+    """`sum(cost)` is 51, and a power or a quotient reads that total rather than each term of the sum.
 
     Before #1777 `sum(cost) ** 2` read 1² + 50².
     """

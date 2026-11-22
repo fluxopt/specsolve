@@ -67,7 +67,7 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -117,7 +117,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/ports/stigler_diet.yaml', sources) as solution:
         solution.objective  # 0.10866227820675685
         solution.dual('meet_requirement')

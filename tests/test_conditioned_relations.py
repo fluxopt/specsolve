@@ -177,7 +177,7 @@ def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
 
 
 def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
-    """A model whose one constraint walks *relations*, both ends named where the declaration leaves a choice."""
+    """A model whose one constraint walks *relations*, both ends named where the entry leaves a choice."""
     declared = {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int', 'ordered': True}}
     sides = [side for r in relations.values() for side in (r['key'], r.get('values', []))]
     over = [d for s in sides for d in (s.values() if isinstance(s, dict) else [s] if isinstance(s, str) else s)]

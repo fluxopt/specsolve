@@ -116,7 +116,7 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -194,7 +194,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve(to_spec('examples/piecewise_ragged.yaml').expand(), sources) as solution:
         solution.objective  # 426.0
         solution.dual('balance')

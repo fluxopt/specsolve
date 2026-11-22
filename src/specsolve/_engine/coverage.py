@@ -1,4 +1,4 @@
-"""Is the data there where a declaration needs it? The positions that ask.
+"""Is the data there where an entry needs it? The positions that ask.
 
 Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
 constant term have no such reading, so each is asked at the last moment the
@@ -24,7 +24,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected, collected_all
-from specsolve._engine.predicates import masked
+from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import join_on
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
@@ -71,7 +71,7 @@ def refuse_null_constants(
 
     Asked before [`constant_scalar`][terms.constant_scalar] sums the term,
     which reads a null as zero. *frames* are narrowed by the caller to the
-    coordinates the declaration builds. *message* words it for the position.
+    coordinates the entry builds. *message* words it for the position.
 
     Raises:
         DataError: Naming *divisors* and the count of undefined values.
@@ -110,8 +110,8 @@ def _refuse_undefined(
 def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyFrame]:
     """Each constant term cut to the rows built, for [`refuse_null_constants`][].
 
-    A term that lost the row's dims to a reduction is asked whole, but only if
-    the declaration builds a row at all.
+    A term that lost the row's dimensions to a reduction is asked whole, but only
+    if the entry builds a row at all.
     """
     return [
         p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi')
@@ -134,8 +134,8 @@ def constant_side(
     check rides on the same pass. Only a term with a parameter under it is
     owed: one whose parameters all stand beside a variable is a coefficient,
     and its zero is not a bound. A term built under a ``cases:`` region is
-    owed only inside it. A gap a reduction summed away is one summand fewer,
-    as it is for a ``missing: neutral`` row anywhere inside a sum.
+    owed only inside it. A gap a reduction summed away leaves the sum one term
+    fewer, as it is for a ``missing: neutral`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant term with no value at a row it is owed.
@@ -153,7 +153,7 @@ def constant_side(
         gap = pl.col(column).is_null()
         if p.region is not None:
             inside = f'__inside {i}__'
-            claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
+            claimed = narrowed(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
         carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))

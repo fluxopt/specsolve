@@ -410,7 +410,7 @@ def index(stamped: dict) -> str:
         " count is shown as `inside PyPSA's range`.\n\n"
         f'## Recorded deviations\n\n{_deviations(stamped)}\n\n'
         'Not compared, deliberately: primals — an optimum need not be unique. Counted rather than compared: the rows built per block, on'
-        " each rung's page, and over the whole ladder that every block is built by some rung, every mask is"
+        " each rung's page, and over the whole ladder that every block is built by some rung, every condition is"
         ' partially true somewhere and every parameter is fed somewhere. The runner fails on a gap not listed in'
         ' `differential/pypsa/untested.txt`, and on a listed one a rung now closes; the rungs that would close them'
         ' are [mathspec#830](https://github.com/energy-models/mathspec/issues/830).\n\n'

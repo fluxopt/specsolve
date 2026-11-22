@@ -19,7 +19,7 @@ SPEC = """
 description: each snapshot priced at the snapshot that represents it
 
 dimensions:
-  snapshot: {dtype: int, description: a step of the horizon, ordered: true}
+  snapshot: {dtype: int, description: a step in time, ordered: true}
 
 relations:
   rep_of:
@@ -103,7 +103,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
 
 
 def test_a_where_reads_a_self_map_at_its_key():
-    """A self-map read as a mask compares at its key."""
+    """A self-map read as a condition compares at its key."""
     spec = override(
         raw_of(SPEC),
         **{

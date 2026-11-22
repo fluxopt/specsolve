@@ -91,7 +91,7 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-The rows and frames those hand back:
+The rows and tables those hand back:
 
 ::: specsolve.types.Diagnostics
     options:
@@ -193,7 +193,7 @@ The rest are specsolve's:
 
 ### Names that differ only by case
 
-**Two declarations of one namespace whose names differ only by case are
+**Two entries of one namespace whose names differ only by case are
 refused** by every function. A case-insensitive filesystem folds `p` and `P` into
 one file on disk.
 
@@ -228,7 +228,7 @@ sinks that do. `solve` and `write` refuse the same. The check reads the built
 model, so a square the data prices at zero, an integer variable with no column
 or an empty set asks for nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
-from whether it is sayable.
+from whether the language states it.
 
 | | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
 |---|---|---|---|---|---|

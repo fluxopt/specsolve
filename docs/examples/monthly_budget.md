@@ -9,8 +9,8 @@ A cap on what each technology may generate in each calendar month, with the mont
 $$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
 
 $\mathrm{month}$ is a **coordinate the snapshot dimension declares**, not a
-calendar the language understands. Its values arrive as a column in the
-snapshot index.
+calendar the language understands. Its values arrive as a column of
+`month_of`, a table passed beside the snapshot labels.
 
 Compare [transport](transport.md): there, $\mathrm{gen\_bus}$ is a relation over
 `generator` and the sum is over generators at a bus. Here $\mathrm{month\_of}$ is a
@@ -79,7 +79,7 @@ A cap on what each technology may generate per calendar month — an aggregate o
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -140,12 +140,12 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     objective:
       sense: minimize
-      description: total cost of generation over the horizon
+      description: total cost of generation over every snapshot
       expression: sum(p * cost)
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
+    # sources: parameter name -> table or parquet path
     with sps.solve('examples/monthly_budget.yaml', sources) as solution:
         solution.objective  # 9500.0
         solution.dual('monthly_budget')
@@ -222,10 +222,10 @@ month     generator   dual
 2030-03   wind        -0.0
 ```
 
-Per-month *results* need no language support: a primal is a tidy frame, so a
+Per-month *results* need no language support: a primal is a tidy table, so a
 join and a `group_by` do it:
 
 ```python
-sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value').sum())
+sol.primal('p').join(month_of, on='snapshot').group_by('month').agg(pl.col('value').sum())
 ```
 
