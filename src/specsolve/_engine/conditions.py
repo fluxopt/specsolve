@@ -81,7 +81,7 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
 
 
 def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
-    """How many rows of *atom*'s parameter pass its test, as a one-cell table; a missing row reads as false."""
+    """How many rows of *atom*'s parameter it holds at, as a one-cell table; a missing row reads as false."""
     keys = tuple(atom.dims)
     base = scope.data.parameters[atom.name].select(*keys) if keys else scope.product(())
     carrier, condition = query_condition(scope, base, program.Mask(atom), keys)

@@ -14,7 +14,7 @@ from specsolve._messages import coordinate_expr, reported_divisor_message, unkno
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
 from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
 from specsolve._sinks.handoff import SENSE_CODES
-from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, settled
+from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, seated
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -392,7 +392,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     basic, which is how a row gained between two builds enters without moving
     the vertex. An entry whose dimensions changed is new. The result is then
     [`_counted`][] to one basic entry per row, which is what a solver needs to
-    take it, and [`settled`][specsolve._sinks.solver.settled]
+    take it, and [`seated`][specsolve._sinks.solver.seated]
     on this build's bounds.
 
     Raises:
@@ -407,7 +407,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
     placed += _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
     _refuse_nothing_placed(placed)
-    return settled(handoff, *_counted(placed_columns, placed_rows))
+    return seated(handoff, *_counted(placed_columns, placed_rows))
 
 
 def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.ndarray:

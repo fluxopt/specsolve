@@ -229,7 +229,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
     """A skip is decided on the data a build reads, so `update` decides it again.
 
     `cap > 100` admits no row of `admits_nothing` until the update moves `cap`'s
-    numbers alone: no dimension changes, so it is the case a refill could keep.
+    numbers alone: no dimension changes, so it is the case a splice could keep.
     """
     with sps.build(SPEC, first) as model:
         model.update(then)
@@ -359,8 +359,8 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
 
 
-def test_a_test_the_assumptions_and_the_build_share_is_read_once(monkeypatch):
-    """The assumptions and the entries fold their `where` over one read of each test, made at attach.
+def test_an_atom_the_assumptions_and_the_build_share_is_read_once(monkeypatch):
+    """The assumptions and the entries specialize their `where` to one read of each atom, made at attach.
 
     Each read its own before, so a model gated on `cap > 2` in both read `cap`'s table twice.
     """
