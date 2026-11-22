@@ -239,7 +239,7 @@ def test_the_command_only_asks_for_xdist_where_xdist_is_installed(monkeypatch: p
     A row built on that reads "pytest exited 4" and proves nothing.
     """
     monkeypatch.setattr(tool.importlib.util, 'find_spec', lambda name: None)
-    assert '-n' not in tool.command(['tests']), 'without xdist the flag is left off rather than sent and rejected'
+    assert '-n' not in tool.command(['tests']), 'without xdist the flag is left off rather than sent and refused'
 
     monkeypatch.setattr(tool.importlib.util, 'find_spec', lambda name: object())
     assert '-n' in tool.command(['tests']), 'and it is used where it is there, because the suite is minutes without it'

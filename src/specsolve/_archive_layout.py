@@ -22,8 +22,8 @@ import polars as pl
 import polars.selectors as cs
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import FORMAT_FILE, MANIFEST_FILE, OWNED_FILE, write_format, write_whole
-from specsolve._inputs import lowered
+from specsolve._answer_layout import FORMAT_FILE, HORIZON_FILE, MANIFEST_FILE, write_format, write_whole
+from specsolve._inputs import as_program
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._outputs import OUTPUT_KINDS
 from specsolve.errors import LayoutError
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter
+    from specsolve._answer_layout import TableWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -48,7 +48,7 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve._answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 3
+INPUTS_LAYOUT = 4
 
 
 def check_the_target(out: Path) -> None:
@@ -78,7 +78,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, FrameWriter], object],
+    answer: Callable[[Path, TableWriter], object],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -99,8 +99,8 @@ def write_archive(
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
 
-    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-        write_whole(_with_run(frame.lazy(), run), path)
+    def write(table: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(table.lazy(), run), path)
 
     staging = _staging_for(out)
     part = staging / out.name
@@ -109,12 +109,12 @@ def write_archive(
         (tree / SOURCES_DIR).mkdir(parents=True)
         write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
-        for name, table in tables.items():
-            write(table, tree / SOURCES_DIR / f'{name}.parquet')
+        for name, source in tables.items():
+            write(source, tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         answer(tree / ANSWER_DIR, write)
-        _write_catalogs(lowered(spec), tree, run, axis)
+        _write_catalogs(as_program(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
     except BaseException:
@@ -141,7 +141,7 @@ _CATALOG_SCHEMA = {
 
 
 def _answered_under(under: str) -> dict[str, list[str]]:
-    """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
+    """The directories under *under* that hold an answer, per kind of entry, each output beside its core kind."""
     held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
     for kind, carried in OUTPUT_KINDS.items():
         held[carried.per].append(f'{under}/{kind}')
@@ -159,14 +159,14 @@ _HELD_UNDER = MappingProxyType(
 )
 
 
-#: What ``answer/owned.parquet`` holds, as its catalog row describes it.
-_OWNED = 'the labels of the windowed dimension that each window owns, by window'
+#: What ``answer/horizon.parquet`` holds, as its catalog row describes it.
+_HORIZON = "the labels of the windowed dimension in each window's horizon, by window"
 
 
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
-    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/owned.parquet`` where a sweep cut windows."""
-    owned = f'{ANSWER_DIR}/{OWNED_FILE}'
-    extra = [(owned, 'owned', 'window', _OWNED)] if (tree / owned).is_file() else []
+    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/horizon.parquet`` where a sweep cut windows."""
+    horizon = f'{ANSWER_DIR}/{HORIZON_FILE}'
+    extra = [(horizon, 'horizon', 'window', _HORIZON)] if (tree / horizon).is_file() else []
     parquet.write(_catalog(program, tree, run, _HELD_UNDER, _axis_dims(tree, axis), extra), tree / CATALOG_MEMBER)
 
 
@@ -241,17 +241,17 @@ def _declared_files(
         yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
     answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
     for kind, declared in answered.items():
-        for name, declaration in declared.items():
-            yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
+        for name, entry in declared.items():
+            yield name, kind, entry.description, None, [(d, d) for d in entry.dims]
 
 
-def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
-    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
+def _with_run(table: pl.LazyFrame, run: str) -> pl.LazyFrame:
+    """*table* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
     timestamp in a time zone becomes the same instant in UTC.
     """
-    return frame.with_columns(
+    return table.with_columns(
         cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
         cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
         pl.lit(run, dtype=pl.String).alias(RUN),

@@ -49,7 +49,7 @@ sources = {
 }
 ```
 
-A source can also be a pandas frame or a parquet path; see
+A source can also be a pandas `DataFrame` or a parquet path; see
 [the data contract](reference/data.md).
 
 ## Solve

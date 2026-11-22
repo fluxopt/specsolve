@@ -3,7 +3,7 @@
 `solve_over` runs one [model](glossary.md#the-chain) once per slice and folds
 the answers together. A slice is one set of [sources](glossary.md#how-it-runs)
 under one key. This page is the reference for its axes, keywords and the `Sweep` it
-returns. [A horizon too large for one solve](../sweep.md) and
+returns. [A model too large for one solve](../sweep.md) and
 [Solving many scenarios](../howto/scenarios.md) show them in use.
 
 ## The axes
@@ -19,7 +19,9 @@ returns. [A horizon too large for one solve](../sweep.md) and
 **`EachWindow` keeps one it does.** A label's slice holds that label's rows
 without the column, and the answer lifts the label back as the key. A window
 is the model over its own labels, so the spec and the sources are the ones a
-single solve takes. A rule for a window's first row is written
+single solve takes. A window's first `horizon=` labels are its horizon, which
+the answer keeps. The `lookahead` labels after them are solved, then left out of
+the answer. A rule for a window's first row is written
 `where: "position(snapshot) == 0"`, since a position counts within the window.
 
 **A windowed dimension is declared `ordered: true`.** Any other is refused,
@@ -29,18 +31,18 @@ since its windows would follow the row order of the data.
 [a label is](data.md#where-coordinates-come-from). A key finer than a
 microsecond is refused.
 
-**`steps` as a sequence is one block per window**, laid end to end.
-`lookahead` is one number, whatever the blocks.
+**`horizon=` as a sequence is one horizon per window**, laid end to end.
+`lookahead` is one number, whatever the horizons.
 
 ```python
-sps.EachWindow('snapshot', steps=[24, 24, 168, 168, 720], lookahead=12)
-sps.EachWindow('snapshot', steps=days_in_each_month, lookahead=48)
+sps.EachWindow('snapshot', horizon=[24, 24, 168, 168, 720], lookahead=12)
+sps.EachWindow('snapshot', horizon=days_in_each_month, lookahead=48)
 ```
 
 **A sequence that stops short of the axis is refused:**
 
 ```text
-DataError: steps keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
+DataError: horizon keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
 the last 5 would be solved by no window. List a block for them, or pass an int to
 repeat one size to the end.
 ```
@@ -51,13 +53,13 @@ holds the same mapping. A mapping with a key the axis does not take, or without
 one it needs, is refused, and the message names the keys the axis takes.
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis.to_dict())
 ```
 
 **Sources cross a slice in every shape `build` takes.** A parameter or relation
-whose table carries the axis is filtered. Every other source passes through. An
-index of another dimension that carries the axis is refused. A table carrying
+whose table carries the axis is filtered. Every other source passes through. The
+labels table of another dimension that carries the axis is refused. A table carrying
 the axis that is short of a label another table has warns, naming both.
 
 **Every source carries the axis as one type.** `int` in one table and `str` in
@@ -71,7 +73,7 @@ beside one without. A row with no label in that column is refused too.
 `activity`, `reduced_cost`, `slack`, `variable_basis`, `constraint_basis`,
 `scan`, `to_pandas`, `to_dataarray` and `to_dataset`. An `EachWindow`
 answer is over the real labels of the sliced dimension, each from the window
-that owns it. An `EachLabel` answer is keyed by slice.
+whose horizon holds it. An `EachLabel` answer is keyed by slice.
 
 **You name the extra dimension.** `EachLabel('scenario')` keys on
 `scenario`, so `sweep.to_dataarray('p')` is `(scenario, snapshot, generator)`.
@@ -113,7 +115,7 @@ replaces what an earlier save left in the directory, as a result's `save` does.
 |---|---|
 | **duals are keyed, never combined** | A slice with an integer variable contributes no duals, and `sweep.records` says which. |
 | **no aggregate objective** | `sweep.records` is keyed by slice, with the objective as one column. |
-| **a window owns its first `steps` labels** | The rows after them are lookahead. The answer keeps the owned rows, and `per_window=True` reads them all. |
+| **a window's horizon is its first `horizon=` labels** | The rows after them are lookahead. The answer keeps the rows of each window's horizon, and `per_window=True` reads them all. |
 | **a slice that did not solve contributes no rows** | `sweep.records` still holds one row per slice, with a null objective where a slice reached none. |
 | **a window keys as `<dim>_start`** | Per window, the key column `snapshot_start` holds the label each window began at, beside the window's own `snapshot`. |
 | **an axis's `key_name=` names the key** | On either axis. A name that collides with a table column, or starts with `specsolve_`, is refused. An archive holds it with the axis, so the sweep runs again under the same key. |
@@ -128,7 +130,7 @@ replaces what an earlier save left in the directory, as a result's `save` does.
 one slice:
 
 ```python
-sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', steps=24, lookahead=24), spill_to='runs/')
+sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', horizon=24, lookahead=24), spill_to='runs/')
 sweep.scan('soc')  # a LazyFrame: (snapshot, value), the answer
 sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, the same keywords
 ```
@@ -150,7 +152,7 @@ sweep runs again from the file alone ([archiving](../howto/archiving.md)):
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24),
+    sps.EachWindow('snapshot', horizon=24, lookahead=24),
     archive='roll.zip',
 )
 ```
@@ -169,20 +171,21 @@ next slice's data.** `EachLabel` and `EachWindow` take it.
 sweep = sps.solve_over(
     'window.yaml',
     sources,
-    sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'}),
+    sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'}),
 )
 ```
 
-**You name no label.** The row handed on is the last one the slice owns:
-label 23 of a window keeping 24, not label 47 of the 48 it solved.
+**You name no label.** The row handed on is the window's horizon end, the
+last label of its horizon: label 23 of a window keeping 24, not label 47 of
+the 48 it solved.
 
 | Rule | |
 |---|---|
 | **a carry is a copy, never arithmetic** | Accumulation (`existing += built`) is a derived variable in the YAML. |
-| **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole frame. |
+| **the carry collapses the one dimension the variable has and the parameter does not** | `soc` over `(t, storage)` into `soc_initial` over `(storage)` drops `t`. Same dimensions move the whole table. |
 | **a window carries nothing over the dimension it windows** | No two windows hold the same labels, so a parameter over that dimension is refused. |
 | **that dimension must be the one `EachWindow` windows** | Any other is refused. A carry on `EachLabel` collapses nothing. |
-| **a carried value is a boundary condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` where `position(t) == 0`, a window's first row. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every seam. |
+| **a carried value is an initial condition, never a pin** | Write `soc == soc_initial + charge * 0.9 - discharge` where `position(t) == 0`, a window's first row. `soc == soc_initial` drops the first row's dynamics, so the window gets free energy at every horizon end. |
 | **the first slice needs a seed** | It takes the parameter from `sources`. A sweep whose sources lack it is refused. |
 | **a carry is checked before any source is read** | Two collapsed dimensions, a parameter over more dimensions than the variable, the wrong dimension and no seed all raise first. `check` cannot see a carry, because it is not part of the spec. |
 | **a slice that leaves nothing to carry stops the sweep** | The error names the slice and how it terminated. Without a carry, the sweep goes on. |
@@ -195,7 +198,7 @@ as `solve_over` builds it. It takes what the sweep took, and the key of the
 slice:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 model = sps.build_slice('window.yaml', sources, axis, 888)
 model.write('window-888.lp')
 ```

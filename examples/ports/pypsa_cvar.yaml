@@ -26,7 +26,7 @@ parameters:
     description: demand to be met, and the one thing that differs between futures
     dims: [scenario, snapshot]
   capex:
-    description: cost of holding one unit of capacity over the horizon
+    description: cost of holding one unit of capacity over the modelled period
     dims: [generator]
   opex:
     description: cost of one unit of output
@@ -74,7 +74,7 @@ variables:
 
 expressions:
   operating_cost:
-    description: what one future costs to run, over the whole horizon
+    description: what one future costs to run, over every snapshot
     expression: sum(sum(p * opex, over=generator), over=snapshot)
 
 constraints:

@@ -1,7 +1,7 @@
 """Every arm, and the four verbs the harness asks of one.
 
 An arm is one library's answer to the same question: same parquet, same model,
-same seam. Adding one is a module here and an entry in `ARMS`.
+same hand-off. Adding one is a module here and an entry in `ARMS`.
 
 Each arm module defines:
 

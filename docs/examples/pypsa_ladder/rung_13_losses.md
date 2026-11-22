@@ -881,8 +881,8 @@ S_{k} \le \overline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_13_losses.yaml', sources) as solution:
-        solution.objective  # 10805.29588
+    with sps.solve('differential/pypsa/rungs/rung_13_losses.yaml', sources) as result:
+        result.objective  # 10805.29588
     ```
 
 === "PyPSA"

@@ -40,7 +40,7 @@ parameters:
     description: demand to be met
     dims: [snapshot]
   period_weight:
-    description: what one period's costs are worth at the horizon's start
+    description: what one period's costs are worth at the start of the first period
     dims: [period]
   opex:
     description: cost of one unit of output

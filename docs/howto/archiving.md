@@ -59,7 +59,7 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 | | `load_archive` | `scan_archive` |
 |---|---|---|
 | a source | the table the member holds | the path to it |
-| the answer | frames in memory | read at the call that asks |
+| the answer | tables in memory | read at the call that asks |
 | a sweep's answer | held: `sweep.primal('p')` | spilled: `sweep.scan('p')` |
 | a zip's `into=` | optional, and scratch without one | required, and kept |
 
@@ -69,7 +69,7 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 runs again from the archive alone:
 
 ```python
-axis = sps.EachWindow('snapshot', steps=24, lookahead=24, carry={'soc_initial': 'soc'})
+axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
 archived = sps.load_archive('roll/')

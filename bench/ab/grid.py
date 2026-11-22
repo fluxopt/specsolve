@@ -179,8 +179,8 @@ def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
     stamp = key / '.complete'
     if not stamp.exists():
         key.mkdir(parents=True, exist_ok=True)
-        for source, frame in tables(shape, SIZES[size]).items():
-            frame.write_parquet(key / f'{source}.parquet')
+        for source, table in tables(shape, SIZES[size]).items():
+            table.write_parquet(key / f'{source}.parquet')
         stamp.write_text(repr(asdict(shape)))
     paths = {p.stem: str(p) for p in sorted(key.glob('*.parquet'))}
     return Cell(cell_id, spec(shape), paths, solvable=not shape.quadratic)
@@ -292,43 +292,43 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
     product = _product(dims, index)
     n = product.height
 
-    def table(values: np.ndarray, frame: pl.DataFrame = product) -> pl.DataFrame:
-        out = frame.with_columns(value=pl.Series(values))
+    def table(values: np.ndarray, rows: pl.DataFrame = product) -> pl.DataFrame:
+        out = rows.with_columns(value=pl.Series(values))
         if shape.order == 'shuffled':
             return out.sample(fraction=1.0, shuffle=True, seed=7)
         if shape.order == 'reversed':
             return out.reverse()
         return out
 
-    frames = {d: pl.DataFrame({d: index[d]}) for d in dims}
-    frames['demand'] = table(rng.uniform(0.0, 1.0, n))
-    frames['cost'] = table(rng.uniform(1.0, 2.0, n))
+    sources = {d: pl.DataFrame({d: index[d]}) for d in dims}
+    sources['demand'] = table(rng.uniform(0.0, 1.0, n))
+    sources['cost'] = table(rng.uniform(1.0, 2.0, n))
     if shape.bounds == 'every':
-        frames['ub'] = table(rng.uniform(5.0, 10.0, n))
+        sources['ub'] = table(rng.uniform(5.0, 10.0, n))
     elif shape.bounds == 'first':
         firsts = pl.DataFrame({'snapshot': index['snapshot']})
-        frames['ub'] = table(rng.uniform(5.0, 10.0, firsts.height), firsts)
+        sources['ub'] = table(rng.uniform(5.0, 10.0, firsts.height), firsts)
     if shape.terms > 1 and shape.mask in ('variable-half', 'both'):
-        frames['built'] = table(rng.random(n) < 0.5)
+        sources['built'] = table(rng.random(n) < 0.5)
     if shape.terms > 1 and shape.mask == 'variable-presence':
-        frames['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
+        sources['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
     if shape.mask == 'constraint-relation':
-        frames['status'] = pl.DataFrame({'status': ['active', 'idle']})
-        frames['status_of'] = pl.DataFrame(
+        sources['status'] = pl.DataFrame({'status': ['active', 'idle']})
+        sources['status_of'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'status': np.where(rng.random(n0) < 0.5, 'active', 'idle')}
         )
     if shape.grouped:
         regions = np.array([f'r{i:05d}' for i in range(max(1, n0 // 10))])
-        frames['region'] = pl.DataFrame({'region': regions})
-        frames['region_of'] = pl.DataFrame(
+        sources['region'] = pl.DataFrame({'region': regions})
+        sources['region_of'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'region': regions[rng.integers(0, regions.size, n0)]}
         )
-    return frames
+    return sources
 
 
 def _product(dims: list[str], index: dict[str, np.ndarray]) -> pl.DataFrame:
     """Every coordinate of *dims*, row-major in each dimension's own label order."""
-    frame = pl.DataFrame({dims[0]: index[dims[0]]})
+    table = pl.DataFrame({dims[0]: index[dims[0]]})
     for d in dims[1:]:
-        frame = frame.join(pl.DataFrame({d: index[d]}), how='cross')
-    return frame
+        table = table.join(pl.DataFrame({d: index[d]}), how='cross')
+    return table

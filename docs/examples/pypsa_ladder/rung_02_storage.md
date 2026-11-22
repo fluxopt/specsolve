@@ -1127,8 +1127,8 @@ e_{\xi,t,v} = \mathrm{e}^{\mathrm{set}}_{\xi,t,v} \qquad \forall\, \xi \in \Xi,\
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_02_storage.yaml', sources) as solution:
-        solution.objective  # 4456.659315422355
+    with sps.solve('differential/pypsa/rungs/rung_02_storage.yaml', sources) as result:
+        result.objective  # 4456.659315422355
     ```
 
 === "PyPSA"

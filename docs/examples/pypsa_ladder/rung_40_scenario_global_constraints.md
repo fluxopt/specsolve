@@ -837,8 +837,8 @@ S_{k} \ge \underline{\mathrm{s}}^{\mathrm{nom}}_{\xi,k} \qquad \forall\, \xi \in
         'snapshot_weightings_generators': weighting(n, 'generators'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_40_scenario_global_constraints.yaml', sources) as solution:
-        solution.objective  # 15106.666667
+    with sps.solve('differential/pypsa/rungs/rung_40_scenario_global_constraints.yaml', sources) as result:
+        result.objective  # 15106.666667
     ```
 
 === "PyPSA"

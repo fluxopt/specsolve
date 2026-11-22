@@ -1047,8 +1047,8 @@ s_{\xi,t,k} + \ell_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_23_transformer_losses_secants.yaml', sources) as solution:
-        solution.objective  # 10981.999155
+    with sps.solve('differential/pypsa/rungs/rung_23_transformer_losses_secants.yaml', sources) as result:
+        result.objective  # 10981.999155
     ```
 
 === "PyPSA"

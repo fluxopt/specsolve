@@ -60,10 +60,10 @@ def test_polars_has_parquet_where_it_was_built_with_it(polars_parquet):
     assert parquet.require('a test') == 'polars', 'the polars this suite runs on reads and writes parquet'
 
 
-def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_frame_inputs):
-    result = sps.solve(dispatch_yaml, dispatch_frame_inputs)
+def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_table_inputs):
+    result = sps.solve(dispatch_yaml, dispatch_table_inputs)
     assert result.termination_condition == 'optimal'
-    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_frame_inputs), sps.EachLabel('scenario'))
+    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_table_inputs), sps.EachLabel('scenario'))
     assert sweep.records['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
 
 
@@ -129,14 +129,14 @@ CALLS: list[tuple[str, Callable[..., object], str]] = [
 
 @pytest.mark.parametrize(('call', 'names'), [pytest.param(call, names, id=label) for label, call, names in CALLS])
 def test_every_call_that_needs_parquet_says_so_by_name(
-    monkeypatch, call, names, dispatch_yaml, dispatch_frame_inputs, tmp_path
+    monkeypatch, call, names, dispatch_yaml, dispatch_table_inputs, tmp_path
 ):
     """The refusal names the call, where polars would raise an ``AttributeError`` from inside itself."""
-    saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
+    saved = _saved(dispatch_yaml, dispatch_table_inputs, tmp_path)
     _take_parquet_away(monkeypatch)
     try:
         with pytest.raises(sps.errors.SpecsolveError, match='this polars was built without it') as raised:
-            call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
+            call(dispatch_yaml, dispatch_table_inputs, saved, tmp_path)
     finally:
         parquet._polars_has_parquet.cache_clear()
     assert names in str(raised.value), 'the refusal names the call'
@@ -146,14 +146,14 @@ def test_every_call_that_needs_parquet_says_so_by_name(
 
 @pytest.mark.parametrize('call', [pytest.param(call, id=label) for label, call, _ in CALLS])
 def test_every_call_that_needs_parquet_goes_through_pyarrow_where_it_can_be_imported(
-    monkeypatch, call, dispatch_yaml, dispatch_frame_inputs, tmp_path
+    monkeypatch, call, dispatch_yaml, dispatch_table_inputs, tmp_path
 ):
     """The same calls succeed where pyarrow is importable, reading what polars wrote and writing what it reads."""
     pytest.importorskip('pyarrow')
-    saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
+    saved = _saved(dispatch_yaml, dispatch_table_inputs, tmp_path)
     _take_parquet_away(monkeypatch, pyarrow=True)
     try:
-        call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
+        call(dispatch_yaml, dispatch_table_inputs, saved, tmp_path)
     finally:
         parquet._polars_has_parquet.cache_clear()
 
@@ -170,7 +170,7 @@ def no_time_zone_database(monkeypatch):
 
 
 def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
-    monkeypatch, no_time_zone_database, dispatch_yaml, dispatch_frame_inputs, tmp_path
+    monkeypatch, no_time_zone_database, dispatch_yaml, dispatch_table_inputs, tmp_path
 ):
     """Archiving a sweep read each slice's record out as Python values, and its UTC timestamp needs the database.
 
@@ -181,7 +181,7 @@ def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
     pytest.importorskip('pyarrow')
     _take_parquet_away(monkeypatch, pyarrow=True)
     try:
-        sources = _by_scenario(dispatch_frame_inputs)
+        sources = _by_scenario(dispatch_table_inputs)
         runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
         study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
         again = sps.solve_over(study.spec, study.sources, study.axis)

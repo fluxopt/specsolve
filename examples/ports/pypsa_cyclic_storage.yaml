@@ -5,7 +5,7 @@ description: >-
 
 dimensions:
   snapshot:
-    description: dispatch periods, cyclic at the horizon
+    description: dispatch periods, the last wrapping to the first
     dtype: int
     ordered: true
   bus:
@@ -134,7 +134,7 @@ constraints:
   energy_balance:
     description: >-
       the level carried into a snapshot, decayed, plus what was stored and less
-      what was taken — and it wraps at the horizon, so the first snapshot
+      what was taken — and it wraps at the last snapshot, so the first snapshot
       inherits from the last
     dims: [snapshot, storage]
     expression: >-

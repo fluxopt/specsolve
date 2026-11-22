@@ -18,7 +18,8 @@ for numbers in steps:
 ```
 
 Each solve carries on from the last while `update` keeps the loaded solver. An
-`update` that moves a mask or a coordinate set loads the solver again
+`update` that changes which coordinates a `where:` keeps, or which coordinates
+exist, loads the solver again
 ([`Model.update`](../reference/api.md#specsolve.types.Model.update)).
 `start=None` begins from nothing every time. The answer is the same either way.
 
@@ -36,7 +37,7 @@ for start in ('previous', None):
 ```
 
 Take the faster one. `loads` equal to the number of solves means each update
-moved a mask.
+changed which coordinates a `where:` keeps.
 
 **Carrying on usually pays, and can lose by an order of magnitude.** It cut
 wall time by 1.5× to 5.7× on the bench's dispatch and storage models

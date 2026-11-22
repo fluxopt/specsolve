@@ -726,8 +726,8 @@ s_{\xi,t,k} \le \overline{\mathrm{s}}_{\xi,t,k} \cdot \mathrm{s}^{\mathrm{nom}}_
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_68_outage_factors_per_period.yaml', sources) as solution:
-        solution.objective  # 13000.0
+    with sps.solve('differential/pypsa/rungs/rung_68_outage_factors_per_period.yaml', sources) as result:
+        result.objective  # 13000.0
     ```
 
 === "PyPSA"

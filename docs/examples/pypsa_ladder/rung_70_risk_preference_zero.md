@@ -747,8 +747,8 @@ a_{\xi} - \mathit{scenario\_opex}_{\xi} + \theta \ge 0 \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_70_risk_preference_zero.yaml', sources) as solution:
-        solution.objective  # 7946.733333
+    with sps.solve('differential/pypsa/rungs/rung_70_risk_preference_zero.yaml', sources) as result:
+        result.objective  # 7946.733333
     ```
 
 === "PyPSA"

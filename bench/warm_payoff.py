@@ -137,8 +137,8 @@ def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
     The cold arm runs first after the update that gained a cut, whose new row
     loads the solver fresh. The warm arm then reuses that solver, which
     forgets its work before the carried basis is set, as any start does. The
-    iteration count is read off the private handle; no public surface reports
-    it.
+    iteration count is read off the private handle; nothing in the public API
+    reports it.
     """
     began = time.perf_counter()
     answer = master.solve(**solve)
@@ -146,14 +146,14 @@ def _solved(master: sps.Model, **solve: Any) -> tuple[Result, int, float]:
     return answer, int(master._engine._solver._handle.getInfo().simplex_iteration_count), seconds
 
 
-def _slope_at(solution: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def _slope_at(result: sps.types.Result, avail: pl.DataFrame, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """The subproblem's subgradient in capacity, and its value at *capacity*.
 
     The subgradient is the capacity row's dual, weighted by availability and
     summed over snapshots.
     """
     slope = (
-        solution.dual('capacity')
+        result.dual('capacity')
         .join(avail, on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')
@@ -201,7 +201,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
         """The part of *dispatch* this spec declares — `feasibility` reads no cost."""
         known = to_spec(spec)
         names = {**known.parameters, **known.dimensions, **known.relations}
-        return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
+        return {name: table for name, table in {**dispatch, **extra}.items() if name in names}
 
     cuts = _empty_cuts()
     capacity = pl.DataFrame({'generator': gens, 'value': [0.0] * n_gen})

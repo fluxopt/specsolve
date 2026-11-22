@@ -19,7 +19,7 @@ import pytest
 
 import specsolve as sps
 from specsolve._outputs import OUTPUT_KINDS, OUTPUTS
-from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, horizon_sources, scenario_sources
+from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, scenario_sources, span_sources
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -190,9 +190,9 @@ def test_the_bridges_read_an_output_through_its_reader(answered, tmp_path: Path)
 def test_a_sweep_carries_the_activity_it_was_asked_for(answered, tmp_path: Path) -> None:
     """Every slice's activity, keyed by slice, as each slice's own solve reads it."""
     answer = answered(ACTIVITY, tmp_path)
-    for scenario, frame in answer.activity('balance').partition_by('scenario', as_dict=True).items():
+    for scenario, table in answer.activity('balance').partition_by('scenario', as_dict=True).items():
         loads = scenario_sources()['load'].filter(pl.col('scenario') == scenario[0]).sort('snapshot')
-        assert frame.sort('snapshot')['value'].to_list() == pytest.approx(loads['value'].to_list()), (
+        assert table.sort('snapshot')['value'].to_list() == pytest.approx(loads['value'].to_list()), (
             f'the activity of slice {scenario[0]!r} is its own load'
         )
     assert answer.scan('balance', kind='activity').collect().height == 12, 'three scenarios of four snapshots'
@@ -277,15 +277,15 @@ def test_a_spill_solved_with_the_same_outputs_resumes(tmp_path: Path) -> None:
 
 
 def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path: Path) -> None:
-    """Each snapshot carries the activity of the window that owns it, and ``per_window`` reads every window."""
+    """Each snapshot carries the activity of the window whose horizon holds it; ``per_window`` reads every window."""
     sweep = sps.solve_over(
         WINDOW,
-        horizon_sources(12),
+        span_sources(12),
         replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         outputs=ACTIVITY,
         archive=tmp_path / 'run',
     )
-    loads = horizon_sources(12)['load']
+    loads = span_sources(12)['load']
     stitched = sweep.activity('balance').sort('snapshot')
     assert stitched['value'].to_list() == pytest.approx(loads['value'].to_list()), (
         'an equality balance, so each snapshot carries its own load'

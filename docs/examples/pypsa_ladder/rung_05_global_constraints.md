@@ -1362,8 +1362,8 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         'snapshot_weightings_generators': weighting(n, 'generators'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_05_global_constraints.yaml', sources) as solution:
-        solution.objective  # 10282.833333333332
+    with sps.solve('differential/pypsa/rungs/rung_05_global_constraints.yaml', sources) as result:
+        result.objective  # 10282.833333333332
     ```
 
 === "PyPSA"
