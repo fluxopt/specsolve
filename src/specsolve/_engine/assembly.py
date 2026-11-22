@@ -633,7 +633,7 @@ def _structural_parameters(plan: program.Program) -> frozenset[str]:
     window as its amount, decide which coordinates exist. A coefficient of a
     quadratic constraint is part of a row a sink takes whole. Every other use
     is a bound, a constant side, a linear coefficient or the objective, which
-    [`refilled`][] reads again.
+    [`spliced_model`][] reads again.
     """
     names: set[str] = set()
     for entry in (*plan.variables.values(), *plan.constraints.values()):
