@@ -43,7 +43,7 @@ xpress = pytest.importorskip('xpress', reason='the xpress sink needs the [xpress
     ],
 )
 def test_xpress_and_highs_agree(name: str, variable: str, constraint: str, has_duals: bool) -> None:
-    """The shared cases: a maximisation, an objective constant and an integrality, each stated outside the frames."""
+    """The shared cases: a maximisation, an objective constant and an integrality, each stated outside the tables."""
     assert_agrees_with_highs('xpress', name, variable, constraint, has_duals=has_duals)
 
 
@@ -61,9 +61,9 @@ def test_every_port_reaches_its_reference_optimum_on_xpress(port: dict[str, Any]
     """
     if port['name'] in OVER_THE_XPRESS_LIMIT:
         pytest.skip(f'{port["name"]} exceeds the bundled xpress licence — see OVER_THE_XPRESS_LIMIT')
-    with sps.solve(expanded(port['spec'], 'piecewise'), port_sources(port['name']), solver_name='xpress') as solution:
-        assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
-        assert solution.objective == pytest.approx(port['objective'], rel=port['rtol'])
+    with sps.solve(expanded(port['spec'], 'piecewise'), port_sources(port['name']), solver_name='xpress') as result:
+        assert result.is_ok, f'{port["name"]} did not solve: {result.status}'
+        assert result.objective == pytest.approx(port['objective'], rel=port['rtol'])
 
 
 def test_an_infeasible_solve_reports_both_axes_in_xpress_wording() -> None:
@@ -74,10 +74,10 @@ def test_a_mixed_integer_model_has_no_duals() -> None:
     """Xpress refuses the read rather than handing back zeros, and the refusal
     is the answer — a zero vector would be indistinguishable from real prices."""
     with (
-        sps.solve(*CASES['MIP'], solver_name='xpress') as solution,
+        sps.solve(*CASES['MIP'], solver_name='xpress') as result,
         pytest.raises(SpecsolveError, match='mixed-integer'),
     ):
-        solution.dual('budget')
+        result.dual('budget')
 
 
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
@@ -87,8 +87,8 @@ def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     where the other two sinks set an attribute — so a sign error here is a
     model that solves and answers wrong by a constant.
     """
-    with sps.solve(*CASES['MAX'], solver_name='xpress') as solution:
-        assert solution.objective == pytest.approx(12.0), 'cap 3 + cap 4, plus the declared 5'
+    with sps.solve(*CASES['MAX'], solver_name='xpress') as result:
+        assert result.objective == pytest.approx(12.0), 'cap 3 + cap 4, plus the declared 5'
 
 
 def test_forgetting_makes_the_next_solve_start_cold() -> None:
@@ -127,7 +127,7 @@ def test_solver_options_reach_xpress() -> None:
 
 
 def test_constructing_xpress_loads_the_model_and_stops() -> None:
-    """The seam `bench/` measures: a loaded problem, unsolved."""
+    """The hand-off `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
         tables = model._engine._model.handoff
@@ -175,8 +175,8 @@ def test_activity_is_the_row_value_and_not_its_right_hand_side() -> None:
     at 0 against caps of 10 and 20, so activity and rhs differ by the whole of
     each bound.
     """
-    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress', outputs={'activity'}) as solution:
-        assert solution.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
+    with sps.solve(SLACK, SLACK_DATA, solver_name='xpress', outputs={'activity'}) as result:
+        assert result.activity('lim')['value'].to_list() == pytest.approx([0.0, 0.0]), (
             'activity is the row value at the solution, not the bound it was compared against'
         )
 

@@ -131,7 +131,7 @@ def test_a_carried_basis_starts_at_the_optimum_not_from_scratch(solver_name):
 
 
 def test_a_carried_basis_answers_what_the_cold_session_answered(solver_name):
-    """A carry moves the route, never the answer — the oracle for the primitive."""
+    """A carry moves the route, never the answer — the oracle for the carry."""
     tables = _tables(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS})
     member = SOLVERS[solver_name]
     first = member(tables)

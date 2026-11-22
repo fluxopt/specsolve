@@ -1125,8 +1125,8 @@ p_{\xi,t - 1,g} - p_{\xi,t,g} - \mathrm{Generator\_shut\_down\_rate}_{\xi,g} \cd
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_47_linearized_ramps.yaml', sources) as solution:
-        solution.objective  # 12862.5
+    with sps.solve('differential/pypsa/rungs/rung_47_linearized_ramps.yaml', sources) as result:
+        result.objective  # 12862.5
     ```
 
 === "PyPSA"

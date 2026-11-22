@@ -1,8 +1,8 @@
-"""What the data decides about a program before a declaration is built.
+"""What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
 same pass, every test a ``where`` makes ([`settle`][]). What that read settles
-is answered here: the program a build compiles is [`specialized`][] to it, and
+is answered here: the program a build reads is [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out ([`rowless`][]). Every such decision lives in this module, so
 a build's shortcuts are one list rather than a check in each place that takes
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from mathspec import program
 
 from specsolve._collect import collected_all, in_memory
-from specsolve._engine.predicates import counted_over_nothing, passing
+from specsolve._engine.conditions import counted_over_nothing, passing
 from specsolve._engine.scope import Scope
 
 if TYPE_CHECKING:
@@ -27,24 +27,24 @@ if TYPE_CHECKING:
     from specsolve._engine.attaching import AttachedSources
 
 
-def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
+def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
     """Each test the ``where`` of a variable, constraint or assumption makes that *attached* decides at every coordinate.
 
-    A test is a parameter's bare name or comparison, anywhere in a mask, a
+    A test is a parameter's bare name or comparison, anywhere in a ``where``, a
     named condition read through: ``True`` where it holds everywhere,
     ``False`` where nowhere. A test the data leaves partial is not in the
     answer. *attached* need not hold the answer yet; this is what computes it.
 
     Each test is read once over its parameter's own table, all in one batch
-    and in memory: a model gates hundreds of declarations on the same few
-    flags, and reading a flag per declaration over the product of its dims
-    was most of the cost of the declarations that build nothing. A parameter
+    and in memory: a model gates hundreds of entries on the same few
+    flags, and reading a flag per entry over the product of its dimensions
+    was most of the cost of the entries that build nothing. A parameter
     with no row, and a count along a dimension without a label, settle
     without a query.
     """
-    declared = [*lowered.variables.values(), *lowered.constraints.values(), *lowered.assumptions.values()]
-    masks = [d.where for d in declared if d.where is not None]
-    scope = Scope(lowered, attached, {})
+    entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
+    masks = [e.where for e in entries if e.where is not None]
+    scope = Scope(compiled, attached, {})
     atoms = {atom for mask in masks for atom in mask.atoms}
     out: dict[program.Condition, bool] = {}
     queried: list[program.ParameterDefined | program.ParameterComparison] = []
@@ -67,32 +67,32 @@ def settle(lowered: program.Program, attached: AttachedSources) -> dict[program.
     return out
 
 
-def specialized(lowered: program.Program, attached: AttachedSources) -> program.Program:
-    """*lowered* with each variable's and constraint's ``where`` folded over the tests *attached* settled.
+def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
+    """*compiled* with each variable's and constraint's ``where`` folded over the tests *attached* settled.
 
-    A ``where`` that folds to true is dropped, so the declaration takes the
+    A ``where`` that folds to true is dropped, so the entry takes the
     path of one without a ``where``: dense labels, and terms placed on their
     rows without a join. One that folds to false is kept as that literal, for
     [`rowless`][] to skip. The program a build keeps is this one, so readback
-    reads the declarations it built. Assumptions keep their ``where`` as
+    reads the entries it built. Assumptions keep their ``where`` as
     written, since a refusal quotes it; [`rules_out`][] answers for them.
     """
     tests = attached.settled
 
-    def narrowed[D: (program.Variable, program.Constraint)](declarations: Mapping[str, D]) -> dict[str, D]:
+    def narrowed[D: (program.Variable, program.Constraint)](entries: Mapping[str, D]) -> dict[str, D]:
         out = {}
-        for name, declaration in declarations.items():
-            where = declaration.where
+        for name, entry in entries.items():
+            where = entry.where
             if where is None:
-                out[name] = declaration
+                out[name] = entry
                 continue
             kept = _folded(where, tests)
-            out[name] = replace(declaration, where=None if _holds(kept, value=True) else kept)
+            out[name] = replace(entry, where=None if _holds(kept, value=True) else kept)
         return out
 
     if not tests:
-        return lowered
-    return replace(lowered, variables=narrowed(lowered.variables), constraints=narrowed(lowered.constraints))
+        return compiled
+    return replace(compiled, variables=narrowed(compiled.variables), constraints=narrowed(compiled.constraints))
 
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
@@ -100,9 +100,9 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     return where is not None and _holds(_folded(where, attached.settled), value=False)
 
 
-def rowless(declaration: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
-    """Whether *declaration* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
-    return any(not attached.cardinality[d] for d in declaration.dims) or rules_out(declaration.where, attached)
+def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
+    """Whether *entry* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
+    return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
 
 
 def _folded(mask: program.Mask, tests: Mapping[program.Condition, bool]) -> program.Mask:

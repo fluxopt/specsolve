@@ -1,4 +1,4 @@
-"""The one place that decides how polars materialises a frame.
+"""The one place that decides how polars materialises a table.
 
 A collect names polars' ``auto`` engine, so polars chooses it, except inside
 [`in_memory`][], where it names the in-memory engine. A polars
@@ -73,11 +73,11 @@ def _engine() -> Literal['auto', 'in-memory']:
     return 'in-memory' if _in_memory.get() else collect_engine()
 
 
-def collected(frame: pl.LazyFrame) -> pl.DataFrame:
-    """*frame* materialised on [`_engine`][], its joins as written."""
-    return frame.collect(engine=_engine(), optimizations=_AS_WRITTEN)
+def collected(table: pl.LazyFrame) -> pl.DataFrame:
+    """*table* materialised on [`_engine`][], its joins as written."""
+    return table.collect(engine=_engine(), optimizations=_AS_WRITTEN)
 
 
-def collected_all(frames: Iterable[pl.LazyFrame]) -> list[pl.DataFrame]:
-    """Every one of *frames*, as [`collected`][] would, in one pass that shares their common work."""
-    return pl.collect_all(frames, engine=_engine(), optimizations=_AS_WRITTEN)
+def collected_all(tables: Iterable[pl.LazyFrame]) -> list[pl.DataFrame]:
+    """Every one of *tables*, as [`collected`][] would, in one pass that shares their common work."""
+    return pl.collect_all(tables, engine=_engine(), optimizations=_AS_WRITTEN)

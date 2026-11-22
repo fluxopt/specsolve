@@ -32,7 +32,7 @@ parameters:
     description: cost of one unit of output
     dims: [generator]
   capital_cost:
-    description: cost of holding one unit of capacity over the horizon
+    description: cost of holding one unit of capacity over the modelled period
     dims: [generator]
   load:
     description: demand to be met

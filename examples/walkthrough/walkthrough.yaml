@@ -49,5 +49,5 @@ constraints:
 
 objective:
   sense: minimize
-  description: total cost of generation over the horizon
+  description: total cost of generation over every snapshot
   expression: sum(weighted_sum(p, cost, over=generator))

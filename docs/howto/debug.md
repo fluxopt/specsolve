@@ -25,7 +25,8 @@ report.omissions  # rows a constraint declared and did not build
 report.sparse_parameters  # parameters whose table is short of their coordinates
 ```
 
-A count smaller than you expected is a mask, or a table with a row missing
+A count smaller than you expected is a `where:` that leaves coordinates
+absent, or a table with a row missing
 ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## 3. Read the row that is wrong
@@ -36,7 +37,7 @@ print(model.row('power_balance', snapshot=2))
 ```
 
 The line is the row as the solver got it. A term you expected and do not see
-is a mask; a coefficient you did not expect is the data
+is left absent by a `where:`; a coefficient you did not expect is the data
 ([`Model.row`](../reference/api.md#specsolve.types.Model.row)).
 
 ## 4. When the solve is infeasible

@@ -5,8 +5,8 @@ oracles replace the differential one:
 
 1. **Two independent encodings** — the direct `addMQConstr` hand-off against
    the same model as LP text read back by Gurobi's parser. They share the
-   frames and nothing below, so an encoding error shows up as two numbers.
-2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built frames
+   tables and nothing below, so an encoding error shows up as two numbers.
+2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built tables
    (`conftest.recomputed_row_values`) against the activity the solver reports.
 
 Neither catches a *shared misreading*, so one test here is an optimum done by
@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COL_L, COL_R
 from specsolve.errors import SpecsolveError
 from tests.conftest import recomputed_row_values
 
@@ -136,8 +137,8 @@ def test_the_optimum_is_the_one_done_by_hand():
 # ---------------------------------------------------------------------------
 
 
-def test_quadratic_declarations_take_the_tail_of_the_label_space():
-    """Quadratic is a property of a *declaration*, so its rows are contiguous —
+def test_quadratic_entries_take_the_tail_of_the_label_space():
+    """Quadratic is a property of an *entry*, so its rows are contiguous —
     which is what keeps every read-back a slice. Declared first in the file
     here, deliberately: the ordering is the engine's, not the author's."""
     first = spec(
@@ -148,7 +149,7 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
     )
     with sps.build(first, SOURCES) as model:
         tables = model._engine._model.handoff
-        assert model._engine._model.constraints['cap'].start == 0, 'the linear declaration is built first'
+        assert model._engine._model.constraints['cap'].start == 0, 'the linear entry is built first'
         assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
@@ -229,7 +230,7 @@ def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
     written = _entries('p * q >= floor')
     reversed_ = _entries('q * p >= floor')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
-    assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
+    assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
 
 def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
@@ -289,14 +290,14 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
     The digest reads the pattern *and* the coefficients, and every update a
-    model can express moves both — labels are dense, so a mask that changes
+    model can express moves both — solver indices are dense, so a condition that changes
     which pair a row holds also changes how many there are. Asked of the tables
     directly instead: one entry at a different column, same coefficient.
     """
     with sps.build(SPEC, SOURCES) as model:
         tables = model._engine._model.handoff
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
-        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col('col_r') + 1))
+        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col(COL_R) + 1))
         assert moved.structure != tables.structure, (
             'the same coefficient on a different pair is a different row, and a digest that '
             'missed it would push new numbers onto a solver holding the old constraint'
@@ -310,7 +311,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
     """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``_inputs.lowered`` gate — and refuses it before linopy is asked,
+    model — one ``_inputs.as_program`` gate — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 
@@ -340,5 +341,5 @@ def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():
-    """Whether a model is sayable is solver-independent, and this one is."""
+    """Whether a model is in the language does not depend on the solver, and this one is."""
     sps.check(SPEC)

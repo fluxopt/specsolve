@@ -118,6 +118,8 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         'machine': machine.get('machine'),
         'cpu': (machine.get('cpu') or {}).get('brand_raw') or machine.get('processor'),
         'cores': (machine.get('cpu') or {}).get('count'),
+        'clock_hz': ((machine.get('cpu') or {}).get('hz_actual') or [None])[0],
+        'host': machine.get('host') or {},
         'python': machine.get('python_version'),
         'versions': machine.get('versions', {}),
         'commits': {'specsolve': _commit(commit)},

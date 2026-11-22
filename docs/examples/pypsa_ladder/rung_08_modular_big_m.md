@@ -1181,8 +1181,8 @@ u_{\xi,t,g} \le N_{g} \qquad \forall\, \xi \in \Xi,\ t \in \mathcal{T},\ g \in \
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_08_modular_big_m.yaml', sources) as solution:
-        solution.objective  # 15915.0
+    with sps.solve('differential/pypsa/rungs/rung_08_modular_big_m.yaml', sources) as result:
+        result.objective  # 15915.0
     ```
 
 === "PyPSA"

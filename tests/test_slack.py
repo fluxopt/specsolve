@@ -121,6 +121,6 @@ def _swept(tmp_path: Path, how: str) -> Sweep:
 
 @pytest.mark.parametrize('how', SHAPES)
 def test_a_sweep_reads_each_slices_slack(tmp_path: Path, how: str) -> None:
-    frame = _swept(tmp_path, how).slack('balance')
-    assert frame.height == 12, 'three scenarios of four snapshots'
-    assert np.abs(frame['value'].to_numpy()).max() < 1e-9, 'an equality met at every snapshot is zero away from binding'
+    table = _swept(tmp_path, how).slack('balance')
+    assert table.height == 12, 'three scenarios of four snapshots'
+    assert np.abs(table['value'].to_numpy()).max() < 1e-9, 'an equality met at every snapshot is zero away from binding'

@@ -565,8 +565,8 @@ f_{\xi,t,l} \le \overline{\mathrm{f}}_{\xi,t,l} \cdot \mathrm{f}^{\mathrm{nom}}_
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_09_multilink.yaml', sources) as solution:
-        solution.objective  # 11714.4
+    with sps.solve('differential/pypsa/rungs/rung_09_multilink.yaml', sources) as result:
+        result.objective  # 11714.4
     ```
 
 === "PyPSA"

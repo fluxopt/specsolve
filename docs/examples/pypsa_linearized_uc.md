@@ -120,7 +120,7 @@ p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -221,10 +221,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as solution:
-        solution.objective  # 5540.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as result:
+        result.objective  # 5540.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"
@@ -239,7 +239,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
         Nothing here says the model is relaxed: ``committable=True`` is the same
         switch the integer model uses, and the mode is chosen at ``optimize`` time.
-        Both ``*_time_before`` are 0, so no status is pinned by a prior horizon.
+        Both ``*_time_before`` are 0, so no status is pinned from before the first snapshot.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])

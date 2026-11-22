@@ -39,7 +39,7 @@ This directory is the source; that is the guided tour.
 | `operators/` | one minimal spec per operator in [the operator reference](https://mathspec.readthedocs.io/en/latest/reference/language/operators/), which is where the math on that page comes from |
 | `ports/` | 33 models somebody else already solved, checked against an optimum that did not come from us |
 
-`walkthrough.py` runs one model through YAML → schema → AST → plan → frames →
+`walkthrough.py` runs one model through YAML → schema → AST → plan → tables →
 LP text → solution, printing what each stage produces, then two specs the
 language refuses and why. Its output is committed as `walkthrough.out` and
 asserted, so it cannot drift from what the code does:

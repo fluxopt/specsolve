@@ -67,7 +67,7 @@ def test_a_relation_short_of_a_key_is_refused_by_default_and_the_key_is_named():
             },
             2.0,
             13.0,
-            id='absent-coefficient-is-one-summand-fewer',
+            id='absent-coefficient-is-one-term-fewer',
         ),
         pytest.param(
             {
@@ -82,14 +82,14 @@ def test_a_relation_short_of_a_key_is_refused_by_default_and_the_key_is_named():
             {'constraints.c': {'dims': [], 'expression': 'sum(x, over=f) <= sum(cap, over=f)'}},
             4.0,
             4.0,
-            id='absent-summand-on-a-constant-side-is-not-owed',
+            id='absent-term-on-a-constant-side-is-not-owed',
         ),
     ],
 )
 def test_an_absent_row_is_absence_in_every_position(patch, value, objective):
     """Under `missing: absent`, `b`'s missing row is absence, whatever position reads it.
 
-    `a` meets its row in each case; `b` loses the row, the summand or the bound,
+    `a` meets its row in each case; `b` loses the row, the term or the bound,
     and runs to whatever is left.
     """
     spec = override(BASE, **{'parameters.cap.missing': 'absent', **patch})
@@ -123,7 +123,7 @@ def test_a_missing_row_reads_as_the_declared_value_wherever_a_value_is_read(patc
         assert run.oracle == pytest.approx(objective, rel=RTOL), f'b reads the value, so {objective}'
 
 
-def test_a_bool_that_declares_true_masks_in_where_the_data_has_no_row():
+def test_a_bool_that_declares_true_admits_where_the_data_has_no_row():
     """A bare `bool` name reads its value, so `missing: true` keeps `b` and the data's `false` drops `a`."""
     spec = override(
         BASE,
@@ -149,8 +149,8 @@ SCALAR: dict[str, Any] = {
 }
 
 
-def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_masks():
-    """A parameter over no dims has one coordinate, so under `missing: neutral` an empty table is its missing row.
+def test_a_dimensionless_parameter_with_no_row_switches_off_what_it_narrows():
+    """A parameter over no dimensions has one coordinate, so under `missing: neutral` an empty table is its missing row.
 
     `z` exists only where `omega` has a row, so it is not built.
     """
@@ -164,4 +164,4 @@ def test_a_dimensionless_parameter_with_no_row_is_refused_by_default():
     """With no `missing:`, the one coordinate needs its row."""
     spec = override(SCALAR, **{'parameters.omega': {'dims': []}})
     empty = pl.DataFrame({'value': []}, schema={'value': pl.Float64})
-    both_lanes_refuse(spec, {'f': ['a', 'b'], 'omega': empty}, match="parameter 'omega' is declared with no dims")
+    both_lanes_refuse(spec, {'f': ['a', 'b'], 'omega': empty}, match="parameter 'omega' is declared with no dimensions")

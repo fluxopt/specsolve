@@ -43,7 +43,7 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
-| $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the horizon |
+| $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the modelled period |
 | $`\mathrm{e}^{\mathrm{initial}}`$ | `e_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
 | $`\mathrm{standing\_loss}`$ | `standing_loss` over $`\mathcal{S}`$ — share of the carried-over level lost between snapshots |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
@@ -124,7 +124,7 @@ e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \ma
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -172,7 +172,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: most energy capacity that may be built at a store
         dims: [store]
       e_capital_cost:
-        description: cost of holding one unit of energy capacity over the horizon
+        description: cost of holding one unit of energy capacity over the modelled period
         dims: [store]
       e_initial:
         description: energy in the store before the first snapshot
@@ -242,10 +242,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_store.yaml', sources) as solution:
-        solution.objective  # 7005.5025000000005
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_store.yaml', sources) as result:
+        result.objective  # 7005.5025000000005
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -303,8 +303,8 @@ report a lower cost. The dual vector catches that where a single objective
 figure might not.
 
 **The initial level is not decayed, and the instance can tell.** PyPSA's first
-row is `e = e_initial - p`, so the 20 MWh in the tank before the horizon arrives
-whole. Decay it and the same instance costs **7074.30** against **7005.50**. A
+row is `e = e_initial - p`, so the 20 MWh in the tank before the first snapshot
+arrives whole. Decay it and the same instance costs **7074.30** against **7005.50**. A
 version with an empty tank reports 3116.36 either way, which is why the tank
 starts full.
 
@@ -317,4 +317,4 @@ not have.
 
 An energy recurrence over one signed variable, a capacity variable bounding a
 time-indexed variable (`e <= e_nom`, two decisions rather than a decision and a
-bound), and a `shift` across the horizon's opening boundary.
+bound), and a `shift` across the first snapshot's boundary.
