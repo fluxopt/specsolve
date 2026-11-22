@@ -181,7 +181,7 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
 class Highs(Solver):
     """HiGHS, holding one model at ``.handle``, a `highspy.Highs`.
 
-    A re-solve pushes bounds, costs, right-hand sides and moved coefficients
+    A re-solve pushes bounds, costs, right-hand sides and changed coefficients
     onto the held model and starts from the basis the last solve ended on.
     """
 

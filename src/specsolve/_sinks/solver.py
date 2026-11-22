@@ -163,10 +163,10 @@ class Solver(ABC):
         if self._options != dict(solver_options or {}) or self.structure() != handoff.structure:
             return False
         tail = int(handoff.row_starts[handoff.linear_row_count])
-        return bool(_unmoved(handoff.matrix[COEFF].to_numpy()[tail:], self._coefficients[tail:]).all())
+        return bool(_unchanged(handoff.matrix[COEFF].to_numpy()[tail:], self._coefficients[tail:]).all())
 
     def push(self, handoff: Handoff) -> None:
-        """*handoff*'s bounds, costs, right-hand sides and moved coefficients onto the loaded model.
+        """*handoff*'s bounds, costs, right-hand sides and changed coefficients onto the loaded model.
 
         Called only after [`keeps`][] said yes. A coefficient within 1e-12
         relative of the one loaded stays: a coefficient summed over rows in
@@ -175,12 +175,12 @@ class Solver(ABC):
         import numpy as np
 
         new = handoff.matrix[COEFF].to_numpy()
-        unmoved = _unmoved(new, self._coefficients)
-        if not unmoved.all():
-            moved = np.flatnonzero(~unmoved)
-            rows = np.searchsorted(handoff.row_starts, moved, side='right') - 1
-            self._change_coefficients(rows, handoff.matrix[COL].to_numpy()[moved], new[moved])
-            self._coefficients = np.where(unmoved, self._coefficients, new)
+        unchanged = _unchanged(new, self._coefficients)
+        if not unchanged.all():
+            changed = np.flatnonzero(~unchanged)
+            rows = np.searchsorted(handoff.row_starts, changed, side='right') - 1
+            self._change_coefficients(rows, handoff.matrix[COL].to_numpy()[changed], new[changed])
+            self._coefficients = np.where(unchanged, self._coefficients, new)
         self._push(handoff)
 
     @classmethod
@@ -434,7 +434,7 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     return pl.Series(VALUE, values, dtype=pl.Float64)
 
 
-def _unmoved(
+def _unchanged(
     new: np.ndarray[tuple[int], np.dtype[np.float64]], held: np.ndarray[tuple[int], np.dtype[np.float64]]
 ) -> np.ndarray[tuple[int], np.dtype[np.bool_]]:
     """Which of *new* is within 1e-12 relative of the coefficient *held* in its place."""

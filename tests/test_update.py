@@ -799,7 +799,7 @@ ROLE_DATA = {
 }
 
 
-#: `eff` scales `p` on each generator's own row, after `meet`'s, so a moved
+#: `eff` scales `p` on each generator's own row, after `meet`'s, so a changed
 #: coefficient sits in a row the matrix does not start with.
 PER_ROW = override(
     ROLES,
@@ -810,7 +810,7 @@ PER_ROW = override(
 )
 
 
-def test_a_moved_coefficient_is_taken_in_place_and_taken_back(solver_name):
+def test_a_changed_coefficient_is_taken_in_place_and_taken_back(solver_name):
     """A changed coefficient reaches the loaded solver in place, and so does the change undone.
 
     `eff` of `a` doubles, so `a` reaches half its capacity and `b`, dearer,
@@ -823,10 +823,10 @@ def test_a_moved_coefficient_is_taken_in_place_and_taken_back(solver_name):
             with sps.build(PER_ROW, data) as reference:
                 got = model.update({'eff': data['eff']}).solve(solver_name).objective
                 assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 1, 'the coefficients moved in place, so the solver stayed loaded'
+        assert model.diagnostics().loads == 1, 'the coefficients changed in place, so the solver stayed loaded'
 
 
-def test_a_quadratic_constraint_whose_linear_part_moved_loads_again():
+def test_a_quadratic_constraint_whose_linear_part_changed_loads_again():
     """A quadratic row goes to the solver whole, so a coefficient of its linear part loads the model again."""
     pytest.importorskip('gurobipy', reason='only the gurobi sink takes a quadratic constraint')
     spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p + p * p, over=generator) >= demand'})
@@ -835,4 +835,4 @@ def test_a_quadratic_constraint_whose_linear_part_moved_loads_again():
         model.solve('gurobi')
         got = model.update(changed).solve('gurobi').objective
         assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 2, 'a quadratic row whose linear part moved was kept'
+        assert model.diagnostics().loads == 2, 'a quadratic row whose linear part changed was kept'

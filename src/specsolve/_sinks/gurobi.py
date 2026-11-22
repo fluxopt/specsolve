@@ -147,7 +147,7 @@ class Gurobi(Solver):
 
         A row here is a linear constraint, so its index is its ``Constr``'s:
         [`keeps`][specsolve._sinks.solver.Solver.keeps] reloads a model whose
-        quadratic constraint moved.
+        quadratic constraint changed.
         """
         constraints, variables = self._m.getConstrs(), self._m.getVars()
         for row, col, value in zip(rows.tolist(), cols.tolist(), values.tolist(), strict=True):
