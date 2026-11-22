@@ -2,7 +2,7 @@
 
 How to keep the spec, the data and the answer of a solve, to read or solve
 again later. The reference is
-[`load_archive`](../reference/api.md#specsolve.load_archive).
+[`read_archive`](../reference/api.md#specsolve.read_archive).
 
 ## Archive as you solve
 
@@ -37,15 +37,15 @@ limit or a gap. Any other option is `<not recorded>` unless you name it in
 ## Read it back
 
 ```python
-case = sps.load_archive('case/')
+case = sps.read_archive('case/')
 
 case.result.objective  # what it reached
 case.result.primal('p')  # the values it came back with
 sps.solve(case.spec, case.sources)  # the same question, asked again
 ```
 
-**`load_inputs` reads the spec and the data, and never the answer.** It still
-reads an archive whose answer layout `load_archive` refuses.
+**`read_inputs` reads the spec and the data, and never the answer.** It still
+reads an archive whose answer layout `read_archive` refuses.
 
 ## Read one too big to hold
 
@@ -56,7 +56,7 @@ archived = sps.scan_archive('sweep.zip', 'sweep/')
 archived.sweep.scan('p')  # read at the collect, one name at a time
 ```
 
-| | `load_archive` | `scan_archive` |
+| | `read_archive` | `scan_archive` |
 |---|---|---|
 | a source | the table the member holds | the path to it |
 | the answer | tables in memory | read at the call that asks |
@@ -72,7 +72,7 @@ runs again from the archive alone:
 axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
-archived = sps.load_archive('roll/')
+archived = sps.read_archive('roll/')
 sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 

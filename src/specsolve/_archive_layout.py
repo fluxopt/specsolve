@@ -291,7 +291,9 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
                 f'{str(held)!r} is a directory archive, so it is read where it lies and into= has nothing to '
                 f'do. Drop into=; it is for unpacking a .zip.'
             )
-        _check_the_layout(held, (file.relative_to(held).as_posix() for file in held.rglob('*') if file.is_file()))
+        _refuse_stray_or_missing_members(
+            held, (file.relative_to(held).as_posix() for file in held.rglob('*') if file.is_file())
+        )
         return held
     if into is None:
         raise LayoutError(
@@ -299,12 +301,12 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
             f'archive is read where it lies and needs none.'
         )
     with zipfile.ZipFile(held) as archive:
-        _check_the_layout(held, (name for name in archive.namelist() if not name.endswith('/')))
+        _refuse_stray_or_missing_members(held, (name for name in archive.namelist() if not name.endswith('/')))
         archive.extractall(into)
     return Path(into)
 
 
-def _check_the_layout(named: Path, members: Iterable[str]) -> None:
+def _refuse_stray_or_missing_members(named: Path, members: Iterable[str]) -> None:
     """Refuse anything that is not this layout, before a byte is unpacked."""
     found = sorted(members)
     strays = [

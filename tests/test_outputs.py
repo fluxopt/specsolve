@@ -105,8 +105,8 @@ def _live(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     return sps.solve(DISPATCH, ONE, outputs=outputs)
 
 
-def _loaded(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.load_result(_live(outputs, tmp_path).save(tmp_path / 'saved'))
+def _read(outputs: frozenset[Output], tmp_path: Path) -> Answer:
+    return sps.read_result(_live(outputs, tmp_path).save(tmp_path / 'saved'))
 
 
 def _scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
@@ -115,7 +115,7 @@ def _scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 
 def _archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run.zip')
-    archive = sps.load_archive(tmp_path / 'run.zip')
+    archive = sps.read_archive(tmp_path / 'run.zip')
     assert isinstance(archive, sps.types.ResultArchive)
     return archive.result
 
@@ -138,8 +138,8 @@ def _spilled(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     return sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, spill_to=tmp_path / 'spill')
 
 
-def _sweep_loaded(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.load_sweep(_swept(outputs, tmp_path).save(tmp_path / 'sweep'))
+def _sweep_read(outputs: frozenset[Output], tmp_path: Path) -> Answer:
+    return sps.read_sweep(_swept(outputs, tmp_path).save(tmp_path / 'sweep'))
 
 
 def _sweep_scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
@@ -148,14 +148,14 @@ def _sweep_scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 
 def _sweep_archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=tmp_path / 'run.zip')
-    archive = sps.load_archive(tmp_path / 'run.zip')
+    archive = sps.read_archive(tmp_path / 'run.zip')
     assert isinstance(archive, sps.types.SweepArchive)
     return archive.sweep
 
 
 RESULTS = [
     pytest.param(_live, id='result'),
-    pytest.param(_loaded, id='loaded-result'),
+    pytest.param(_read, id='read-result'),
     pytest.param(_scanned, id='scanned-result'),
     pytest.param(_archived, id='archived-result'),
 ]
@@ -164,7 +164,7 @@ SWEEPS = [
     pytest.param(_threaded, id='threaded-sweep'),
     pytest.param(_in_processes, id='sweep-in-processes'),
     pytest.param(_spilled, id='spilled-sweep'),
-    pytest.param(_sweep_loaded, id='loaded-sweep'),
+    pytest.param(_sweep_read, id='read-sweep'),
     pytest.param(_sweep_scanned, id='scanned-sweep'),
     pytest.param(_sweep_archived, id='archived-sweep'),
 ]
@@ -251,7 +251,7 @@ def test_an_output_a_later_specsolve_wrote_is_ignored_rather_than_refused(tmp_pa
     out = sps.solve(DISPATCH, ONE, outputs=ACTIVITY).save(tmp_path / 'saved')
     stamp = json.loads((out / 'format.json').read_text())
     (out / 'format.json').write_text(json.dumps({**stamp, 'outputs': ['activity', 'from_the_future']}))
-    assert sps.load_result(out).activity('balance')['value'].to_list() == pytest.approx(LOAD), (
+    assert sps.read_result(out).activity('balance')['value'].to_list() == pytest.approx(LOAD), (
         'the outputs this package knows still read back'
     )
 
@@ -290,7 +290,7 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
     assert stitched['value'].to_list() == pytest.approx(loads['value'].to_list()), (
         'an equality balance, so each snapshot carries its own load'
     )
-    archive = sps.load_archive(tmp_path / 'run')
+    archive = sps.read_archive(tmp_path / 'run')
     assert isinstance(archive, sps.types.SweepArchive)
     assert archive.sweep.activity('balance').sort('snapshot').equals(stitched)
     assert archive.sweep.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))

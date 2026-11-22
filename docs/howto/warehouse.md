@@ -162,8 +162,8 @@ assert len(specs) == 1, 'one spec, or this compares nothing'
 **Find the sources that differ:**
 
 ```python
-base = sps.load_archive('runs/base')
-other = sps.load_archive('runs/peak')
+base = sps.read_archive('runs/base')
+other = sps.read_archive('runs/peak')
 
 moved = [name for name in sorted(base.sources) if not base.sources[name].equals(other.sources[name])]
 moved  # ['load']
