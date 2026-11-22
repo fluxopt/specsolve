@@ -195,7 +195,8 @@ class Metrics(NamedTuple):
     #: it exists at.
     columns: int
     #: How many rows the build produced: one per constraint at each coordinate
-    #: it is built at. A row left with no term is not built.
+    #: it is built at. A row with no term is not built; one whose terms sum
+    #: to zero is.
     rows: int
     #: How many coefficients the constraint matrix holds: one per row and
     #: column a linear term reaches, the terms at one pair summed and a sum of
