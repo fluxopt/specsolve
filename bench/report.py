@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from bench import results as bench_results
+from specsolve._records import PHASES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -336,6 +337,46 @@ def table(case: str, rows: dict[Key, Row], sink: str = 'lp') -> str:
         arms,
         ratios=False,
     )
+
+
+def phases(rows: dict[Key, Row], sink: str = 'highs') -> str:
+    """specsolve's seconds per phase along each case's size ladder, one table per case.
+
+    A phase is a row and a rung a column, so a phase that grows faster than
+    the model stands out. The phases are specsolve's engine's own, so no other
+    arm has them. A phase a run did not clock reads ``—``: a run taken before
+    a phase existed has none of it.
+    """
+    tables = []
+    for case in sorted({c for c, _, k, arm in rows if k == sink and arm == 'specsolve'}):
+        runs = [
+            run
+            for size in sizes_of(case, rows, sink)
+            if (run := rows.get((case, size, sink, 'specsolve'))) and run.get('phase_seconds')
+        ]
+        if not runs:
+            continue
+        seen = [phase for run in runs for phase in run['phase_seconds']]
+        clocked = [*(p for p in PHASES if p in seen), *sorted(set(seen) - set(PHASES))]
+        lines = [
+            '<details markdown="1">',
+            f"<summary><b>{case}</b> — specsolve's phases on the {sink} sink</summary>",
+            '',
+            '| phase | ' + ' | '.join(f'{_si(run["counts"]["columns"])} columns' for run in runs) + ' |',
+            '| --- |' + ' --: |' * len(runs),
+        ]
+        lines += [
+            f'| {phase} | ' + ' | '.join(_clock(run['phase_seconds'].get(phase)) for run in runs) + ' |'
+            for phase in clocked
+        ]
+        tables.append('\n'.join([*lines, '', '</details>']))
+    return '\n\n'.join(tables)
+
+
+def _clock(seconds: float | None) -> str:
+    if seconds is None:
+        return '—'
+    return f'{seconds * 1e3:.3g} ms' if seconds < 1 else f'{seconds:.3g} s'
 
 
 def _live(r: Row) -> str:
@@ -761,6 +802,7 @@ def main(argv: list[str] | None = None) -> int:
         'models': models(rows),
         'results': '\n'.join(results),
         'fresh': fresh(best(started)),
+        'phases': phases(rows),
         'marginal': marginal(loop),
         'sweeps': '\n\n'.join(t for t in (width(rows), density(rows), declarations(rows)) if t),
     }

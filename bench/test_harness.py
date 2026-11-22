@@ -1423,6 +1423,42 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
+def _phase_rows(table: str) -> dict[str, list[str]]:
+    """The body rows of a rendered phase table, keyed by phase, each split into its cells."""
+    rows = [line for line in table.splitlines() if line.startswith('| ') and not line.startswith(('| phase', '| ---'))]
+    return {cells[0]: cells[1:] for cells in ([c.strip() for c in row.strip('|').split('|')] for row in rows)}
+
+
+def test_the_phase_table_runs_along_the_ladder_in_the_order_the_engine_runs() -> None:
+    """A phase is a row, a rung a column smallest first, and a phase a rung never clocked reads a dash."""
+    records = [
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='s',
+            counts={'columns': 1000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 0.004, 'attach': 0.001},
+        ),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'load': 0.0005, 'build': 2.5, 'attach': 0.002},
+        ),
+        _timing('linopy', sink='highs', size='m', counts={'columns': 10000, 'rows': 1, 'nonzeros': 1}),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert list(rows) == ['load', 'attach', 'build'], 'the phases in the order the engine runs them'
+    assert rows['build'] == ['4 ms', '2.5 s'], 'one column per rung, smallest first, each in its own unit'
+    assert rows['load'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
+
+
+def test_a_run_without_phase_clocks_renders_no_phase_table() -> None:
+    assert report.phases(report.best([_timing('specsolve', sink='highs')])) == '', 'no clocks, no table'
+
+
 def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
 
