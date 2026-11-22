@@ -204,7 +204,7 @@ def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
 
 
 def test_a_partial_coordinate_is_refused_rather_than_answered_about_one_row() -> None:
-    """A partial coordinate names a block, not a row."""
+    """A partial coordinate names several of an entry's rows, not one row."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model, pytest.raises(SpecsolveError, match='declared over'):
         model.row('commit', t=0)
 
@@ -239,11 +239,11 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         tables = model._engine._model.handoff
         for name in ('commit', 'balance'):
-            block = model._engine._model.constraints[name]
-            coordinates = block.table.collect()
-            for offset in range(block.height):
-                at = block.start + offset
-                given = tables.matrix_block(at, at + 1)
+            indexed = model._engine._model.constraints[name]
+            coordinates = indexed.table.collect()
+            for offset in range(indexed.height):
+                at = indexed.start + offset
+                given = tables.matrix_chunk(at, at + 1)
                 where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != ROW}
                 read = model.row(name, **where)
                 assert read.terms['coefficient'].to_list() == pytest.approx(given[COEFF].to_list()), (

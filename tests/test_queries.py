@@ -212,7 +212,7 @@ def test_a_factor_with_a_sum_under_it_is_added_up_before_the_product():
 
 
 def narrowed_builder() -> QueryBuilder:
-    """A query builder over two variables with a condition, since a restriction only crosses between terms."""
+    """A query builder over two variables with a condition, since a presence only narrows across terms."""
     over = ('snapshot', 'generator')
     where = program.Mask(program.ParameterComparison('available', '>', 0.0, ('generator',)))
     masked = program.Program(
@@ -232,7 +232,7 @@ def narrowed_builder() -> QueryBuilder:
 def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_from():
     """`sum(p + q)` sums where each exists, and neither is checked against itself.
 
-    Restricting a term by its own coordinates returns the rows it was
+    Narrowing a term by its own coordinates returns the rows it was
     given, so a lone term with a condition costs no join.
     """
     both = narrowed_builder().expression(
@@ -245,7 +245,7 @@ def test_a_reduction_carries_absence_between_terms_and_not_into_the_one_it_came_
     assert joins(alone.linear[0].table) == 0
 
 
-def test_a_reduction_restricts_by_existence_and_does_not_deduplicate():
+def test_a_reduction_narrows_by_existence_and_does_not_deduplicate():
     """A semi-join asks whether a key occurs, so a distinct on its right changes no row."""
     terms = narrowed_builder().expression(
         program.Sum(program.Add(P, Q, dims=P.dims), (program.Axis('generator'),), dims=('snapshot',)), 'test'
@@ -366,9 +366,9 @@ def test_what_a_bare_name_asks_is_decided_by_its_entry():
 # ---------------------------------------------------------------------------
 
 
-def test_a_table_cross_joins_its_dim_tables_and_carries_their_ordinals():
+def test_a_table_cross_joins_its_dim_tables_and_carries_their_positions():
     table = narrowed(builder().scope, ('snapshot', 'generator'), None)
-    assert columns(table) == ['snapshot', '__ord snapshot__', 'generator', '__ord generator__']
+    assert columns(table) == ['snapshot', '__position snapshot__', 'generator', '__position generator__']
     assert 'CROSS' in query(table)
 
 
@@ -376,7 +376,7 @@ def test_a_table_with_no_condition_has_nothing_to_filter():
     assert 'FILTER' not in query(narrowed(builder().scope, ('snapshot', 'generator'), None))
 
 
-def test_a_condition_reading_part_of_the_table_restricts_by_semi_join():
+def test_a_condition_reading_part_of_the_table_narrows_by_semi_join():
     """The condition is evaluated over the product of the dimensions it reads, and the full product semi-joined."""
     table = narrowed(
         builder().scope,

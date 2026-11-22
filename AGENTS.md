@@ -315,7 +315,7 @@ yes  fix(data): a piecewise curve that is short of a breakpoint is refused at lo
 
 no   fix(data): fix dtype bug
      ^ an activity, not an outcome
-no   perf(engine): the bound attach reads the ordinal off the Enum, not a dictionary
+no   perf(engine): the bound attach reads the position off the Enum, not a dictionary
      ^ how it was done
 no   fix(data): a piecewise curve short of a breakpoint is refused, not read as the origin
      ^ telegraphed, and the tail is a fragment → the yes above

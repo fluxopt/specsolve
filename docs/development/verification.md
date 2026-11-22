@@ -5,24 +5,24 @@ convincing. Each one catches what the one before cannot.
 
 | Check | It catches | Where |
 |---|---|---|
-| [The oracle](#the-oracle) | a build that differs from linopy's on the same file | `tests/linopy_lane/`, the differential tests |
-| [Published optima](#published-optima) | a misreading the oracle shares | `examples/ports/`, `references.json` |
+| [The linopy lane](#the-linopy-lane) | a build that differs from linopy's on the same file | `tests/linopy_lane/`, the differential tests |
+| [Published optima](#published-optima) | a misreading the linopy lane shares | `examples/ports/`, `references.json` |
 | [The PyPSA ladder](#the-pypsa-ladder) | a model that solves but is not PyPSA's | `differential/pypsa/`, [the ladder](../examples/pypsa_ladder.md) |
 | [Decomposition](#decomposition) | an algorithm outside the language that cannot be written over it | [`examples/benders/`](https://github.com/fluxopt/specsolve/blob/main/examples/benders/README.md) |
 
-## The oracle
+## The linopy lane
 
 The test suite builds every file twice: through the relational engine, and as
 a `linopy.Model` in `tests/linopy_lane/`. The differential tests compare the
-two. Both builds pass the same `_inputs.as_program` gate and read data through
-`_sources.tidy_sources`, so both refuse the same constructs and the same
+two. Both builds compile through `_inputs.as_program`, the one function every verb
+compiles a spec through, and read data through `_sources.tidy_sources`, so both refuse the same constructs and the same
 malformed sources ([#60](https://github.com/fluxopt/specsolve/issues/60)).
 
 **Where a concept is already linopy's, specsolve copies its name**: solve
 statuses, `is_ok`, the shape of a result. `tests/test_solve_status.py` checks
 that the copy still matches.
 
-### What a construct becomes in the oracle
+### What a construct becomes in the linopy lane
 
 Each row lives in `tests/linopy_lane/builder.py`.
 
@@ -64,15 +64,15 @@ Three files pass `check` and build on one side only.
   `linopy.Objective` has no slot for one (`osemosys_utopia`,
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
 - **A relation that is not a single-valued map** builds only in specsolve,
-  because the oracle holds each relation as one dense array.
+  because the linopy lane holds each relation as one dense array.
 - **An operator along a dimension a constant term does not carry**, such as
-  `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
+  `sum(x * k + d, over=t)` with a scalar `d`, builds only in the linopy lane. The
   refusal says to declare the parameter over the dimension
   ([#1137](https://github.com/fluxopt/specsolve/issues/1137)).
 
 ## Published optima
 
-The oracle cannot catch a misreading both builds share. A published optimum
+The linopy lane cannot catch a misreading both builds share. A published optimum
 can. Each model in `examples/ports/` carries an optimum somebody else solved,
 in `references.json`, and `tests/test_ports.py` solves to it. A **✔** means the
 optimum did not come from specsolve; the reference column says where it did.

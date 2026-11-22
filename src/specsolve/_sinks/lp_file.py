@@ -74,8 +74,8 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
             f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
-        for block in handoff.row_blocks(EMIT_BUDGET):
-            append_lines(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
+        for chunk in handoff.row_chunks(EMIT_BUDGET):
+            append_lines(_constraint_lines(handoff, chunk.lo, chunk.hi, handoff.matrix_chunk(chunk.lo, chunk.hi)), f)
         if handoff.qmatrix.height:
             append_lines(_quadratic_row_lines(handoff), f)
 
@@ -116,7 +116,7 @@ def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
         )
 
     rows = handoff.rows.lazy().filter(pl.col(ROW) >= lo)
-    entries = handoff.matrix_block(lo, handoff.row_count).lazy()
+    entries = handoff.matrix_chunk(lo, handoff.row_count).lazy()
     pairs = handoff.qmatrix.lazy().with_row_index('at')
     zero = pl.lit(0)
     return (

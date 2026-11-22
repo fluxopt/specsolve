@@ -107,7 +107,7 @@ class Grouping:
         groups: The group-making columns, one per group column, under
             [`group_column`][].
         grouped: The dimension each group column is over, in the same order.
-        table: ``(val, ord, joined…, groups…, GROUP_RANK, GROUP_SIZE)``, one
+        table: ``(LABEL, POSITION, joined…, groups…, GROUP_RANK, GROUP_SIZE)``, one
             row per coordinate the partition places in a group.
     """
 

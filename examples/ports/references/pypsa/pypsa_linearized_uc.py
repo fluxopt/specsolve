@@ -19,10 +19,10 @@ and the two transition variables in [0, 1] instead of {0, 1} and leaves every
 constraint where it was. A unit may then be committed by a third.
 
 ``base`` carries unequal start-up and shut-down costs. PyPSA tightens the
-relaxation with an extra dispatch-limit block wherever a generator's two costs
-*match*, and that block reaches for the ramp-limit parameters, so ``base`` is
+relaxation with an extra dispatch-limit constraint wherever a generator's two costs
+*match*, and that constraint reaches for the ramp-limit parameters, so ``base`` is
 left untightened. ``peak`` is not, its two costs both being zero: PyPSA emits four
-further blocks for it, every one of which collapses to a row the port already
+further constraints for it, every one of which collapses to a row the port already
 holds, since ``p_min_pu`` is 0 and there are no ramp limits. Hence the same
 objective and the same prices out of a model with more rows in it.
 

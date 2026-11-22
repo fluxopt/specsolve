@@ -272,7 +272,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
         by names. PyPSA declares the spill variable only for units whose inflow is
         positive somewhere; the port declares it for every unit and bounds it above
         by the inflow, which pins it to zero for the battery. Same model, and the
-        port's spelling is the one that keeps the energy balance a single block.
+        port's spelling is the one that keeps the energy balance a single constraint.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])

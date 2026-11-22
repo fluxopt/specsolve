@@ -14,7 +14,7 @@ A spec compiles to a **closed program known before any data is touched**, so
 it can be built two ways that mean the same thing. The package's build is the
 *relational lane* (`_engine/`, `_sinks/` and the modules both read), a program
 streamed to a sink. The test suite's
-is *the oracle* (`tests/linopy_lane/`), a `linopy.Model`.
+is *the linopy lane* (`tests/linopy_lane/`), a `linopy.Model`.
 
 ```mermaid
 flowchart TB
@@ -28,7 +28,7 @@ flowchart TB
     end
 
     SPEC -->|"the entries to attach against"| SRC
-    SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>the one door both lanes enter</i>"]
+    SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>tidy_sources, the one function both lanes read data through</i>"]
 
     PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the program"| QUERIES
@@ -52,12 +52,12 @@ flowchart TB
 
     SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · evaluate<br/>polars tables you can join"]
 
-    subgraph LIN["tests/linopy_lane/ — the test oracle, not shipped"]
+    subgraph LIN["tests/linopy_lane/ — the linopy lane, not shipped"]
         direction TB
         LOAD["loader.py<br/>the tidy tables → xr.Dataset"] --> BUILD["builder.py<br/>evaluate the program"]
     end
 
-    BUILD --> MODEL["<b>a linopy.Model</b> — the oracle stops here<br/>solved by the tests, and compared with the Result"]
+    BUILD --> MODEL["<b>a linopy.Model</b> — the linopy lane stops here<br/>solved by the tests, and compared with the Result"]
 
     classDef laneL stroke:#b7791f,stroke-width:2px
     classDef laneR stroke:#3a7d44,stroke-width:2px
@@ -79,13 +79,13 @@ flowchart TB
 
 - **The language is another package.** `mathspec` reads a file and compiles it
   to a `Program`. It cannot import anything here.
-- **Data enters through one door, and both lanes use it.**
+- **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
   accepts into tidy polars tables, and `_assumptions.py` checks a spec's
   assumptions there.
-- **One gate decides what either lane builds.** `_inputs.as_program` returns a
-  `Program` or raises `LanguageError`. `DataError` is what a source failed to
-  supply. A spec the language accepts and this lane cannot build raises
+- **One function decides what either lane builds.** `_inputs.as_program`, which
+  every verb compiles a spec through, returns a `Program` or raises
+  `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
 
 ## The public API
@@ -115,7 +115,7 @@ the dependency claims.*
 2. **The engine knows nothing about linopy, xarray or YAML.** It imports
    nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
-3. **One language, two builds, and linopy is only the oracle.** Both pass
+3. **One language, two builds, and linopy only in the linopy lane.** Both pass
    `_inputs.as_program`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
    [Verification](verification.md#the-same-language-but-not-every-build).
@@ -128,8 +128,8 @@ the dependency claims.*
 ## The program, node for node
 
 **The program is the vocabulary both lanes speak.** The table gives what the file
-writes and what the relational query does with it. The oracle's call is in
-[what a construct becomes in the oracle](verification.md#what-a-construct-becomes-in-the-oracle).
+writes and what the relational query does with it. The linopy lane's call is in
+[what a construct becomes in the linopy lane](verification.md#what-a-construct-becomes-in-the-linopy-lane).
 `tests/test_docs_site.py` holds the table to `mathspec.program.Expression`'s
 subclasses.
 
@@ -205,7 +205,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
-| `_sources.py` | the door: caller data into tidy tables |
+| `_sources.py` | `tidy_sources`: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `_tables.py` | caller tables in, via the Arrow PyCapsule protocol |
@@ -223,7 +223,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
-| `_engine/attaching.py` | the door's tables → `AttachedSources` |
+| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources` |
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
@@ -250,15 +250,16 @@ The names the code uses for its own parts. The names a caller meets are in
 [the glossary](../reference/glossary.md).
 
 **Lane**
-: One way to build a spec: the relational lane, which is this package, or the
-  oracle, the linopy lane under `tests/linopy_lane/` that builds a
-  `linopy.Model`.
+: One way to build a spec: the relational lane, which is this package, or
+  the linopy lane under `tests/linopy_lane/`, which builds a `linopy.Model`
+  and is what every build is checked against.
 
-**The door**
+**`tidy_sources`**
 : `_sources.tidy_sources`, the one function both lanes read data through.
 
 **Compiling**
-: Turning a spec into its `Program`, through `_inputs.as_program`.
+: Turning a spec into its `Program`, through `_inputs.as_program`, the one
+  function every verb compiles a spec through.
 
 **Query builder**
 : `QueryBuilder` (`queries.py`): turns a program's expressions into polars lazy
@@ -298,7 +299,7 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Handoff**
 : Everything a sink reads of a built model, and nothing more: the tables, the
-  column and row vectors, the matrix a block at a time (`handoff.py`).
+  column and row vectors, the matrix a chunk at a time (`handoff.py`).
 
 **Collect engine**
 : Which polars engine materialises a table. A build within `IN_MEMORY_REACH`
@@ -344,7 +345,7 @@ is the full list.
 
 **Add an operator:** first
 [in mathspec](https://mathspec.readthedocs.io/en/latest/contributing/#adding-an-operator),
-landed and tagged. Then here: the oracle's linopy call, the query builder's case, the
+landed and tagged. Then here: the linopy lane's call, the query builder's case, the
 engine, and a differential test through a solver and the LP writer.
 [The nightly canary](https://github.com/fluxopt/specsolve/blob/main/.github/workflows/canary.yml)
 checks the two halves have not drifted.

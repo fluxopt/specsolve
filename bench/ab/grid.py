@@ -60,7 +60,7 @@ class Shape:
     ] = 'none'
     #: The row order of every parameter table, against the order of its dimensions.
     order: Literal['sorted', 'shuffled', 'reversed'] = 'sorted'
-    #: The order of the first dimension's own labels, which sets its ordinals.
+    #: The order of the first dimension's own labels, which sets its positions.
     index: Literal['sorted', 'shuffled'] = 'sorted'
     #: The dtype of the first dimension's labels.
     labels: Literal['int', 'str'] = 'int'

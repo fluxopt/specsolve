@@ -43,7 +43,7 @@ sps.EachWindow('snapshot', horizon=days_in_each_month, lookahead=48)
 
 ```text
 DataError: horizon keeps 7 label(s) across 2 window(s), and 'snapshot' has 12 —
-the last 5 would be solved by no window. List a block for them, or pass an int to
+the last 5 would be solved by no window. List a horizon for them, or pass an int to
 repeat one size to the end.
 ```
 
