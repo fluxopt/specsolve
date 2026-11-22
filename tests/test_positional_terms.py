@@ -54,7 +54,7 @@ SPEC = {
 }
 
 #: `i` has 40 labels so that `rare`, true at one coordinate of 80, leaves a
-#: variable narrowed by it past `dense.CELLS_PER_COLUMN` coordinates per column.
+#: variable narrowed by it past `dense.COORDINATES_PER_COLUMN` coordinates per column.
 LABELS = list(range(40))
 PAIR = ['p', 'q']
 SOURCES = {

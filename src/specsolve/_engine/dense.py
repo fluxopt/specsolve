@@ -51,7 +51,7 @@ READ_BY_POSITION_FROM = 100_000
 #: The most coordinates the dimensions of a variable narrowed by its ``where:``
 #: may span per column it has, for its columns to be held by position: an
 #: integer per coordinate.
-CELLS_PER_COLUMN = 16
+COORDINATES_PER_COLUMN = 16
 
 
 class CoordinatePositions:
@@ -164,14 +164,14 @@ def variable(scope: Scope, name: str) -> Columns | None:
     A variable with no condition has its start plus its position as its
     column, so nothing is held. One narrowed by its ``where:`` holds an
     integer per coordinate of its dimensions, which is refused past
-    [`CELLS_PER_COLUMN`][] per column it has.
+    [`COORDINATES_PER_COLUMN`][] per column it has.
     """
     entry, held = scope.program.variables[name], scope.variables[name]
     dims = entry.dims
     if entry.where is None:
         return lambda at: held.start + at.over(dims)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
-    if not held.height or cells > CELLS_PER_COLUMN * held.height:
+    if not held.height or cells > COORDINATES_PER_COLUMN * held.height:
         return None
     return lambda at: _read(_read_once(scope, ('variable', name), _columns_by_position), at, dims)
 
