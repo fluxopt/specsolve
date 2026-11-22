@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from tools.changelog import LEGACY, PATH, RELEASE, ChangelogError, missing_entry, notes, order, pending, sections
+from tools.changelog import LEGACY, PATH, RELEASE, ChangelogError, missing_line, notes, order, pending, sections
 
 PREAMBLE = '# Changelog\n\nProse the tool never reads.\n\n'
 HISTORY = '## [0.0.1-alpha.357](https://example.org/compare) (2026-09-25)\n\n* an old line\n'
@@ -146,11 +146,11 @@ ADDED = changelog('## Upcoming version\n\n- an earlier line\n- this PR\n\n')
     ],
 )
 def test_a_pr_a_changelog_reader_wants_to_hear_about_adds_a_line(title, text, owes):
-    assert (missing_entry(title, text, BASE) is not None) == owes
+    assert (missing_line(title, text, BASE) is not None) == owes
 
 
 def test_a_pr_that_owes_a_line_is_told_the_way_out():
-    reason = missing_entry('feat: a new thing', BASE, BASE)
+    reason = missing_line('feat: a new thing', BASE, BASE)
     assert reason is not None
     assert 'under "## Upcoming version"' in reason, 'the message says where the line goes'
     assert 'the label "no changelog"' in reason, 'and how a PR that owes none says so'

@@ -106,7 +106,7 @@ def test_the_activity_is_the_whole_left_hand_side():
     """`xᵀQx + Ax`, recomputed — the residual half of the oracle.
 
     Not ``Ax``: for ``p·q >= 4`` it is 4 at the optimum where
-    ``Ax`` is 0, the row owning no linear entry at all.
+    ``Ax`` is 0, the row owning no linear coefficient at all.
     """
     with sps.build(SPEC, SOURCES) as model:
         result = model.solve(solver_name='gurobi', outputs={'activity'})
@@ -213,7 +213,7 @@ def test_asking_for_prices_on_a_nonconvex_row_says_which_option_did_it():
         sps.solve(nonconvex, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1})
 
 
-def _entries(expression: str, sources=None) -> pl.DataFrame:
+def _coefficients(expression: str, sources=None) -> pl.DataFrame:
     """The quadratic stream of a model whose row is *expression*."""
     varied = spec(constraints={'coupled': {'dims': ['g'], 'expression': expression}})
     with sps.build(varied, dict(sources or SOURCES)) as model:
@@ -221,14 +221,14 @@ def _entries(expression: str, sources=None) -> pl.DataFrame:
 
 
 def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
-    """``q · p`` and ``p · q`` are one entry of one row.
+    """``q · p`` and ``p · q`` are one coefficient of one row.
 
     Sharper here than in the objective: a pair written the other way round
     lands in ``Q``'s *lower* triangle, still solves — ``xᵀQx`` reads both — and
     stops matching the LP file, where the two orders are two different lines.
     """
-    written = _entries('p * q >= floor')
-    reversed_ = _entries('q * p >= floor')
+    written = _coefficients('p * q >= floor')
+    reversed_ = _coefficients('q * p >= floor')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
     assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
@@ -292,7 +292,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     The digest reads the pattern *and* the coefficients, and every update a
     model can express moves both — solver indices are contiguous, so a condition that changes
     which pair a row holds also changes how many there are. Asked of the tables
-    directly instead: one entry at a different column, same coefficient.
+    directly instead: one coefficient at a different column, same value.
     """
     with sps.build(SPEC, SOURCES) as model:
         tables = model._engine._model.handoff
