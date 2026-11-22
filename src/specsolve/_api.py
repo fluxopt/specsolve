@@ -403,7 +403,6 @@ class Model:
         model's life, not one solve. It is the last member written, so its
         ``archive_seconds`` covers every other one.
         """
-        started = perf_counter()
 
         def metrics() -> pl.DataFrame:
             row = self._engine.diagnostics().metrics()
@@ -411,6 +410,7 @@ class Model:
             return pl.DataFrame([row._asdict()], schema_overrides=METRICS_SCHEMA)
 
         with self._engine.clocked('archive'):
+            started = perf_counter()
             write_archive(
                 out,
                 self._spec,

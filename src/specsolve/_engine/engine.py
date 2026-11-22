@@ -154,7 +154,8 @@ class Engine:
         tables. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
-            self._solver.structure()
+            with self.clocked('handoff'):
+                self._solver.structure()
         self._built = None
         self._solved = None
         self._measured = Measured()

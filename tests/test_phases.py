@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-#: Wall time no phase holds: argument checks between them, and the call itself.
-#: The model here builds and solves in tens of milliseconds, so a step left
-#: unclocked that costs as much as one of them shows.
-SLACK = 0.02
-
-#: What one slowed step sleeps, comfortably above [`SLACK`][].
+#: What one slowed step sleeps. A step no phase clocks loses all of it.
 DELAY = 0.1
+
+#: Wall time no phase holds: the argument checks between phases, and the call
+#: itself. Under four test workers on four cores it reached 21.6 ms, so half a
+#: [`DELAY`][] holds it and still finds a slowed step that no phase clocks.
+SLACK = DELAY / 2
 
 
 def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
@@ -183,3 +183,27 @@ def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispa
         kept = model.diagnostics().seconds.get('archive', 0.0)
     recorded = sps.read_archive(tmp_path / 'case.zip').metrics.archive_seconds
     assert kept >= recorded > 0, f'the model keeps the {recorded} s its archive row recorded, and the rest: {kept}'
+
+
+def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch
+):
+    """An update makes the held solver read its model's digest before the build lets the tables go.
+
+    That read decides whether the solver keeps its model, so it is the handoff's.
+    """
+    load = dispatch_table_inputs['load']
+    out = tmp_path / 'case.zip'
+    monkeypatch.setattr(Solver, 'structure', _slowed(Solver.structure))
+
+    def call() -> sps.types.Model:
+        model = sps.build(dispatch_yaml, dispatch_table_inputs)
+        model.solve()
+        model.update({'load': load.with_columns(value=load['value'] * 0.5)})
+        model.solve(archive=out)
+        return model
+
+    wall, seconds = _timed(call, out)
+
+    assert seconds['handoff'] >= DELAY, f'the slowed digest is clocked in the handoff: {seconds}'
+    assert wall - sum(seconds.values()) < SLACK, f'and nothing it took is lost: {seconds} sum short of {wall}'
