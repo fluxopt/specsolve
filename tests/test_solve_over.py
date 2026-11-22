@@ -367,7 +367,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
     assert len(runs) == 3, 'three slices'
     assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped updating'
     seen = built[0].diagnostics()
-    assert (seen.loads, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
+    assert (seen.solver_instances, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 
 def test_a_carried_fold_still_builds_once(builds):
@@ -2197,7 +2197,7 @@ def test_a_key_that_collides_with_a_fixed_column_is_refused(key_name):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name=key_name))
 
 
-@pytest.mark.parametrize('key_name', ['columns', 'rows', 'solves', 'loads', 'build_seconds'], ids=str)
+@pytest.mark.parametrize('key_name', ['columns', 'rows', 'solves', 'solver_instances', 'build_seconds'], ids=str)
 def test_a_key_named_like_a_metrics_column_is_refused_before_a_slice_is_solved(key_name):
     """`Sweep.metrics` carries the key beside every `Metrics` column.
 
@@ -2326,7 +2326,7 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
         'a clock is never negative'
     )
     assert table['solves'].to_list() == [1, 1, 1], "each row is one slice's solve, not the model's running total"
-    assert table['loads'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
+    assert table['solver_instances'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
         'a serial sweep loads the solver once and pushes values after; a pooled one builds every slice cold'
     )
     assert table['write_seconds'].to_list() == [0.0] * 3, 'a sweep writes no model file'
@@ -2368,9 +2368,9 @@ def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
     """A resume reads a slice's record back as values, so a file short of a column is refused by name."""
     _spilled(tmp_path / 'sweep')
     first = min((tmp_path / 'sweep' / 'metrics').glob('*.parquet'))
-    pl.read_parquet(first).drop('loads').write_parquet(first)
+    pl.read_parquet(first).drop('solver_instances').write_parquet(first)
 
-    with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['loads'\]"):
+    with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['solver_instances'\]"):
         _spilled(tmp_path / 'sweep')
 
 
@@ -2521,9 +2521,9 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     assert answer_of(resumed).equals(answer_of(cold))
     assert resumed.scan('soc').collect().equals(cold.primal('soc'))
     assert resumed.scan('soc', per_window=True).collect().equals(cold.primal('soc', per_window=True))
-    loads = cold.metrics['loads'].to_list()
+    loads = cold.metrics['solver_instances'].to_list()
     loads[2] = 1
-    assert resumed.metrics['loads'].to_list() == loads, (
+    assert resumed.metrics['solver_instances'].to_list() == loads, (
         'the two read back are the record they left, and the third loads where the uninterrupted run updated'
     )
 

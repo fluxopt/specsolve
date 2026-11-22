@@ -153,7 +153,7 @@ def test_lookahead_closes_the_gap_and_grows_the_window(over_time: tuple[dict[str
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
     numbers = namespace['after_numbers']
-    assert (numbers.loads, numbers.solves) == (1, 5), 'the page says five answers came off one loaded model'
+    assert (numbers.solver_instances, numbers.solves) == (1, 5), 'the page says five answers came off one loaded model'
 
 
 def test_more_wind_saves_less_each_time(session: tuple[dict[str, Any], str]) -> None:
@@ -174,14 +174,16 @@ def test_a_update_answers_what_a_fresh_build_answers(session: tuple[dict[str, An
 
 def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['after_rows'].loads == 2, 'the page says new snapshots cost a reload'
+    assert namespace['after_rows'].solver_instances == 2, 'the page says new snapshots cost a reload'
     assert namespace['longer'].objective == pytest.approx(2 * 10500.0), 'the page says two days cost twice one day'
 
 
 def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, Any], str]) -> None:
     """A pin writes bounds, not a row, so the loaded model is kept."""
     namespace, _ = lifecycle
-    assert namespace['pinning'].loads == 1, 'a pin writes bounds, so the solver keeps the model it has loaded'
+    assert namespace['pinning'].solver_instances == 1, (
+        'a pin writes bounds, so the solver keeps the model it has loaded'
+    )
     assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'
 
 

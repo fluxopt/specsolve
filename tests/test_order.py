@@ -163,7 +163,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
         model.solve()
         for seed in range(3):
             model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
-        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
+        assert model.diagnostics().solver_instances == 1, 'the same numbers, shuffled, loaded the solver again'
 
 
 def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
@@ -179,6 +179,6 @@ def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -
     with sps.build(spec, {'i': [0, 1, 2], 'cost': cost}) as model:
         model.solve()
         model.update({'cost': cost.with_columns(pl.col('value') * (1 + 1e-9))}).solve()
-        assert model.diagnostics().loads == 2, (
+        assert model.diagnostics().solver_instances == 2, (
             'a coefficient moved by 1e-9 relative kept a solver that holds the old one'
         )

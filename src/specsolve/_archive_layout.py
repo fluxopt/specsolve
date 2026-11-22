@@ -22,7 +22,7 @@ import polars as pl
 import polars.selectors as cs
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import FORMAT_FILE, HORIZON_FILE, MANIFEST_FILE, write_format, write_whole
+from specsolve._answer_layout import FORMAT_FILE, HORIZON_FILE, MANIFEST_FILE, METRICS_FILE, write_format, write_whole
 from specsolve._inputs import as_program
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._outputs import OUTPUT_KINDS
@@ -79,6 +79,7 @@ def write_archive(
     *,
     axis: Mapping[str, object] | None,
     answer: Callable[[Path, TableWriter], object],
+    metrics: Callable[[], pl.DataFrame] | None = None,
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -92,6 +93,9 @@ def write_archive(
             sources are not cut.
         answer: Lays the answer out in the directory it is given, writing
             each table with the writer it is given, which adds the run.
+        metrics: The row ``answer/metrics.parquet`` holds, called once every
+            other member is written and packed, so a clock it reads covers
+            them; ``None`` where *answer* writes its own.
 
     Returns:
         *out*, which lands whole or not at all.
@@ -117,6 +121,9 @@ def write_archive(
         _write_catalogs(as_program(spec), tree, run, axis)
         if zipped:
             _pack(tree, part)
+            shutil.rmtree(tree)
+        if metrics is not None:
+            _write_last(metrics(), run, tree, part if zipped else None)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -256,6 +263,21 @@ def _with_run(table: pl.LazyFrame, run: str) -> pl.LazyFrame:
         cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
         pl.lit(run, dtype=pl.String).alias(RUN),
     )
+
+
+def _write_last(row: pl.DataFrame, run: str, tree: Path, packed: Path | None) -> None:
+    """*row* as ``answer/metrics.parquet``, into *tree*, or appended to the zip *packed* where there is one.
+
+    Appended rather than packed with the rest, since what packing costs is
+    one of the clocks the row records.
+    """
+    member = f'{ANSWER_DIR}/{METRICS_FILE}'
+    written = tree / member
+    written.parent.mkdir(parents=True, exist_ok=True)
+    write_whole(_with_run(row.lazy(), run), written)
+    if packed is not None:
+        with zipfile.ZipFile(packed, 'a', compression=zipfile.ZIP_STORED) as appended:
+            appended.write(written, member)
 
 
 def _pack(tree: Path, into: Path) -> None:

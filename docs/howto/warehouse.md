@@ -47,7 +47,7 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 | glob | one row per | says |
 |---|---|---|
 | `answer/record.parquet`, `answer/record/*.parquet` | solve, or sweep slice | how it ended, and on which solver |
-| `answer/metrics.parquet`, `answer/metrics/*.parquet` | the same | what the build and its solves spent |
+| `answer/metrics.parquet`, `answer/metrics/*.parquet` | the same | how long each phase took |
 | `catalog.parquet` | column of labels of each file | [what a file holds](#what-a-file-holds) |
 
 **Every row names its archive in `specsolve_run`.** A sweep writes one row per

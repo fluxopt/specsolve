@@ -254,7 +254,7 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             first = model.solve(solver_name='gurobi').objective
             model.update(moved)
             again = model.solve(solver_name='gurobi').objective
-            assert model.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
+            assert model.diagnostics().solver_instances == 2, 'anything about a quadratic row is a model to load again'
             with sps.solve(weighted, moved, solver_name='gurobi') as fresh:
                 assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
                     'an update answers what a fresh build answers — a coefficient or a right-hand '
@@ -278,7 +278,7 @@ def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
         model.solve(solver_name='gurobi').close()
         model.update(tight)
         pushed = model.solve(solver_name='gurobi')
-        assert model.diagnostics().loads == 1, 'only a linear right-hand side moved, so it is pushed'
+        assert model.diagnostics().solver_instances == 1, 'only a linear right-hand side moved, so it is pushed'
         with sps.solve(capped, tight, solver_name='gurobi') as fresh:
             assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
                 'a pushed right-hand side answers what a fresh build answers'
@@ -330,7 +330,7 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
     assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
-def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
+def test_the_highs_handoff_refuses_one_even_when_reached_directly():
     """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""

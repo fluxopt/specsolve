@@ -30,8 +30,8 @@ import polars as pl
 from mathspec import advice
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import METRICS_FILE
 from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
@@ -39,7 +39,7 @@ from specsolve._outputs import checked_outputs
 from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
-from specsolve._sources import refuse_unknown_sources, tidied_and_attached, tidy_sources, with_positions
+from specsolve._sources import refuse_unknown_sources, tidied, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve._answer_layout import TableWriter
     from specsolve._outputs import Output
     from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem
     from specsolve._start import Start
@@ -190,12 +189,13 @@ class Model:
     """
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
+        self._engine = Engine()
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
+        self._engine.lap('load')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
-        self._engine = Engine()
         self._fill()
 
     def _lower(self, written: str | Mapping[str, object]) -> Expression:
@@ -213,7 +213,10 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            self._tidied, attached = tidied_and_attached(self._program, self._sources)
+            self._tidied = tidied(self._program, self._sources)
+            self._engine.lap('tidy')
+            attached = validate_assumptions(self._program, self._tidied)
+            self._engine.lap('attach')
             self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._engine.close()
@@ -230,7 +233,7 @@ class Model:
         whatever changed. Data that changes which coordinates a condition admits
         renumbers solver indices, so the model is rebuilt and solved cold rather
         than pushed onto a loaded solver;
-        [`loads`][specsolve._result.Diagnostics.loads] says which ran.
+        [`solver_instances`][specsolve._result.Diagnostics.solver_instances] says which ran.
 
         Results taken before the update keep reading their own tables, and
         keep their build's index tables alive until dropped or until
@@ -251,6 +254,7 @@ class Model:
                 anything changes. Data the build refuses releases the model, as
                 a build that raises does.
         """
+        self._engine.start()
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
         self._fill()
@@ -340,6 +344,7 @@ class Model:
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
+        self._engine.start()
         out = None if archive is None else Path(archive)
         if out is not None:
             parquet.require('archive=')
@@ -351,18 +356,12 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        answered = self._with_record_fields(
-            self._engine.solve(
-                solver_name,
-                solver_options=solver_options,
-                lower=self._lower,
-                outputs=asked,
-                start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
-            ),
-            solver_name,
-            solver_options,
-            also_record or (),
+        read = start if start is None or isinstance(start, (str, Result)) else self._read_start(start)
+        solved = self._engine.solve(
+            solver_name, solver_options=solver_options, lower=self._lower, outputs=asked, start=read
         )
+        answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
+        self._engine.lap('readback')
         if out is not None:
             self._archive(out, answered)
         return answered
@@ -401,15 +400,24 @@ class Model:
         """Write this model, what is attached to it now, and *answered* to *out*.
 
         The metrics row is written here, not by [`Result.save`][]: it spans the
-        model's life, not one solve.
+        model's life, not one solve. It is the last member written, so its
+        ``archive_seconds`` covers every other one; writing and landing it are
+        in the model's own clock alone.
         """
-        taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        def answer(under: Path, write: TableWriter) -> None:
-            answered._save(under, write)
-            write(taken, under / METRICS_FILE)
+        def metrics() -> pl.DataFrame:
+            self._engine.lap('archive')
+            return pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        write_archive(out, self._spec, with_positions(self._program, self._tidied), axis=None, answer=answer)
+        write_archive(
+            out,
+            self._spec,
+            with_positions(self._program, self._tidied),
+            axis=None,
+            answer=answered._save,
+            metrics=metrics,
+        )
+        self._engine.lap('archive')
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -419,6 +427,7 @@ class Model:
             SpecsolveError: A construct the format has no section for, as
                 [`check_sink`][] refuses it.
         """
+        self._engine.start()
         self._engine.write(path)
 
     def check_sink(self, sink: str) -> None:

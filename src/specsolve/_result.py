@@ -278,19 +278,19 @@ class Diagnostics:
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
 
-    #: How many times this model has been solved, and how many of those solves
-    #: loaded the solver from scratch instead of pushing values onto one that
-    #: already held it. ``loads == solves`` on an iterating driver means the
-    #: model has a condition on a parameter that varies.
+    #: How many times this model has been solved, and how many solver
+    #: instances those solves took: a new one wherever the solver could not
+    #: keep the model and take its new values. ``solver_instances == solves``
+    #: on an iterating driver means the model has a condition on a parameter
+    #: that varies.
     solves: int
-    loads: int
+    solver_instances: int
 
-    #: Cumulative wall-clock seconds per phase, keyed by the phase's name:
-    #: ``attach`` (the caller's sources onto the program), ``build`` (entries
-    #: into the model tables), ``handoff`` (the built model into a solver),
-    #: ``solve`` (the solver's own run), ``write`` (the built model to a
-    #: file). A phase that never ran has no key; one that ran again holds the
-    #: sum.
+    #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
+    #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
+    #: ``handoff``, ``solve``, ``readback``, ``write`` and ``archive``, as
+    #: [`Metrics`][specsolve._records.Metrics] defines each. A phase that
+    #: never ran has no key; one that ran again holds the sum.
     seconds: Mapping[str, float]
 
     def metrics(self) -> Metrics:
@@ -306,12 +306,16 @@ class Diagnostics:
             rows=self.rows,
             nonzeros=self.nonzeros,
             solves=self.solves,
-            loads=self.loads,
+            solver_instances=self.solver_instances,
+            load_seconds=clocks.get('load', 0.0),
+            tidy_seconds=clocks.get('tidy', 0.0),
             attach_seconds=clocks.get('attach', 0.0),
             build_seconds=clocks.get('build', 0.0),
             handoff_seconds=clocks.get('handoff', 0.0),
             solve_seconds=clocks.get('solve', 0.0),
+            readback_seconds=clocks.get('readback', 0.0),
             write_seconds=clocks.get('write', 0.0),
+            archive_seconds=clocks.get('archive', 0.0),
         )
 
 

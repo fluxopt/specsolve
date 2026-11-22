@@ -22,7 +22,7 @@ case/
     sources/cost.parquet          each source, as the solve read it
     catalog.parquet               what each file holds
     answer/record.parquet         how it ended, what it reached, and on which solver and versions
-    answer/metrics.parquet        what the build and its solves took
+    answer/metrics.parquet        how long each phase took, from the spec to the archive
     answer/primal/p.parquet       one file per variable
     answer/dual/power_balance.parquet
 ```

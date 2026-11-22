@@ -194,7 +194,7 @@ def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
         sps.solve(DISPATCH, snapshots(40), start=before)
 
 
-def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_loads(
+def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_instances(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Neither an answer read back nor a model never solved bears a mark, and two absent marks are not one solve."""
