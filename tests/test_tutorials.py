@@ -105,7 +105,7 @@ def test_the_data_from_files_solves_as_the_first_model_did(data: tuple[dict[str,
 def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], str]) -> None:
     namespace, _ = data
     assert namespace['archived'].result.objective == pytest.approx(namespace['result'].objective), (
-        'the page says load_archive gives the answer without solving again'
+        'the page says read_archive gives the answer without solving again'
     )
 
 

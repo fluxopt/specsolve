@@ -633,12 +633,12 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
 
 
 def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_table_inputs, tmp_path):
-    """An answer asked for its activities saves each row's left-hand side, and loads it back."""
+    """An answer asked for its activities saves each row's left-hand side, and reads it back."""
     with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}) as result:
         out = result.save(tmp_path / 'solution')
         constraints = set(sps.check(dispatch_yaml).constraints)
         assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
-        loaded = sps.load_result(out)
+        loaded = sps.read_result(out)
         for name in constraints:
             assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(result.activity(name))
             assert loaded.activity(name).equals(result.activity(name))
@@ -670,9 +670,9 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     ], 'the whole kind for the duals, one name for the expression, each with the sentence the reader gives'
 
 
-def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_result, dispatch_yaml, tmp_path):
+def test_a_saved_solution_reads_back_as_the_result_it_was(dispatch_result, dispatch_yaml, tmp_path):
     """Every reader answers what it answered, off the directory rather than a session."""
-    loaded = sps.load_result(dispatch_result.save(tmp_path / 'solution'))
+    loaded = sps.read_result(dispatch_result.save(tmp_path / 'solution'))
 
     assert (loaded.status, loaded.termination_condition) == (
         dispatch_result.status,
@@ -687,8 +687,8 @@ def test_a_saved_solution_loads_back_as_the_result_it_was(dispatch_result, dispa
         assert loaded.dual(name).equals(dispatch_result.dual(name))
 
 
-def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
-    """An absence loads back as the sentence, not as an unknown name."""
+def test_a_result_read_back_gives_the_reason_the_solve_gave(tmp_path):
+    """An absence reads back as the sentence, not as an unknown name."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
         'parameters': {'load': {'dims': ['t']}, 'scale': {'dims': ['t'], 'missing': 'neutral'}},
@@ -699,7 +699,7 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     }
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
     with sps.solve(spec, sources) as result:
-        loaded = sps.load_result(result.save(tmp_path))
+        loaded = sps.read_result(result.save(tmp_path))
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
         with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
@@ -716,10 +716,10 @@ def test_a_loaded_result_gives_the_reason_the_solve_gave(tmp_path):
     assert 'integer' in str(no_dual.value), 'and the dual refuses for the reason it refused there'
 
 
-def test_a_solve_that_left_no_values_loads_back_and_still_has_none(tmp_path):
+def test_a_solve_that_left_no_values_reads_back_and_still_has_none(tmp_path):
     """A run that did not solve is an answer, and reads back as that answer."""
     with sps.solve(*CASES['INFEASIBLE']) as result:
-        loaded = sps.load_result(result.save(tmp_path / 'infeasible'))
+        loaded = sps.read_result(result.save(tmp_path / 'infeasible'))
     assert loaded.termination_condition == 'infeasible'
     assert not loaded.has_primal, 'the record says the solve produced none, so no reader is offered any'
     assert loaded.objective != loaded.objective, 'nan, as the solve reported it'
@@ -732,7 +732,7 @@ def test_a_scanned_result_saved_where_it_was_scanned_keeps_its_files(dispatch_re
     saved = dispatch_result.save(tmp_path / 'answer')
     with sps.scan_result(saved) as scanned:
         assert scanned.save(saved) == saved
-    with sps.load_result(saved) as loaded:
+    with sps.read_result(saved) as loaded:
         assert loaded.primal('p').equals(dispatch_result.primal('p')), 'every value is still there'
 
 
@@ -752,33 +752,33 @@ def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
     empty = tmp_path / 'nothing'
     empty.mkdir()
     with pytest.raises(sps.errors.LayoutError, match=r'record\.parquet'):
-        sps.load_result(empty)
+        sps.read_result(empty)
 
 
-def test_a_loaded_answer_outlives_the_directory_and_a_scanned_one_does_not(dispatch_result, tmp_path):
-    """`load_result` holds the values when it returns; `scan_result` reads each table when asked."""
+def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(dispatch_result, tmp_path):
+    """`read_result` holds the values when it returns; `scan_result` reads each table when asked."""
     saved = dispatch_result.save(tmp_path / 'solution')
-    loaded = sps.load_result(saved)
+    loaded = sps.read_result(saved)
     scanned = sps.scan_result(saved)
     expected = dispatch_result.primal('p')
     assert scanned.primal('p').equals(expected), 'both read the same answer while the directory is there'
     shutil.rmtree(saved)
 
-    assert loaded.primal('p').equals(expected), 'the loaded answer was in memory before the files went'
+    assert loaded.primal('p').equals(expected), 'the answer read whole was in memory before the files went'
     with pytest.raises(FileNotFoundError):
         scanned.primal('p')
 
 
 def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_result, tmp_path):
-    """A scan returns what the file holds at the read; a load, what it held at the load."""
+    """A scan returns what the file holds at the read; a read, what it held at the read."""
     saved = dispatch_result.save(tmp_path / 'solution')
-    loaded = sps.load_result(saved)
+    loaded = sps.read_result(saved)
     scanned = sps.scan_result(saved)
     was = dispatch_result.primal('p')
     was.with_columns(pl.col('value') * 2).write_parquet(saved / 'primal' / 'p.parquet')
 
     assert scanned.primal('p')['value'].to_list() == (was['value'] * 2).to_list(), 'the scan reads the file it finds'
-    assert loaded.primal('p').equals(was), 'and the loaded answer is the one the load read'
+    assert loaded.primal('p').equals(was), 'and the answer read whole is what the file held at the read'
 
 
 def test_read_back_is_in_index_order_and_stays_there(dispatch_yaml, dispatch_table_inputs, tmp_path):
@@ -848,7 +848,7 @@ def _left_absent(missing: str) -> dict:
 def _saved(spec, sources, tmp_path):
     with sps.solve(spec, sources) as result:
         saved = result.save(tmp_path / 'answer')
-    with sps.load_result(saved) as loaded:
+    with sps.read_result(saved) as loaded:
         return loaded.evaluate('twice')
 
 
