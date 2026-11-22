@@ -37,6 +37,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   [`Result`](api.md#specsolve.types.Result). It owns its tables, so it outlives
   its model.
 
+**Solution**
+: The values a solve found: each variable's primal and each row's dual. A
+  `Result` holds one solution; a `Sweep` holds one per slice.
+
 **Answer**
 : What came back: a `Result` for one solve, a [`Sweep`](#sweeps) for a sweep.
 
