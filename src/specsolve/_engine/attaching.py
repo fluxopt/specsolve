@@ -39,9 +39,9 @@ class AttachedSources:
     cached table heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its ordinal. ``settled`` is each test of a ``where`` that the
-    data decides at every coordinate: ``True`` where it holds everywhere,
-    ``False`` where nowhere ([`settle`][]).
+    ``first`` is its ordinal. ``settled`` is each atom of a ``where`` that the
+    data settles: ``True`` where it holds everywhere, ``False`` where
+    nowhere ([`settle`][]).
     ``seconds`` is how long attaching took, for the
     build these are handed to, which did not run the attach itself.
     """
@@ -66,8 +66,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
-    [`in_memory`][], since every read holds one table whole. Every test a
-    ``where`` makes is then read once ([`settle`][]), for the assumptions
+    [`in_memory`][], since every read holds one table whole. Every atom of a
+    ``where`` is then read once ([`settle`][]), for the assumptions
     and the build both.
 
     Raises:
