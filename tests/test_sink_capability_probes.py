@@ -74,7 +74,7 @@ end
 
 
 def _highs_qp(curvature: float = 2.0, *, integral: bool = False) -> Any:
-    """A two-column QP: an LP, plus ``Q = curvature · I`` through the sink's own entry point."""
+    """A two-column QP: an LP, plus ``Q = curvature · I`` through the sink's own method."""
     h = highspy.Highs()
     h.setOptionValue('output_flag', False)
     lp = highspy.HighsLp()
@@ -132,7 +132,7 @@ def test_highs_refuses_a_hessian_beside_integrality():
     )
 
 
-def test_highs_has_no_quadratic_constraint_entry_point():
+def test_highs_has_no_quadratic_constraint_method():
     named = [name for name in dir(highspy.Highs) if 'quad' in name.lower() or 'qconstr' in name.lower()]
     assert named == [], f'{TABLE} says HiGHS has no quadratic-constraint concept, and {named} contradicts it'
 
@@ -197,7 +197,7 @@ def test_the_highs_descriptor_says_what_these_probes_measured():
     capabilities = SOLVERS['highs'].capabilities
     assert 'quadratic_objective' in capabilities.supports, 'a convex Hessian solved, above'
     assert 'nonconvex_quadratic_objective' not in capabilities.supports, 'a non-PSD Hessian was refused, above'
-    assert 'quadratic_constraint' not in capabilities.supports, 'there is no entry point to call, above'
+    assert 'quadratic_constraint' not in capabilities.supports, 'there is no method to call, above'
     assert 'sos' not in capabilities.supports, (
         'HiGHS has no set concept — its own LP reader refusing the section is that same fact from the other side'
     )

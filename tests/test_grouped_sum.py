@@ -352,7 +352,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
     with sps.build(spec, BROADCAST_SOURCES) as model:
         tables = model._engine._model.handoff
         matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
-        assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
+        assert matrix.height == 6, 'one coefficient per (row, generator-on-that-bus), not one per bus'
         assert model.solve().termination_condition == 'optimal'
 
 
