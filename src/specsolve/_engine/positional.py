@@ -1,20 +1,20 @@
-"""Data read by position instead of joined, where it has a value at every coordinate of its dims.
+"""Data read by position instead of joined, where it has a value at every coordinate of its dimensions.
 
-The join path keys a term by its label columns, so every alignment hashes
+The join path keys a term by its dimension columns, so every alignment hashes
 them. Where the data has a row at every coordinate, a coordinate's row-major
 position ([`Scope.row_major`][specsolve._engine.scope.Scope.row_major])
 is the key, and an alignment is an index. A [`Positional`][] term is that reading,
-and it always carries the frame the join path would read, so an operator
-without a positional arm takes the frame and nothing is written twice to be
+and it always carries the table the join path would read, so an operator
+without a positional arm takes the table and nothing is written twice to be
 right.
 
-A read by position is a polars expression over a frame of positions, so it
+A read by position is a polars expression over a table of positions, so it
 runs in the query that places it, on the engine and the memory every other
-frame of the build uses.
+table of the build uses.
 
 Only a leaf decides: [`parameter`][], [`variable`][] and [`constant`][]
 answer ``None`` where the data is short of a coordinate, and a term over one
-such leaf is a frame from there on.
+such leaf is a table from there on.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._names import VALUE
+from specsolve._names import COEFF, COL, VALUE
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     #: A term's values at coordinates.
     type Values = Callable[[Coordinates], pl.Expr]
 
-#: The column a frame of coordinates carries: each one's row-major position in the product of its dims.
+#: The column a table of coordinates carries: each one's row-major position in the product of its dimensions.
 POSITION = '#position'
 
 #: The fewest coordinates a parameter spans for a ``where`` or a bound to read
@@ -48,16 +48,17 @@ POSITION = '#position'
 #: that runs anyway, and under this many rows it costs more than the join.
 READ_BY_POSITION_FROM = 100_000
 
-#: The most coordinates a masked variable's dims may span per column it has,
-#: for its columns to be held by position: an integer per coordinate.
+#: The most coordinates the dimensions of a variable narrowed by its ``where:``
+#: may span per column it has, for its columns to be held by position: an
+#: integer per coordinate.
 CELLS_PER_COLUMN = 16
 
 
 class Coordinates:
-    """A frame of coordinates of the product of *dims*, each given as its [`POSITION`][] there.
+    """A table of coordinates of the product of *dims*, each given as its [`POSITION`][] there.
 
-    It holds no row: it is how such a frame is read. A term over some of the
-    dims reads them through [`over`][Coordinates.over].
+    It holds no row: it is how such a table is read. A term over some of the
+    dimensions reads them through [`over`][Coordinates.over].
     """
 
     def __init__(self, dims: tuple[str, ...], cardinality: Mapping[str, int]) -> None:
@@ -74,23 +75,24 @@ class Coordinates:
         return position
 
     def ordinal(self, dim: str) -> pl.Expr:
-        """Each coordinate's ordinal along *dim*, one of this one's dims."""
+        """Each coordinate's ordinal along *dim*, one of this one's dimensions."""
         after = self.dims[self.dims.index(dim) + 1 :]
         stride = math.prod(self._cardinality[d] for d in after)
         return (pl.col(POSITION) // stride) % self._cardinality[dim]
 
 
 class Positional:
-    """A term held by position: a value at every coordinate of its dims.
+    """A term held by position: a value at every coordinate of its dimensions.
 
-    ``values`` is the expression that reads it on a frame of
-    [`Coordinates`][] over dims that include its own, and ``columns`` the one
+    ``values`` is the expression that reads it on a table of
+    [`Coordinates`][] over dimensions that include its own, and ``columns`` the one
     that reads the column under it, ``None`` for a constant term. ``reach``
     is the last column its variable can hold.
-    ``frame`` is the same term as the join path reads it, formed the first
+    ``table`` is the same term as the join path reads it, formed the first
     time something asks. ``absent`` is the presence a coordinate without a
-    column stands for, where the term's variable is masked and removes the
-    row it is missing from; ``None`` where a missing column is a zero.
+    column stands for, where the term's variable is narrowed by its
+    ``where:`` and removes the row it is missing from; ``None`` where a
+    missing column is a zero.
     """
 
     def __init__(
@@ -108,15 +110,15 @@ class Positional:
         self._tidy = tidy
 
     @cached_property
-    def frame(self) -> pl.LazyFrame:
-        """The term as ``(dims…, label columns, value)``, one row per coordinate it holds."""
+    def table(self) -> pl.LazyFrame:
+        """The term as ``(dims…, column-index columns, value)``, one row per coordinate it holds."""
         return self._tidy()
 
     def stands_for(self, presences: Sequence[Presence]) -> bool:
         """Whether *presences*, a term's, are exactly what this body's missing columns say.
 
         An operator that gives a term another presence leaves the body
-        saying less than the term does, and the term is then read as a frame.
+        saying less than the term does, and the term is then read as a table.
         """
         own = () if self.absent is None else (self.absent,)
         return len(presences) == len(own) and all(theirs is mine for theirs, mine in zip(presences, own, strict=True))
@@ -128,7 +130,7 @@ def constant(value: float) -> Values | None:
 
 
 def readable(scope: Scope, name: str) -> bool:
-    """Whether parameter *name* can be read by position: it [covers][specsolve._engine.attaching.AttachedSources.covers] its dims."""
+    """Whether parameter *name* can be read by position: it [covers][specsolve._engine.attaching.AttachedSources.covers] its dimensions."""
     return scope.data.covers(name, scope.program.parameters[name].dims)
 
 
@@ -139,7 +141,7 @@ def worth_reading(scope: Scope, name: str) -> bool:
 
 
 def column(scope: Scope, name: str) -> pl.Series:
-    """Parameter *name*'s value column in the row-major order of its dims, as it was attached; it is [`readable`][]."""
+    """Parameter *name*'s value column in the row-major order of its dimensions, as it was attached; it is [`readable`][]."""
     return _read_once(scope, ('column', name), _column_by_position)
 
 
@@ -159,13 +161,14 @@ def parameter(scope: Scope, name: str) -> Values | None:
 def variable(scope: Scope, name: str) -> Columns | None:
     """Variable *name*'s columns by position, or ``None`` where position is not worth holding.
 
-    An unmasked variable's column is its start plus its position, so nothing
-    is held. A masked one holds an integer per coordinate of its dims, which
-    is refused past [`CELLS_PER_COLUMN`][] per column it has.
+    A variable with no condition has its start plus its position as its
+    column, so nothing is held. One narrowed by its ``where:`` holds an
+    integer per coordinate of its dimensions, which is refused past
+    [`CELLS_PER_COLUMN`][] per column it has.
     """
-    declaration, held = scope.program.variables[name], scope.variables[name]
-    dims = declaration.dims
-    if declaration.where is None:
+    entry, held = scope.program.variables[name], scope.variables[name]
+    dims = entry.dims
+    if entry.where is None:
         return lambda at: held.start + at.over(dims)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
     if not held.height or cells > CELLS_PER_COLUMN * held.height:
@@ -174,10 +177,10 @@ def variable(scope: Scope, name: str) -> Columns | None:
 
 
 def _read(held: pl.Series, at: Coordinates, dims: tuple[str, ...]) -> pl.Expr:
-    """*held*, one value per coordinate of *dims* in row-major order, at each coordinate of the frame.
+    """*held*, one value per coordinate of *dims* in row-major order, at each coordinate of the table.
 
-    Over no dims it is its one value, said as a scalar: a gather of one row
-    is a column of one row, which no frame taller than that takes.
+    Over no dimensions it is its one value, said as a scalar: a gather of one
+    row is a column of one row, which no table taller than that takes.
     """
     return pl.lit(held).gather(at.over(dims)) if dims else pl.lit(held).first()
 
@@ -202,14 +205,14 @@ def negated(body: Positional, tidy: Callable[[], pl.LazyFrame]) -> Positional:
 def product(a: Positional, c: Positional, tidy: Callable[[], pl.LazyFrame]) -> Positional:
     """``a * c`` where *c* is a constant term, *tidy* being the same on the join path.
 
-    Each factor reads the coordinate along its own dims, which is the
-    broadcast the join makes by matching the dims the two share.
+    Each factor reads the coordinate along its own dimensions, which is the
+    broadcast the join makes by matching the dimensions the two share.
     """
     return Positional(lambda at: a.values(at) * c.values(at), tidy, a.columns, a.reach, a.absent)
 
 
 def _column_by_position(scope: Scope, name: str) -> pl.Series:
-    """Parameter *name*'s value column in the row-major order of its dims, the table having a row at every coordinate.
+    """Parameter *name*'s value column in the row-major order of its dimensions, the table having a row at every coordinate.
 
     A table whose rows already stand in that order is read as it is, with no
     copy beside it; any other order is moved into one in a single pass.
@@ -229,22 +232,18 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
         at, pl.int_range(at.len(), dtype=pl.Int64, eager=True)
     )
     if at.len() != cells or (row < 0).any():
-        msg = f"parameter '{name}' is as tall as the product of its dims and does not cover it"
+        msg = f"parameter '{name}' is as tall as the product of its dimensions and does not cover it"
         raise SpecsolveError(msg)
     return column.gather(row)
 
 
 def _columns_by_position(scope: Scope, name: str) -> pl.Series:
-    """Variable *name*'s column at each coordinate of its dims in row-major order, ``-1`` where it has none."""
+    """Variable *name*'s column at each coordinate of its dimensions in row-major order, ``-1`` where it has none."""
     dims = scope.program.variables[name].dims
     position = scope.row_major(dims, scope.ordinal_of)
-    held = (
-        scope.variables[name].frame.select(position.alias(POSITION), pl.col('var_label').cast(pl.Int32)).pipe(collected)
-    )
+    held = scope.variables[name].table.select(position.alias(POSITION), pl.col(COL).cast(pl.Int32)).pipe(collected)
     cells = math.prod(scope.data.cardinality[d] for d in dims)
-    return pl.repeat(-1, cells, dtype=pl.Int32, eager=True).scatter(
-        held.get_column(POSITION), held.get_column('var_label')
-    )
+    return pl.repeat(-1, cells, dtype=pl.Int32, eager=True).scatter(held.get_column(POSITION), held.get_column(COL))
 
 
 def placed(
@@ -257,7 +256,7 @@ def placed(
 
     Returns:
         The positions that keep a row, and which of *positions* they are,
-        ``None`` for all of them. Then the entries as ``(index, col, coeff)``
+        ``None`` for all of them. Then the entries as ``(index, COL, COEFF)``
         in *index* order, *index* counting the positions kept. A term whose
         variable has no column at a coordinate holds no entry there. Within
         a coordinate the terms are laid out by ``reach``, which is column
@@ -278,19 +277,19 @@ def placed(
     blocks = [
         coordinates.select(
             'index',
-            _columns_of(body, at).cast(pl.Int32).alias('col'),
-            (body.values(at) * sign).cast(pl.Float64).alias('coeff'),
+            _columns_of(body, at).cast(pl.Int32).alias(COL),
+            (body.values(at) * sign).cast(pl.Float64).alias(COEFF),
         )
         for body, sign in sorted(terms, key=lambda term: term[0].reach)
     ]
     entries = reduce(lambda merged, block: merged.merge_sorted(block, key='index'), blocks).pipe(collected)
-    if entries.height and entries.get_column('col').min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
-        entries = entries.filter(pl.col('col') >= 0)
+    if entries.height and entries.get_column(COL).min() < 0:  # pyrefly: ignore[unsupported-operation] -- an Int32 column of rows has a minimum
+        entries = entries.filter(pl.col(COL) >= 0)
     return positions, kept, entries
 
 
 def summed(terms: Sequence[tuple[Positional, float]], at: Coordinates) -> pl.Expr:
-    """The sum of *terms*, each a constant body and its sign, on a frame of the coordinates *at* describes.
+    """The sum of *terms*, each a constant body and its sign, on a table of the coordinates *at* describes.
 
     Every term has a value at every coordinate, so the sum is owed nothing: no
     coordinate is a gap for a coverage check to find.

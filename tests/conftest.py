@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
@@ -165,15 +166,15 @@ def solve_written_file(path: Path | str) -> float:
     return h.getInfo().objective_function_value
 
 
-def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
-    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dim.
+def primal_by_coordinate(result: Any, name: str, *dims: str) -> dict[Any, float]:
+    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dimension.
 
     One ``primal`` call: two separate calls are not promised to line up.
     """
-    frame = result.primal(name)
-    columns = [frame[dim] for dim in dims]
+    table = result.primal(name)
+    columns = [table[dim] for dim in dims]
     keys = columns[0] if len(dims) == 1 else zip(*columns, strict=True)
-    return dict(zip(keys, frame['value'], strict=True))
+    return dict(zip(keys, table['value'], strict=True))
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +229,7 @@ def dispatch_yaml() -> Path:
 
 @pytest.fixture
 def dispatch_spec_inputs():
-    """``DISPATCH_SPEC``'s data as pandas, index included — one mapping, both lanes."""
+    """``DISPATCH_SPEC``'s data as pandas, labels included — one mapping, both lanes."""
     import pandas as pd
 
     return {
@@ -277,8 +278,8 @@ def dispatch_inputs():
 
 
 @pytest.fixture
-def dispatch_frame_inputs():
-    """The same data as tidy frames — the shape the engine documents."""
+def dispatch_table_inputs():
+    """The same data as tidy tables — the shape the engine documents."""
     generators = list(DISPATCH_GENERATORS)
     return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
@@ -313,7 +314,7 @@ def commitment_inputs():
 
 
 # ---------------------------------------------------------------------------
-# the law fixture: one model, one masked dimension
+# the law fixture: one model, one partly absent variable
 # ---------------------------------------------------------------------------
 
 #: The two dimensions every expression in the law and sweep tests is written over.
@@ -321,7 +322,7 @@ LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}}
 
 
 def law_data() -> dict[str, Any]:
-    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient."""
+    """``gate`` leaves ``y`` absent at ``f=b``; ``w`` is a dense coefficient."""
     import pandas as pd
 
     return {
@@ -359,11 +360,11 @@ def law_spec(
     }
 
 
-def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
-    """The probe behind the shift and window edge cases, over one masked operand.
+def narrowed_operand_spec(constraint: str, expression: str, *, grouped: bool = False, narrowed: bool = True) -> dict:
+    """The probe behind the shift and window edge cases, over one partly absent operand.
 
-    ``level`` is masked where ``usable`` says so (unmasked under
-    ``masked=False``), and ``take`` is capped only by *expression*'s row. The
+    ``level`` is absent where ``usable`` says so (present everywhere under
+    ``narrowed=False``), and ``take`` is capped only by *expression*'s row. The
     1000x penalty on ``level`` makes "row dropped" and "row built and binding"
     separable from the objective alone. ``grouped`` adds ``season_of``.
     """
@@ -380,7 +381,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     if grouped:
         spec['dimensions']['season'] = {'dtype': 'str'}
         spec['relations'] = {'season_of': {'key': 't', 'values': 'season'}}
-    if not masked:
+    if not narrowed:
         del spec['parameters']
         del spec['variables']['level']['where']
     return spec
@@ -427,7 +428,7 @@ def recomputed_row_values(engine, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
-    built frames and the primal alone. Scattered rather than ``reduceat``-ed: a
+    built tables and the primal alone. Scattered rather than ``reduceat``-ed: a
     purely quadratic row owns no linear entries, and ``reduceat`` repeats the
     previous row on an empty span.
     """
@@ -439,12 +440,12 @@ def recomputed_row_values(engine, result) -> Any:
     values = np.zeros(tables.row_count)
     spans = np.diff(tables.row_starts)
     rows = np.repeat(np.arange(tables.row_count), spans)
-    np.add.at(values, rows, tables.matrix['coeff'].to_numpy() * x[tables.matrix['col'].to_numpy()])
+    np.add.at(values, rows, tables.matrix[COEFF].to_numpy() * x[tables.matrix[COL].to_numpy()])
 
     quadratic = tables.qmatrix
     if quadratic.height:
-        pairs = quadratic['coeff'].to_numpy() * x[quadratic['col_l'].to_numpy()] * x[quadratic['col_r'].to_numpy()]
-        np.add.at(values, quadratic['row'].to_numpy(), pairs)
+        pairs = quadratic[COEFF].to_numpy() * x[quadratic[COL_L].to_numpy()] * x[quadratic[COL_R].to_numpy()]
+        np.add.at(values, quadratic[ROW].to_numpy(), pairs)
     return values
 
 
@@ -492,7 +493,7 @@ QP_SOURCES = {
     'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
 }
 
-#: Maximisation and an objective constant, the two things a sink states outside the frames.
+#: Maximisation and an objective constant, the two things a sink states outside the tables.
 MAX = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},
@@ -576,13 +577,13 @@ def assert_infeasible_reports_both_axes(solver_name: str) -> None:
     import specsolve as sps
     from specsolve.errors import NoSolutionError
 
-    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.has_primal
-        assert solution.objective != solution.objective, 'nan, not 0.0'
+    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as result:
+        assert result.status == 'warning'
+        assert result.termination_condition == 'infeasible'
+        assert not result.has_primal
+        assert result.objective != result.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='INFEASIBLE'):
-            solution.primal('p')
+            result.primal('p')
 
 
 #: A knapsack: the discrete model the update and warm-start tests share.

@@ -1,8 +1,8 @@
 """A `where` or a bound over a parameter with a row at every coordinate reads it by position.
 
-The mask's own walk is unchanged: only how a parameter's column reaches the
-frame differs, a read at each row's position where it was a join on every dim
-(`Scope.parameter_join`). Each case is built both ways and the written models
+The condition's own walk is unchanged: only how a parameter's column reaches
+the table differs, a read at each row's position where it was a join on every
+dimension (`Scope.parameter_join`). Each case is built both ways and the written models
 compared, and each says which parameters were read by position.
 """
 
@@ -88,7 +88,7 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.parametrize(
-    ('declarations', 'by_position'),
+    ('entries', 'by_position'),
     [
         pytest.param(
             {'constraints': {'row': {'dims': ['i', 'j'], 'where': 'on', 'expression': 'x <= 5'}}},
@@ -129,14 +129,14 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
                 'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(z) + sum(y)'},
             },
             ['on', 'size'],
-            id='a-bound-on-a-masked-variable',
+            id='a-bound-on-a-variable-narrowed-by-its-where',
         ),
     ],
 )
 def test_a_parameter_read_by_position_gives_the_model_the_join_gives(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, declarations: dict, by_position: list[str]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, entries: dict, by_position: list[str]
 ) -> None:
-    spec = {**SPEC, **declarations}
+    spec = {**SPEC, **entries}
     text, read = _written(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
     assert read == by_position, f'{read} were read by position, and this shape reads {by_position} so'
     assert text == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch), (

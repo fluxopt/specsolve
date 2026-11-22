@@ -1481,8 +1481,8 @@ Z_{j} \le \overline{\mathrm{z}}^{\mathrm{nom}}_{\xi,j} \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_33_maintenance.yaml', sources) as solution:
-        solution.objective  # 7367.560185
+    with sps.solve('differential/pypsa/rungs/rung_33_maintenance.yaml', sources) as result:
+        result.objective  # 7367.560185
     ```
 
 === "PyPSA"

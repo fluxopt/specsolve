@@ -722,8 +722,8 @@ u_{\xi,t,g} \le \mathrm{N}^{\mathrm{fix}}_{\xi,g} \qquad \forall\, \xi \in \Xi,\
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_62_startup_cost_per_snapshot.yaml', sources) as solution:
-        solution.objective  # 6850.0
+    with sps.solve('differential/pypsa/rungs/rung_62_startup_cost_per_snapshot.yaml', sources) as result:
+        result.objective  # 6850.0
     ```
 
 === "PyPSA"

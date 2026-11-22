@@ -1,14 +1,14 @@
-"""Logical plan → polars. Lazy: nothing is read, nothing is executed.
+"""Program → polars. Lazy: nothing is read, nothing is executed.
 
 Column conventions, relied on by the engine:
 
 ===================  ==========================================
-frame                columns
+table                columns
 ===================  ==========================================
-dimension table      ``val``, ``ord``
+dimension table      ``LABEL``, ``POSITION``
 relation table       its declared columns, each under its own name
 parameter table      ``dims…``, ``value``
-variable frame       ``dims…``, ``var_label``
+variable table       ``dims…``, ``COL``
 ===================  ==========================================
 
 A term's columns are in ``terms.py``.
@@ -26,14 +26,14 @@ from mathspec import program
 from specsolve._collect import collected
 from specsolve._engine import positional
 from specsolve._engine.attaching import refuse_a_negative_window
+from specsolve._engine.conditions import Carrier, falsy_if_null, narrowed, query_condition
 from specsolve._engine.positional import Positional
-from specsolve._engine.predicates import Carrier, compile_predicate, falsy_if_null, masked
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
 from specsolve._engine.terms import (
     PRESENT,
-    CompiledExpression,
+    ExpressionTerms,
     Presence,
     Term,
     absence_restrictions,
@@ -52,26 +52,26 @@ from specsolve._engine.terms import (
     times_variable,
     to_the_power,
 )
-from specsolve._names import VALUE
+from specsolve._names import COEFF, COL, CONSTANT, LABEL, ROW, VALUE
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from specsolve._engine.labels import Labelled
+    from specsolve._engine.indices import Indexed
 
 
 def _totalled(p: Term) -> pl.LazyFrame:
-    """Constant term *p* added up to one ``cval`` per coordinate, null where any of its rows is.
+    """Constant term *p* added up to one ``CONSTANT`` per coordinate, null where any of its rows is.
 
-    A null summand is a divisor's hole, so the total keeps it for the refusal.
+    A null term of a sum is a divisor's hole, so the total keeps it for the refusal.
     """
-    total = pl.when(pl.col('cval').is_null().any()).then(None).otherwise(pl.col('cval').sum()).alias('cval')
-    return p.frame.group_by(p.dims).agg(total) if p.dims else p.frame.select(total)
+    total = pl.when(pl.col(CONSTANT).is_null().any()).then(None).otherwise(pl.col(CONSTANT).sum()).alias(CONSTANT)
+    return p.table.group_by(p.dims).agg(total) if p.dims else p.table.select(total)
 
 
 def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
-    """Constant *terms* over one set of dims added up to one term ([`_totalled`][]), else *terms* as they are.
+    """Constant *terms* over one set of dimensions added up to one term ([`_totalled`][]), else *terms* as they are.
 
     Multiplied as they stand, each term pairs with every variable term of the
     other factor, and the matrix sums the copies back at assembly: a
@@ -86,30 +86,30 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     dims = terms[0].dims
     if any(set(p.dims) != set(dims) or p.presences for p in terms):
         return terms
-    stacked = Term(dims, pl.concat([p.frame.select(*dims, 'cval') for p in terms]), 'constant')
+    stacked = Term(dims, pl.concat([p.table.select(*dims, CONSTANT) for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
 
 
-def _held(values: positional.Values | None, frame: pl.LazyFrame) -> pl.LazyFrame | Positional:
-    """A constant leaf's body: held by position where *values* reads it there, *frame* otherwise."""
-    return frame if values is None else Positional(values, lambda: frame)
+def _held(values: positional.Values | None, table: pl.LazyFrame) -> pl.LazyFrame | Positional:
+    """A constant leaf's body: held by position where *values* reads it there, *table* otherwise."""
+    return table if values is None else Positional(values, lambda: table)
 
 
-def _presence(held: Labelled, dims: tuple[str, ...], label: str) -> pl.LazyFrame:
-    """The coordinates a declaration's rows exist at.
+def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
+    """The coordinates an entry's rows exist at.
 
-    A scalar's marker is renamed from the *label* column, never a ``pl.lit()``:
+    A scalar's marker is renamed from the *index* column, never a ``pl.lit()``:
     a select of literals alone is length 1, so an absent scalar would come back present.
     """
     if dims:
-        return held.frame.select(*dims)
-    return held.frame.select(pl.col(label).alias(PRESENT))
+        return held.table.select(*dims)
+    return held.table.select(pl.col(index).alias(PRESENT))
 
 
 @dataclass(frozen=True)
 class Solution:
-    """What a solve left, for a compiler reading a named expression at it.
+    """What a solve left, for a query builder reading a named expression at it.
 
     ``dual`` is ``None`` where the solve left no duals, and ``no_duals`` then
     says why, which is what reading one raises.
@@ -117,19 +117,19 @@ class Solution:
 
     primal: pl.Series
     dual: pl.Series | None
-    constraints: Mapping[str, Labelled]
+    constraints: Mapping[str, Indexed]
     no_duals: str | None
 
 
 @dataclass(frozen=True)
-class Compiler:
-    """Turn plan nodes into polars queries over the model's tidy frames.
+class QueryBuilder:
+    """Turn program nodes into polars queries over the model's tidy tables.
 
-    ``solution`` is set on the compiler a read builds and on no other: with it
-    every variable and every ``dual(c)`` compiles to a value. ``builds`` is set
-    on the compiler of a build and on no other: a build places each term on a
-    declaration's rows by the term's own dims, so a term that holds nothing
-    can be left out, where a read takes its dims from the terms it is given.
+    ``solution`` is set on the builder a read makes and on no other: with it
+    every variable and every ``dual(c)`` turns into a value. ``builds`` is set
+    on the builder of a build and on no other: a build places each term on an
+    entry's rows by the term's own dimensions, so a term that holds nothing
+    can be left out, where a read takes its dimensions from the terms it is given.
     """
 
     scope: Scope
@@ -140,9 +140,9 @@ class Compiler:
     # bounds
     # ------------------------------------------------------------------
 
-    def bounds(self, frame: pl.LazyFrame, variable: str, v: program.Variable) -> pl.LazyFrame:
-        """*frame* with ``lb``/``ub`` columns for the variable *variable* declares as *v*."""
-        carrier = Carrier(frame)
+    def bounds(self, table: pl.LazyFrame, variable: str, v: program.Variable) -> pl.LazyFrame:
+        """*table* with ``lb``/``ub`` columns for the variable *variable* declares as *v*."""
+        carrier = Carrier(table)
 
         def attach_bound(f: pl.LazyFrame, alias: str, name: str) -> pl.LazyFrame:
             aligned = self._aligned_bound(f, name, v, alias)
@@ -152,7 +152,7 @@ class Compiler:
             return self.scope.parameter_join(f, name, v.dims, alias, subject, maintain_order='left')
 
         def bound(e: program.Expression | None, open_side: float) -> pl.Expr:
-            """A bound is a number, a parameter name, or ``None`` where that side is open; lowering admits nothing else."""
+            """A bound is a number, a parameter name, or ``None`` where that side is open; the program admits nothing else."""
             if e is None:
                 return pl.lit(open_side, dtype=pl.Float64)
             if isinstance(e, program.Constant):
@@ -165,20 +165,22 @@ class Compiler:
             raise AssertionError(msg)
 
         lower, upper = bound(v.lower, -math.inf), bound(v.upper, math.inf)
-        return carrier.frame.with_columns(lower.alias('lb'), upper.alias('ub'))
+        return carrier.table.with_columns(lower.alias('lb'), upper.alias('ub'))
 
-    def _aligned_bound(self, frame: pl.LazyFrame, param: str, v: program.Variable, alias: str) -> pl.LazyFrame | None:
-        """*frame* with *param* attached by position, or ``None`` to join.
+    def _aligned_bound(
+        self, table: pl.LazyFrame, parameter: str, v: program.Variable, alias: str
+    ) -> pl.LazyFrame | None:
+        """*table* with *parameter* attached by position, or ``None`` to join.
 
-        Position lines up only for a parameter that covers the variable's
-        unmasked dims, declared in their order.
+        Position lines up only for a parameter that covers the dimensions of a
+        variable with no condition, declared in their order.
         """
-        declaration = self.scope.program.parameters[param]
-        if v.where is not None or tuple(declaration.dims) != tuple(v.dims) or not v.dims:
+        entry = self.scope.program.parameters[parameter]
+        if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
-        if not positional.readable(self.scope, param):
+        if not positional.readable(self.scope, parameter):
             return None
-        return frame.with_columns(positional.values(self.scope, param).alias(alias))
+        return table.with_columns(positional.values(self.scope, parameter).alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -186,18 +188,18 @@ class Compiler:
 
     def expression(
         self, expr: program.Expression, context: str, *, admits_quadratic: bool = False, reported: bool = False
-    ) -> CompiledExpression:
-        """Compile an expression into linear, quadratic and constant terms.
+    ) -> ExpressionTerms:
+        """Turn an expression into its linear, quadratic and constant terms.
 
         *admits_quadratic* is the position's ceiling: whether it may hold a
         product of two variables, as the objective and a quadratic constraint
         may. *reported* is set by a read, where a quotient is absent wherever
         its divisor is zero ([`_read_divisor`][]). The asserts are the
-        plan-boundary backstop to ``mathspec.degree``. No join in the walk
-        maintains order; every consumer verifies order where it reads.
+        program-boundary backstop to ``mathspec.degree``. No join in the walk
+        maintains order; the code that reads a table verifies order there.
         """
 
-        def product(a: CompiledExpression, b: CompiledExpression) -> CompiledExpression:
+        def product(a: ExpressionTerms, b: ExpressionTerms) -> ExpressionTerms:
             """``a * b``, every pairing of both operands' terms formed once, both mixed products included.
 
             A variable meets the other factor's constants added up
@@ -207,10 +209,10 @@ class Compiler:
             other factor carries no variable ([`Term.parameters`][]).
             """
             assert not ((a.quadratic and b.linear) or (b.quadratic and a.linear) or (a.quadratic and b.quadratic)), (
-                f'in {context}: a product of degree 3 reached the compiler'
+                f'in {context}: a product of degree 3 reached the query builder'
             )
             assert admits_quadratic or not (a.linear and b.linear), (
-                f'in {context}: a quadratic product in a position compiled as affine'
+                f'in {context}: a quadratic product in an affine position'
             )
             a_one, b_one = _one_coefficient(a.constant), _one_coefficient(b.constant)
             quadratic = tuple(times_variable(t, u) for t in a.linear for u in b.linear)
@@ -228,45 +230,47 @@ class Compiler:
                 for x in a.constant
                 for c in b.constant
             )
-            return CompiledExpression(linear, constant, quadratic)
+            return ExpressionTerms(linear, constant, quadratic)
 
-        def quotient(e: program.Divide) -> CompiledExpression:
+        def quotient(e: program.Divide) -> ExpressionTerms:
             """``a / b``, where *b* carries no variable, added up first to one value per coordinate.
 
-            *a* is repeated along the dims of *b* it lacks first: joined across
+            *a* is repeated along the dimensions of *b* it lacks first: joined across
             the divisor's rows, a coordinate the divisor has no row for would
             drop the quotient rather than leave the null its refusal looks for.
             """
             a, b = ev(e.numerator), self._added_up(ev(e.divisor), e.divisor, absent='spreads')
-            assert not (b.linear or b.quadratic), f'in {context}: a divisor carrying a variable reached the compiler'
+            assert not (b.linear or b.quadratic), (
+                f'in {context}: a divisor carrying a variable reached the query builder'
+            )
             assert len(b.constant) == 1, 'a variable-free divisor is added up to one term'
             inv = self._read_divisor(b.constant[0]) if reported else b.constant[0]
             a = map_terms(a, lambda p: spread_term(self.scope, p, inv.dims))
             linear = tuple(times_constant(t, inv, t.kind, divide=True) for t in a.linear)
             quadratic = tuple(times_constant(q, inv, 'quadratic', divide=True) for q in a.quadratic)
             constant = tuple(times_constant(x, inv, 'constant', divide=True) for x in a.constant)
-            return CompiledExpression(linear, constant, quadratic)
+            return ExpressionTerms(linear, constant, quadratic)
 
-        def power(e: program.Power) -> CompiledExpression:
+        def power(e: program.Power) -> ExpressionTerms:
             """``a ** b``, where neither side carries a variable; each side is added up first."""
             a = self._added_up(ev(e.base), e.base, absent='zero')
             b = self._added_up(ev(e.exponent), e.exponent, absent='zero')
             assert not (a.linear or a.quadratic or b.linear or b.quadratic), (
-                f'in {context}: a power over variables reached the compiler'
+                f'in {context}: a power over variables reached the query builder'
             )
             assert len(a.constant) == 1 and len(b.constant) == 1, 'a variable-free operand is added up to one term'
-            return CompiledExpression((), (to_the_power(a.constant[0], b.constant[0]),))
+            return ExpressionTerms((), (to_the_power(a.constant[0], b.constant[0]),))
 
         def shaped(
             e: program.Sum | program.Join | program.Translate | program.WindowSum,
             rewrite: Callable[[Term], Term],
             reads: tuple[str, ...],
             acts: tuple[str, ...],
-            inner: CompiledExpression | None = None,
-        ) -> CompiledExpression:
-            """One shape operator applied to its compiled operand, *inner* where the caller compiled it.
+            inner: ExpressionTerms | None = None,
+        ) -> ExpressionTerms:
+            """One shape operator applied to its operand's terms, *inner* where the caller already holds them.
 
-            *reads* are the dims the rewrite keys each term by, and *acts*
+            *reads* are the dimensions the rewrite keys each term by, and *acts*
             those among them it moves or sums along. A term lacking one is
             constant along it, so it is repeated there first, as the
             operator's input: a term along all of them, and a constant along
@@ -286,20 +290,20 @@ class Compiler:
                 inner = propagate_absence(inner, self.scope, acted_along(e))
             return map_terms(inner, rewrite)
 
-        def region(r: program.Region) -> CompiledExpression:
+        def region(r: program.Region) -> ExpressionTerms:
             """One region's value, kept only where that region applies.
 
-            The coordinates it claims are read once, over the dims its
+            The coordinates it claims are read once, over the dimensions its
             condition reads. In a build, a region that claims none builds no
             term: each term would carry presences over the full product of its
-            dims, read only to be cut away. A read keeps it, since a read
-            takes its dims from its terms and the region may be the only one
-            over a dim.
+            dimensions, read only to be cut away. A read keeps it, since a read
+            takes its dimensions from its terms and the region may be the only
+            one over a dimension.
             """
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            truth = masked(self.scope, on, r.when).select(*on).pipe(collected) if on else None
+            truth = narrowed(self.scope, on, r.when).select(*on).pipe(collected) if on else None
             if truth is not None and not truth.height and self.builds:
-                return CompiledExpression((), ())
+                return ExpressionTerms((), ())
             truth = truth.lazy() if truth is not None else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
@@ -307,41 +311,41 @@ class Compiler:
 
                 Unwidened, it would unmake rows another region covers. The
                 regions are disjoint, so each coordinate is still held to the
-                one region that claims it. Keyed by no dim, both halves are
-                the scalar marker [`PRESENT`][], since a frame with no columns
+                one region that claims it. Keyed by no dimension, both halves are
+                the scalar marker [`PRESENT`][], since a table with no columns
                 holds no rows.
                 """
-                have = x.keys(dims)
-                keys = tuple(dict.fromkeys((*have, *on)))
-                complement = masked(self.scope, on, ~r.when)
-                if not keys:
-                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.frame, complement)]
-                    return Presence(pl.concat(marks).unique(), keys)
+                have = x.join_columns(dims)
+                join_columns = tuple(dict.fromkeys((*have, *on)))
+                complement = narrowed(self.scope, on, ~r.when)
+                if not join_columns:
+                    marks = [f.with_columns(pl.lit(True).alias(PRESENT)).select(PRESENT) for f in (x.table, complement)]
+                    return Presence(pl.concat(marks).unique(), join_columns)
                 elsewhere = complement.select(*on) if on else complement.select(UNIT)
-                widened = [self.scope.widen(x.frame, have, keys), self.scope.widen(elsewhere, on, keys)]
-                return Presence(pl.concat(widened, how='vertical_relaxed').unique(), keys)
+                widened = [self.scope.widen(x.table, have, join_columns), self.scope.widen(elsewhere, on, join_columns)]
+                return Presence(pl.concat(widened, how='vertical_relaxed').unique(), join_columns)
 
             def kept(p: Term) -> Term:
                 """One term cut down to the region's coordinates.
 
-                An inner join, so a value narrower than the mask gains the
-                mask's dims. A mask reading no dimension filters by its own
-                constant instead.
+                An inner join, so a value narrower than the condition gains
+                the condition's dimensions. A condition reading no dimension
+                filters by its own constant instead.
                 """
                 if truth is None:
-                    carrier, condition = compile_predicate(self.scope, p.frame, r.when, p.dims)
-                    frame = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
+                    carrier, condition = query_condition(self.scope, p.table, r.when, p.dims)
+                    table = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                    return replace(p, body=frame, presences=presences, region=both_regions(p.region, r.when))
+                    return replace(p, body=table, presences=presences, region=both_regions(p.region, r.when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
-                frame = join_on(p.frame, truth, shared, 'inner').select(*out_dims, *p.carried)
+                table = join_on(p.table, truth, shared, 'inner').select(*out_dims, *p.carried)
                 presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                return replace(p, dims=out_dims, body=frame, presences=presences, region=both_regions(p.region, r.when))
+                return replace(p, dims=out_dims, body=table, presences=presences, region=both_regions(p.region, r.when))
 
             return map_terms(ev(r.value), kept)
 
-        def cases(e: program.Cases) -> CompiledExpression:
+        def cases(e: program.Cases) -> ExpressionTerms:
             """Every region added; the language proved them disjoint at load, so nothing is ranked or subtracted.
 
             A region worth the literal zero adds nothing, so it builds no
@@ -349,34 +353,32 @@ class Compiler:
             cannot follow, and be owed at every row it lands on.
             """
             built = [region(r) for r in e.regions if not _zero(r.value)]
-            return CompiledExpression(
+            return ExpressionTerms(
                 tuple(f for c in built for f in c.linear),
                 tuple(f for c in built for f in c.constant),
                 tuple(f for c in built for f in c.quadratic),
             )
 
-        def ev(e: program.Expression) -> CompiledExpression:
+        def ev(e: program.Expression) -> ExpressionTerms:
             if isinstance(e, program.Constant):
-                frame = pl.LazyFrame({'cval': [float(e.value)]}, schema={'cval': pl.Float64})
-                return CompiledExpression(
-                    (), (Term((), _held(positional.constant(float(e.value)), frame), 'constant'),)
-                )
+                table = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
+                return ExpressionTerms((), (Term((), _held(positional.constant(float(e.value)), table), 'constant'),))
             if isinstance(e, program.ParameterReference):
-                return CompiledExpression((), (self._parameter_term(e.name),))
+                return ExpressionTerms((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
                 if self.solution is None:
-                    return CompiledExpression((self._variable_term(e.name),), ())
-                return CompiledExpression((), (self._solved_term(e.name),))
+                    return ExpressionTerms((self._variable_term(e.name),), ())
+                return ExpressionTerms((), (self._solved_term(e.name),))
             if isinstance(e, program.Dual):
                 assert self.solution is not None, (
                     f'in {context}: a dual reached a build — the language keeps one out of the math'
                 )
-                return CompiledExpression((), (self._dual_term(e.constraint),))
+                return ExpressionTerms((), (self._dual_term(e.constraint),))
             if isinstance(e, program.Negate):
                 return map_terms(ev(e.operand), negate)
             if isinstance(e, program.Add):
                 a, b = ev(e.left), ev(e.right)
-                return CompiledExpression(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
+                return ExpressionTerms(a.linear + b.linear, a.constant + b.constant, a.quadratic + b.quadratic)
             if isinstance(e, program.Multiply):
                 return product(*(self._factor(ev(f), f) for f in (e.left, e.right)))
             if isinstance(e, program.Divide):
@@ -425,55 +427,53 @@ class Compiler:
         return ev(expr)
 
     def _parameter_term(self, name: str) -> Term:
-        """A parameter as a constant term, keyed by its declared dims, present only at its rows under ``missing: absent``."""
+        """A parameter as a constant term, keyed by its declared dimensions, present only at its rows under ``missing: absent``."""
         dims = self.scope.program.parameters[name].dims
-        frame = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias('cval'))
-        present = frame.select(*dims) if dims else frame.select(pl.col('cval').is_not_null().alias(PRESENT))
+        table = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
+        present = table.select(*dims) if dims else table.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
         take = None if presences else positional.parameter(self.scope, name)
-        return Term(dims, _held(take, frame), 'constant', presences=presences, parameters=frozenset({name}))
+        return Term(dims, _held(take, table), 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
         dims = self.scope.program.variables[name].dims
-        frame = self.scope.variables[name].frame.select(
-            *dims, 'var_label', pl.lit(1.0, dtype=pl.Float64).alias('coeff')
-        )
+        table = self.scope.variables[name].table.select(*dims, COL, pl.lit(1.0, dtype=pl.Float64).alias(COEFF))
         presences = self._variable_presences(name, dims)
-        return Term(dims, self._variable_body(name, frame, presences), 'linear', presences=presences)
+        return Term(dims, self._variable_body(name, table, presences), 'linear', presences=presences)
 
     def _variable_body(
-        self, name: str, frame: pl.LazyFrame, presences: tuple[Presence, ...]
+        self, name: str, table: pl.LazyFrame, presences: tuple[Presence, ...]
     ) -> pl.LazyFrame | Positional:
-        """A variable's body at unit coefficient: held by position where its columns are, *frame* otherwise."""
+        """A variable's body at unit coefficient: held by position where its columns are, *table* otherwise."""
         columns = positional.variable(self.scope, name)
         if columns is None:
-            return frame
+            return table
         held = self.scope.variables[name]
         absent = presences[0] if presences else None
-        return Positional(positional.unit, lambda: frame, columns, held.start + held.height - 1, absent)
+        return Positional(positional.unit, lambda: table, columns, held.start + held.height - 1, absent)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
-        """Presence only for a masked variable under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
-        declaration = self.scope.program.variables[name]
-        propagates = declaration.where is not None and declaration.missing == 'absent'
-        return (Presence(_presence(self.scope.variables[name], dims, 'var_label'), dims),) if propagates else ()
+        """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
+        entry = self.scope.program.variables[name]
+        propagates = entry.where is not None and entry.missing == 'absent'
+        return (Presence(_presence(self.scope.variables[name], dims, COL), dims),) if propagates else ()
 
     def _solved_term(self, name: str) -> Term:
-        """A variable at its primal — the constant term a read compiles it to, carrying the presence its linear term would.
+        """A variable at its primal — the constant term a read turns it into, carrying the presence its linear term would.
 
-        Under ``missing: neutral`` it is filled with zero over the unmasked product,
+        Under ``missing: neutral`` it is filled with zero over the full product,
         because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
         """
         assert self.solution is not None
-        held, declaration = self.scope.variables[name], self.scope.program.variables[name]
-        dims = declaration.dims
+        held, entry = self.scope.variables[name], self.scope.program.variables[name]
+        dims = entry.dims
         keys = dims or (UNIT,)
-        rows = held.frame.select(*keys).with_columns(held.share(self.solution.primal).alias('cval'))
-        if declaration.where is not None and declaration.missing == 'neutral':
-            everywhere = masked(self.scope, dims, None).select(*keys)
-            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col('cval').fill_null(0.0))
-        return Term(dims, rows.select(*dims, 'cval'), 'constant', presences=self._variable_presences(name, dims))
+        rows = held.table.select(*keys).with_columns(held.share(self.solution.primal).alias(CONSTANT))
+        if entry.where is not None and entry.missing == 'neutral':
+            everywhere = narrowed(self.scope, dims, None).select(*keys)
+            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col(CONSTANT).fill_null(0.0))
+        return Term(dims, rows.select(*dims, CONSTANT), 'constant', presences=self._variable_presences(name, dims))
 
     def _dual_term(self, name: str) -> Term:
         """``dual(name)`` at the solve's row duals — one value per row the constraint built, and present exactly there.
@@ -487,8 +487,8 @@ class Compiler:
             assert solution.no_duals is not None, 'a solve without duals says why'
             raise SpecsolveError(solution.no_duals)
         held, dims = solution.constraints[name], self.scope.program.constraints[name].dims
-        frame = held.valued(dims, solution.dual.alias('cval'))
-        return Term(dims, frame, 'constant', presences=(Presence(_presence(held, dims, 'row'), dims),))
+        table = held.valued(dims, solution.dual.alias(CONSTANT))
+        return Term(dims, table, 'constant', presences=(Presence(_presence(held, dims, ROW), dims),))
 
     def _read_divisor(self, divisor: Term) -> Term:
         """*divisor* absent wherever it is zero, which is how a reported quotient reads a zero divisor.
@@ -498,9 +498,9 @@ class Compiler:
         the divisor has: a divisor parameter short of a row stays a null for
         the refusal to find.
         """
-        zeros = divisor.frame.filter(pl.col('cval') == 0)
+        zeros = divisor.table.filter(pl.col(CONSTANT) == 0)
         if divisor.dims:
-            present = masked(self.scope, divisor.dims, None).select(*divisor.dims)
+            present = narrowed(self.scope, divisor.dims, None).select(*divisor.dims)
             present = present.join(zeros.select(*divisor.dims), on=list(divisor.dims), how='anti')
         else:
             count = zeros.select(pl.len().alias('__zeros__'))
@@ -508,23 +508,23 @@ class Compiler:
             present = present.select(PRESENT)
         return replace(divisor, presences=(*divisor.presences, Presence(present, divisor.dims)))
 
-    def _factor(self, compiled: CompiledExpression, operand: program.Expression) -> CompiledExpression:
+    def _factor(self, terms: ExpressionTerms, operand: program.Expression) -> ExpressionTerms:
         """A product's factor with each constant term added up to one value per coordinate ([`_totalled`][]).
 
-        A sum leaves one row per summand for the aggregate at assembly. Joined
-        to the other factor as it is, each of its rows would repeat every term
-        there, so a factor with a reduction under it is added up first.
+        A sum leaves one row per term of the sum for the aggregate at assembly.
+        Joined to the other factor as it is, each of its rows would repeat every
+        term there, so a factor with a reduction under it is added up first.
         """
         if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
-            return compiled
-        return replace(compiled, constant=tuple(replace(p, body=_totalled(p)) for p in compiled.constant))
+            return terms
+        return replace(terms, constant=tuple(replace(p, body=_totalled(p)) for p in terms.constant))
 
     def _added_up(
-        self, compiled: CompiledExpression, operand: program.Expression, *, absent: Literal['zero', 'spreads']
-    ) -> CompiledExpression:
-        """*compiled* as one constant term with one value per coordinate — a divisor, or a power's base or exponent.
+        self, terms: ExpressionTerms, operand: program.Expression, *, absent: Literal['zero', 'spreads']
+    ) -> ExpressionTerms:
+        """*terms* as one constant term with one value per coordinate — a divisor, or a power's base or exponent.
 
-        A sum reaches ``/`` and ``**`` still holding one row per summand
+        A sum reaches ``/`` and ``**`` still holding one row per term of the sum
         ([`_sum_term`][]), so an operand with a reduction under it is totalled
         first ([`_totalled`][]). Several terms are added up too: addition does
         not distribute over ``/`` or ``**``. At a build, *absent* is what a
@@ -536,29 +536,29 @@ class Compiler:
         divisor would refuse as a missing row. At a read, several terms add up
         null where no term has a value, so a divisor's hole is reported rather
         than divided by an invented zero. An operand carrying a variable passes
-        through, for the plan-boundary assert behind it.
+        through, for the program-boundary assert behind it.
         """
-        if compiled.linear or compiled.quadratic:
-            return compiled
-        terms = compiled.constant
-        if len(terms) == 1 and terms[0].region is None:
+        if terms.linear or terms.quadratic:
+            return terms
+        constant = terms.constant
+        if len(constant) == 1 and constant[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
-                return compiled
-            return CompiledExpression((), (replace(terms[0], body=_totalled(terms[0])),))
-        dims, restrictions = self.scope.spanned(terms), absence_restrictions(terms)
-        carrier = masked(self.scope, dims, None)
+                return terms
+            return ExpressionTerms((), (replace(constant[0], body=_totalled(constant[0])),))
+        dims, restrictions = self.scope.spanned(constant), absence_restrictions(constant)
+        carrier = narrowed(self.scope, dims, None)
         for restriction in restrictions:
-            carrier = restriction.restrict(carrier, restriction.keyed_by or ())
-        added = self.summed_onto(terms, carrier, absent='hole' if self.solution is not None else absent)
-        parameters = frozenset[str]().union(*(p.parameters for p in terms))
-        return CompiledExpression(
+            carrier = restriction.restrict(carrier, restriction.joined_on or ())
+        added = self.summed_onto(constant, carrier, absent='hole' if self.solution is not None else absent)
+        parameters = frozenset[str]().union(*(p.parameters for p in constant))
+        return ExpressionTerms(
             (), (Term(dims, added, 'constant', presences=tuple(restrictions), parameters=parameters),)
         )
 
     def summed_onto(
         self, terms: Sequence[Term], carrier: pl.LazyFrame, *, absent: Literal['zero', 'hole', 'spreads']
     ) -> pl.LazyFrame:
-        """Constant *terms* added per coordinate onto *carrier* — its columns, then ``cval``.
+        """Constant *terms* added per coordinate onto *carrier* — its columns, then ``CONSTANT``.
 
         *carrier* holds one row per coordinate of
         [`spanned`][specsolve._engine.scope.Scope.spanned], restricted by
@@ -567,17 +567,17 @@ class Compiler:
         term has a value; ``spreads``, null where any term has none inside
         the ``cases:`` region it was built under ([`_zero_outside`][]).
         """
-        assert terms, 'an expression compiles to at least one term'
-        assert all(p.kind == 'constant' for p in terms), 'a read compiles every variable to its value'
+        assert terms, 'an expression has at least one term'
+        assert all(p.kind == 'constant' for p in terms), 'a read turns every variable into its value'
         columns = [f'__term {i}__' for i in range(len(terms))]
         for p, column in zip(terms, columns, strict=True):
-            carrier = join_on(carrier, constant_scalar(p).rename({'cval': column}), p.dims, 'left')
+            carrier = join_on(carrier, constant_scalar(p).rename({CONSTANT: column}), p.dims, 'left')
             if absent == 'spreads' and p.region is not None:
                 carrier = self._zero_outside(carrier, column, p.region, self.scope.spanned(terms))
         total = pl.sum_horizontal(columns, ignore_nulls=absent != 'spreads')
         if absent == 'hole':
             total = pl.when(pl.any_horizontal([pl.col(c).is_not_null() for c in columns])).then(total).otherwise(None)
-        return carrier.select(pl.exclude(columns), total.alias('cval'))
+        return carrier.select(pl.exclude(columns), total.alias(CONSTANT))
 
     def _zero_outside(
         self, carrier: pl.LazyFrame, column: str, region: program.Mask, dims: tuple[str, ...]
@@ -589,17 +589,17 @@ class Compiler:
         no row would find a hole at every coordinate another region claims.
         """
         keys = list(dims or (UNIT,))
-        claimed = masked(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
+        claimed = narrowed(self.scope, dims, region).select(*keys).with_columns(pl.lit(True).alias('__claimed__'))
         inside = carrier.join(claimed, on=keys, how='left')
         value = pl.when(pl.col('__claimed__')).then(pl.col(column)).otherwise(0.0)
         return inside.with_columns(value.alias(column)).drop('__claimed__')
 
     # ------------------------------------------------------------------
-    # shape operators — one dim rewritten per term
+    # shape operators — one dimension rewritten per term
     # ------------------------------------------------------------------
 
     def _sum_term(self, p: Term, over: tuple[str, ...], context: str) -> Term:
-        """Drop the summed dims — not an aggregate; the terminal ``sum(coeff)`` at assembly collapses the rows.
+        """Drop the summed dimensions — not an aggregate; the terminal ``sum(coeff)`` at assembly collapses the rows.
 
         Constructed rather than ``replace``d so presence is dropped: a reduction
         skips absent slots.
@@ -608,11 +608,11 @@ class Compiler:
         if missing:
             refuse_a_term_without_the_dims(p, missing, context, f'sum(over={list(over)})')
         keep = tuple(d for d in p.dims if d not in over)
-        frame = p.frame.select(*keep, *p.carried)
-        return self._empty_sums(Term(keep, frame, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
+        table = p.table.select(*keep, *p.carried)
+        return self._empty_sums(Term(keep, table, p.kind, region=region_over(p.region, keep), parameters=p.parameters))
 
     def _group_term(self, p: Term, columns: program.JoinColumns, context: str) -> Term:
-        """Relabel the dims the join drops to the ones it adds, through its relation.
+        """Relabel the dimensions the join drops to the ones it adds, through its relation.
 
         No aggregate, as for [`_sum_term`][]: a keyed relation neither
         duplicates nor drops a term, and a bare one fans out into the
@@ -625,33 +625,32 @@ class Compiler:
         return self._empty_sums(self._remap_term(p, columns))
 
     def _empty_sums(self, p: Term) -> Term:
-        """Reduced *p* with a zero row at every coordinate of its dims that no member lands in.
+        """Reduced *p* with a zero row at every coordinate of its dimensions that no label lands in.
 
         An empty sum is zero, not a hole, and [`coverage.constant_side`][]
         cannot tell the two apart, so the zero is written here: a dimension
-        with no labels, a group its relation maps no member to, a window of
-        width zero or over no row, and a member a ``cases:`` region leaves out
-        all land nowhere. Asked of the term
-        rather than the relation for that last reason. A neutral parameter short
-        of a member is one summand fewer. Only for a constant term: a row with
-        no terms is not built.
+        with no labels, a group its relation maps no label to, a window of
+        width zero or over no row, and a label a ``cases:`` region leaves out
+        all land nowhere. Asked of the term rather than the relation for that
+        last reason. A neutral parameter short of a label leaves the sum one
+        term fewer. Only for a constant term: a row with no terms is not built.
         """
         if p.kind != 'constant':
             return p
         if not p.dims:
-            zero = pl.LazyFrame({'cval': [0.0]}, schema={'cval': pl.Float64})
-            return replace(p, body=pl.concat([p.frame.select(*p.carried), zero.select(*p.carried)]))
-        first = self.scope.data.dimensions[p.dims[0]].select(pl.col('val').alias(p.dims[0]))
+            zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
+            return replace(p, body=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
+        first = self.scope.data.dimensions[p.dims[0]].select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
-        empty = universe.join(p.frame.select(*p.dims).unique(), on=list(p.dims), how='anti')
-        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias('cval')).select(*p.dims, *p.carried)
-        return replace(p, body=pl.concat([p.frame.select(*p.dims, *p.carried), zeros]))
+        empty = universe.join(p.table.select(*p.dims).unique(), on=list(p.dims), how='anti')
+        zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
+        return replace(p, body=pl.concat([p.table.select(*p.dims, *p.carried), zeros]))
 
     def _at_term(self, p: Term, a: program.JoinColumns, context: str) -> Term:
-        """Spread the dropped dims back out over the added ones — the adjoint of a group.
+        """Spread the dropped dimensions back out over the added ones — the adjoint of a group.
 
         The join fans out, so a later reduction can bring two copies of one
-        ``var_label`` into a row, where the terminal aggregate adds them. Unlike
+        ``COL`` into a row, where the terminal aggregate adds them. Unlike
         a group it is pointwise, so it reports absence.
         """
         missing = [d for d in a.dropped_dims if d not in p.dims]
@@ -661,7 +660,7 @@ class Compiler:
         return replace(remapped, presences=self._pulled_back_presences(p, a))
 
     def _pulled_back_presences(self, p: Term, a: program.JoinColumns) -> tuple[Presence, ...]:
-        """Where a lookup's variables exist, keyed by the fine dims they now span, as [`Presence`][] requires.
+        """Where a lookup's variables exist, joined on the fine dimensions they now span, as [`Presence`][] requires.
 
         [`_remap_term`][]'s inner join swallows both the operand's absence and
         the relation's; unreported, the row survives to assert ``x <= 0`` where
@@ -677,21 +676,23 @@ class Compiler:
             return () if reached == total else (Presence(reachable, fine),)
 
         def pulled(presence: Presence) -> Presence:
-            keys = presence.keys(p.dims)
-            if not keys:
-                return Presence(presence.restrict(reachable, keys), fine)
-            carries_targets = all(i in keys for i in a.joined_dims)
-            source, keys = (
-                (presence.frame, keys) if carries_targets else (self.scope.widen(presence.frame, keys, p.dims), p.dims)
+            join_columns = presence.join_columns(p.dims)
+            if not join_columns:
+                return Presence(presence.restrict(reachable, join_columns), fine)
+            carries_targets = all(i in join_columns for i in a.joined_dims)
+            source, join_columns = (
+                (presence.table, join_columns)
+                if carries_targets
+                else (self.scope.widen(presence.table, join_columns, p.dims), p.dims)
             )
-            return Presence(*walk_join(source, table, a, keys))
+            return Presence(*walk_join(source, table, a, join_columns))
 
         return tuple(pulled(x) for x in p.presences)
 
     def _remap_term(self, p: Term, columns: program.JoinColumns) -> Term:
-        """Trade the dims *columns* drops for the ones it adds, through its relation."""
-        frame, dims = walk_join(p.frame, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
-        return Term(dims, frame, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
+        """Trade the dimensions *columns* drops for the ones it adds, through its relation."""
+        table, dims = walk_join(p.table, mapping(self.scope.data.relations, columns), columns, p.dims, p.carried)
+        return Term(dims, table, p.kind, region=region_over(p.region, dims), parameters=p.parameters)
 
 
 def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:

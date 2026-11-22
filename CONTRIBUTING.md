@@ -57,7 +57,7 @@ It is also the axis that survives the two lanes — a behaviour spans both, whil
 a module is on one side of the fence or the other.
 
 A module-shaped file is the exception and earns it by being about the module as
-such: `test_compiler.py`, `test_schema.py`, and `test_relational.py`, which is
+such: `test_queries.py`, `test_schema.py`, and `test_relational.py`, which is
 matrix assembly and the solver hand-off rather than a language construct.
 
 The failure mode is a file that grows into everything that had no other home.
@@ -201,7 +201,7 @@ Grouping is sub-issue parentage — a track is a parent issue — because parent
 is structural where a label mirroring a list is a copy that drifts.
 `blocked:upstream` and `blocked:decision` say what an issue waits on. A
 `decision` closes by *resolution*, not by work: on yes it becomes `roadmap`, on
-no it becomes a row in the deliberate non-primitives table.
+no it becomes a row in the table of what mathspec refuses.
 
 ## Breaking changes are free
 
@@ -215,7 +215,7 @@ Spend nothing on the retirement either. The closed schema already fails at load
 naming the valid keys and the near miss, and the operator table already names
 what it accepts — that is the whole migration story a release before 1.0 owes
 anyone. A hand-written message per retired spelling is a second place the old
-surface lives, it needs a test of its own, and it outlives every file it was
+spelling lives, it needs a test of its own, and it outlives every file it was
 written for: `shift(by=)` had one for a day before `by=` became a legal keyword
 again and the message started refusing the new spelling.
 
@@ -223,23 +223,23 @@ This binds **agents working in this repo** too, and it is the habit most often
 imported from elsewhere: asked to change something, change it — do not add
 backwards compatibility nobody requested.
 
-It is the *surface* that is unfrozen, not the behaviour. What exists is tested
+It is the *spelling* that is unfrozen, not the behaviour. What exists is tested
 and differentially verified against linopy; a break is a deliberate rewrite, not
 licence for churn.
 
 ## Changing the language
 
-**Triage first: macro, primitive, or escape?** Most requests are compositions
-and cost nothing. A genuinely new shape earns a primitive only if it clears the
+**Triage first: macro, operator, or escape?** Most requests are compositions
+and cost nothing. A genuinely new shape earns an operator only if it clears the
 expressive ceiling — relational ∩ local, degree 2 in the math and 1 beside it. Unsayable math goes to a
 declared `escape:` island rather than into the language.
 
 Read, in order:
 
-1. [the deliberate non-primitives](https://mathspec.readthedocs.io/en/latest/about/limits/#deliberate-non-primitives) — parity with
+1. [what mathspec refuses](https://mathspec.readthedocs.io/en/latest/about/limits/#what-mathspec-refuses) — parity with
    another tool is not by itself a reason to add anything, and several
    plausible-sounding features are refused there on purpose;
-2. [the limits in mathspec](https://mathspec.readthedocs.io/en/latest/about/limits/#what-a-new-primitive-has-to-satisfy) —
+2. [what a new operator has to satisfy](https://mathspec.readthedocs.io/en/latest/contributing/#what-a-new-operator-has-to-satisfy) —
    the admissibility test;
 3. [the extension checklists](docs/development/architecture.md#extension-checklists), which sit directly under that
    test. They stay there rather than moving here: *may I?* and *how?* are one
@@ -271,9 +271,9 @@ is picked because its structure exercises something; twelve candidates chosen
 that way produced six whose structure was not in the data they ship. Three
 checks, in the order they catch things:
 
-1. **Count the rows.** A map into a one-member dimension cannot change an
+1. **Count the rows.** A map into a one-label dimension cannot change an
    answer, and a table with no rows is not structure. An empty `zone` table and
-   a one-member `DAYTYPE` both read as topology until counted.
+   a one-label `DAYTYPE` both read as topology until counted.
 2. **Quote the source's own constraint that reads the map** — not its schema,
    not its prose. A source that models the same problem over three separate
    sets needs no map at all, whatever its data dictionary suggests.
@@ -339,7 +339,7 @@ published figure.
   reference table is rendered straight from `references.json`, so the published
   optimum and the asserted one cannot disagree.
 - **A rung that cannot be said is also a result.** It goes in the ledger in
-  docs/development/verification.md with a verdict — macro, primitive or
+  docs/development/verification.md with a verdict — macro, operator or
   escape — and feeds the issue tracks. Do not work around a gap silently.
 
 ## Refreshing the benchmarks

@@ -42,14 +42,14 @@ def present(model: Any, name: str) -> Any:
 
 
 def unmapped(key: object) -> bool:
-    """Whether a relation left this member in no group: ``None``, or the NaN that never equals itself."""
+    """Whether a relation left this label in no group: ``None``, or the NaN that never equals itself."""
     return key is None or key != key
 
 
 def variable_term(variable: Any, missing: str) -> Any:
     """The variable as it enters an expression, carrying its declared ``missing:``.
 
-    The mask stays on the variable either way — it is what keeps the absent
+    The ``where:`` stays on the variable either way — it is what keeps the absent
     coordinates out of the model. Under v1 an absent slot propagates and takes
     its row, which is ``missing: absent``; ``fillna(0)`` is linopy's own
     per-expression escape back to the other reading: the slot contributes
@@ -61,7 +61,7 @@ def variable_term(variable: Any, missing: str) -> Any:
 def variable_value(variable: Any, missing: str) -> Any:
     """The variable's primal as it enters a read, carrying its declared ``missing:``.
 
-    :func:`variable_term`'s two readings over values: a masked slot is NaN,
+    :func:`variable_term`'s two readings over values: an absent slot is NaN,
     which propagates through the arithmetic the way the absent term takes its
     row, and ``missing: neutral`` fills it.
     """
@@ -97,7 +97,7 @@ def combined(op: Callable[[Any, Any], Any], left: Any, right: Any, *, neutral: f
     Two values meet in xarray, where NaN propagates on its own; a value and a
     term meet in linopy, which refuses NaN in a constant. So the value's NaN
     is filled with *neutral* — whatever leaves ``op`` defined there — and the
-    result is masked back to absent at exactly those coordinates, which takes
+    result is made absent again at exactly those coordinates, which takes
     the row as any absent term does.
     """
     terms = [hasattr(side, 'to_linexpr') or hasattr(side, 'nterm') for side in (left, right)]

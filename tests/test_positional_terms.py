@@ -17,9 +17,10 @@ import pytest
 import specsolve as sps
 from specsolve._engine import assembly, coverage, positional
 from specsolve._engine.attaching import AttachedSources
-from specsolve._engine.compiler import Compiler
+from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Presence, Term
+from specsolve._names import LABEL, POSITION
 from specsolve.errors import DataError, SpecsolveError
 from tests.conftest import nothing_by_position
 
@@ -41,16 +42,19 @@ SPEC = {
     'variables': {
         'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
         'y': {'dims': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 10}},
-        'masked': {'dims': ['i'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 10}},
+        'narrowed': {'dims': ['i'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 10}},
         'silent': {'dims': ['i'], 'where': 'on', 'missing': 'neutral', 'bounds': {'lower': 0, 'upper': 10}},
         'total': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
         'late': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'objective': {'sense': 'maximize', 'expression': 'sum(x) + sum(y) + sum(masked) + sum(silent) + total + sum(late)'},
+    'objective': {
+        'sense': 'maximize',
+        'expression': 'sum(x) + sum(y) + sum(narrowed) + sum(silent) + total + sum(late)',
+    },
 }
 
 #: `i` has 40 labels so that `rare`, true at one coordinate of 80, leaves a
-#: variable masked by it past `positional.CELLS_PER_COLUMN` coordinates per column.
+#: variable narrowed by it past `positional.CELLS_PER_COLUMN` coordinates per column.
 LABELS = list(range(40))
 PAIR = ['p', 'q']
 SOURCES = {
@@ -109,7 +113,9 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
         pytest.param({'dims': ['i'], 'expression': 'a * x <= 10'}, BY_POSITION, id='a-parameter-times-a-variable'),
         pytest.param({'dims': ['i'], 'expression': 'x <= 10 - 2 * late'}, BY_POSITION, id='a-number-times-a-variable'),
         pytest.param(
-            {'dims': ['i', 'j'], 'expression': 'y <= a * x'}, BY_POSITION, id='a-term-over-fewer-dims-than-the-row'
+            {'dims': ['i', 'j'], 'expression': 'y <= a * x'},
+            BY_POSITION,
+            id='a-term-over-fewer-dimensions-than-the-row',
         ),
         pytest.param(
             {'dims': ['i', 'j'], 'expression': 'b * y - s * total <= 10'},
@@ -125,19 +131,19 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
             {'dims': ['i'], 'expression': 'zero_at_one * x <= 10'}, BY_POSITION, id='a-coefficient-that-is-zero'
         ),
         pytest.param(
-            {'dims': ['i'], 'expression': 'masked + x <= 10'},
+            {'dims': ['i'], 'expression': 'narrowed + x <= 10'},
             BY_POSITION,
-            id='a-masked-variable-removes-the-rows-it-is-absent-from',
+            id='a-narrowed-variable-removes-the-rows-it-is-absent-from',
         ),
         pytest.param(
-            {'dims': ['i'], 'expression': 'a * masked + x <= 10'},
+            {'dims': ['i'], 'expression': 'a * narrowed + x <= 10'},
             BY_POSITION,
-            id='a-masked-variable-under-a-product-still-removes-its-rows',
+            id='a-narrowed-variable-under-a-product-still-removes-its-rows',
         ),
         pytest.param(
             {'dims': ['i'], 'expression': 'silent + x <= 10'},
             BY_POSITION,
-            id='a-masked-variable-that-reads-as-zero-keeps-its-rows',
+            id='a-narrowed-variable-that-reads-as-zero-keeps-its-rows',
         ),
         pytest.param(
             {'dims': ['i'], 'expression': 'silent <= 10'},
@@ -145,11 +151,11 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
             id='a-row-left-with-no-term-is-not-built',
         ),
         pytest.param(
-            {'dims': ['i'], 'where': 'a > 5', 'expression': 'masked - a * x <= 10'},
+            {'dims': ['i'], 'where': 'a > 5', 'expression': 'narrowed - a * x <= 10'},
             BY_POSITION,
             id='a-where-on-the-constraint',
         ),
-        pytest.param({'dims': [], 'expression': 's * total <= 10'}, BY_POSITION, id='a-constraint-over-no-dims'),
+        pytest.param({'dims': [], 'expression': 's * total <= 10'}, BY_POSITION, id='a-constraint-over-no-dimensions'),
         pytest.param(
             {'dims': ['i'], 'expression': 'x <= gone'}, BY_POSITION, id='a-right-hand-side-absent-at-a-coordinate'
         ),
@@ -160,7 +166,7 @@ def _joined(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPat
         pytest.param(
             {'dims': ['i'], 'expression': 'x + shift(x, along=i, offset=1) <= 10'},
             BY_JOIN,
-            id='one-term-of-two-is-a-frame',
+            id='one-term-of-two-is-a-table',
         ),
     ],
 )
@@ -204,7 +210,7 @@ def _sided(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatc
         pytest.param(
             {'dims': ['i', 'j'], 'expression': 'y <= b - a'},
             BY_POSITION,
-            id='a-parameter-declared-in-another-order-and-one-over-fewer-dims',
+            id='a-parameter-declared-in-another-order-and-one-over-fewer-dimensions',
         ),
         pytest.param(
             {'dims': ['i'], 'expression': 'sum(y, over=j) <= a'}, BY_POSITION, id='under-terms-that-are-joined'
@@ -213,16 +219,16 @@ def _sided(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatc
             {'dims': ['i'], 'where': 'a > 5', 'expression': 'sum(y, over=j) <= a'}, BY_POSITION, id='under-a-where'
         ),
         pytest.param(
-            {'dims': ['i'], 'expression': 'masked + x <= a'}, BY_POSITION, id='at-the-rows-a-masked-variable-keeps'
+            {'dims': ['i'], 'expression': 'narrowed + x <= a'}, BY_POSITION, id='at-the-rows-a-narrowed-variable-keeps'
         ),
         pytest.param({'dims': ['i'], 'expression': 'x - late <= 0 * a'}, BY_POSITION, id='a-side-that-is-zero'),
         pytest.param({'dims': ['i'], 'expression': 'x <= late'}, BY_POSITION, id='no-constant-term-at-all'),
-        pytest.param({'dims': [], 'expression': 'total <= s'}, BY_POSITION, id='a-constraint-over-no-dims'),
+        pytest.param({'dims': [], 'expression': 'total <= s'}, BY_POSITION, id='a-constraint-over-no-dimensions'),
         pytest.param({'dims': ['i'], 'expression': 'x <= gone'}, BY_JOIN, id='a-parameter-absent-at-a-coordinate'),
         pytest.param({'dims': ['i'], 'expression': 'x <= 10 / a'}, BY_JOIN, id='a-quotient'),
         pytest.param({'dims': ['i'], 'expression': 'x <= sum(b, over=j)'}, BY_JOIN, id='a-sum'),
         pytest.param(
-            {'dims': ['i'], 'expression': 'x <= a + sum(b, over=j)'}, BY_JOIN, id='one-constant-of-two-is-a-frame'
+            {'dims': ['i'], 'expression': 'x <= a + sum(b, over=j)'}, BY_JOIN, id='one-constant-of-two-is-a-table'
         ),
     ],
 )
@@ -247,7 +253,7 @@ def test_a_right_hand_side_short_of_a_row_is_refused_as_before(monkeypatch: pyte
 def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """A table in the order of its dims is read as it stands; any other order is moved into place first."""
+    """A table in the order of its dimensions is read as it stands; any other order is moved into place first."""
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i', 'j'], 'expression': 'b * y + a * x <= 10'}}}
     reversed_rows = {**SOURCES, 'a': SOURCES['a'].reverse(), 'b': SOURCES['b'].reverse()}
     in_order, placed = _built(spec, SOURCES, tmp_path / 'in_order.lp', monkeypatch)
@@ -265,10 +271,10 @@ def test_terms_that_name_a_later_variable_first_are_placed_without_a_sort(monkey
     assert not sorts, f'the share of two terms over two variables was sorted by {sorts}'
 
 
-def test_a_variable_masked_to_few_coordinates_is_not_held_by_position(
+def test_a_variable_narrowed_to_few_coordinates_is_not_held_by_position(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Held by position it would cost an integer per coordinate of its dims, 80 here for the one column it has."""
+    """Held by position it would cost an integer per coordinate of its dimensions, 80 here for the one column it has."""
     spec = {
         **SPEC,
         'variables': {**SPEC['variables'], 'few': {'dims': ['i', 'j'], 'where': 'rare', 'bounds': {'lower': 0}}},
@@ -279,9 +285,9 @@ def test_a_variable_masked_to_few_coordinates_is_not_held_by_position(
     assert text == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch)
 
 
-def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`on` is false at 14 of the 40 labels, and `masked` is absent there."""
-    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'masked + x <= 10'}}}
+def test_rows_a_narrowed_variable_removes_are_counted_as_not_built(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`on` is false at 14 of the 40 labels, and `narrowed` is absent there."""
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'narrowed + x <= 10'}}}
     counts = {}
     for label, by_join in (('by position', False), ('by join', True)):
         with monkeypatch.context() as patched:
@@ -291,7 +297,7 @@ def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: py
                 omissions = model.diagnostics().omissions.to_dicts()
         counts[label] = {r['constraint']: r['rows_not_built'] for r in omissions}
     assert counts == {'by position': {'row': 14}, 'by join': {'row': 14}}, (
-        'each way counts the 14 rows where the masked variable is absent'
+        'each way counts the 14 rows where `narrowed` is absent'
     )
 
 
@@ -299,14 +305,14 @@ def test_rows_a_masked_variable_removes_are_counted_as_not_built(monkeypatch: py
     'constraint',
     [
         pytest.param({'dims': ['i', 'j'], 'expression': 'y <= a * x'}, id='every-coordinate-holds-a-row'),
-        pytest.param({'dims': ['i', 'j'], 'expression': 'y + masked <= 10'}, id='a-masked-variable-removes-rows'),
-        pytest.param({'dims': ['i'], 'where': 'a > 5', 'expression': 'masked + x <= 10'}, id='under-a-where'),
+        pytest.param({'dims': ['i', 'j'], 'expression': 'y + narrowed <= 10'}, id='a-narrowed-variable-removes-rows'),
+        pytest.param({'dims': ['i'], 'where': 'a > 5', 'expression': 'narrowed + x <= 10'}, id='under-a-where'),
     ],
 )
-def test_rows_labelled_from_their_positions_read_back_at_the_coordinates_the_joins_give(
+def test_rows_indexed_from_their_positions_read_back_at_the_coordinates_the_joins_give(
     monkeypatch: pytest.MonkeyPatch, constraint: dict
 ) -> None:
-    """A constraint without a `where` is labelled from the positions its terms keep, not from the product of its dims."""
+    """A constraint without a `where` is indexed from the positions its terms keep, not from the product of its dimensions."""
     spec = {**SPEC, 'constraints': {'row': constraint}}
     read = {}
     for label, by_join in (('by position', False), ('by join', True)):
@@ -343,7 +349,7 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
     )
     data = AttachedSources(
         parameters={'a': pl.LazyFrame({'i': [0, 0, 2], 'value': [1.0, 2.0, 3.0]})},
-        dimensions={'i': pl.LazyFrame({'val': [0, 1, 2], 'ord': [0, 1, 2]})},
+        dimensions={'i': pl.LazyFrame({LABEL: [0, 1, 2], POSITION: [0, 1, 2]})},
         relations={},
         cardinality={'i': 3},
         parameter_rows={'a': 3},
@@ -357,19 +363,19 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No operator does this today: each that adds a presence makes the term a frame.
+    """No operator does this today: each that adds a presence makes the term a table.
 
     One that kept the body would leave it saying less than the term, and read
     by position the constraint would keep the rows the presence removes. Here
     `x` is given a presence at the first two labels only.
     """
-    variable_term = Compiler._variable_term
+    variable_term = QueryBuilder._variable_term
 
     def narrowed(self, name: str) -> Term:
         term = variable_term(self, name)
         if name != 'x':
             return term
-        first_two = Presence(term.frame.filter(pl.col('i') < 2).select('i'), ('i',))
+        first_two = Presence(term.table.filter(pl.col('i') < 2).select('i'), ('i',))
         return replace(term, presences=(*term.presences, first_two))
 
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'a * x <= 10'}}}
@@ -380,7 +386,7 @@ def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkey
         placed.append(BY_POSITION)
         return by_position(self, *args, **kwargs)
 
-    monkeypatch.setattr(Compiler, '_variable_term', narrowed)
+    monkeypatch.setattr(QueryBuilder, '_variable_term', narrowed)
     monkeypatch.setattr(assembly.Assembly, '_placed_by_position', spied)
     with sps.build(spec, SOURCES) as model:
         rows = model.diagnostics().rows

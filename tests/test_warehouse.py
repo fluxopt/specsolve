@@ -305,7 +305,7 @@ def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -
     steps = pl.concat([pl.read_parquet(file) for file in held])
     assert p.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
     assert sorted(file.parent.parent.name for file in held) == RUNS, (
-        'every run holds the index of t, a rolling horizon the whole of it'
+        'every run holds the labels of t, a rolling horizon the whole of it'
     )
 
 
@@ -422,5 +422,5 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 
 
 def test_an_unsigned_integer_int64_cannot_hold_is_archived_as_it_arrived() -> None:
-    frame = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
-    assert frame['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'
+    table = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
+    assert table['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'
