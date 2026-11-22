@@ -1,6 +1,6 @@
 # Docs
 
-This folder is the published site. [index.md](index.md) is its front door;
+This folder is the published site. [index.md](index.md) is its home page;
 this page is the folder view on GitHub.
 
 **The nav and the tree are arranged by the four kinds of

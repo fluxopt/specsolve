@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://mathspec.readthedocs.io/en/latest/examples/pypsa/#rung-30--security-constrained): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 51986084 — objective **22113.333333** on both sides; structure ✔ 26 constraints · 6 variables, name for name; size ✔ 240 rows · ✔ 46 columns · ✔ 412 nonzeros; duals ✔ 240 rows; **model for model**: 32 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 51986084 — objective **22113.333333** on both sides; structure ✔ 26 constraints · 6 variables, name for name; size ✔ 240 rows · ✔ 46 columns · ✔ 412 nonzeros; duals ✔ 240 rows; **model for model**: 32 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

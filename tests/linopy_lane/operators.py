@@ -331,7 +331,7 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     position reads a source position of its own, so the index is an array over
     the offset's dimensions and *over* rather than a number.
 
-    Selection is by *label* rather than by ordinal, because that is what linopy
+    Selection is by *label* rather than by position, because that is what linopy
     passes through to its own labels — which also keeps a non-integer axis (a
     datetime snapshot) working for free.
 
@@ -343,12 +343,12 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     """
     card = int(array.sizes[over])
     labels = np.asarray(array.indexes[over])
-    ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
-    source = (ordinal - offset).astype(int)
+    position = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
+    source = (position - offset).astype(int)
 
-    def gathered(ordinals: Any) -> Any:
+    def gathered(positions: Any) -> Any:
         """Pick each position's source, then put the original labels back — the indexer carries no coordinate."""
-        picked = array.sel({over: _labelled(labels, ordinals, over)})
+        picked = array.sel({over: _labelled(labels, positions, over)})
         return picked.assign_coords({over: labels})
 
     if edge.wrap:
@@ -399,7 +399,7 @@ class _Groups:
         belongs: The group ordinal of each coordinate, 0 where it has none.
         within: Each coordinate's position inside its group.
         size: Each coordinate's group size, 1 where it has none.
-        roster: The label ordinal at each ``(group, position)``.
+        roster: The label position at each ``(group, position)``.
         names: Each group's key, by group ordinal.
         counts: Each group's label count, by group ordinal.
     """
@@ -461,12 +461,12 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: _Groups, ed
     """Translate *array* inside each group *groups* makes, not along the axis.
 
     The neighbour of a coordinate is the one *offset* back among the coordinates
-    sharing its group, so the gather is by a source ordinal computed per group:
+    sharing its group, so the gather is by a source position computed per group:
     a position past the group's start is vacated where the axis edge would
     vacate, and under *wrap* it comes round to that group's own last.
 
     *offset* is a number, or an array where the model named a parameter — per
-    entity, per group (:func:`_per_group`), or both — so the source ordinal is
+    entity, per group (:func:`_per_group`), or both — so the source position is
     computed from the within-group position rather than looked up label by
     label, and carries the offset's own dimensions.
 
@@ -481,7 +481,7 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: _Groups, ed
     inside = groups.grouped & (reached >= 0) & (reached < groups.size)
 
     def peer(group: Any, position: Any) -> Any:
-        """The label ordinal sitting at *position* of the group at *group*."""
+        """The label position sitting at *position* of the group at *group*."""
         return groups.roster[group, position]
 
     source = xr.apply_ufunc(peer, groups.belongs, reached.where(inside, 0).astype(int))
@@ -504,12 +504,12 @@ def _off_the_axis(array: Any, over: str, offset: float) -> Any:
     return (source < 0) | (source >= len(labels))
 
 
-def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
-    """*ordinals* as the coordinate labels they stand for, keeping their dimensions.
+def _labelled(labels: Any, positions: Any, over: str) -> Any:
+    """*positions* as the coordinate labels they stand for, keeping their dimensions.
 
     Carries no coordinates of its own: an indexer that keeps the axis's own
     coordinate asserts the values it holds *are* that axis, and after a gather
     they are not — which xarray reports as a size conflict rather than a
     mislabelling.
     """
-    return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
+    return xr.DataArray(labels[positions.transpose(*positions.dims).values], dims=positions.dims)

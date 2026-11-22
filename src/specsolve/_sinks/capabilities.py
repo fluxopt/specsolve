@@ -4,9 +4,9 @@ One descriptor per sink, so a construct the language says and a sink cannot
 take is a refusal naming both rather than a ``kError`` from inside a library.
 
 - A sink takes a construct or it does not; nothing is rewritten at the
-  hand-off.
+  handoff.
 - An exclusion is a pair a sink takes separately and refuses together.
-- What a model needs is read off the hand-off by [`required`][], which never
+- What a model needs is read off the handoff by [`required`][], which never
   asks for ``nonconvex_quadratic_objective``: the coefficients' signs decide
   it. A descriptor still records it, the capability probes check it, and the
   sink that meets one at solve time sends the caller to the sinks that list it.

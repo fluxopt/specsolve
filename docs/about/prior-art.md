@@ -4,10 +4,10 @@ The projects specsolve is derived from, and how to cite them.
 
 **[Calliope](https://github.com/calliope-project/calliope) (Apache-2.0) is
 where the YAML you write comes from**: solver-ready math as a reviewable file,
-a block per component, `dims:`, a `where:` string over `AND`/`OR`/`NOT`,
+an entry per component, `dims:`, a `where:` string over `AND`/`OR`/`NOT`,
 `bounds:`, `active:`, and parsing with pyparsing rather than `eval`. Our `expressions` is their `global_expressions`,
 and our `piecewise` is their `piecewise_constraints`. What is ours is the
-semantics underneath: one `expression` per block, macros that take arguments, a
+semantics underneath: one `expression` per entry, macros that take arguments, a
 schema closed at every level, and the absence and degree-1 laws
 ([the ten rules](https://mathspec.readthedocs.io/en/latest/reference/language/#the-ten-rules)).
 Their math is the corpus we score coverage against, not a specification we
@@ -15,7 +15,7 @@ match
 ([the limits](https://mathspec.readthedocs.io/en/latest/reference/language/errors/#what-the-language-will-not-express)).
 **File portability is not a goal**: a Calliope model does not load here.
 
-**[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the oracle
+**[linopy](https://github.com/PyPSA/linopy) (MIT) is the vocabulary, the check
 and the denominator.** Where a concept is already theirs, we copy the spelling.
 Every language feature is differentially tested against a linopy build, and
 the [benchmarks](benchmarks.md) measure specsolve against it.

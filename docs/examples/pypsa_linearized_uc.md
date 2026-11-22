@@ -277,11 +277,11 @@ nothing else. Relaxing the status turns the model back into an LP, which is
 most of why the mode exists, so this port records a price vector too.
 
 **`base` carries unequal start-up and shut-down costs.** PyPSA tightens the
-relaxation with an extra dispatch-limit block wherever a generator's two costs
-match. That block reaches for the ramp-limit parameters, a second feature. So
+relaxation with an extra dispatch-limit constraint wherever a generator's two costs
+match. That constraint reaches for the ramp-limit parameters, a second feature. So
 `base` is left untightened, and PyPSA logs that it is proceeding without
 it. `peak` has two costs of zero, so PyPSA does emit the tightening there:
-four blocks of three rows this port does not hold. Each collapses to a row the
+four constraints of three rows this port does not hold. Each collapses to a row the
 port already has, because `p_min_pu` is 0 and there are no ramp limits:
 `p ≤ p_nom · status`, or that row differenced against the snapshot before. The
 objective and the price vector therefore agree to `rtol=1e-09`; the two are

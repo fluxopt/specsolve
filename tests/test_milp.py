@@ -94,7 +94,7 @@ def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitme
 
 
 def test_highs_numbers_a_continuous_column_zero_and_an_integer_one():
-    """The two numbers the hand-off's boolean integrality vector *is*.
+    """The two numbers the handoff's boolean integrality vector *is*.
 
     ``_built`` widens ``cols.integral`` — one boolean per column — straight to
     the ``int32`` vector HiGHS reads as variable types, which is only the same

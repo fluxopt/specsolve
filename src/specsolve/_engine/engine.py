@@ -201,7 +201,7 @@ class Engine:
     def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
-        Read off the hand-off, so a square the data prices at zero or an
+        Read off the handoff, so a square the data prices at zero or an
         integer variable with no column built asks for nothing. What
         [`solve`][] and [`write`][] refuse, this refuses, with the same
         message.
