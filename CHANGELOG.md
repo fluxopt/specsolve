@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - docs: the benchmarks page shows how each of specsolve's phases grows along a model's size ladder ([#2185](https://github.com/fluxopt/specsolve/pull/2185))
+- docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))
 - feat(api): the metrics time every phase from the spec to the archive, and an older answer reads as another layout ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - refactor(api): diagnostics and metrics count the solver instances a model's solves took as solver_instances, which was loads ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - refactor(api): a saved answer is read with read_result, read_sweep, read_archive and read_inputs, as scan_… scans it ([#2179](https://github.com/fluxopt/specsolve/pull/2179))
