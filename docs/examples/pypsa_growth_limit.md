@@ -13,7 +13,7 @@ that allowance, which turns a flat cap into a growth rate
 new[period] - max_relative_growth * new[period - 1] <= max_growth
 ```
 
-Two things the source settles. The quantity on both sides is **newly built**
+Two things the source decides. The quantity on both sides is **newly built**
 capacity, not standing capacity: `vars.where(first_active)` counts an asset in
 the period it first exists and never again. And the first period has no
 predecessor, so its row is the bare allowance.
