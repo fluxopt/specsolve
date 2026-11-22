@@ -92,12 +92,16 @@ flowchart TB
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
 Each phase takes what the one before it produced, as
-[the diagram](../howto/faster.md#find-where-the-time-goes) draws it. `Engine.clocked(phase)`
-adds a block's wall time to its phase, and refuses a name that has no
-`Metrics` column. `tests/test_phases.py` holds the phases' sum to the wall time
-of a call, and slows each step to find it in its own phase.
+[the diagram](../howto/faster.md#find-where-the-time-goes) draws it. The clock
+is one mark: each public call starts it with `Engine.start()`, and
+`Engine.lap(phase)` adds the time since the mark to that phase and moves the
+mark, so the laps tile the call and a step between two named ones is in the
+phase of the one after it. `lap` refuses a name that has no `Metrics` column.
+`tests/test_phases.py` holds the phases' sum to the wall time of a call, within
+the return from one call and the entry into the next (50–110 µs, #2180), and
+slows each step to find it in its own phase.
 
-| phase | takes | hands over | clocked in |
+| phase | takes | hands over | lapped in |
 | --- | --- | --- | --- |
 | `load` | the spec as given | `Spec` and its `Program` | `Model.__init__` |
 | `tidy` | the caller's sources | the tidy tables | `Model._fill`, through `_sources.tidied` |
@@ -110,8 +114,9 @@ of a call, and slows each step to find it in its own phase.
 | `archive` | `Result`, the spec and the tidy tables | the archive on disk | `Model._archive` |
 
 **The metrics row is the archive's last member**, written after the zip is
-packed, so `archive_seconds` covers every other member. Closing the model
-comes after the archive, and no phase holds it.
+packed, so `archive_seconds` covers every other member. Writing the row and
+landing the archive are in `diagnostics()` alone (3.3–3.5 ms median, #2180).
+Closing the model comes after the archive, and no phase holds it.
 
 ## The public API
 

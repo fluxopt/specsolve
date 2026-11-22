@@ -213,7 +213,9 @@ class Metrics(NamedTuple):
     #: - ``write``: the built model streamed to an LP or MPS file by
     #:   [`write`][specsolve._api.Model.write].
     #: - ``archive``: the spec, the sources and the answer written to disk.
-    #:   Every member is timed but this row itself, which is written last.
+    #:   Every member is timed but this row itself, which is written last:
+    #:   writing it and landing the archive are in
+    #:   [`Diagnostics.seconds`][specsolve._result.Diagnostics.seconds] alone.
     load_seconds: float
     tidy_seconds: float
     attach_seconds: float

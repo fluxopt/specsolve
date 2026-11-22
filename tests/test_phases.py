@@ -1,14 +1,15 @@
 """The phases a solve is clocked in add up to the call, and each step is clocked in the phase that names it.
 
-[`Metrics`][specsolve._records.Metrics] defines the phases. The first test
-holds their sum to the wall time of a whole call; the second slows one step
-at a time and finds the delay in its own phase and nowhere else.
+[`Metrics`][specsolve._records.Metrics] defines the phases. The model's own
+clocks are held to the wall time of a whole call; the archived row, written
+before the archive lands, to at most what the model kept. One test slows one
+step at a time and finds the delay in its own phase and nowhere else.
 """
 
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 import yaml
@@ -27,10 +28,9 @@ if TYPE_CHECKING:
 #: What one slowed step sleeps. A step no phase clocks loses all of it.
 DELAY = 0.1
 
-#: Wall time no phase holds: the argument checks between phases, and the call
-#: itself. Under four test workers on four cores it reached 21.6 ms, so half a
-#: [`DELAY`][] holds it and still finds a slowed step that no phase clocks.
-SLACK = DELAY / 2
+#: Wall time no phase holds. The laps tile each call, so what is left is the
+#: return from one call and the entry into the next: 50 to 110 µs (#2180).
+SLACK = 0.005
 
 
 def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
@@ -39,8 +39,28 @@ def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
     return {**spec, 'assumptions': {'capacity_is_not_negative': {'holds': 'p_max >= 0'}}}
 
 
-def _timed(call: Callable[[], sps.types.Model], out: Path) -> tuple[float, dict[str, float]]:
-    """The wall time of *call*, and the seconds per phase of the archive it writes to *out*.
+class Timed(NamedTuple):
+    """One call, timed from outside and from inside."""
+
+    #: The wall time of the call.
+    wall: float
+    #: Seconds per phase as the model kept them, the archive's landing included.
+    kept: dict[str, float]
+    #: Seconds per phase as the archive's metrics row recorded them.
+    recorded: dict[str, float]
+
+    def check(self) -> None:
+        """The model's phases tile the call, and the row never holds more than the model kept."""
+        kept = sum(self.kept.values())
+        assert kept <= self.wall, f'no step is clocked twice: {self.kept} sum past the wall time {self.wall}'
+        assert self.wall - kept < SLACK, f'no step is left unclocked: {self.kept} sum short of {self.wall}'
+        assert all(self.recorded[phase] <= self.kept[phase] for phase in PHASES), (
+            f'the row is taken before the archive lands, so it holds no more than the model: {self.recorded}'
+        )
+
+
+def _timed(call: Callable[[], sps.types.Model], out: Path) -> Timed:
+    """*call* timed from outside, and the seconds per phase the model kept and the archive at *out* recorded.
 
     The model *call* returns is closed after the clock stops: releasing it
     comes after the archive is written, so no archive can record it.
@@ -48,9 +68,14 @@ def _timed(call: Callable[[], sps.types.Model], out: Path) -> tuple[float, dict[
     started = time.perf_counter()
     model = call()
     wall = time.perf_counter() - started
+    kept = model.diagnostics().seconds
     model.close()
     taken = sps.read_archive(out).metrics
-    return wall, {phase: getattr(taken, f'{phase}_seconds') for phase in PHASES}
+    return Timed(
+        wall,
+        {phase: kept.get(phase, 0.0) for phase in PHASES},
+        {phase: getattr(taken, f'{phase}_seconds') for phase in PHASES},
+    )
 
 
 def _archived(spec: object, sources: Mapping[str, object], out: Path, **solve: object) -> Callable[[], sps.types.Model]:
@@ -86,12 +111,11 @@ def test_the_phases_add_up_to_a_build_solved_into_an_archive(
     """From the spec as given to the archive on disk, every second is in one phase."""
     spec = _with_assumption(dispatch_yaml) if with_assumption else dispatch_yaml
     out = tmp_path / f'case{suffix}'
-    wall, seconds = _timed(_archived(spec, dispatch_table_inputs, out), out)
+    timed = _timed(_archived(spec, dispatch_table_inputs, out), out)
 
-    entered = {phase for phase, spent in seconds.items() if spent > 0}
+    entered = {phase for phase, spent in timed.recorded.items() if spent > 0}
     assert entered == set(PHASES) - {'write'}, 'a solve into an archive enters every phase but writing a model file'
-    assert sum(seconds.values()) <= wall, f'no step is clocked twice: {seconds} sum past the wall time {wall}'
-    assert wall - sum(seconds.values()) < SLACK, f'no step is left unclocked: {seconds} sum short of {wall}'
+    timed.check()
 
 
 def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_yaml, dispatch_table_inputs, tmp_path):
@@ -108,11 +132,10 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_
         model.solve(archive=out)
         return model
 
-    wall, seconds = _timed(call, out)
+    timed = _timed(call, out)
 
-    assert all(spent > 0 for spent in seconds.values()), f'this model entered every phase: {seconds}'
-    assert sum(seconds.values()) <= wall, f'no step is clocked twice: {seconds} sum past the wall time {wall}'
-    assert wall - sum(seconds.values()) < SLACK, f'no step is left unclocked: {seconds} sum short of {wall}'
+    assert all(spent > 0 for spent in timed.recorded.values()), f'this model entered every phase: {timed.recorded}'
+    timed.check()
 
 
 def _slowed(real: Callable[..., object]) -> Callable[..., object]:
@@ -162,18 +185,18 @@ def test_a_slow_step_shows_in_its_own_phase(dispatch_yaml, dispatch_table_inputs
     for owner, name in steps:
         monkeypatch.setattr(owner, name, _slowed(getattr(owner, name)))
     out = tmp_path / 'case.zip'
-    wall, seconds = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out, start=start), out)
+    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out, start=start), out)
 
-    assert seconds[phase] >= DELAY, f'the slowed step is clocked in {phase!r}: {seconds}'
-    others = {other: spent for other, spent in seconds.items() if other != phase}
+    assert timed.recorded[phase] >= DELAY, f'the slowed step is recorded in {phase!r}: {timed.recorded}'
+    others = {other: spent for other, spent in timed.kept.items() if other != phase}
     assert all(spent < DELAY for spent in others.values()), f'and in no other phase: {others}'
-    assert wall - sum(seconds.values()) < SLACK, f'and nothing it took is lost: {seconds} sum short of {wall}'
+    timed.check()
 
 
 def test_a_clock_with_no_column_is_refused():
     """A phase clocked under a name no `Metrics` column carries would be dropped from every archive."""
-    with pytest.raises(AssertionError, match="'nap' is not a phase"), engine.Engine().clocked('nap'):
-        pass
+    with pytest.raises(AssertionError, match="'nap' is not a phase"):
+        engine.Engine().lap('nap')
 
 
 def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispatch_table_inputs, tmp_path):
@@ -203,7 +226,26 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
         model.solve(archive=out)
         return model
 
-    wall, seconds = _timed(call, out)
+    timed = _timed(call, out)
 
-    assert seconds['handoff'] >= DELAY, f'the slowed digest is clocked in the handoff: {seconds}'
-    assert wall - sum(seconds.values()) < SLACK, f'and nothing it took is lost: {seconds} sum short of {wall}'
+    assert timed.recorded['handoff'] >= DELAY, f'the slowed digest is clocked in the handoff: {timed.recorded}'
+    timed.check()
+
+
+@pytest.mark.parametrize(
+    'call',
+    [
+        pytest.param(lambda model, tmp_path, load: model.solve(archive=tmp_path / 'case.zip'), id='a solve'),
+        pytest.param(lambda model, tmp_path, load: model.update({'load': load}), id='an update'),
+        pytest.param(lambda model, tmp_path, load: model.write(tmp_path / 'model.lp'), id='a write'),
+    ],
+)
+def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs, tmp_path, call):
+    """Each call starts the clock, so a caller who waits between two calls is not billed for the wait."""
+    with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
+        before = model.diagnostics().seconds
+        time.sleep(DELAY)
+        call(model, tmp_path, dispatch_table_inputs['load'])
+        after = model.diagnostics().seconds
+    grown = {phase: after.get(phase, 0.0) - before.get(phase, 0.0) for phase in PHASES}
+    assert all(spent < DELAY for spent in grown.values()), f'the wait before the call is in a phase: {grown}'

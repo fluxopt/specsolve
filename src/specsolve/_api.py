@@ -23,7 +23,6 @@ import warnings
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -191,9 +190,9 @@ class Model:
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._engine = Engine()
-        with self._engine.clocked('load'):
-            self._spec = as_spec(spec)
-            self._program = as_program(self._spec)
+        self._spec = as_spec(spec)
+        self._program = as_program(self._spec)
+        self._engine.lap('load')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
@@ -214,10 +213,10 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            with self._engine.clocked('tidy'):
-                self._tidied = tidied(self._program, self._sources)
-            with self._engine.clocked('attach'):
-                attached = validate_assumptions(self._program, self._tidied)
+            self._tidied = tidied(self._program, self._sources)
+            self._engine.lap('tidy')
+            attached = validate_assumptions(self._program, self._tidied)
+            self._engine.lap('attach')
             self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._engine.close()
@@ -255,6 +254,7 @@ class Model:
                 anything changes. Data the build refuses releases the model, as
                 a build that raises does.
         """
+        self._engine.start()
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
         self._fill()
@@ -344,6 +344,7 @@ class Model:
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
+        self._engine.start()
         out = None if archive is None else Path(archive)
         if out is not None:
             parquet.require('archive=')
@@ -355,13 +356,12 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        with self._engine.clocked('handoff'):
-            read = start if start is None or isinstance(start, (str, Result)) else self._read_start(start)
+        read = start if start is None or isinstance(start, (str, Result)) else self._read_start(start)
         solved = self._engine.solve(
             solver_name, solver_options=solver_options, lower=self._lower, outputs=asked, start=read
         )
-        with self._engine.clocked('readback'):
-            answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
+        answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
+        self._engine.lap('readback')
         if out is not None:
             self._archive(out, answered)
         return answered
@@ -401,24 +401,23 @@ class Model:
 
         The metrics row is written here, not by [`Result.save`][]: it spans the
         model's life, not one solve. It is the last member written, so its
-        ``archive_seconds`` covers every other one.
+        ``archive_seconds`` covers every other one; writing and landing it are
+        in the model's own clock alone.
         """
 
         def metrics() -> pl.DataFrame:
-            row = self._engine.diagnostics().metrics()
-            row = row._replace(archive_seconds=row.archive_seconds + perf_counter() - started)
-            return pl.DataFrame([row._asdict()], schema_overrides=METRICS_SCHEMA)
+            self._engine.lap('archive')
+            return pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        with self._engine.clocked('archive'):
-            started = perf_counter()
-            write_archive(
-                out,
-                self._spec,
-                with_positions(self._program, self._tidied),
-                axis=None,
-                answer=answered._save,
-                metrics=metrics,
-            )
+        write_archive(
+            out,
+            self._spec,
+            with_positions(self._program, self._tidied),
+            axis=None,
+            answer=answered._save,
+            metrics=metrics,
+        )
+        self._engine.lap('archive')
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -428,6 +427,7 @@ class Model:
             SpecsolveError: A construct the format has no section for, as
                 [`check_sink`][] refuses it.
         """
+        self._engine.start()
         self._engine.write(path)
 
     def check_sink(self, sink: str) -> None:
