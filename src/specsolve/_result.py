@@ -2,7 +2,7 @@
 
 A [`Result`][] holds one finished table per entry, its values already
 laid out over the build's coordinates. [`Result.save`][] writes one to disk;
-[`load_result`][] reads it back, and [`scan_result`][] leaves it there.
+[`read_result`][] reads it back, and [`scan_result`][] leaves it there.
 """
 
 from __future__ import annotations
@@ -446,7 +446,7 @@ class Result:
     def provenance(self) -> Provenance:
         """The solver, its options and the package versions that produced this answer.
 
-        Read back as it was written, so an answer loaded from an archive names
+        Read back as it was written, so an answer read from an archive names
         the environment that solved it rather than the one reading it.
         """
         return self._provenance
@@ -876,7 +876,7 @@ def _absent(reason: str) -> Callable[[], pl.DataFrame]:
     return read
 
 
-def load_result(directory: str | Path) -> Result:
+def read_result(directory: str | Path) -> Result:
     """Read back an answer [`Result.save`][] wrote — a solve, off disk.
 
     Every reader answers what it answered in the session that solved: the
@@ -891,7 +891,7 @@ def load_result(directory: str | Path) -> Result:
     Args:
         directory: Where [`save`][specsolve._result.Result.save] wrote
             it. One inside an archive is
-            [`load_archive`][specsolve._archive.load_archive]'s to find.
+            [`read_archive`][specsolve._archive.read_archive]'s to find.
 
     Returns:
         The result, read into memory, so it owes *directory* nothing.
@@ -907,17 +907,17 @@ def load_result(directory: str | Path) -> Result:
 def scan_result(directory: str | Path) -> Result:
     """The answer under *directory*, read as its readers are called rather than now.
 
-    The same answer as [`load_result`][], but each table is a
+    The same answer as [`read_result`][], but each table is a
     `polars.scan_parquet` of its file, so an answer larger than memory is
     readable a name at a time, and unread names cost nothing.
 
     **The files have to outlive the result**: a name read after the
     directory is gone raises where the scan is collected, and a file
     rewritten underneath it comes back changed. *directory* is as
-    [`load_result`][] takes it.
+    [`read_result`][] takes it.
 
     Raises:
-        LayoutError: As [`load_result`][] raises it.
+        LayoutError: As [`read_result`][] raises it.
     """
     return _answer_under(Path(directory), eager=False)
 

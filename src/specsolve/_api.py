@@ -290,7 +290,7 @@ class Model:
                 shared storage.
             archive: Where to write the spec, the data attached to it **now**,
                 and this answer, so that
-                [`load_archive`][specsolve._archive.load_archive] gives all
+                [`read_archive`][specsolve._archive.read_archive] gives all
                 three back and the model solves again from the file alone. A
                 ``.zip`` suffix packs it into one file; anything else is a
                 directory. What the build and its solves spent goes in beside
@@ -311,8 +311,8 @@ class Model:
                 to the optimum, never which one. ``'previous'``, the default,
                 carries on from the last solve while the solver stays loaded,
                 and begins from nothing after an update that loads it again.
-                ``None`` begins from nothing. An earlier answer, live, loaded
-                with [`load_result`][specsolve._result.load_result] or from an archive, or a
+                ``None`` begins from nothing. An earlier answer, live, read
+                with [`read_result`][specsolve._result.read_result] or from an archive, or a
                 [`Start`][specsolve.types.Start] of tables keyed by reader, is
                 matched by coordinate, so one from another build of the spec,
                 with rows or columns gained or lost, starts it too. An LP starts from a basis where one is given, which an

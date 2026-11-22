@@ -482,7 +482,7 @@ def test_the_splice_steps_over_an_entry_of_its_own_name():
 
 def test_an_answer_read_back_off_disk_says_why_it_cannot_evaluate(result, tmp_path):
     """An answer carries the values and not the model, and a name the file never wrote needs the model."""
-    read_back = sps.load_result(result.save(tmp_path))
+    read_back = sps.read_result(result.save(tmp_path))
     with pytest.raises(SpecsolveError, match='no model behind it'):
         read_back.evaluate('sum(p, over=generator)')
     assert read_back.evaluate('total_gen').equals(result.evaluate('total_gen')), (
@@ -507,9 +507,9 @@ def archived(tmp_path):
         pytest.param('dual(balance) * total_gen', id='a-dual-times-an-expression'),
     ],
 )
-def test_evaluate_off_a_loaded_archive_reads_the_archived_solution(result, archived, expression):
-    """A quantity the file never named reads off a loaded archive, at the values the solve left — no re-solve."""
-    read_back = sps.load_archive(archived).result.evaluate(expression)
+def test_evaluate_off_an_archive_read_whole_reads_the_archived_solution(result, archived, expression):
+    """A quantity the file never named reads off an archive read whole, at the values the solve left — no re-solve."""
+    read_back = sps.read_archive(archived).result.evaluate(expression)
     live = result.evaluate(expression)
     keys = live.columns[:-1]
     assert read_back.sort(keys).equals(live.sort(keys)), (
@@ -528,7 +528,7 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
 def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
     monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
-    table = sps.load_archive(archived).result.evaluate('total_gen')
+    table = sps.read_archive(archived).result.evaluate('total_gen')
     assert table.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
 
 
