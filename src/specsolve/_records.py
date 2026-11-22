@@ -174,6 +174,13 @@ class Metrics(NamedTuple):
     with the same columns whoever writes them, so rows from unrelated runs
     concatenate into one table.
 
+    **The ``*_seconds`` columns are the phases of a call**, in the order they
+    run: load, tidy, attach, build, handoff, solve, readback, write and
+    archive. Each starts from what the one before it produced, so together
+    they are the whole call and no step is in two of them; each column says
+    what its phase holds. A phase that never ran reads zero rather than no
+    column. [`phases`][] lays them out as a table.
+
     **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
     for the archive [`specsolve.solve`][] writes and on each slice's row of a
     sweep, whose clocks are that slice's own share. There [`solver_instances`][] is ``1``
@@ -188,51 +195,45 @@ class Metrics(NamedTuple):
     columns: int
     rows: int
     nonzeros: int
-    #: How many solves the row covers, and how many solver instances they
-    #: took: a new one wherever the solver could not keep the model and take
-    #: its new values. The clocks are cumulative over exactly these solves.
+    #: How many solves the row covers. The clocks are cumulative over exactly
+    #: these solves.
     solves: int
+    #: How many solver instances those solves took: a new one wherever the
+    #: solver could not keep the model and take its new values.
     solver_instances: int
-    #: Wall-clock seconds in each phase, in the order the phases run. Each
-    #: phase starts from what the one before it produced, so together they
-    #: are the whole call and no step is in two of them. A phase that never
-    #: ran writes zero rather than no column.
-    #:
-    #: - ``load``: mathspec's load, ``to_spec`` on the spec as given: a path
-    #:   read and parsed, every rule that needs no data checked, and the
-    #:   program compiled. Creating a solver is ``handoff``, and
-    #:   [`solver_instances`][] counts each one created.
-    #: - ``tidy``: the source keys checked against the spec, and each source
-    #:   read into its tidy table, the way [`tidy`][specsolve._api.tidy]
-    #:   returns it.
-    #: - ``attach``: the tidy tables encoded against the program's
-    #:   dimensions, a parameter's missing rows filled or refused, and the
-    #:   spec's ``assumptions:`` checked on them.
-    #: - ``build``: every entry into the model's columns, rows and matrix.
-    #: - ``handoff``: a ``start=`` read and matched to this build, the solver
-    #:   checked to take the model, the model loaded into it or its new
-    #:   numbers pushed onto the one held, and the start given. After an
-    #:   update it also holds the held solver's digest of its last model,
-    #:   which decides between the load and the push.
-    #: - ``solve``: the solver's own run, up to the vectors it returns.
-    #: - ``readback``: those vectors laid out by coordinate as the result,
-    #:   and when and how it was solved recorded on it. Its tables are read
-    #:   lazily, so turning one into rows is spent where it is read: in
-    #:   ``archive`` for an archive, in your code otherwise.
-    #: - ``write``: the format checked to take the model, and the model
-    #:   streamed to an LP or MPS file by [`write`][specsolve._api.Model.write].
-    #: - ``archive``: the spec, the sources and the answer written to disk.
-    #:   Every member is timed but this row itself, which is written last:
-    #:   writing it and landing the archive are in
-    #:   [`Diagnostics.seconds`][specsolve._result.Diagnostics.seconds] alone.
+    #: mathspec's load: ``to_spec`` on the spec as given, a path read and
+    #: parsed, every rule that needs no data checked, and the program
+    #: compiled. Creating a solver is [`handoff_seconds`][]'s.
     load_seconds: float
+    #: The source keys checked against the spec, and each source read into
+    #: its tidy table, the way [`tidy`][specsolve._api.tidy] returns it.
     tidy_seconds: float
+    #: The tidy tables encoded against the program's dimensions, a
+    #: parameter's missing rows filled or refused, and the spec's
+    #: ``assumptions:`` checked on them.
     attach_seconds: float
+    #: Every entry into the model's columns, rows and matrix.
     build_seconds: float
+    #: A ``start=`` read and matched to this build, the solver checked to take
+    #: the model, the model loaded into a new solver or its new numbers pushed
+    #: onto the one held, and the start given. After an update it also holds
+    #: the held solver's digest of its last model, which decides between the
+    #: two.
     handoff_seconds: float
+    #: The solver's own run, up to the vectors it returns.
     solve_seconds: float
+    #: Those vectors laid out by coordinate as the result, and when and how it
+    #: was solved recorded on it. Its tables are read lazily, so turning one
+    #: into rows is spent where it is read: in [`archive_seconds`][] for an
+    #: archive, in your code otherwise.
     readback_seconds: float
+    #: The format checked to take the model, and the model streamed to an LP
+    #: or MPS file by [`write`][specsolve._api.Model.write].
     write_seconds: float
+    #: The spec, the sources and the answer written to disk. Every member is
+    #: timed but this row itself, which is written last: writing it and
+    #: landing the archive are in
+    #: [`Diagnostics.seconds`][specsolve._result.Diagnostics.seconds] alone.
     archive_seconds: float
     #: What the archive holding this row was called, as
     #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
