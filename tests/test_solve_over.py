@@ -313,11 +313,11 @@ def _scanned(tmp_path) -> pl.DataFrame:
     return sps.scan_sweep(tmp_path / 'spill').records
 
 
-def _loaded(tmp_path) -> pl.DataFrame:
+def _read(tmp_path) -> pl.DataFrame:
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), solver_options=_OPTIONS).save(
         tmp_path / 'saved'
     )
-    return sps.load_sweep(tmp_path / 'saved').records
+    return sps.read_sweep(tmp_path / 'saved').records
 
 
 def _archived(tmp_path) -> pl.DataFrame:
@@ -333,7 +333,7 @@ def _archived(tmp_path) -> pl.DataFrame:
         pytest.param(_pooled, id='pooled'),
         pytest.param(_rolling, id='rolling'),
         pytest.param(_scanned, id='scanned-spill'),
-        pytest.param(_loaded, id='loaded-save'),
+        pytest.param(_read, id='read-save'),
         pytest.param(_archived, id='archive-file'),
     ],
 )
@@ -1234,7 +1234,7 @@ def test_a_sweep_whose_first_record_never_landed_is_no_sweep_to_read(tmp_path):
     for written in (out / 'record').glob('*.parquet'):
         written.unlink()
     with pytest.raises(sps.errors.LayoutError, match="holds no slice under 'record'"):
-        sps.load_sweep(out)
+        sps.read_sweep(out)
 
 
 def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
@@ -1796,7 +1796,7 @@ def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
         'every slice terminated infeasible, and the record says so'
     )
     assert not (out / 'primal').exists(), 'and no tables are written, there being none'
-    assert sps.load_sweep(out).records.height == records.height, 'the saved study reads back'
+    assert sps.read_sweep(out).records.height == records.height, 'the saved study reads back'
 
 
 @pytest.mark.parametrize('lost', ['record', 'metrics'], ids=str)
@@ -1807,22 +1807,22 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     and not the other was edited or interrupted.
     """
     out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
-    assert sps.load_sweep(out._spill.directory).records.height == 3, 'the whole one reads back first'
+    assert sps.read_sweep(out._spill.directory).records.height == 3, 'the whole one reads back first'
     shutil.rmtree(out._spill.directory / lost)
 
     with pytest.raises(sps.errors.LayoutError, match=f"holds no slice under '{lost}'"):
-        sps.load_sweep(out._spill.directory)
+        sps.read_sweep(out._spill.directory)
 
 
-def test_a_loaded_sweep_is_held_and_a_scanned_one_is_spilled(tmp_path):
+def test_a_sweep_read_whole_is_held_and_a_scanned_one_is_spilled(tmp_path):
     """The two verbs give the same study and differ in where its tables are.
 
     `scan_sweep` leaves the tables on disk, so it owes the directory every
-    read. `load_sweep` reads them in, so the directory is free afterwards.
+    read. `read_sweep` reads them in, so the directory is free afterwards.
     """
     spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
     expected = spilled.scan('p').collect()
-    loaded = sps.load_sweep(tmp_path / 'sweep')
+    loaded = sps.read_sweep(tmp_path / 'sweep')
     scanned = sps.scan_sweep(tmp_path / 'sweep')
 
     assert scanned.primal('p').equals(expected), 'both read the study the spill wrote'
@@ -1868,7 +1868,7 @@ def test_an_archive_runs_again_under_the_key_name_the_sweep_ran_with(tmp_path):
     """The key name was an argument of the call, so the axis an archive held ran again keyed by its default."""
     axis = sps.EachLabel('scenario', key_name='draw')
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'study')
-    study = sps.load_archive(tmp_path / 'study')
+    study = sps.read_archive(tmp_path / 'study')
     assert study.axis == axis, 'the axis reads back with the key name it was given'
     assert sps.solve_over(study.spec, study.sources, study.axis).key_name == 'draw'
 
@@ -2416,7 +2416,7 @@ def test_an_export_reads_a_spilled_sweep_as_a_held_one(priced, tmp_path):
 def test_a_spilled_sweep_saves_as_the_sweep_it_is(priced, tmp_path):
     """`save` copies a spilled sweep's slices to another directory, as it writes a held one's."""
     saved = _spilled(tmp_path / 'sweep').save(tmp_path / 'copy')
-    assert sps.load_sweep(saved).primal('soc').equals(priced.primal('soc'))
+    assert sps.read_sweep(saved).primal('soc').equals(priced.primal('soc'))
 
 
 def test_scan_reads_an_in_memory_sweep_too(sweep):
@@ -2554,7 +2554,7 @@ def test_a_sweep_saved_over_another_leaves_none_of_its_files(tmp_path):
     again = sps.solve_over(DISPATCH, {**sources, 'load': beyond}, sps.EachLabel('scenario'))
     again.save(out)
 
-    saved = sps.load_sweep(out)
+    saved = sps.read_sweep(out)
     assert saved.records['has_primal'].to_list() == again.records['has_primal'].to_list()
     assert saved.primal('p')['scenario'].unique().sort().to_list() == ['low', 'mid'], (
         'the scenario that has no values now has none on disk either'
@@ -2627,7 +2627,7 @@ def test_a_sweep_archive_carries_its_carry(tmp_path):
     sps.solve_over(
         WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
-    assert sps.load_archive(tmp_path / 'roll').axis.carry == {'soc_initial': 'soc'}, (
+    assert sps.read_archive(tmp_path / 'roll').axis.carry == {'soc_initial': 'soc'}, (
         'the carry reads back as it was given'
     )
 
@@ -2635,7 +2635,7 @@ def test_a_sweep_archive_carries_its_carry(tmp_path):
 def test_a_sweep_archive_with_no_carry_reads_an_empty_carry(tmp_path):
     """A sweep that chained nothing carries nothing — the manifest omits the key and the reader defaults it."""
     sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'plain')
-    assert sps.load_archive(tmp_path / 'plain').axis.carry == {}, (
+    assert sps.read_archive(tmp_path / 'plain').axis.carry == {}, (
         'no carry given, none stored, an empty mapping read back'
     )
 
@@ -2645,7 +2645,7 @@ def test_a_carried_sweep_reruns_from_its_archive_with_the_stored_carry(tmp_path)
     original = sps.solve_over(
         WINDOW, span_sources(), replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}), archive=tmp_path / 'roll'
     )
-    packed = sps.load_archive(tmp_path / 'roll')
+    packed = sps.read_archive(tmp_path / 'roll')
     rerun = sps.solve_over(packed.spec, packed.sources, packed.axis)
     assert rerun.primal('soc').equals(original.primal('soc')), 'the re-run with the stored carry matches the archive'
 
@@ -2654,7 +2654,7 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
     """`Sweep.evaluate` reads an undeclared quantity at each slice's own solution — matches solving that slice alone."""
     axis = sps.EachLabel('scenario')
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'study.zip')
-    sweep = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'out')
+    sweep = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'out')
     expr = 'sum(p * cost, over=generator)'
     swept = sweep.sweep.evaluate(expr)
     for key in sweep.sweep.keys:
@@ -2669,7 +2669,7 @@ def test_a_scanned_sweep_archive_evaluates_the_same(tmp_path):
     """A sweep left on disk (`scan_archive`) evaluates against those tables, the same values held reads."""
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
     expr = 'sum(p * cost, over=generator)'
-    whole = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'whole').sweep.evaluate(expr)
+    whole = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'whole').sweep.evaluate(expr)
     scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').sweep.evaluate(expr)
     assert scanned.equals(whole), 'a scanned sweep evaluates against the tables on disk, the same answer'
 
@@ -2681,7 +2681,7 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     with pytest.raises(sps.errors.SpecsolveError, match='no model behind it') as refused:
         runs.evaluate('sum(p, over=generator)')
     assert 'archive=' in str(refused.value), 'the refusal names what gives a sweep its models back'
-    assert 'load_archive' in str(refused.value), 'and where the sweep that reads any expression comes from'
+    assert 'read_archive' in str(refused.value), 'and where the sweep that reads any expression comes from'
     assert 'sps.solve(' not in str(refused.value), (
         "one solve of a sweep's sources is another question, and here it is refused: they hold a row per scenario"
     )
@@ -2846,7 +2846,7 @@ def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with
     live = sps.solve_over(SWITCHED_OFF, sources, axis, archive=tmp_path / 'study')
     assert live.primal('p')['draw'].unique().to_list() == [1], 'the second draw builds no p'
 
-    read = sps.load_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
+    read = sps.read_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
     assert read['value'].to_list() == [3.0, 4.0], 'each draw read against the model it was solved as'
 
 
@@ -2858,7 +2858,7 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
         replace(WINDOW_AXIS, carry={'soc_initial': 'soc'}),
         archive=tmp_path / 'roll.zip',
     )
-    sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
+    sweep = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
     assert sweep.sweep.evaluate('sum(p * cost)', per_window=True).height, (
         'an expression over static data evaluates per slice'
     )
@@ -2869,7 +2869,7 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
     """`evaluate` stitches as `primal` does — the sliced dimension back, the slice key gone."""
     sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
-    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
+    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     reindexed = answer.evaluate('sum(p, over=generator)')
     assert reindexed.columns == ['snapshot', 'value'], 'the sliced dimension is restored and the slice key dropped'
     by_hand = answer.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
@@ -2882,7 +2882,7 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
     """A scalar-per-window quantity has no labels of the sliced dimension to restore, so its answer is refused — as `expression` is."""
     sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
-    answer = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
+    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
     with pytest.raises(sps.errors.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
 

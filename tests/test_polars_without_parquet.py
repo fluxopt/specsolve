@@ -117,13 +117,13 @@ CALLS: list[tuple[str, Callable[..., object], str]] = [
         ),
         'Sweep.save',
     ),
-    ('load-result', lambda yaml, inputs, saved, tmp: sps.load_result(saved['result']), 'reading a saved answer'),
+    ('read-result', lambda yaml, inputs, saved, tmp: sps.read_result(saved['result']), 'reading a saved answer'),
     ('scan-result', lambda yaml, inputs, saved, tmp: sps.scan_result(saved['result']), 'reading a saved answer'),
-    ('load-sweep', lambda yaml, inputs, saved, tmp: sps.load_sweep(saved['sweep']), 'reading a saved sweep'),
+    ('read-sweep', lambda yaml, inputs, saved, tmp: sps.read_sweep(saved['sweep']), 'reading a saved sweep'),
     ('scan-sweep', lambda yaml, inputs, saved, tmp: sps.scan_sweep(saved['sweep']), 'reading a saved sweep'),
-    ('load-archive', lambda yaml, inputs, saved, tmp: sps.load_archive(saved['archive']), 'reading an archive'),
+    ('read-archive', lambda yaml, inputs, saved, tmp: sps.read_archive(saved['archive']), 'reading an archive'),
     ('scan-archive', lambda yaml, inputs, saved, tmp: sps.scan_archive(saved['archive']), 'reading an archive'),
-    ('load-inputs', lambda yaml, inputs, saved, tmp: sps.load_inputs(saved['archive']), 'reading an archive'),
+    ('read-inputs', lambda yaml, inputs, saved, tmp: sps.read_inputs(saved['archive']), 'reading an archive'),
 ]
 
 
@@ -183,7 +183,7 @@ def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
     try:
         sources = _by_scenario(dispatch_table_inputs)
         runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
-        study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
+        study = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'study')
         again = sps.solve_over(study.spec, study.sources, study.axis)
     finally:
         parquet._polars_has_parquet.cache_clear()

@@ -109,7 +109,7 @@ def solve_over(
             slices already there, which is how an interrupted sweep resumes.
         archive: Where to write the model, the sources the sweep was cut from,
             the axis that cut them and every slice's answer, so that
-            ``sps.load_archive`` gives all four back and the sweep runs again
+            ``sps.read_archive`` gives all four back and the sweep runs again
             from the file alone. A ``.zip`` suffix packs it into one file;
             anything else is a directory. The answer is in the layout
             *spill_to* writes, one file per slice of each name under
@@ -179,8 +179,8 @@ def solve_over(
     plan = carry_plan(program, axis)
     key_name = _key_column(axis, program)
 
-    _check_the_carry(plan, axis, sources, program)
-    axis._check_the_program(program, sources)
+    _refuse_an_unseeded_or_misshapen_carry(plan, axis, sources, program)
+    axis._refuse_an_uncuttable_program(program, sources)
     slices, stitch = axis._slice(program, sources, key_name)
     if not slices:
         raise DataError('the axis produced no slices')
@@ -248,8 +248,8 @@ def build_slice(
     sources = _materialised(sources)
     program = check(spec)
     plan = carry_plan(program, axis)
-    _check_the_carry(plan, axis, sources, program)
-    axis._check_the_program(program, sources)
+    _refuse_an_unseeded_or_misshapen_carry(plan, axis, sources, program)
+    axis._refuse_an_uncuttable_program(program, sources)
     slices, _ = axis._slice(program, sources, axis._key_name())
     keys = [current.key for current in slices]
     if key not in keys:
@@ -352,7 +352,7 @@ def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.L
     return table.select(axis.dim, *declared)
 
 
-def _check_the_carry(
+def _refuse_an_unseeded_or_misshapen_carry(
     plan: Mapping[str, CarryRule],
     axis: Axis,
     first: Mapping[str, Source],

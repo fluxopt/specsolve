@@ -137,7 +137,7 @@ class EachLabel:
     def _key_name(self) -> str:
         return self.dim if self.key_name is None else self.key_name
 
-    def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
+    def _refuse_an_uncuttable_program(self, program: Program, sources: Mapping[str, Source]) -> None:
         """Refuse a *dim* the spec declares, and a labels table that carries it.
 
         Every slice squeezes *dim* out of its sources, so nothing would supply
@@ -252,7 +252,7 @@ class EachWindow:
         """Where the window started, never ``dim``, which every table of the window already carries."""
         return f'{self.dim}_start' if self.key_name is None else self.key_name
 
-    def _check_the_program(self, program: Program, sources: Mapping[str, Source]) -> None:
+    def _refuse_an_uncuttable_program(self, program: Program, sources: Mapping[str, Source]) -> None:
         """Refuse a window the program's rows cannot be whole inside, before one is taken.
 
         The program's `separability` answers; a reach the data decides is
