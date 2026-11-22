@@ -53,10 +53,10 @@ def prepare(
 
 
 def _handoff(handle: Any) -> Any:
-    """The built model's frames, wherever the checkout under test keeps them.
+    """The built model's tables, wherever the checkout under test keeps them.
 
     The ladder runs across checkouts, so this reaches the handle, the engine and
-    the frames (``handoff`` or ``tables``) in each shape an older checkout had.
+    the tables (``handoff`` or ``tables``) in each shape an older checkout had.
     """
     engine = getattr(handle, '_engine', handle)
     built = getattr(engine, '_model', None)
@@ -84,7 +84,7 @@ def _clocks(model: Any) -> dict[str, float]:
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
 
-    A solver is constructed straight off the frames, so its load is in no
+    A solver is constructed straight off the tables, so its load is in no
     phase: it is the wall time less the phases.
     """
     import specsolve as sps

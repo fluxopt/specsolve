@@ -61,7 +61,7 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
 
 
 def refuse_null_constants(
-    frames: Sequence[pl.LazyFrame],
+    tables: Sequence[pl.LazyFrame],
     divisors: Collection[str],
     subject: str,
     message: Callable[[str, int], str] = sparse_divisor_message,
@@ -71,7 +71,7 @@ def refuse_null_constants(
     One that is not finite has no number to build either.
 
     Asked before [`constant_scalar`][terms.constant_scalar] sums the term,
-    which reads a null as zero. *frames* are narrowed by the caller to the
+    which reads a null as zero. *tables* are narrowed by the caller to the
     coordinates the entry builds. *message* words it for the position.
 
     Raises:
@@ -82,10 +82,10 @@ def refuse_null_constants(
     cval = pl.col(CONSTANT)
     counts = collected_all(
         [
-            frame.select(
+            table.select(
                 cval.null_count().alias('null'), cval.cast(pl.Float64).is_finite().not_().sum().alias('non_finite')
             )
-            for frame in frames
+            for table in tables
         ]
     )
     undefined = sum(int(count.item(0, 'null')) for count in counts)
@@ -115,9 +115,9 @@ def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyF
     if the entry builds a row at all.
     """
     return [
-        p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi')
+        p.table.join(rows.select(*p.dims), on=list(p.dims), how='semi')
         if p.dims
-        else p.frame.join(rows.select(ROW).head(1), how='cross')
+        else p.table.join(rows.select(ROW).head(1), how='cross')
         for p in terms
     ]
 

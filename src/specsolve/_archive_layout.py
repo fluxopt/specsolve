@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter
+    from specsolve._answer_layout import TableWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -78,7 +78,7 @@ def write_archive(
     tables: Mapping[str, pl.LazyFrame],
     *,
     axis: Mapping[str, object] | None,
-    answer: Callable[[Path, FrameWriter], object],
+    answer: Callable[[Path, TableWriter], object],
 ) -> Path:
     """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
@@ -99,8 +99,8 @@ def write_archive(
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
 
-    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-        write_whole(_with_run(frame.lazy(), run), path)
+    def write(table: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(table.lazy(), run), path)
 
     staging = _staging_for(out)
     part = staging / out.name
@@ -109,8 +109,8 @@ def write_archive(
         (tree / SOURCES_DIR).mkdir(parents=True)
         write_format(tree, layout=INPUTS_LAYOUT)
         (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
-        for name, table in tables.items():
-            write(table, tree / SOURCES_DIR / f'{name}.parquet')
+        for name, source in tables.items():
+            write(source, tree / SOURCES_DIR / f'{name}.parquet')
         if axis is not None:
             (tree / AXIS_MEMBER).write_text(json.dumps(axis))
         answer(tree / ANSWER_DIR, write)
@@ -245,13 +245,13 @@ def _declared_files(
             yield name, kind, entry.description, None, [(d, d) for d in entry.dims]
 
 
-def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
-    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
+def _with_run(table: pl.LazyFrame, run: str) -> pl.LazyFrame:
+    """*table* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
     timestamp in a time zone becomes the same instant in UTC.
     """
-    return frame.with_columns(
+    return table.with_columns(
         cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
         cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
         pl.lit(run, dtype=pl.String).alias(RUN),

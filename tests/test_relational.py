@@ -580,7 +580,7 @@ class TestTheIndexSpace:
         ]
 
         with sps.build(spec, sources) as model:
-            indexed = model._engine._model.variables['p'].frame.collect()
+            indexed = model._engine._model.variables['p'].table.collect()
 
         assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be dense and ascending'
         assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected
@@ -597,7 +597,7 @@ class TestTheIndexSpace:
         declared = pl.Enum(['c', 'a', 'b'])
 
         with sps.build(NODE_CAP_SPEC, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
-            assert model._engine._model.variables['x'].frame.collect_schema()['node'] == declared
+            assert model._engine._model.variables['x'].table.collect_schema()['node'] == declared
             primal = model.solve().primal('x')
 
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
@@ -665,7 +665,7 @@ class TestTheIndexSpace:
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
             with Engine() as engine:
                 engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
-                indexed.append(engine._model.variables['p'].frame.collect().sort(COL))
+                indexed.append(engine._model.variables['p'].table.collect().sort(COL))
         assert indexed[0].equals(indexed[1])
 
     def test_a_condition_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
@@ -696,7 +696,7 @@ class TestTheIndexSpace:
         }
         with sps.build(spec, sources) as model:
             surviving = {
-                name: sorted(model._engine._model.variables[name].frame.select('i').collect().to_series().to_list())
+                name: sorted(model._engine._model.variables[name].table.select('i').collect().to_series().to_list())
                 for name in ('absent', 'either', 'both', 'mixed')
             }
         assert surviving == {
@@ -711,7 +711,7 @@ class TestTheIndexSpace:
 
         A solver vector is positional in the solver indices, so an entry's
         share of it is a slice — but only if its indices are a dense run and
-        the runs tile the whole index. Both are how `indices.frame` numbers
+        the runs tile the whole index. Both are how `indices.table` numbers
         an entry, and neither is visible from the tables: a block
         that started one late would report a neighbour's numbers under this
         entry's coordinates, with nothing out of range and nothing null.
@@ -742,7 +742,7 @@ class TestTheIndexSpace:
                 for name in names:
                     start, height = held[name].start, held[name].height
                     assert start == at, f'{name} does not start where the previous entry ended'
-                    numbered = held[name].frame.select(index).collect().to_series()
+                    numbered = held[name].table.select(index).collect().to_series()
                     assert sorted(numbered) == list(range(start, start + height)), f'{name} is not a dense run'
                     at += height
                 assert at == total, 'the runs do not tile the index'
@@ -877,13 +877,13 @@ class TestTheIndexSpace:
         A sweep holds one table per slice and joins them on read, so slices that
         attached different labels of a dimension still have to concatenate.
         """
-        frames = []
+        tables = []
         for members in (['a', 'b'], ['a', 'c']):
             cap = pl.DataFrame({'node': members, 'value': [1.0, 2.0]})
             with sps.build(NODE_CAP_SPEC, {'node': pl.DataFrame({'node': members}), 'cap': cap}) as model:
-                frames.append(model.solve().primal('x'))
+                tables.append(model.solve().primal('x'))
 
-        assert pl.concat(frames).height == 4
+        assert pl.concat(tables).height == 4
 
 
 def _objective_table(program, sources):
@@ -1237,8 +1237,8 @@ def _aligned_for(spec, data, monkeypatch):
     real = compiler_module.Compiler._aligned_bound
     seen = {}
 
-    def spy(self, frame, param, v, alias):
-        out = real(self, frame, param, v, alias)
+    def spy(self, table, param, v, alias):
+        out = real(self, table, param, v, alias)
         seen[param] = out is not None
         return out
 
@@ -1463,7 +1463,7 @@ class TestThePositionalHandoff:
             assert COL not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            indexed = model._engine._model.variables['x'].frame.collect().sort(COL)
+            indexed = model._engine._model.variables['x'].table.collect().sort(COL)
             raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(indexed['j'].dtype))
             expected = indexed.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
@@ -1696,9 +1696,9 @@ def _tidy_cap(names):
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
     schema = Spec(**NETWORK)
     buses = {'from_bus': ['n1', 'n2'], 'to_bus': ['n1', 'n2']}
-    frame = tidy_sources(schema.program, {'cap': wide, **buses})['cap'].collect()
-    table = frame.to_dict(as_series=False)
-    return dict(zip(zip(table['from_bus'], table['to_bus'], strict=True), table['value'], strict=True))
+    table = tidy_sources(schema.program, {'cap': wide, **buses})['cap'].collect()
+    columns = table.to_dict(as_series=False)
+    return dict(zip(zip(columns['from_bus'], columns['to_bus'], strict=True), columns['value'], strict=True))
 
 
 def test_a_named_column_attaches_by_name_not_position():
@@ -1756,8 +1756,8 @@ def test_a_parquet_path_short_of_a_column_is_refused_by_name(tmp_path, name, sho
         'p_max': pl.DataFrame({'g': ['w', 's'], 'value': [5.0, 5.0]}),
     }
     paths = {}
-    for key, frame in {**sources, name: pl.DataFrame(short)}.items():
-        frame.write_parquet(path := tmp_path / f'{key}.parquet')
+    for key, table in {**sources, name: pl.DataFrame(short)}.items():
+        table.write_parquet(path := tmp_path / f'{key}.parquet')
         paths[key] = str(path)
 
     with pytest.raises(DataError, match=match):

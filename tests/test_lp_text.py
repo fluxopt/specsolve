@@ -46,8 +46,8 @@ AWKWARD = [
 
 def _rendered(render, values: list[float]) -> list[str]:
     """*render* applied to ``values`` as the sink applies it, in order."""
-    frame = pl.DataFrame({'v': values}, schema={'v': pl.Float64})
-    return frame.select(render(pl.col('v'))).to_series().to_list()
+    table = pl.DataFrame({'v': values}, schema={'v': pl.Float64})
+    return table.select(render(pl.col('v'))).to_series().to_list()
 
 
 def _signed_text(value: pl.Expr) -> pl.Expr:

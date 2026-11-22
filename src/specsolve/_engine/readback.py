@@ -99,13 +99,13 @@ def _members(
         if not mine.height:
             continue
         dims = declared[name].dims
-        frame = (
-            held.frame.with_columns(pl.col(index).cast(pl.Int64))
+        table = (
+            held.table.with_columns(pl.col(index).cast(pl.Int64))
             .join(mine.lazy(), on=index)
             .sort(index, *carried)
             .select(*dims, *carried)
         )
-        out[name] = _as_strings(frame, model.attached, dims).pipe(collected)
+        out[name] = _as_strings(table, model.attached, dims).pipe(collected)
     return out
 
 
@@ -118,11 +118,11 @@ def _row_index(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -
             f'— got {sorted(coordinate)}. A row is one coordinate: name every dimension once, and '
             'no dimension the constraint does not have.'
         )
-    frame = model.constraints[name].frame
-    schema = frame.collect_schema()
+    table = model.constraints[name].table
+    schema = table.collect_schema()
     ordered = {d: coordinate[d] for d in dims}
     matches = [pl.col(d) == _label(name, d, v, schema[d]) for d, v in ordered.items()]
-    found = frame.filter(matches).pipe(collected) if matches else frame.pipe(collected)
+    found = table.filter(matches).pipe(collected) if matches else table.pipe(collected)
     if not found.height:
         raise SpecsolveError(
             f"constraint '{name}' built no row at {ordered}. Either a `where` left the "
@@ -163,8 +163,8 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
             continue
         dims = model.program.variables[variable].dims
         at = pl.Series('#position', inside - held.start, dtype=pl.UInt32)
-        picked = held.frame.select(pl.col(COL), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
-        schema = held.frame.collect_schema()
+        picked = held.table.select(pl.col(COL), *(pl.col(d) for d in dims)).select(pl.all().gather(at))
+        schema = held.table.collect_schema()
         rendered = coordinate_expr({d: schema[d] for d in dims})
         named.append(
             picked.select(
@@ -219,12 +219,12 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     reduced = np.zeros(handoff.column_count, dtype=np.float64)
     reduced += summed(obj[COL], obj[COEFF].to_numpy())
     reduced -= summed(matrix[COL], matrix[COEFF].to_numpy() * y[entry_rows])
-    for frame, weights in (
+    for table, weights in (
         (quad, quad[COEFF].to_numpy()),
         (qmatrix, -qmatrix[COEFF].to_numpy() * y[index(qmatrix[ROW])]),
     ):
-        reduced += summed(frame[COL_L], weights * x[index(frame[COL_R])])
-        reduced += summed(frame[COL_R], weights * x[index(frame[COL_L])])
+        reduced += summed(table[COL_L], weights * x[index(table[COL_R])])
+        reduced += summed(table[COL_R], weights * x[index(table[COL_L])])
     return pl.Series(VALUE, reduced, dtype=pl.Float64)
 
 
@@ -246,20 +246,20 @@ def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
     return pl.Series(VALUE, slack, dtype=pl.Float64)
 
 
-def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](frame: F, attached: AttachedSources, dims: Sequence[str]) -> F:
-    """*frame* with those of *dims* that attaching encoded as ``Enum`` cast back to ``String``.
+def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](table: F, attached: AttachedSources, dims: Sequence[str]) -> F:
+    """*table* with those of *dims* that attaching encoded as ``Enum`` cast back to ``String``.
 
     A caller joins a dimension column against its own data, and polars refuses
     ``Enum`` against ``String``.
     """
-    return frame.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
+    return table.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
 
 
 def reordered(
     attached: AttachedSources,
     registry: Mapping[str, indices.Indexed],
     declared: Mapping[str, program.Variable | program.Constraint],
-    frames: Mapping[str, pl.DataFrame],
+    tables: Mapping[str, pl.DataFrame],
 ) -> pl.Series:
     """A saved solution's value tables back as the positional vector — the inverse of [`laid_out`][].
 
@@ -272,7 +272,7 @@ def reordered(
     """
     in_start_order = sorted((held.start, name) for name, held in registry.items())
     aligned = [
-        _aligned(attached, name, registry[name], declared[name].dims, frames.get(name)) for _, name in in_start_order
+        _aligned(attached, name, registry[name], declared[name].dims, tables.get(name)) for _, name in in_start_order
     ]
     return pl.concat(aligned) if aligned else pl.Series(_SOLUTION, [], dtype=pl.Float64)
 
@@ -294,7 +294,7 @@ def _aligned(
         )
     if not dims:
         return stored[VALUE].rename(_SOLUTION)
-    order = _as_strings(held.frame.select(*dims).pipe(collected), attached, dims).with_row_index(_INDEX_ORDER)
+    order = _as_strings(held.table.select(*dims).pipe(collected), attached, dims).with_row_index(_INDEX_ORDER)
     joined = order.join(stored, on=list(dims), how='left').sort(_INDEX_ORDER)
     if joined[VALUE].null_count():
         raise SpecsolveError(
@@ -316,7 +316,7 @@ def expressions(
     """
 
     def reader(name: str, expression: program.Expression) -> Callable[[], pl.DataFrame]:
-        return lambda: expression_frame(name, expression, compiler)
+        return lambda: expression_table(name, expression, compiler)
 
     declared = {name: reader(name, e.expression) for name, e in named.items()}
     if lower is None:
@@ -324,12 +324,12 @@ def expressions(
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         name = written if isinstance(written, str) and written in named else 'the expression'
-        return expression_frame(name, lower(written), compiler)
+        return expression_table(name, lower(written), compiler)
 
     return Expressions(declared, evaluate)
 
 
-def expression_frame(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:
+def expression_table(name: str, expr: program.Expression, compiler: Compiler) -> pl.DataFrame:
     """Named expression *expr* evaluated at the solve *compiler* holds — ``(dims…, value)``.
 
     It answers as a constraint over the same expression would: a coordinate a
@@ -346,10 +346,10 @@ def expression_frame(name: str, expr: program.Expression, compiler: Compiler) ->
     context = f"named expression '{name}'"
     terms = compiler.expression(expr, context, reported=True).constant
     dims = compiler.scope.spanned(terms)
-    carrier = indices.frame(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
+    carrier = indices.table(compiler.scope, dims, None, _EXPRESSION_ROW, 0, absence_restrictions(terms)).lazy()
 
     coverage.refuse_null_constants(
-        [_holed(carrier, terms), *(p.frame.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],
+        [_holed(carrier, terms), *(p.table.with_columns(pl.col(CONSTANT).fill_null(0.0)) for p in terms)],
         program.parameters_of(*coverage.divisors_of(expr)),
         context,
         reported_divisor_message,
@@ -372,14 +372,14 @@ def _holed(carrier: pl.LazyFrame, terms: Sequence[Term]) -> pl.LazyFrame:
         column = f'__hole {i}__'
         if p.dims:
             hole = (
-                p.frame.filter(pl.col(CONSTANT).is_null())
+                p.table.filter(pl.col(CONSTANT).is_null())
                 .select(*p.dims)
                 .unique()
                 .with_columns(pl.lit(True).alias(column))
             )
             carrier = carrier.join(hole, on=list(p.dims), how='left')
         else:
-            carrier = carrier.join(p.frame.select(pl.col(CONSTANT).is_null().any().alias(column)), how='cross')
+            carrier = carrier.join(p.table.select(pl.col(CONSTANT).is_null().any().alias(column)), how='cross')
         holed = holed | pl.col(column).fill_null(False)
     return carrier.select(pl.when(holed).then(None).otherwise(0.0).alias(CONSTANT))
 

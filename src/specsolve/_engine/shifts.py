@@ -99,14 +99,14 @@ def walked_dims(scope: Scope, s: program.Translate | program.WindowSum) -> tuple
 
 
 def translate_rows(
-    scope: Scope, frame: pl.LazyFrame, dims: tuple[str, ...], carried: Sequence[str], along: str, offset: int
+    scope: Scope, table: pl.LazyFrame, dims: tuple[str, ...], carried: Sequence[str], along: str, offset: int
 ) -> pl.LazyFrame:
-    """*frame*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
+    """*table*'s rows moved *offset* positions along *along*, the end the move vacates dropped.
 
     The condition form of [`translate_term`][]: a missing row already reads as false.
     """
     order = _Order.of(scope, along, None)
-    return order.remap(frame, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
+    return order.remap(table, carried, dims, moved=pl.col(_ORD_IN) + offset, prepared=lambda f: f)
 
 
 def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Term:
@@ -135,19 +135,19 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     if s.wrap:
         moved = moved % pl.col(GROUP_SIZE)
 
-    def lagged(frame: pl.LazyFrame) -> pl.LazyFrame:
+    def lagged(table: pl.LazyFrame) -> pl.LazyFrame:
         """Every reachable lag beside each row — a named width keeps only the lags its entity reaches."""
-        frame = frame.join(lags, how='cross')
+        table = table.join(lags, how='cross')
         if width_name is None:
-            return frame
+            return table
         widths, keys = _named_amount(scope, order, width_name, _WIDTH)
-        return join_on(frame, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
+        return join_on(table, widths, keys, 'inner').filter(pl.col(_LAG) < pl.col(_WIDTH))
 
-    frame = order.remap(p.frame, p.carried, p.dims, moved=moved, prepared=lagged)
+    table = order.remap(p.table, p.carried, p.dims, moved=moved, prepared=lagged)
     if width_name is not None and scope.absent(width_name):
-        return replace(p, frame=frame, presences=(_widths_defined(scope, order, width_name),))
+        return replace(p, table=table, presences=(_widths_defined(scope, order, width_name),))
     unplaced = (Presence(order.grouping.placed(), order.grouping.keys),) if order.grouping.partial else ()
-    return replace(p, frame=frame, presences=unplaced)
+    return replace(p, table=table, presences=unplaced)
 
 
 def _widths_defined(scope: Scope, order: _Order, name: str) -> Presence:
@@ -189,12 +189,12 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
     if s.wrap:
         moved = (moved % pl.col(GROUP_SIZE) + pl.col(GROUP_SIZE)) % pl.col(GROUP_SIZE)
 
-    def offsetted(frame: pl.LazyFrame) -> pl.LazyFrame:
-        """A per-entity offset is one more equi-join, on keys *frame* already carries."""
+    def offsetted(table: pl.LazyFrame) -> pl.LazyFrame:
+        """A per-entity offset is one more equi-join, on keys *table* already carries."""
         if edge.offsets is None:
-            return frame
+            return table
         offsets, keys = edge.offsets
-        return join_on(frame, offsets, keys, 'inner')
+        return join_on(table, offsets, keys, 'inner')
 
     remap = partial(order.remap, moved=moved, prepared=offsetted)
 
@@ -216,7 +216,7 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         return tuple(travelled(x) for x in p.presences)
 
     def travelled(presence: Presence) -> Presence:
-        source, keyed_by = presence.frame, presence.keyed_by
+        source, keyed_by = presence.table, presence.keyed_by
         if keyed_by is not None and not set(edge.keys).issubset(keyed_by):
             source, keyed_by = scope.widen(source, keyed_by, p.dims), None
         keys = p.dims if keyed_by is None else keyed_by
@@ -226,10 +226,10 @@ def translate_term(scope: Scope, p: Term, s: program.Translate, context: str, *,
         vacated = edge.vacated(scope, keys, beside=source if over_a_variable else None)
         return Presence(pl.concat([moved_presence, vacated], how='vertical_relaxed').unique(), keyed_by)
 
-    frame = remap(p.frame, p.carried, p.dims)
+    table = remap(p.table, p.carried, p.dims)
     if not s.wrap and s.fill is not None and p.kind == 'constant':
-        frame = pl.concat([frame, edge.filled(scope, others, s.fill)], how='vertical_relaxed')
-    return replace(p, frame=frame, presences=travelled_presences())
+        table = pl.concat([table, edge.filled(scope, others, s.fill)], how='vertical_relaxed')
+    return replace(p, table=table, presences=travelled_presences())
 
 
 @dataclass(frozen=True)
@@ -320,8 +320,8 @@ def _named_amount(scope: Scope, order: _Order, name: str, alias: str) -> tuple[p
     """
     dims = scope.program.parameters[name].dims
     keys = [order.grouping.column_of(d) or d for d in dims]
-    frame = scope.data.parameters[name].select(
+    table = scope.data.parameters[name].select(
         *(pl.col(d).alias(key) for d, key in zip(dims, keys, strict=True)),
         pl.col(VALUE).cast(pl.Int64).alias(alias),
     )
-    return frame, keys
+    return table, keys

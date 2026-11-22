@@ -15,13 +15,13 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 import polars as pl
 
 from specsolve._collect import collected
-from specsolve._frames import as_frame
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import Result
 from specsolve._sinks.solver import BASIS_STATUSES
 from specsolve._sources import read_values
 from specsolve._sweep import Sweep
+from specsolve._tables import as_table
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -82,10 +82,10 @@ def read_start(
         read[reader] = {}
         for name, obj in tables.items():
             kind = _kind(reader, per)
-            frame = read_values(kind, name, declared[name].dims, obj, labels, dtype)
+            table = read_values(kind, name, declared[name].dims, obj, labels, dtype)
             if reader != 'primal':
-                _refuse_unknown_statuses(kind, name, frame)
-            read[reader][name] = frame
+                _refuse_unknown_statuses(kind, name, table)
+            read[reader][name] = table
     return read
 
 
@@ -138,9 +138,9 @@ def _read_by(reader: str, program: Program) -> tuple[str, Mapping[str, Variable]
     return 'variable', program.variables
 
 
-def _refuse_unknown_statuses(kind: str, name: str, frame: pl.LazyFrame) -> None:
+def _refuse_unknown_statuses(kind: str, name: str, table: pl.LazyFrame) -> None:
     """Refuse a basis status outside [`BASIS_STATUSES`][]."""
-    held = frame.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
+    held = table.select(pl.col(VALUE).cast(pl.String).unique()).pipe(collected)[VALUE]
     if unknown := sorted(set(held.drop_nulls()) - set(BASIS_STATUSES)):
         raise SpecsolveError(
             f"{kind} '{name}' gives the basis status {', '.join(map(repr, unknown))}, and a status is one of "
@@ -159,7 +159,7 @@ def _refuse_unknown_statuses_of(tables: Mapping[str, Mapping[str, Source]], prog
             continue
         per, _ = _read_by(reader, program)
         for name, obj in named.items():
-            if (table := as_frame(obj)) is not None and VALUE in table.collect_schema().names():
+            if (table := as_table(obj)) is not None and VALUE in table.collect_schema().names():
                 _refuse_unknown_statuses(_kind(reader, per), name, table)
 
 
@@ -218,7 +218,7 @@ def _cut_one(obj: Source, column: str, cut: Callable[[pl.LazyFrame], pl.LazyFram
     A shape that is not a table, such as one number, carries no column to cut
     on and reaches the slice whole.
     """
-    table = as_frame(obj)
+    table = as_table(obj)
     if table is None:
         return obj
     piece = (cut(table) if column in table.collect_schema().names() else table).pipe(collected)
@@ -229,8 +229,8 @@ def _start_tables(start: Sweep | Result | Start, column: str) -> dict[str, dict[
     """*start* as tables keyed as [`Start`][] is, an earlier sweep's keyed by *column*."""
     if isinstance(start, Result):
         return {
-            reader: {name: frame.pipe(collected) for name, frame in frames.items()}
-            for reader, frames in start._start().items()
+            reader: {name: table.pipe(collected) for name, table in tables.items()}
+            for reader, tables in start._start().items()
         }
     if isinstance(start, Sweep):
         return {reader: dict(named) for reader, named in start._start(column).items()}

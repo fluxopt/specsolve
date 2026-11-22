@@ -107,8 +107,8 @@ def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
     """
     lo = handoff.linear_row_count
 
-    def _keyed(frame: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
-        return frame.select(
+    def _keyed(table: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
+        return table.select(
             pl.col(ROW).cast(pl.Int64),
             pl.lit(part, dtype=pl.Int64).alias('part'),
             at.cast(pl.Int64).alias('at'),

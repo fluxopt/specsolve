@@ -63,11 +63,11 @@ def result():
 
 
 def test_a_referenced_expression_reads_the_value_its_constraint_pinned(result):
-    frame = result.evaluate('total_gen')
-    assert frame.columns == ['snapshot', 'value'], (
+    table = result.evaluate('total_gen')
+    assert table.columns == ['snapshot', 'value'], (
         'an expression table is (dims…, value), dimensions in the order the spec declares them'
     )
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     assert got == pytest.approx({0: 50.0, 1: 120.0, 2: 80.0}), (
         'balance pins total_gen to load, so the reader must hand back exactly the load values'
     )
@@ -81,16 +81,16 @@ def test_an_expression_nothing_references_reads_the_value_the_primal_implies(res
         .agg((pl.col('value') * pl.col('cost')).sum().alias('value'))
         .sort('snapshot')
     )
-    frame = result.evaluate('spend')
-    assert frame.sort('snapshot').equals(external), (
+    table = result.evaluate('spend')
+    assert table.sort('snapshot').equals(external), (
         'spend is referenced by nothing, and must still equal sum(p * cost) computed from the primal by hand'
     )
 
 
 def test_a_scalar_expression_is_one_row_matching_the_objective(result):
-    frame = result.evaluate('total_cost')
-    assert frame.columns == ['value'] and frame.height == 1, 'an expression with no dimensions is a single value row'
-    assert frame.item() == pytest.approx(result.objective), (
+    table = result.evaluate('total_cost')
+    assert table.columns == ['value'] and table.height == 1, 'an expression with no dimensions is a single value row'
+    assert table.item() == pytest.approx(result.objective), (
         'total_cost restates the objective, so the two numbers must agree'
     )
 
@@ -111,8 +111,8 @@ def test_a_variable_free_expression_is_legal_and_reads_its_constant(result):
     ],
 )
 def test_the_table_carries_exactly_the_dims_the_expression_survives_over(result, name, dims):
-    frame = result.evaluate(name)
-    assert set(frame.columns) - {'value'} == dims, (
+    table = result.evaluate(name)
+    assert set(table.columns) - {'value'} == dims, (
         'the returned table answers over the dimensions the expression still ranges over after its sums'
     )
 
@@ -139,12 +139,12 @@ def test_an_absent_coordinate_has_no_row():
         'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [200.0, 0.0]}),
         'load': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [50.0, 120.0, 80.0]}),
     }
-    frame = sps.solve(masked, data).evaluate('scaled')
-    assert frame['generator'].unique().to_list() == ['g1'], (
+    table = sps.solve(masked, data).evaluate('scaled')
+    assert table['generator'].unique().to_list() == ['g1'], (
         'absence propagates into a reader the way it does into a constraint (the operator rules): the absent '
         "generator's coordinates have no rows rather than zeros"
     )
-    assert frame.height == 3, 'the surviving generator keeps one row per snapshot'
+    assert table.height == 3, 'the surviving generator keeps one row per snapshot'
 
 
 def test_an_entry_of_degree_two_reads_the_primal_squared(result):
@@ -193,8 +193,8 @@ def test_an_operand_that_is_a_sum_is_read_whole(result, expression, of_load):
     Before #1777 the power and the quotient were taken of each generator's
     output and added: `p1² + p2²`, and `inf` wherever a generator produced nothing.
     """
-    frame = result.evaluate(expression)
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    table = result.evaluate(expression)
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     loads = {0: 50.0, 1: 120.0, 2: 80.0}
     assert got == pytest.approx({t: of_load(v) for t, v in loads.items()}), 'the sum is taken whole, as its total'
 
@@ -271,16 +271,16 @@ def test_a_quotient_is_absent_where_its_divisor_is_absent_or_zero(data, expressi
     Before #1775, an absent divisor was refused as if a parameter were short of
     a row, and a zero one read `inf`, or `nan` over a zero numerator.
     """
-    frame = sps.solve(override(SIZED, **{'expressions.q': expression}), data).evaluate('q')
-    got = dict(zip(frame['g'], frame['value'], strict=True))
+    table = sps.solve(override(SIZED, **{'expressions.q': expression}), data).evaluate('q')
+    got = dict(zip(table['g'], table['value'], strict=True))
     assert got == pytest.approx(expected), 'the coordinate whose divisor is absent or zero has no row, not inf'
 
 
 def test_a_zero_term_does_not_make_a_divisor_that_is_a_sum_zero():
     """`sum(fixed, over=g)` is 4 + 0: the zero rule reads the total, so every coordinate divides by 4 and none is absent."""
     spec = override(SIZED, **{'expressions.q': 'out / sum(fixed, over=g)'})
-    frame = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
-    got = dict(zip(frame['g'], frame['value'], strict=True))
+    table = sps.solve(spec, GIVEN_ZERO_AT_C).evaluate('q')
+    got = dict(zip(table['g'], table['value'], strict=True))
     assert got == pytest.approx({'a': 0.5, 'b': 1.25, 'c': 0.25}), 'out divided by the total 4, at every coordinate'
 
 
@@ -291,8 +291,8 @@ def test_a_sum_of_quotients_skips_the_one_whose_divisor_is_absent_or_zero(data):
     Before #1775 the absent term was refused as a short parameter, and the
     zero one made the whole sum `inf`.
     """
-    frame = sps.solve(override(SIZED, **{'expressions.q': 'sum(out / size, over=g)'}), data).evaluate('q')
-    assert frame['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
+    table = sps.solve(override(SIZED, **{'expressions.q': 'sum(out / size, over=g)'}), data).evaluate('q')
+    assert table['value'].to_list() == pytest.approx([1.5]), 'the sum reads 2/4 + 5/5 and skips c'
 
 
 @pytest.mark.parametrize(
@@ -424,9 +424,9 @@ def test_an_expression_the_file_never_declared_reads_what_the_primal_implies(res
         .agg((pl.col('value') * pl.col('cost') * 2).sum().alias('value'))
         .sort('snapshot')
     )
-    frame = result.evaluate('sum(p * cost * 2, over=generator)')
-    assert frame.columns == ['snapshot', 'value'], 'an evaluated table is (dims…, value), like a declared one'
-    assert frame.sort('snapshot').equals(external), (
+    table = result.evaluate('sum(p * cost * 2, over=generator)')
+    assert table.columns == ['snapshot', 'value'], 'an evaluated table is (dims…, value), like a declared one'
+    assert table.sort('snapshot').equals(external), (
         'an expression nothing declared is evaluated at the same primal a declared one is'
     )
 
@@ -443,14 +443,14 @@ def test_a_mapping_carries_the_cases_a_string_cannot_say():
         'parameters': {**SPEC['parameters'], 'peak': {'dims': ['snapshot'], 'dtype': 'bool', 'missing': 'neutral'}},
     }
     data = sources() | {'peak': pl.DataFrame({'snapshot': [0, 1, 2], 'value': [False, True, False]})}
-    frame = sps.solve(spec, data).evaluate(
+    table = sps.solve(spec, data).evaluate(
         {
             'dims': ['snapshot'],
             'cases': {'busy': {'when': 'peak', 'expression': 'total_gen'}},
             'otherwise': 0,
         }
     )
-    got = dict(zip(frame['snapshot'], frame['value'], strict=True))
+    got = dict(zip(table['snapshot'], table['value'], strict=True))
     assert got == pytest.approx({0: 0.0, 1: 120.0, 2: 0.0}), (
         'the case holds only where peak does, and otherwise supplies the rest'
     )
@@ -528,8 +528,8 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
 def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
     monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
-    frame = sps.load_archive(archived).result.evaluate('total_gen')
-    assert frame.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
+    table = sps.load_archive(archived).result.evaluate('total_gen')
+    assert table.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
 
 
 def test_a_closed_result_refuses_to_evaluate():

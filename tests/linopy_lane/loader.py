@@ -22,8 +22,8 @@ import polars as pl
 import xarray as xr
 from mathspec import program as _program
 
-from specsolve._frames import to_pandas
 from specsolve._messages import coordinate_text, missing_row_message
+from specsolve._tables import to_pandas
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -137,8 +137,8 @@ def _refuse_a_missing_row(
         return
     labels = [tidy[dim(column)].select(pl.col(dim(column)).alias(column)) for column in columns]
     product = labels[0]
-    for frame in labels[1:]:
-        product = product.join(frame, how='cross')
+    for table in labels[1:]:
+        product = product.join(table, how='cross')
     schema = product.collect_schema()
     held = rows.select(pl.col(column).cast(schema[column]) for column in columns)
     gaps = product.join(held, on=list(columns), how='anti').collect()
@@ -163,21 +163,21 @@ def _relation_arrays(
     out: dict[tuple[str, str], xr.DataArray] = {}
     for name, relation in program.relations.items():
         dims = [relation.dim(role) for role in relation.key]
-        frame = to_pandas(tidy[name].collect())
-        keys = [frame[role].to_numpy() for role in relation.key]
+        table = to_pandas(tidy[name].collect())
+        keys = [table[role].to_numpy() for role in relation.key]
         keyed = pd.Index(keys[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(keys, names=dims)
         index = pd.MultiIndex.from_product([master[d] for d in dims], names=dims) if len(dims) > 1 else master[dims[0]]
         shape = tuple(len(master[d]) for d in dims)
         coords = {d: master[d] for d in dims}
         for value in relation.values:
-            padded = pd.Series(frame[value].to_numpy(), index=keyed).reindex(index)
+            padded = pd.Series(table[value].to_numpy(), index=keyed).reindex(index)
             out[name, value] = xr.DataArray(padded.to_numpy().reshape(shape), dims=dims, coords=coords, name=name)
         if not relation.values:
-            out[name, ''] = _membership(relation, frame, master)
+            out[name, ''] = _membership(relation, table, master)
     return out
 
 
-def _membership(relation: Any, frame: pd.DataFrame, master: Mapping[str, pd.Index]) -> xr.DataArray:
+def _membership(relation: Any, table: pd.DataFrame, master: Mapping[str, pd.Index]) -> xr.DataArray:
     """A bare relation as one where its rows are and zero elsewhere, over its key's *roles*.
 
     The roles name the axes because two of them may range over one dimension —
@@ -185,7 +185,7 @@ def _membership(relation: Any, frame: pd.DataFrame, master: Mapping[str, pd.Inde
     """
     roles = list(relation.key)
     index = pd.MultiIndex.from_product([master[relation.dim(role)] for role in roles], names=roles)
-    held = pd.MultiIndex.from_arrays([frame[role].to_numpy() for role in roles], names=roles)
+    held = pd.MultiIndex.from_arrays([table[role].to_numpy() for role in roles], names=roles)
     shape = tuple(len(master[relation.dim(role)]) for role in roles)
     coords = {role: master[relation.dim(role)].rename(role) for role in roles}
     return xr.DataArray(index.isin(held).astype(float).reshape(shape), dims=roles, coords=coords)
@@ -214,11 +214,11 @@ def load_parameters(
     """
     arrays: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        frame = tidy[pname].collect()
-        if not pdef.dims and frame.is_empty():
+        table = tidy[pname].collect()
+        if not pdef.dims and table.is_empty():
             arrays[pname] = xr.DataArray(_fill(pdef, pdef.dtype == 'bool'))
             continue
-        arr = _from_tidy(frame, pdef.dims)
+        arr = _from_tidy(table, pdef.dims)
         if pdef.dims:
             if pdef.missing == 'refused':
                 _refuse_a_missing_row('parameter', pname, tidy[pname], pdef.dims, lambda d: d, tidy)
@@ -266,16 +266,16 @@ def _fill(pdef: program.Parameter, flag: bool) -> Any:
     return False if flag else np.nan
 
 
-def _from_tidy(frame: pl.DataFrame, dims: Sequence[str]) -> xr.DataArray:
+def _from_tidy(table: pl.DataFrame, dims: Sequence[str]) -> xr.DataArray:
     """A tidy ``(dims…, value)`` table as an array.
 
     A value with no dimensions keeps the dtype it arrived with, as a column does — a
     ``bool`` cast to ``0.0`` would read as *defined* under a bare ``where``.
     """
     if not dims:
-        return xr.DataArray(frame['value'].to_numpy()[0])
-    columns = [frame[d].to_numpy() for d in dims]
+        return xr.DataArray(table['value'].to_numpy()[0])
+    columns = [table[d].to_numpy() for d in dims]
     index = (
         pd.Index(columns[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(columns, names=list(dims))
     )
-    return xr.DataArray.from_series(pd.Series(frame['value'].to_numpy(), index=index))
+    return xr.DataArray.from_series(pd.Series(table['value'].to_numpy(), index=index))

@@ -168,7 +168,7 @@ class Assembly:
         )
 
     def _matrix_share(
-        self, frames: list[pl.LazyFrame], name: str, *expressions: program.Expression
+        self, tables: list[pl.LazyFrame], name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
         """One constraint's share: in ``(row, col)`` order, repeated cells summed.
 
@@ -176,7 +176,7 @@ class Assembly:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(frames).pipe(collected)
+        stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, (ROW, COL), ordered=True)
         return share, stacked.get_column(ROW).unique() if dropped else _ordered_rows(share)
@@ -198,7 +198,7 @@ class Assembly:
         if rowless(v, self.attached):
             indexed = indices.nothing(self.scope, v.dims, COL)
         else:
-            indexed = indices.frame(self.scope, v.dims, v.where, COL, start)
+            indexed = indices.table(self.scope, v.dims, v.where, COL, start)
         self.n_cols = start + indexed.height
         self.variables[name] = indices.Indexed(indexed.lazy(), start, indexed.height)
         if not indexed.height:
@@ -235,12 +235,12 @@ class Assembly:
         span = cardinality[s.along] * stride
 
         if v.where is None:
-            frame = pl.select(pl.int_range(held.height, dtype=pl.Int64).alias('#position')).lazy()
+            table = pl.select(pl.int_range(held.height, dtype=pl.Int64).alias('#position')).lazy()
             place, col = pl.col('#position'), (pl.col('#position') + held.start)
         else:
-            frame = held.frame
+            table = held.table
             place, col = self.scope.row_major(v.dims, self.scope.ordinal_of), pl.col(COL)
-        placed = frame.select(
+        placed = table.select(
             ((place // span) * stride + place % stride).alias('#set position'),
             ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES[COL]).alias(COL),
@@ -274,7 +274,7 @@ class Assembly:
         start = self.n_rows
         if rowless(c, self.attached):
             return self._without_a_row(name, indices.nothing(self.scope, c.dims, ROW), start)
-        admitted = None if c.where is None else indices.frame(self.scope, c.dims, c.where, ROW, start)
+        admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
         admits = declares_quadratic(c)
@@ -285,7 +285,7 @@ class Assembly:
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         restrictions = absence_restrictions([p for p, _ in (*linear, *quadratic, *constant)])
         if admitted is None or restrictions:
-            indexed = indices.frame(self.scope, c.dims, c.where, ROW, start, restrictions)
+            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, restrictions)
         else:
             indexed = admitted
         if restrictions:
@@ -293,31 +293,31 @@ class Assembly:
             if declared > indexed.height:
                 self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
         self.n_rows = start + indexed.height
-        frame = indexed.lazy()
-        self.constraints[name] = indices.Indexed(frame, start, indexed.height)
+        table = indexed.lazy()
+        self.constraints[name] = indices.Indexed(table, start, indexed.height)
 
         subject = f"constraint '{name}'"
         coverage.refuse_null_constants(
-            coverage.narrowed_to_rows(frame, [p for p, _ in constant]),
+            coverage.narrowed_to_rows(table, [p for p, _ in constant]),
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        rows = coverage.constant_side(self.scope, frame, constant, c, subject)
+        rows = coverage.constant_side(self.scope, table, constant, c, subject)
 
         if not linear and not quadratic:
             none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
             rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
-        frames = []
+        tables = []
         carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
         dense = c.where is None and not restrictions
         for p, sign in linear:
             if dense and set(p.dims) == set(c.dims):
-                placed = p.frame.with_columns(self._dense_row(c.dims, start).alias(ROW))
+                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
             else:
-                placed = join_on(frame, p.frame, p.dims, 'inner', maintain_order=carried_order)
-            frames.append(
+                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
+            tables.append(
                 placed.select(
                     ROW,
                     pl.col(COL).cast(_DTYPES[COL]).alias(COL),
@@ -325,11 +325,11 @@ class Assembly:
                 )
             )
         matrix, term_rows = (
-            self._matrix_share(frames, subject, c.lhs, c.rhs)
-            if frames
+            self._matrix_share(tables, subject, c.lhs, c.rhs)
+            if tables
             else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
         )
-        qmatrix = self._quadratic_share(frame, quadratic, name, c)
+        qmatrix = self._quadratic_share(table, quadratic, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, qmatrix.get_column(ROW).unique()]).unique()
         rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
@@ -356,7 +356,7 @@ class Assembly:
         """The row a coordinate lands on in a block built over the whole product of *dims* from *start*.
 
         Such a block numbers its rows row-major over the declared ordinals
-        ([`indices.frame`][specsolve._engine.indices.frame]), so a term
+        ([`indices.table`][specsolve._engine.indices.table]), so a term
         computes its row from its own coordinate rather than joining the block.
         The door admits no label outside its dimension, so every coordinate a
         term carries is a row of the block, as the join would find.
@@ -364,7 +364,7 @@ class Assembly:
         return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.ordinal_of)
 
     def _quadratic_share(
-        self, frame: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
+        self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
         """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
 
@@ -373,15 +373,15 @@ class Assembly:
         """
         if not quadratic:
             return None
-        frames = [
-            join_on(frame, p.frame, p.dims, 'inner').select(
+        tables = [
+            join_on(table, p.table, p.dims, 'inner').select(
                 ROW,
                 *_ordered_pair(),
                 (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
             )
             for p, sign in quadratic
         ]
-        stacked = pl.concat(frames).pipe(collected)
+        stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
         share, _ = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
         return share
@@ -413,10 +413,10 @@ class Assembly:
         matrix = matrix.with_columns(pl.col(ROW).replace_strict(remap))
         if qmatrix is not None:
             qmatrix = qmatrix.with_columns(pl.col(ROW).replace_strict(remap))
-        kept_frame = (
-            self.constraints[name].frame.filter(pl.col(ROW).is_in(kept)).with_columns(pl.col(ROW).replace_strict(remap))
+        kept_table = (
+            self.constraints[name].table.filter(pl.col(ROW).is_in(kept)).with_columns(pl.col(ROW).replace_strict(remap))
         )
-        self.constraints[name] = indices.Indexed(kept_frame, start, surviving.height)
+        self.constraints[name] = indices.Indexed(kept_table, start, surviving.height)
         return rows, matrix, qmatrix, start + surviving.height
 
     def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
@@ -430,20 +430,20 @@ class Assembly:
             return None
         comp = self.compiler.expression(o.expression, 'objective', admits_quadratic=True)
         coverage.refuse_null_constants(
-            [p.frame for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
+            [p.table for p in comp.constant], program.parameters_of(*coverage.divisors_of(o.expression)), 'objective'
         )
         for p in comp.constant:
             assert not p.dims, (
                 f'objective constant term has dimensions {list(p.dims)} — the language refuses a '
                 f'variable-free term of an objective that carries any'
             )
-            self.obj_const += p.frame.select(pl.col(CONSTANT).sum()).pipe(collected).item() or 0.0
+            self.obj_const += p.table.select(pl.col(CONSTANT).sum()).pipe(collected).item() or 0.0
         self.obj_sense = o.sense
         self.quad = self._objective_quadratic(comp.quadratic, o.expression)
         if not comp.linear:
             return None
-        frames = [p.frame.select(pl.col(COL).cast(_DTYPES[COL]).alias(COL), pl.col(COEFF)) for p in comp.linear]
-        stacked = pl.concat(frames).pipe(collected)
+        tables = [p.table.select(pl.col(COL).cast(_DTYPES[COL]).alias(COL), pl.col(COEFF)) for p in comp.linear]
+        stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', o.expression)
         objective, _ = _collapsed(stacked, (COL,), ordered=False, space=self.n_cols)
         self.measured.objective_range = _magnitude_range(objective, COEFF)
@@ -458,8 +458,8 @@ class Assembly:
         """
         if not quadratic:
             return None
-        frames = [p.frame.select(*_ordered_pair(), pl.col(COEFF)) for p in quadratic]
-        stacked = pl.concat(frames).pipe(collected)
+        tables = [p.table.select(*_ordered_pair(), pl.col(COEFF)) for p in quadratic]
+        stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, 'objective', expression)
         quad, _ = _collapsed(stacked, (COL_L, COL_R), ordered=True)
         return quad
@@ -507,7 +507,7 @@ def _whole(bound: pl.Expr, inward: pl.Expr) -> pl.Expr:
     return pl.when((bound - nearest).abs() <= 1e-6).then(nearest).otherwise(inward)
 
 
-def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
+def _magnitude_range(table: pl.DataFrame, *columns: str) -> tuple[float, float] | None:
     """The smallest and largest magnitude across *columns*, or ``None`` where none has one.
 
     Zero and infinity are dropped, as in the ``Bound`` and ``RHS`` lines a solver prints.
@@ -522,7 +522,7 @@ def _magnitude_range(frame: pl.DataFrame, *columns: str) -> tuple[float, float] 
             value.filter(finite & down).max().alias(f'#low-{i}'),
             value.filter(finite & down).min().alias(f'#high-{i}'),
         ]
-    answered = frame.select(sides).row(0, named=True)
+    answered = table.select(sides).row(0, named=True)
     lows = [abs(bound) for name, bound in answered.items() if name.startswith('#low') and bound is not None]
     highs = [abs(bound) for name, bound in answered.items() if name.startswith('#high') and bound is not None]
     return (min(lows), max(highs)) if lows else None
@@ -628,8 +628,8 @@ def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, 
     return np.cumsum(starts, out=starts)
 
 
-def _stack(frames: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
-    """Concatenate *frames*, or an empty table of *columns* when there are none."""
-    if frames:
-        return pl.concat(frames)
+def _stack(tables: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame:
+    """Concatenate *tables*, or an empty table of *columns* when there are none."""
+    if tables:
+        return pl.concat(tables)
     return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})

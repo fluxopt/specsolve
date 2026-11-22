@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 class Indexed:
     """One entry's indexed table, and the contiguous run of solver indices it owns."""
 
-    frame: pl.LazyFrame
+    table: pl.LazyFrame
     start: int
     height: int
 
@@ -46,10 +46,10 @@ class Indexed:
         no columns no rows, so a scalar's one value would be lost. A share of the
         wrong length raises rather than padding with nulls.
         """
-        return self.frame.with_columns(self.share(values)).select(*dims, values.name)
+        return self.table.with_columns(self.share(values)).select(*dims, values.name)
 
 
-def frame(
+def table(
     scope: Scope,
     dims: tuple[str, ...],
     where: program.Mask | None,
@@ -100,7 +100,7 @@ def frame(
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
-    """[`frame`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
+    """[`table`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
     schema = {d: scope.data.dimensions[d].collect_schema()[LABEL] for d in dims}
     return pl.DataFrame(schema=schema | {index: pl.Int64})
 

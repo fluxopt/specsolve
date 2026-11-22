@@ -887,7 +887,9 @@ def test_every_table_an_archive_holds_says_which_run_it_came_from(
     )
     answer = case.sweep if isinstance(case, sps.types.SweepArchive) else case.result
     assert answer.primal('p').equals(live), 'a table read back is the table the solve returned'
-    assert all(RUN not in frame.columns for frame in case.sources.values()), 'and a source read back is the table given'
+    assert all(RUN not in source.columns for source in case.sources.values()), (
+        'and a source read back is the table given'
+    )
 
 
 def test_a_saved_answer_that_was_never_archived_names_no_run(

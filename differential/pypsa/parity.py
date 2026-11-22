@@ -321,10 +321,10 @@ def _keyed_model(model) -> dict[str, object]:
     def keys(held: dict) -> dict[int, tuple]:
         out = {}
         for name, indexed in held.items():
-            frame = indexed.frame.collect()
-            index = COL if COL in frame.columns else ROW
-            dims = [c for c in frame.columns if c != index]
-            for row in frame.iter_rows(named=True):
+            table = indexed.table.collect()
+            index = COL if COL in table.columns else ROW
+            dims = [c for c in table.columns if c != index]
+            for row in table.iter_rows(named=True):
                 out[row[index]] = (name, *(str(row[d]) for d in dims))
         return out
 
@@ -376,16 +376,16 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
     """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
-    frame `sps.solve` received, floats rounded to twelve places because a
+    table `sps.solve` received, floats rounded to twelve places because a
     ``pow`` differs by an ulp between libms and the gate is a byte diff. Once
     per table, under the lowest rung that feeds it.
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
     for name, source in tidy_sources(declared.program, sources).items():
-        frame = source.collect() if hasattr(source, 'collect') else source
-        if len(frame) and name not in FIRST[spec]:
-            frame.sort(frame.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
+        table = source.collect() if hasattr(source, 'collect') else source
+        if len(table) and name not in FIRST[spec]:
+            table.sort(table.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
             FIRST[spec].add(name)
 
 
@@ -428,8 +428,8 @@ def _dual_rows(constraint) -> pd.DataFrame:
     """A PyPSA constraint's dual per coordinate, with the label of the row that carries it."""
     if not constraint.dual.ndim:
         return pd.DataFrame({'dual': [float(constraint.dual)], ROW: [int(constraint.labels)]})
-    frame = constraint.dual.to_dataframe('dual')
-    return frame.assign(row=constraint.labels.to_series().reindex(frame.index).to_numpy()).reset_index()
+    table = constraint.dual.to_dataframe('dual')
+    return table.assign(row=constraint.labels.to_series().reindex(table.index).to_numpy()).reset_index()
 
 
 def _gc_dual(constraint, label: str) -> pd.DataFrame:

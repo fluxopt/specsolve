@@ -131,8 +131,8 @@ def _drop_label(sources: dict[str, Any], dim: str, label: Any) -> None:
             sources[name] = {k: v for k, v in source.items() if k != label}
 
 
-def _without_row(frame: pl.DataFrame, i: int) -> pl.DataFrame:
-    return pl.concat([frame.slice(0, i), frame.slice(i + 1)])
+def _without_row(table: pl.DataFrame, i: int) -> pl.DataFrame:
+    return pl.concat([table.slice(0, i), table.slice(i + 1)])
 
 
 def _smaller(text: str) -> Iterator[str]:

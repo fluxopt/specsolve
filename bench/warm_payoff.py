@@ -201,7 +201,7 @@ def sweep(n_gen: int, n_snap: int = SNAPSHOTS, steps: int = 200) -> Run:
         """The part of *dispatch* this spec declares — `feasibility` reads no cost."""
         known = to_spec(spec)
         names = {**known.parameters, **known.dimensions, **known.relations}
-        return {name: frame for name, frame in {**dispatch, **extra}.items() if name in names}
+        return {name: table for name, table in {**dispatch, **extra}.items() if name in names}
 
     cuts = _empty_cuts()
     capacity = pl.DataFrame({'generator': gens, 'value': [0.0] * n_gen})

@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 class Carrier:
     """A table a walk joins onto, each attachment made at most once."""
 
-    def __init__(self, frame: pl.LazyFrame) -> None:
-        self.frame = frame
+    def __init__(self, table: pl.LazyFrame) -> None:
+        self.table = table
         self._attached: set[str] = set()
 
     def once(self, alias: str, attach: Callable[[pl.LazyFrame, str], pl.LazyFrame]) -> str:
         """Join *attach* onto the table under *alias*, unless it already is, and return *alias*."""
         if alias not in self._attached:
-            self.frame = attach(self.frame, alias)
+            self.table = attach(self.table, alias)
             self._attached.add(alias)
         return alias
 
@@ -81,7 +81,7 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
 
 
 def compile_condition(
-    scope: Scope, frame: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
+    scope: Scope, table: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """The table with the condition's parameters joined, and the boolean expression.
 
@@ -91,7 +91,7 @@ def compile_condition(
     that reads the table verifies it ([`indices.in_position_order`][]).
     """
     certain = _certain_names(mask)
-    carrier = Carrier(frame)
+    carrier = Carrier(table)
     serial = itertools.count()
 
     def join_param(param: str) -> str:
@@ -101,12 +101,12 @@ def compile_condition(
             lambda f, alias: scope.parameter_join(f, param, dims, alias, f"where-parameter '{param}'", how),
         )
 
-    def refuse_outside_frame(reading: str, dimension: str) -> None:
+    def refuse_outside_table(reading: str, dimension: str) -> None:
         """A condition reading a dimension outside *dims* — refused at load, asserted here."""
         assert dimension in dims, f'where-comparison on {reading} is outside the dimensions {list(dims)}'
 
     def join_ordinal(dimension: str) -> str:
-        refuse_outside_frame(f"dimension '{dimension}'", dimension)
+        refuse_outside_table(f"dimension '{dimension}'", dimension)
         return carrier.once(
             f'__where ord {dimension}__',
             lambda f, alias: f.join(
@@ -121,7 +121,7 @@ def compile_condition(
         assert p.partition is not None, 'an ungrouped position counts along the whole dimension and asks for no table'
         grouping = Grouping.of(scope.data, p.partition)
         for dim in grouping.keys:
-            refuse_outside_frame(f"dimension '{dim}'", dim)
+            refuse_outside_table(f"dimension '{dim}'", dim)
         _refuse_short_groups(p, grouping)
         target = pl.lit(p.position) if p.position >= 0 else pl.col(GROUP_SIZE) + p.position
         offset = pl.col(GROUP_RANK) - target
@@ -137,7 +137,7 @@ def compile_condition(
     def join_relation(relation: str, dims: tuple[str, ...], column: str | None) -> str:
         """*relation* read at *dims* — one value column, or with ``None`` whether a row is there at all."""
         for dim in dims:
-            refuse_outside_frame(f"relation '{relation}' reading dimension '{dim}'", dim)
+            refuse_outside_table(f"relation '{relation}' reading dimension '{dim}'", dim)
         shape = scope.program.relations[relation]
         roles = shape.key or shape.roles
         assert tuple(shape.dim(role) for role in roles) == dims, f"relation '{relation}' is read at its key"
@@ -159,7 +159,7 @@ def compile_condition(
         The alias is numbered: two leaves of one condition can reduce the same table to different answers.
         """
         for dimension in on:
-            refuse_outside_frame(f'where {label}', dimension)
+            refuse_outside_table(f'where {label}', dimension)
         alias = f'__where {label} {next(serial)}__'
         return carrier.once(alias, lambda f, a: join_on(f, build(a), on, 'left'))
 
@@ -187,7 +187,7 @@ def compile_condition(
             alias = join_reduction(f'at {p.columns.name}', lambda a: _joined(scope, p, a), on)
             return falsy_if_null(pl.col(alias))
         if isinstance(p, program.DimensionComparison):
-            refuse_outside_frame(f"dimension '{p.name}'", p.name)
+            refuse_outside_table(f"dimension '{p.name}'", p.name)
             return _compare(_dimension_column(p.name, p.value), p.op, p.value)
         if isinstance(p, program.DimensionPosition):
             if p.partition is not None:
@@ -219,7 +219,7 @@ def compile_condition(
             return falsy_if_null(pl.col(given)) & defined
         if isinstance(p, program.VariableDefined):
             on = list(scope.program.variables[p.name].dims)
-            coordinates = scope.variables[p.name].frame.select(*on)
+            coordinates = scope.variables[p.name].table.select(*on)
             if p.name in certain:
                 carrier.once(f'__where defined {p.name}__', lambda f, _: f.join(coordinates, on=on, how='semi'))
                 return pl.lit(value=True)
@@ -243,7 +243,7 @@ def compile_condition(
         assert_never(p)
 
     condition = walk(mask.root)
-    return carrier.frame, condition
+    return carrier.table, condition
 
 
 def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:

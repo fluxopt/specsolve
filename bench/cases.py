@@ -160,16 +160,16 @@ def _seed(shape: Shape) -> np.random.Generator:
     return np.random.default_rng(int.from_bytes(digest, 'big'))
 
 
-def _dump(frames: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
+def _dump(tables: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
     paths = {}
-    for name, df in frames.items():
+    for name, df in tables.items():
         path = (dest / f'{name}.parquet').absolute()
         df.to_parquet(path, index=False)
         paths[name] = str(path)
     return paths
 
 
-def _installed_frame(nodes: list[str], techs: list[str], installed: np.ndarray, capacity: np.ndarray) -> pd.DataFrame:
+def _installed_table(nodes: list[str], techs: list[str], installed: np.ndarray, capacity: np.ndarray) -> pd.DataFrame:
     """The (node, tech) pairs that exist, tidy — the table *is* the sparsity."""
     live = installed.reshape(-1)
     return pd.DataFrame(
@@ -295,7 +295,7 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(nodes, techs, installed, capacity),
+            'installed': _installed_table(nodes, techs, installed, capacity),
             'cost': pd.DataFrame({'tech': techs, 'value': cost}),
             'demand': pd.DataFrame(
                 {
@@ -346,7 +346,7 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(nodes, techs, installed, capacity),
+            'installed': _installed_table(nodes, techs, installed, capacity),
             'produces': pd.DataFrame({'tech': techs, 'carrier': [carriers[c] for c in serves], 'value': efficiency}),
             'cost': pd.DataFrame({'tech': techs, 'value': rng.uniform(10.0, 100.0, len(techs))}),
             'demand': pd.DataFrame(
@@ -444,7 +444,7 @@ def _curves_data(shape: Shape, dest: Path) -> dict[str, str]:
     y = np.concatenate([np.zeros((n_unit, 1)), np.cumsum(slopes * np.diff(x, axis=1), axis=1)], axis=1)
     load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
     curve = {'unit': np.repeat(units, CURVE_POINTS), 'bp': np.tile(np.arange(CURVE_POINTS), n_unit)}
-    frames = {
+    tables = {
         'p_max': pd.DataFrame({'unit': units, 'value': p_max}),
         'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
         'bp_x': pd.DataFrame({**curve, 'value': x.ravel()}),
@@ -453,7 +453,7 @@ def _curves_data(shape: Shape, dest: Path) -> dict[str, str]:
         'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
         'bp': pd.DataFrame({'bp': np.arange(CURVE_POINTS)}),
     }
-    return _dump(frames, dest)
+    return _dump(tables, dest)
 
 
 # --------------------------------------------------------------------------
@@ -716,7 +716,7 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(buses, techs, installed, capacity).rename(columns={'node': 'bus'}),
+            'installed': _installed_table(buses, techs, installed, capacity).rename(columns={'node': 'bus'}),
             'p_max': pd.DataFrame(
                 {
                     'snapshot': np.repeat(np.arange(n_snap), len(bus_of)),
@@ -818,9 +818,9 @@ def _milp_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     milp = SHAPES['milp']
     paths = {}
-    for name, frame in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
+    for name, table in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
         path = (dest / f'{name}.parquet').absolute()
-        frame.write_parquet(path)
+        table.write_parquet(path)
         paths[name] = str(path)
     return paths
 

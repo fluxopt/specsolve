@@ -1009,8 +1009,8 @@ def test_the_carried_row_is_the_horizon_end_and_not_the_last_one_solved():
 
     def at(name: str, start: int, t: int) -> float:
         on = (pl.col('snapshot_start') == start) & (pl.col('snapshot') == start + t)
-        frame = runs.primal(name, per_window=True).filter(on)
-        return frame['value'].item()
+        table = runs.primal(name, per_window=True).filter(on)
+        return table['value'].item()
 
     for start in (0, 3, 6):
         assert at('soc', start, 2) != pytest.approx(at('soc', start, 5), abs=1e-6), (
@@ -1213,10 +1213,10 @@ def test_a_sweep_copied_halfway_is_solved_again_rather_than_read_back(monkeypatc
     spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'spill')
     write = sweep_module.write_whole
 
-    def stops_at_the_metrics(frame, path) -> None:
+    def stops_at_the_metrics(table, path) -> None:
         if path.parent.name == 'metrics':
             raise _CrashError
-        write(frame, path)
+        write(table, path)
 
     with monkeypatch.context() as patched:
         patched.setattr(sweep_module, 'write_whole', stops_at_the_metrics)
@@ -1485,9 +1485,9 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
     """A path source is scanned, so the per-slice filter pushes into the file."""
     sources = scenario_sources()
     path = tmp_path / 'load.parquet'
-    frame = sources.pop('load')
-    assert isinstance(frame, pl.DataFrame)
-    frame.write_parquet(path)
+    table = sources.pop('load')
+    assert isinstance(table, pl.DataFrame)
+    table.write_parquet(path)
 
     runs = sps.solve_over(DISPATCH, {**sources, 'load': str(path)}, sps.EachLabel('scenario'))
     assert runs.keys == ['high', 'low', 'mid']
@@ -1504,9 +1504,9 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
     """
     sources = scenario_sources()
     path = tmp_path / 'p_max.parquet'
-    frame = sources.pop('p_max')
-    assert isinstance(frame, pl.DataFrame)
-    frame.write_parquet(path)
+    table = sources.pop('p_max')
+    assert isinstance(table, pl.DataFrame)
+    table.write_parquet(path)
     sources['p_max'] = str(path)
 
     crossed: list[object] = []
@@ -1546,9 +1546,9 @@ def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension(swee
     pytest.importorskip('xarray')
     runs = sweep
 
-    pandas_frame = runs.to_pandas('p')
-    assert list(pandas_frame.columns) == ['scenario', 'snapshot', 'generator', 'value']
-    assert len(pandas_frame) == 3 * 4 * 2
+    pandas_table = runs.to_pandas('p')
+    assert list(pandas_table.columns) == ['scenario', 'snapshot', 'generator', 'value']
+    assert len(pandas_table) == 3 * 4 * 2
 
     array = runs.to_dataarray('p')
     assert array.name == 'p'
@@ -1656,10 +1656,10 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
     """
     write_whole = sweep_module.write_whole
 
-    def crashing(frame: pl.DataFrame, path) -> None:
+    def crashing(table: pl.DataFrame, path) -> None:
         if path.name == lost:
             raise _CrashError
-        write_whole(frame, path)
+        write_whole(table, path)
 
     out = tmp_path / 'sweep'
     with monkeypatch.context() as patched:
@@ -2316,20 +2316,20 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
     """
     with _entered(make_executor() if make_executor else None) as executor:
         runs = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), executor=executor)
-    frame = runs.metrics
-    assert frame.columns == ['scenario', *Metrics._fields], 'the key, then the columns a single solve writes'
-    assert frame['scenario'].to_list() == runs.keys
-    assert frame['slice'].to_list() == ['high', 'low', 'mid'], 'the key again, as text, in slice order'
-    assert frame['slice_axis'].unique().to_list() == ['scenario'], 'every row names the axis it is a slice of'
-    assert frame['columns'].unique().to_list() == [8], 'every slice is the same model over different numbers'
-    assert (frame.select(pl.col('attach_seconds', 'build_seconds', 'solve_seconds') >= 0).to_numpy()).all(), (
+    table = runs.metrics
+    assert table.columns == ['scenario', *Metrics._fields], 'the key, then the columns a single solve writes'
+    assert table['scenario'].to_list() == runs.keys
+    assert table['slice'].to_list() == ['high', 'low', 'mid'], 'the key again, as text, in slice order'
+    assert table['slice_axis'].unique().to_list() == ['scenario'], 'every row names the axis it is a slice of'
+    assert table['columns'].unique().to_list() == [8], 'every slice is the same model over different numbers'
+    assert (table.select(pl.col('attach_seconds', 'build_seconds', 'solve_seconds') >= 0).to_numpy()).all(), (
         'a clock is never negative'
     )
-    assert frame['solves'].to_list() == [1, 1, 1], "each row is one slice's solve, not the model's running total"
-    assert frame['loads'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
+    assert table['solves'].to_list() == [1, 1, 1], "each row is one slice's solve, not the model's running total"
+    assert table['loads'].to_list() == ([1, 0, 0] if executor is None else [1] * 3), (
         'a serial sweep loads the solver once and pushes values after; a pooled one builds every slice cold'
     )
-    assert frame['write_seconds'].to_list() == [0.0] * 3, 'a sweep writes no model file'
+    assert table['write_seconds'].to_list() == [0.0] * 3, 'a sweep writes no model file'
 
 
 # ---------------------------------------------------------------------------
@@ -2477,8 +2477,8 @@ def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypat
     out = tmp_path / 'spill'
     write = sweep_module.write_whole
 
-    def stops_after_the_last_record(frame, path) -> None:
-        write(frame, path)
+    def stops_after_the_last_record(table, path) -> None:
+        write(table, path)
         if (path.parent.name, path.name) == ('record', '000001.parquet'):
             raise _CrashError
 
@@ -2615,7 +2615,7 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
     entry, which is what the spill writes for it."""
     index = sweep._by_slice('primal')['p']
     assert list(index) == ['high', 'low', 'mid'], 'one entry per slice, keyed by its own key'
-    assert all(sweep.key_name not in frame.columns for frame in index.values()), 'the key column is dropped'
+    assert all(sweep.key_name not in table.columns for table in index.values()), 'the key column is dropped'
 
     held = sweep._slices['primal']['p'].filter(pl.col(sweep.key_name) != 'low')
     short = replace(sweep, _slices={'primal': {'p': held}})

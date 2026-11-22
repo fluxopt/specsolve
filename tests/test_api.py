@@ -68,39 +68,39 @@ def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_lengt
     """A ``points:`` curve supplied as a file keeps its own length, as a table does."""
     from tests.conftest import expanded, port_sources, port_spec
 
-    frames = port_sources('piecewise_ragged')
+    tables = port_sources('piecewise_ragged')
     paths = {}
-    for name, frame in frames.items():
-        frame.write_parquet(tmp_path / f'{name}.parquet')
+    for name, table in tables.items():
+        table.write_parquet(tmp_path / f'{name}.parquet')
         paths[name] = str(tmp_path / f'{name}.parquet')
 
     with (
         sps.solve(expanded(port_spec('piecewise_ragged')), paths) as from_paths,
-        sps.solve(expanded(port_spec('piecewise_ragged')), frames) as from_frames,
+        sps.solve(expanded(port_spec('piecewise_ragged')), tables) as from_tables,
     ):
-        assert from_paths.objective == pytest.approx(from_frames.objective, rel=1e-9), (
+        assert from_paths.objective == pytest.approx(from_tables.objective, rel=1e-9), (
             'a curve read from a file is the curve read from a table'
         )
 
 
 def test_a_string_is_a_parquet_path_at_every_door(tmp_path):
-    """Every reader of a source goes through `as_frame`, so a path attaches the same everywhere."""
-    from specsolve._frames import as_frame
+    """Every reader of a source goes through `as_table`, so a path attaches the same everywhere."""
+    from specsolve._tables import as_table
 
-    frame = pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})
-    frame.write_parquet(tmp_path / 'load.parquet')
-    assert as_frame(str(tmp_path / 'load.parquet')).collect().equals(frame), 'a str is scanned as parquet'
-    assert as_frame(tmp_path / 'load.parquet').collect().equals(frame), 'and so is a Path'
-    assert as_frame(frame).collect().equals(frame), 'a table is normalised as before'
-    assert as_frame(2.0) is None, 'a number is not a table, and the caller says what it is'
+    table = pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})
+    table.write_parquet(tmp_path / 'load.parquet')
+    assert as_table(str(tmp_path / 'load.parquet')).collect().equals(table), 'a str is scanned as parquet'
+    assert as_table(tmp_path / 'load.parquet').collect().equals(table), 'and so is a Path'
+    assert as_table(table).collect().equals(table), 'a table is normalised as before'
+    assert as_table(2.0) is None, 'a number is not a table, and the caller says what it is'
 
 
 def test_parquet_path_sources(dispatch_yaml, dispatch_table_inputs, tmp_path):
     sources = dispatch_table_inputs
     paths = {}
-    for name, frame in sources.items():
+    for name, table in sources.items():
         p = tmp_path / f'{name}.parquet'
-        frame.write_parquet(p)
+        table.write_parquet(p)
         paths[name] = str(p)
 
     with sps.solve(dispatch_yaml, paths) as result:
@@ -132,20 +132,20 @@ def test_plain_python_sources_reach_the_same_answer_as_tables(dispatch_yaml, dis
 
     A dict carries its own labels; a sequence is positional against the dimension's labels.
     """
-    frames = dispatch_table_inputs
-    with sps.solve(dispatch_yaml, frames) as tables:
-        expected = tables.objective
+    tables = dispatch_table_inputs
+    with sps.solve(dispatch_yaml, tables) as from_tables:
+        expected = from_tables.objective
 
-    labels = {'snapshot': frames['snapshot'], 'generator': frames['generator']}
+    labels = {'snapshot': tables['snapshot'], 'generator': tables['generator']}
     with sps.solve(dispatch_yaml, _PLAIN[shape] | labels) as plain:
         assert plain.objective == pytest.approx(expected, rel=1e-9)
 
 
 def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_table_inputs):
     """A scalar covers the dimensions the parameter declares, not just a 0-D one."""
-    frames = dispatch_table_inputs
-    flat = {**frames, 'cost': 7.0}
-    spelled = {**frames, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
+    tables = dispatch_table_inputs
+    flat = {**tables, 'cost': 7.0}
+    spelled = {**tables, 'cost': pl.DataFrame({'generator': list(DISPATCH_GENERATORS), 'value': [7.0] * 3})}
 
     with (
         sps.solve(dispatch_yaml, flat) as broadcast,
@@ -163,9 +163,9 @@ def test_one_number_stands_for_every_coordinate(dispatch_yaml, dispatch_table_in
     ],
 )
 def test_a_plain_python_source_that_does_not_fit_is_refused(dispatch_yaml, dispatch_table_inputs, sources, match):
-    frames = dispatch_table_inputs
+    tables = dispatch_table_inputs
     with pytest.raises(sps.errors.DataError, match=match):
-        sps.build(dispatch_yaml, {**frames, **sources}).close()
+        sps.build(dispatch_yaml, {**tables, **sources}).close()
 
 
 #: One parameter over two dimensions — what a dict and a sequence cannot cover.
@@ -558,9 +558,9 @@ def test_a_solution_saves_every_kind_it_answered_with(dispatch_solution, dispatc
     assert dispatch_solution.is_ok
     out = dispatch_solution.save(tmp_path / 'solution')
     assert out == tmp_path / 'solution'
-    frame = pl.read_parquet(out / 'primal' / 'p.parquet')
-    assert set(frame.columns) == {'snapshot', 'generator', 'value'}
-    assert frame.height == dispatch_solution.primal('p').height
+    table = pl.read_parquet(out / 'primal' / 'p.parquet')
+    assert set(table.columns) == {'snapshot', 'generator', 'value'}
+    assert table.height == dispatch_solution.primal('p').height
     assert {p.stem for p in (out / 'dual').iterdir()} == set(sps.check(dispatch_yaml).constraints), (
         'one dual file per constraint'
     )
@@ -935,16 +935,16 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
 
 def test_primal_is_a_table_and_to_pandas_is_the_bridge(dispatch_solution):
     """A polars DataFrame is the shape results come in; `to_pandas` converts the same table."""
-    frame = dispatch_solution.primal('p')
-    assert isinstance(frame, pl.DataFrame)
-    assert frame.columns == ['snapshot', 'generator', 'value']
+    table = dispatch_solution.primal('p')
+    assert isinstance(table, pl.DataFrame)
+    assert table.columns == ['snapshot', 'generator', 'value']
 
     pandas = pytest.importorskip('pandas')
     converted = dispatch_solution.to_pandas('p')
     assert isinstance(converted, pandas.DataFrame)
-    assert list(converted.columns) == frame.columns
-    assert len(converted) == frame.height
-    assert frame['value'].sum() == pytest.approx(converted['value'].sum())
+    assert list(converted.columns) == table.columns
+    assert len(converted) == table.height
+    assert table['value'].sum() == pytest.approx(converted['value'].sum())
 
 
 @pytest.mark.parametrize(
@@ -1113,11 +1113,11 @@ def test_a_closed_result_says_it_was_closed(dispatch_yaml, dispatch_table_inputs
     """After `close` the readers say so; tables read before it stay valid."""
     sources = dispatch_table_inputs
     sol = sps.solve(dispatch_yaml, sources)
-    frame = sol.primal('p')
+    table = sol.primal('p')
     objective = sol.objective
     sol.close()
 
-    assert frame.height > 0, 'a table read before the close is its own data'
+    assert table.height > 0, 'a table read before the close is its own data'
     assert sol.objective == objective, 'and the outcome needs no model to report'
     for read in (lambda: sol.primal('p'), lambda: sol.dual('power_balance')):
         with pytest.raises(sps.errors.SpecsolveError, match='this result was closed'):

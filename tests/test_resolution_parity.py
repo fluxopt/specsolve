@@ -118,7 +118,7 @@ def _both_lanes_agree(path, data, where):
     linopy_status = m.solve(solver_name='highs')[1]
 
     with sps.build(path, data) as model:
-        relational_rows = model._engine._model.variables['p'].frame.select(pl.len()).collect().item()
+        relational_rows = model._engine._model.variables['p'].table.select(pl.len()).collect().item()
         relational_status = model.solve().termination_condition
 
     assert linopy_rows == relational_rows, f'{where}: {linopy_rows} vs {relational_rows} variables'
@@ -355,7 +355,7 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
     path = tmp_path / 'm.yaml'
     path.write_text(pyyaml.safe_dump(DATETIME_SPEC))
     days = [datetime.date(2030, 1, d) for d in (1, 2, 3)]
-    frames = {
+    tables = {
         'cost': pl.DataFrame({'generator': ['wind', 'gas'], 'value': [1.0, 5.0]}),
         'load': pl.DataFrame({'snapshot': days, 'value': [10.0, 20.0, 30.0]}),
         'snapshot': pl.DataFrame({'snapshot': days}),
@@ -374,7 +374,7 @@ def test_a_datetime_boundary_is_sayable_on_both_lanes(tmp_path):
     m.solve(solver_name='highs')
     linopy_lane = float(m.objective.value)
 
-    with sps.solve(path, frames) as result:
+    with sps.solve(path, tables) as result:
         relational = result.objective
         assert result.primal('p')['snapshot'].dtype in (pl.Date, pl.Datetime('us')), 'the coordinate keeps its dtype'
         assert result.primal('p').height == 2, 'only the third day survives the boundary'

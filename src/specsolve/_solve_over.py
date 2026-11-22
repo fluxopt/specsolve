@@ -30,7 +30,6 @@ from specsolve._api import build, check
 from specsolve._archive_layout import check_the_target, write_archive
 from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
-from specsolve._frames import as_frame
 from specsolve._inputs import as_spec
 from specsolve._names import VALUE, refuse_reserved
 from specsolve._outputs import checked_outputs
@@ -38,6 +37,7 @@ from specsolve._records import Metrics, Record
 from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
 from specsolve._sweep import SliceAnswer, Spill, Sweep, one_key_type
+from specsolve._tables import as_table
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -438,7 +438,7 @@ def _serially(
                         model.update(current.sources)
                     result = model.solve(**solving, start=starts[position])
                     answer = _answers(result, _slice_metrics(model.diagnostics(), before))
-                primals = answer.frames.get('primal', {})
+                primals = answer.tables.get('primal', {})
                 if spill is not None:
                     answer = spill.write(position, current.key, answer)
             last = (position, answer, primals)
@@ -497,7 +497,7 @@ def _pooled(
             continue
         with _named_slice(current.key, position, len(slices)):
             answer = future.result()
-        answer = replace(answer, frames={kind: _decode(named) for kind, named in answer.frames.items()})
+        answer = replace(answer, tables={kind: _decode(named) for kind, named in answer.tables.items()})
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
@@ -509,11 +509,11 @@ def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
     """
     if not result.has_primal:
         return SliceAnswer(result.record, metrics)
-    held, no_expressions = result._all_frames()
-    frames = {
-        kind: {name: frame.lazy().pipe(collected) for name, frame in named.items()} for kind, named in held.items()
+    held, no_expressions = result._all_tables()
+    tables = {
+        kind: {name: table.lazy().pipe(collected) for name, table in named.items()} for kind, named in held.items()
     }
-    return SliceAnswer(result.record, metrics, frames, result._no_duals, no_expressions)
+    return SliceAnswer(result.record, metrics, tables, result._no_duals, no_expressions)
 
 
 def _run_slice(
@@ -528,7 +528,7 @@ def _run_slice(
         answer = _answers(result, _slice_metrics(model.diagnostics(), None))
         if not encode_out:
             return answer
-        return replace(answer, frames={kind: _encode(named, {}) for kind, named in answer.frames.items()})
+        return replace(answer, tables={kind: _encode(named, {}) for kind, named in answer.tables.items()})
 
 
 def _key_column(axis: Axis, program: Program) -> str:
@@ -589,7 +589,7 @@ def _encode(
             continue
         if isinstance(obj, (str, Path)):
             out[name] = Path(obj).read_bytes()
-        elif (table := as_frame(obj)) is None:
+        elif (table := as_table(obj)) is None:
             out[name] = obj
         else:
             buffer = io.BytesIO()

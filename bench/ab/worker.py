@@ -156,7 +156,7 @@ class _Built:
             'structure': np.frombuffer(handoff.structure, dtype=np.uint8),
             'objective_constant': np.array([handoff.objective_constant], dtype=np.float64),
             'cost': handoff._dense_cost(),
-            **{f'{frame}.{column}': _column(getattr(handoff, frame), column).to_numpy() for frame, column in fields},
+            **{f'{table}.{column}': _column(getattr(handoff, table), column).to_numpy() for table, column in fields},
         }
 
 

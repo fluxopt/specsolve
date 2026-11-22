@@ -85,10 +85,10 @@ def test_a_variable_times_a_difference_stacks_one_term_per_cell(monkeypatch) -> 
     stacked = []
     share = assembly.Assembly._matrix_share
 
-    def spied(self, frames, name, *expressions):
+    def spied(self, tables, name, *expressions):
         if name == "constraint 'row'":
-            stacked.append(len(frames))
-        return share(self, frames, name, *expressions)
+            stacked.append(len(tables))
+        return share(self, tables, name, *expressions)
 
     monkeypatch.setattr(assembly.Assembly, '_matrix_share', spied)
     spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a - b) <= 10'}}}
