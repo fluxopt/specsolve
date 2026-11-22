@@ -72,7 +72,7 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     program = expanded(port_spec(name)).program
     sources = port_sources(name)
     archive = _archived(expanded(port_spec(name)), sources, tmp_path / 'model.zip')
-    spec, unpacked = _question(sps.load_archive(archive, tmp_path / 'out'))
+    spec, unpacked = _question(sps.read_archive(archive, tmp_path / 'out'))
 
     assert set(unpacked) == set(attachable(program)), (
         'the archive holds one member per attachable key — every declared parameter, dimension and relation, '
@@ -95,7 +95,7 @@ def test_the_round_trip_solves_to_the_same_objective(
     archive = _archived(dispatch_yaml, dispatch_table_inputs, tmp_path / 'dispatch.zip')
     with (
         sps.solve(dispatch_yaml, dispatch_table_inputs) as direct,
-        sps.solve(*_question(sps.load_archive(archive, tmp_path / 'out'))) as unpacked,
+        sps.solve(*_question(sps.read_archive(archive, tmp_path / 'out'))) as unpacked,
     ):
         assert unpacked.objective == pytest.approx(direct.objective, rel=1e-9), (
             'the archive builds the model the tables did'
@@ -235,7 +235,7 @@ def test_a_zip_outside_the_layout_is_refused(members: dict[str, bytes], says: st
         for name, data in members.items():
             zipped.writestr(name, data)
     with pytest.raises(sps.errors.LayoutError) as excinfo:
-        _question(sps.load_archive(path, tmp_path / 'out'))
+        _question(sps.read_archive(path, tmp_path / 'out'))
     assert says in str(excinfo.value), 'the message names what was found, and the layout archive= writes'
     assert not (tmp_path / 'out').exists(), 'nothing is extracted from a zip that is not an archive'
 
@@ -252,8 +252,8 @@ def test_a_directory_archive_holds_what_the_zip_holds_and_is_read_where_it_lies(
     spread = sorted(f.relative_to(tmp_path / 'case').as_posix() for f in (tmp_path / 'case').rglob('*') if f.is_file())
     assert spread == packed, 'the same members, laid out instead of packed'
 
-    loose = sps.load_archive(tmp_path / 'case')
-    unpacked = sps.load_archive(tmp_path / 'case.zip', tmp_path / 'out')
+    loose = sps.read_archive(tmp_path / 'case')
+    unpacked = sps.read_archive(tmp_path / 'case.zip', tmp_path / 'out')
     assert loose.result.objective == unpacked.result.objective
     assert sps.scan_archive(tmp_path / 'case').sources['load'].parent.parent == tmp_path / 'case', (
         'a directory archive is scanned where it lies, so there is no second copy to keep alive'
@@ -265,7 +265,7 @@ def test_a_directory_archive_holds_what_the_zip_holds_and_is_read_where_it_lies(
     [
         pytest.param(sps.scan_archive, '.zip', None, 'needs somewhere to unpack', id='scan-a-zip-with-no-into'),
         pytest.param(sps.scan_archive, '', 'anywhere', 'read where it lies', id='scan-a-directory-with-an-into'),
-        pytest.param(sps.load_archive, '', 'anywhere', 'read where it lies', id='load-a-directory-with-an-into'),
+        pytest.param(sps.read_archive, '', 'anywhere', 'read where it lies', id='read-a-directory-with-an-into'),
     ],
 )
 def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
@@ -284,14 +284,14 @@ def test_into_is_asked_for_exactly_where_something_must_be_unpacked_and_kept(
         read(out, None if into is None else tmp_path / into)
 
 
-def test_loading_a_zip_needs_nowhere_to_unpack_and_leaves_nothing_behind(
+def test_reading_a_zip_needs_nowhere_to_unpack_and_leaves_nothing_behind(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """What `load_archive` reads whole it does not read again, so the members are scratch."""
+    """What `read_archive` reads whole it does not read again, so the members are scratch."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case.zip')
     beside_it = sorted(path.name for path in tmp_path.iterdir())
 
-    case = sps.load_archive(tmp_path / 'case.zip')
+    case = sps.read_archive(tmp_path / 'case.zip')
 
     assert case.result.primal('p').height > 0, 'the answer came back with no directory named to read it off'
     assert sorted(path.name for path in tmp_path.iterdir()) == beside_it, (
@@ -389,7 +389,7 @@ def test_an_archive_carries_the_answer_beside_the_question(
 ) -> None:
     """The whole archive: what was asked, the data it was asked of, and what came back."""
     with sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case.zip') as solved:
-        loaded = sps.load_archive(tmp_path / 'case.zip', tmp_path / 'case')
+        loaded = sps.read_archive(tmp_path / 'case.zip', tmp_path / 'case')
 
         assert loaded.result.objective == solved.objective
         for name in to_spec(dispatch_yaml).program.variables:
@@ -410,14 +410,14 @@ def test_two_archives_of_one_spec_over_different_numbers_are_told_apart(
     )
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'base').close()
     sps.solve(dispatch_yaml, {**dispatch_table_inputs, 'load': halved}, archive=tmp_path / 'halved').close()
-    base, other = sps.load_archive(tmp_path / 'base'), sps.load_archive(tmp_path / 'halved')
+    base, other = sps.read_archive(tmp_path / 'base'), sps.read_archive(tmp_path / 'halved')
 
     assert base.result.spec == other.result.spec == base.spec, 'one document, so the spec cannot separate them'
     moved = [name for name in sorted(base.sources) if not base.sources[name].equals(other.sources[name])]
     assert moved == ['load'], 'and comparing the sources names the one input that moved, not merely that something did'
 
 
-@pytest.mark.parametrize('read', [sps.load_archive, sps.scan_archive], ids=['loaded', 'scanned'])
+@pytest.mark.parametrize('read', [sps.read_archive, sps.scan_archive], ids=['read', 'scanned'])
 def test_the_sources_an_archive_gives_back_archive_again_as_the_same_tables(
     read: Callable[[Path], sps.types.ResultArchive | sps.types.SweepArchive],
     dispatch_yaml: Path,
@@ -427,7 +427,7 @@ def test_the_sources_an_archive_gives_back_archive_again_as_the_same_tables(
     """A scanned source is the member itself, so it carries the first archive's `specsolve_run`, which the solve leaves out."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'first').close()
     sps.solve(*_question(read(tmp_path / 'first')), archive=tmp_path / 'second').close()
-    first, second = sps.load_archive(tmp_path / 'first'), sps.load_archive(tmp_path / 'second')
+    first, second = sps.read_archive(tmp_path / 'first'), sps.read_archive(tmp_path / 'second')
 
     assert all(second.sources[name].equals(table) for name, table in first.sources.items()), (
         'the same tables are archived again, whichever reader gave them back'
@@ -445,7 +445,7 @@ def test_a_sweep_archive_holds_the_sources_it_was_cut_from(
     _by_scenario(['low', 'high']).write_parquet(whole)
     sources = {**dispatch_table_inputs, 'load': whole}
     sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
-    study = sps.load_archive(tmp_path / 'study')
+    study = sps.read_archive(tmp_path / 'study')
 
     assert isinstance(study, sps.types.SweepArchive), 'the archive carries an axis, or this is testing the other type'
     held = pl.read_parquet(tmp_path / 'study' / 'sources' / 'load.parquet')
@@ -713,7 +713,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
 ) -> None:
     """The clocks: the one part of an archive that re-solving cannot recover."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case')
-    taken = sps.load_archive(tmp_path / 'case').metrics
+    taken = sps.read_archive(tmp_path / 'case').metrics
 
     assert isinstance(taken, Metrics), 'the row comes back as the value its columns declare, not a table of one'
     assert Metrics._fields == (
@@ -751,7 +751,7 @@ def test_the_cost_row_says_how_many_solves_its_clocks_cover(
         model.solve()
         model.solve(archive=tmp_path / 'second')
 
-    assert sps.load_archive(tmp_path / 'second').metrics.solves == 2, (
+    assert sps.read_archive(tmp_path / 'second').metrics.solves == 2, (
         'two solves ran before the archive was written, and the row it carries counts both'
     )
 
@@ -766,7 +766,7 @@ def test_a_case_that_wrote_a_file_and_one_that_did_not_are_still_one_table(
         model.solve(archive=tmp_path / 'written')
 
     cases = ('solved', 'written')
-    rows = [sps.load_archive(tmp_path / case).metrics for case in cases]
+    rows = [sps.read_archive(tmp_path / case).metrics for case in cases]
     assert [row.write_seconds == 0.0 for row in rows] == [True, False], (
         'the first case never wrote a file and the second did, or the two schemas were never in question'
     )
@@ -783,7 +783,7 @@ def test_an_archive_whose_metrics_are_short_of_a_column_is_refused_by_name(
     pl.read_parquet(metrics).drop('write_seconds').write_parquet(metrics)
 
     with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['write_seconds'\]") as excinfo:
-        sps.load_archive(tmp_path / 'case')
+        sps.read_archive(tmp_path / 'case')
     assert 'solve the model again' in str(excinfo.value), 'and the message names the way out'
 
 
@@ -816,7 +816,7 @@ def test_an_updated_model_archives_the_data_it_actually_answered(
         after = model.update({'load': halved}).solve(archive=tmp_path / 'updated.zip')
         assert after.objective != pytest.approx(before, rel=1e-9), 'the update moved the answer, or this proves nothing'
 
-    loaded = sps.load_archive(tmp_path / 'updated.zip', tmp_path / 'updated')
+    loaded = sps.read_archive(tmp_path / 'updated.zip', tmp_path / 'updated')
     with sps.solve(*_question(loaded)) as resolved:
         assert resolved.objective == pytest.approx(after.objective, rel=1e-9), (
             'the archived question is the updated one, so it re-solves to the answer it carries'
@@ -850,11 +850,11 @@ def test_an_archive_stamps_its_own_name_and_when_the_solve_returned(
     before = datetime.now(UTC)
     with sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'nightly-2026-09-10.zip') as solved:
         reached = solved.solved_at
-    sps.load_archive(tmp_path / 'nightly-2026-09-10.zip', tmp_path / 'out')
+    sps.read_archive(tmp_path / 'nightly-2026-09-10.zip', tmp_path / 'out')
     record = pl.read_parquet(tmp_path / 'out' / 'answer' / 'record.parquet')
 
     assert record[RUN].to_list() == ['nightly-2026-09-10'], "the archive's own name, suffix dropped"
-    answer = sps.load_archive(tmp_path / 'nightly-2026-09-10.zip').result
+    answer = sps.read_archive(tmp_path / 'nightly-2026-09-10.zip').result
     assert answer.record.specsolve_run == 'nightly-2026-09-10', (
         'the answer read back carries the name its record was stamped with'
     )
@@ -876,7 +876,7 @@ def test_every_table_an_archive_holds_says_which_run_it_came_from(
     else:
         with sps.solve(dispatch_yaml, dispatch_table_inputs, archive=out) as solved:
             live = solved.primal('p')
-    case = sps.load_archive(out, tmp_path / 'out')
+    case = sps.read_archive(out, tmp_path / 'out')
     tables = sorted((tmp_path / 'out').rglob('*.parquet'))
 
     assert {
@@ -902,33 +902,33 @@ def test_a_saved_answer_that_was_never_archived_names_no_run(
     assert record.schema[RUN] == pl.String, 'and the column is a string either way, never an all-null one'
 
 
-def test_a_loaded_archive_owes_the_members_nothing_and_a_scanned_one_owes_them_everything(
+def test_an_archive_read_whole_owes_the_members_nothing_and_a_scanned_one_owes_them_everything(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """`load_archive` holds sources and answer in memory; `scan_archive` reads them off the members."""
+    """`read_archive` holds sources and answer in memory; `scan_archive` reads them off the members."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case.zip')
-    loaded = sps.load_archive(tmp_path / 'case.zip', tmp_path / 'out')
+    loaded = sps.read_archive(tmp_path / 'case.zip', tmp_path / 'out')
     scanned = sps.scan_archive(tmp_path / 'case.zip', tmp_path / 'out')
     expected = loaded.result.primal('p')
 
-    assert isinstance(loaded.sources['load'], pl.DataFrame), 'a loaded source is the table the member holds'
+    assert isinstance(loaded.sources['load'], pl.DataFrame), 'a source read whole is the table the member holds'
     assert scanned.sources['load'] == tmp_path / 'out' / 'sources' / 'load.parquet', 'a scanned one is the path to it'
     shutil.rmtree(tmp_path / 'out')
 
-    assert loaded.result.primal('p').equals(expected), 'the loaded answer was read before the members went'
+    assert loaded.result.primal('p').equals(expected), 'the answer was read whole before the members went'
     with pytest.raises(FileNotFoundError):
         scanned.result.primal('p')
 
 
-def test_a_loaded_sweep_archive_answers_the_table_readers(
+def test_a_sweep_archive_read_whole_answers_the_table_readers(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """`load_archive` gives a held `Sweep`, `scan_archive` one that reads off the unpacked files."""
+    """`read_archive` gives a held `Sweep`, `scan_archive` one that reads off the unpacked files."""
     axis = sps.EachLabel('scenario')
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
 
-    loaded = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
+    loaded = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'study')
     scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'study')
 
     assert loaded.sweep.primal('p').equals(scanned.sweep.primal('p')), 'the same study, read two ways'
@@ -970,7 +970,7 @@ def test_an_archived_sweep_keyed_by_datetimes_in_a_time_zone_reads_back(
     sources = {**dispatch_table_inputs, 'load': by_day}
     runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / target)
     unpacked = [tmp_path / 'unpacked'] if target.endswith('.zip') else []
-    study = sps.load_archive(tmp_path / target, *unpacked)
+    study = sps.read_archive(tmp_path / target, *unpacked)
 
     assert study.sweep.keys == runs.keys, 'the same instants, whichever zone each is written in'
     assert study.sweep.records['objective'].to_list() == runs.records['objective'].to_list()
@@ -987,7 +987,7 @@ def test_a_scenario_sweep_is_an_archive_and_runs_again(
     axis = sps.EachLabel('scenario')
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     runs = sps.solve_over(dispatch_yaml, sources, axis, archive=tmp_path / 'study.zip')
-    study = sps.load_archive(tmp_path / 'study.zip', tmp_path / 'study')
+    study = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'study')
 
     assert study.axis == axis, 'the axis comes back as the value it went in as'
     assert study.sweep.records.drop(RUN).equals(runs.records.drop(RUN))
@@ -1046,7 +1046,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     axis = sps.EachWindow('snapshot', horizon=horizon, lookahead=0, carry={'soc_initial': 'soc'})
     sources = {**span_sources(10), 'price': price, 'soc_initial': 0.0}
     runs = sps.solve_over(spec, sources, axis, archive=tmp_path / 'roll.zip')
-    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
+    archived = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
 
     differing = _attached_differently(spec, sources, archived)
     assert not differing, f'(window, source) pairs the archive attaches differently: {differing}'
@@ -1084,7 +1084,7 @@ def test_a_sweep_archive_holds_its_answer_as_a_saved_sweep_does(
 def test_a_rolling_horizon_archive_reads_back_its_answer(tmp_path: Path) -> None:
     """The answer off the archive is the answer off the sweep, read whole or off disk."""
     runs = _rolling(tmp_path)
-    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+    loaded = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
     scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
 
     assert loaded.axis == CARRIED, 'the axis reads back with its carry'
@@ -1095,12 +1095,12 @@ def test_a_rolling_horizon_archive_reads_back_its_answer(tmp_path: Path) -> None
 @pytest.mark.parametrize(
     ('read', 'asked'),
     [
-        pytest.param(sps.load_archive, lambda sweep, out: sweep.primal('soc', per_window=True), id='primal-per-window'),
+        pytest.param(sps.read_archive, lambda sweep, out: sweep.primal('soc', per_window=True), id='primal-per-window'),
         pytest.param(sps.scan_archive, lambda sweep, out: sweep.scan('soc', per_window=True), id='scan-per-window'),
         pytest.param(
-            sps.load_archive, lambda sweep, out: sweep.evaluate('sum(p, over=generator)'), id='evaluate-undeclared'
+            sps.read_archive, lambda sweep, out: sweep.evaluate('sum(p, over=generator)'), id='evaluate-undeclared'
         ),
-        pytest.param(sps.load_archive, lambda sweep, out: sweep.save(out), id='save'),
+        pytest.param(sps.read_archive, lambda sweep, out: sweep.save(out), id='save'),
     ],
 )
 def test_a_rolling_horizon_archive_answers_every_read_a_saved_sweep_does(
@@ -1121,7 +1121,7 @@ def test_a_rolling_horizon_archive_reads_its_windows_back(spilled: bool, tmp_pat
     A held sweep writes its windows from memory, a spilled one copies them off the spill.
     """
     runs = _rolling(tmp_path, **({'spill_to': tmp_path / 'spill'} if spilled else {}))
-    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+    loaded = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
     scanned = sps.scan_archive(tmp_path / 'roll.zip', tmp_path / 'scanned')
 
     assert (tmp_path / 'scanned' / 'answer' / 'primal' / 'soc').is_dir()
@@ -1135,7 +1135,7 @@ def test_a_rolling_horizon_archive_reads_its_windows_back(spilled: bool, tmp_pat
 @pytest.mark.parametrize(
     ('read', 'per_window'),
     [
-        pytest.param(sps.load_archive, lambda sweep: sweep.primal('soc', per_window=True), id='load'),
+        pytest.param(sps.read_archive, lambda sweep: sweep.primal('soc', per_window=True), id='read'),
         pytest.param(sps.scan_archive, lambda sweep: sweep.scan('soc', per_window=True), id='scan'),
     ],
 )
@@ -1164,7 +1164,7 @@ def test_a_rolling_horizon_archive_stamps_every_table_and_reads_back_without_the
     """The windows, their keys and their horizons all carry the run on disk, and no reader returns it."""
     out = tmp_path / 'nightly-2026-09-10.zip'
     runs = sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=out)
-    loaded = sps.load_archive(out, tmp_path / 'out').sweep
+    loaded = sps.read_archive(out, tmp_path / 'out').sweep
     scanned = sps.scan_archive(out, tmp_path / 'out').sweep
     tables = sorted((tmp_path / 'out').rglob('*.parquet'))
     stamps = {
@@ -1227,7 +1227,7 @@ def test_a_name_with_no_answer_has_none_off_the_archive_and_reads_per_window(
 ) -> None:
     """A quantity a rolling horizon cannot stitch has no answer off the archive either, and is all there per window."""
     runs = _rolling(tmp_path, spec)
-    loaded = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
+    loaded = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'loaded')
 
     with pytest.raises(sps.errors.SpecsolveError, match=r'not over the windowed dimension.*per_window=True'):
         read(loaded.sweep, False)
@@ -1249,7 +1249,7 @@ def test_a_rolling_horizon_reads_the_same_names_live_and_off_its_archive(
     """
     pytest.importorskip('xarray')
     runs = _rolling(tmp_path, CAPPED)
-    archived = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').sweep.to_dataset(kind=kind)
+    archived = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').sweep.to_dataset(kind=kind)
     live = runs.to_dataset(kind=kind)
 
     assert live.equals(archived), 'the same answer, read live or off the archive'
@@ -1272,7 +1272,7 @@ def test_a_kind_with_no_answer_over_the_window_names_what_it_left_out(archived: 
     did not solve.
     """
     runs = _rolling(tmp_path, WINDOW_TOTAL)
-    sweep = sps.load_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').sweep if archived else runs
+    sweep = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'loaded').sweep if archived else runs
     with pytest.raises(sps.errors.SpecsolveError, match=r'window_spend.*not over the windowed dimension'):
         sweep.to_dataset(kind='expression')
 
@@ -1293,8 +1293,8 @@ def test_a_sweep_read_off_its_archive_saves_as_the_sweep_it_was(
         sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
         out = tmp_path / 'study.zip'
         runs, name = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=out), 'p'
-    resaved = sps.load_archive(out, tmp_path / 'loaded').sweep.save(tmp_path / 'resaved')
-    saved = sps.load_sweep(resaved)
+    resaved = sps.read_archive(out, tmp_path / 'loaded').sweep.save(tmp_path / 'resaved')
+    saved = sps.read_sweep(resaved)
     stamped = [
         table.relative_to(resaved).as_posix()
         for table in sorted(resaved.rglob('*.parquet'))
@@ -1321,7 +1321,7 @@ def test_a_label_sweep_archive_evaluates_an_undeclared_expression_per_slice(
     """A label sweep's answer is its slices, so the archive alone puts each slice back against its model."""
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study')
-    for read in (sps.load_archive, sps.scan_archive):
+    for read in (sps.read_archive, sps.scan_archive):
         valued = read(tmp_path / 'study').sweep.evaluate('sum(p, over=generator)')
         by_hand = runs.primal('p').group_by('scenario', 'snapshot').agg(pl.col('value').sum())
         assert valued.sort('scenario', 'snapshot').equals(by_hand.sort('scenario', 'snapshot')), (
@@ -1371,7 +1371,7 @@ def test_a_sweep_carries_the_spec_it_answered_once(dispatch_yaml: Path, dispatch
     assert runs.spec == sps.solve(dispatch_yaml, dispatch_table_inputs).spec, (
         'the spec one solve of the same file carries'
     )
-    assert sps.load_sweep(runs.save(tmp_path / 'saved')).spec == runs.spec, 'and a saved sweep reads it back'
+    assert sps.read_sweep(runs.save(tmp_path / 'saved')).spec == runs.spec, 'and a saved sweep reads it back'
 
 
 def test_saving_an_answer_twice_leaves_only_the_second(
@@ -1390,7 +1390,7 @@ def test_saving_an_answer_twice_leaves_only_the_second(
         "only the second model's variable is left"
     )
     with pytest.raises(KeyError, match='unknown variable'):
-        sps.load_result(out).primal('p')
+        sps.read_result(out).primal('p')
 
 
 def test_saving_an_answer_into_an_unpacked_archive_takes_its_metrics_row_with_it(
@@ -1412,8 +1412,8 @@ def test_saved_cases_say_whether_they_are_comparable(dispatch_yaml: Path, dispat
     for name, spec in (('base', dispatch_yaml), ('capped', other)):
         sps.solve(spec, dispatch_table_inputs).save(tmp_path / name)
 
-    base, capped = sps.load_result(tmp_path / 'base'), sps.load_result(tmp_path / 'capped')
-    assert base.spec == to_spec(dispatch_yaml), 'a loaded answer carries the spec it answered'
+    base, capped = sps.read_result(tmp_path / 'base'), sps.read_result(tmp_path / 'capped')
+    assert base.spec == to_spec(dispatch_yaml), 'an answer read back carries the spec it answered'
     assert base.spec != capped.spec, 'and two models are not comparing like with like'
 
 
@@ -1456,7 +1456,7 @@ def test_a_record_names_the_solver_and_the_packages_that_produced_it(
         'specsolve_version': sps.__version__,
         'mathspec_version': version('mathspec'),
     }, 'the solver, its options as one JSON string with sorted keys, and the three installed versions'
-    assert sps.load_archive(tmp_path / 'case').result.provenance == provenance, 'and it reads back as it was written'
+    assert sps.read_archive(tmp_path / 'case').result.provenance == provenance, 'and it reads back as it was written'
 
 
 def test_a_solve_with_no_options_records_an_empty_object() -> None:
@@ -1583,18 +1583,18 @@ def test_an_answer_in_another_layout_is_refused_by_name(
     (out / 'format.json').write_text(json.dumps({'layout': 0, 'specsolve': '0.0.1a359'}))
 
     with pytest.raises(sps.errors.LayoutError, match='solve the model again and save it') as refused:
-        sps.load_result(out)
+        sps.read_result(out)
     assert f'layout 0, written by specsolve 0.0.1a359, and this package reads layout {ANSWER_LAYOUT}' in str(
         refused.value
     ), 'the refusal names the layout it found and the version that wrote it'
 
     (out / 'format.json').write_text(json.dumps({'answer': 0}))  # what 0.1.0 wrote
     with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
-        sps.load_result(out)
+        sps.read_result(out)
 
     (out / 'format.json').unlink()
     with pytest.raises(sps.errors.LayoutError, match='with no layout stamp'):
-        sps.load_result(out)
+        sps.read_result(out)
 
 
 def _restamped(tree: Path, stamp: dict[str, object] | None, out: Path) -> Path:
@@ -1616,7 +1616,7 @@ _IN_ANOTHER_LAYOUT = {'layout': 0, 'specsolve': '0.0.1a359'}
 
 
 @pytest.mark.parametrize('suffix', [pytest.param('', id='directory'), pytest.param('.zip', id='zip')])
-def test_load_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_in_another_layout(
+def test_read_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_in_another_layout(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path, suffix: str
 ) -> None:
     """The answer and the inputs are stamped apart, so an answer in an old layout does not lock the inputs away."""
@@ -1625,12 +1625,12 @@ def test_load_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_i
     out = _restamped(tree, json.loads((tree / 'format.json').read_text()), tmp_path / f'old{suffix}')
 
     with pytest.raises(sps.errors.LayoutError) as refused:
-        sps.load_archive(out)
-    assert f'sps.load_inputs({str(out)!r})' in str(refused.value), (
+        sps.read_archive(out)
+    assert f'sps.read_inputs({str(out)!r})' in str(refused.value), (
         'the refusal names the archive as the caller passed it, and the reader that still takes it'
     )
 
-    inputs = sps.load_inputs(out)
+    inputs = sps.read_inputs(out)
     assert inputs.axis is None, 'an archive of one solve holds no axis'
     with (
         sps.solve(inputs.spec, inputs.sources) as again,
@@ -1642,7 +1642,7 @@ def test_load_inputs_reads_the_spec_and_the_data_of_an_archive_whose_answer_is_i
 @pytest.mark.parametrize(
     'stamp', [pytest.param(_IN_ANOTHER_LAYOUT, id='another-layout'), pytest.param(None, id='no-stamp')]
 )
-@pytest.mark.parametrize('read', [sps.load_archive, sps.load_inputs], ids=['load_archive', 'load_inputs'])
+@pytest.mark.parametrize('read', [sps.read_archive, sps.read_inputs], ids=['read_archive', 'read_inputs'])
 def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_solve_them_again(
     read: Callable[[Path], object],
     stamp: dict[str, object] | None,
@@ -1671,17 +1671,17 @@ def test_a_spec_and_sources_in_another_layout_are_refused_with_the_files_that_so
         assert again.objective == pytest.approx(direct.objective), 'the files the refusal names solve the same model'
 
 
-def test_load_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
+def test_read_inputs_gives_back_what_a_sweep_runs_again_with(tmp_path: Path) -> None:
     from tests.test_solve_over import WINDOW, span_sources
 
     sps.solve_over(WINDOW, span_sources(12), CARRIED, archive=tmp_path / 'roll')
-    archived = sps.load_archive(tmp_path / 'roll')
-    inputs = sps.load_inputs(tmp_path / 'roll')
+    archived = sps.read_archive(tmp_path / 'roll')
+    inputs = sps.read_inputs(tmp_path / 'roll')
 
     assert inputs.axis == archived.axis, 'the axis the sweep ran with'
     unlike = [key for key in archived.sources if not inputs.sources[key].equals(archived.sources[key])]
     assert inputs.sources.keys() == archived.sources.keys(), 'one table per source the archive holds'
-    assert not unlike, f'sources that differ from what load_archive gives back: {unlike}'
+    assert not unlike, f'sources that differ from what read_archive gives back: {unlike}'
 
 
 def _by_scenario(names: list[str]) -> pl.DataFrame:
@@ -1735,7 +1735,7 @@ def test_an_archive_reads_an_undeclared_expression_as_the_solve_did(
     """The archive rebuilds its own spec over its own data, and reads the saved values against that build."""
     with sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case') as solved:
         want = solved.evaluate(_UNDECLARED)['value'].sum()
-    read = sps.load_archive(tmp_path / 'case').result.evaluate(_UNDECLARED)['value'].sum()
+    read = sps.read_archive(tmp_path / 'case').result.evaluate(_UNDECLARED)['value'].sum()
     assert read == pytest.approx(want, rel=1e-9), 'the archive reads the expression as the live answer did'
 
 
@@ -1751,7 +1751,7 @@ def test_an_archive_reads_back_an_undeclared_expression_however_its_rebuild_sums
     spec = expanded(port_spec('osemosys_utopia'))
     sps.solve(spec, port_sources('osemosys_utopia'), archive=tmp_path / 'run.zip').close()
     variable = next(iter(sps.check(spec).variables))
-    assert sps.load_archive(tmp_path / 'run.zip').result.evaluate(f'sum({variable})').height == 1
+    assert sps.read_archive(tmp_path / 'run.zip').result.evaluate(f'sum({variable})').height == 1
 
 
 @pytest.mark.parametrize(
