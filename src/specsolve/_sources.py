@@ -745,8 +745,8 @@ def _row_major_positions(
     position = pl.lit(0, dtype=pl.UInt64)
     for d in dims:
         labels = known[d]
-        ordinals = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, ordinals, default=None)
+        label_positions = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        position = position * labels.len() + pl.col(d).replace_strict(labels, label_positions, default=None)
     return table.select(position).to_series()
 
 
