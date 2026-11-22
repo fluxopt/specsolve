@@ -50,7 +50,7 @@ def span(days: int) -> dict:
 sizes = []
 for days in (1, 3, 30, 365):
     with sps.build('tutorial/storage.yaml', span(days)) as model:
-        size = model.diagnostics()
+        size = model.diagnostics().metrics
     sizes.append({'days': days, 'columns': size.columns, 'rows': size.rows})
 print(pl.DataFrame(sizes))
 ```

@@ -27,12 +27,11 @@ flowchart TB
 Each arrow is one phase, and each box is what that phase produces.
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines each phase.
 
-Read the clocks as a table, one row per phase:
+Every result carries its clocks. Read them as a table, one row per phase:
 
 ```python
-with sps.build('dispatch.yaml', sources) as model:
-    model.solve(archive='runs/dispatch.zip')
-    print(model.diagnostics().metrics.phases)
+result = sps.solve('dispatch.yaml', sources, archive='runs/dispatch.zip')
+print(result.metrics.phases)
 ```
 
 One run of the dispatch example prints:
@@ -60,15 +59,18 @@ model of 300,000 columns, `solve` took 2.4 s of a 2.5 to 2.6 s call
 ([#2180](https://github.com/fluxopt/specsolve/pull/2180)). A phase that never
 ran, here `write`, reads zero.
 
-An archive keeps the same table, so you can read it later or on another
-machine:
+A saved result and an archive keep the same table, so you can read it later
+or on another machine:
 
 ```python
 print(sps.read_archive('runs/dispatch.zip').metrics.phases)
 ```
 
-The archive's `archive` row is a little shorter than the model's. The archive
-cannot time writing its own last file.
+A result holds the time since the model's previous result. The first result
+of a model carries the load and the build. A later one carries the update and
+the solve that led to it. `model.diagnostics().metrics` adds up every result
+of the model, and also holds writing the archive's last file, which no result
+can time.
 
 | Where the time goes | What to try |
 |---|---|

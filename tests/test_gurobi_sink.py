@@ -119,7 +119,9 @@ def test_a_pushed_quadratic_objective_replaces_rather_than_accumulates() -> None
         first = model.solve(solver_name='gurobi').objective
         model.update(stiff)
         pushed = model.solve(solver_name='gurobi').objective
-        assert model.diagnostics().solver_instances == 1, 'the pattern did not move, so the coefficients are pushed'
+        assert model.diagnostics().metrics.solver_instances == 1, (
+            'the pattern did not move, so the coefficients are pushed'
+        )
 
     assert pushed != pytest.approx(first), 'a stiffer model is a different answer'
     with sps.solve(scaled, stiff, solver_name='gurobi') as fresh:
@@ -288,7 +290,7 @@ def test_a_push_into_a_linear_model_leaves_the_objective_to_the_costs(monkeypatc
         model.solve(solver_name='gurobi').close()
         model.update(CASES['LP'][1])
         model.solve(solver_name='gurobi').close()
-        assert model.diagnostics().solver_instances == 1, (
+        assert model.diagnostics().metrics.solver_instances == 1, (
             'nothing moved, so the second solve pushed into the loaded model'
         )
 

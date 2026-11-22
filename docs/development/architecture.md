@@ -114,10 +114,14 @@ slows each step to find it in its own phase.
 | `write` | `Engine.write` |
 | `archive` | `Model._archive` |
 
-**The metrics row is the archive's last member**, written after the zip is
-packed, so `archive_seconds` covers every other member. Writing the row and
-landing the archive are in `diagnostics()` alone (3.3–3.5 ms median, #2180).
-Closing the model comes after the archive, and no phase holds it.
+**A result's metrics row is its share of the model's clocks**: `Engine.metrics`
+builds the one `Metrics`, and `Model.solve` takes the difference from where
+the previous result was handed back. A sweep slice's row is its result's.
+**The row is the archive's last member**, written after the zip is packed, so
+`archive_seconds` covers every other member, and the result handed back
+carries that row. Writing the row and landing the archive are in
+`diagnostics()` alone (3.3–3.5 ms median, #2180). Closing the model comes
+after the archive, and no phase holds it.
 
 ## The public API
 

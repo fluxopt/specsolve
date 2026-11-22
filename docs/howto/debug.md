@@ -20,7 +20,7 @@ refuses a built model the solver cannot take
 ```python
 model = sps.build('dispatch.yaml', sources)
 report = model.diagnostics()
-report.columns, report.rows, report.nonzeros  # 8, 4, 8
+report.metrics.columns, report.metrics.rows, report.metrics.nonzeros  # 8, 4, 8
 report.omissions  # rows a constraint declared and did not build
 report.sparse_parameters  # parameters whose table is short of their coordinates
 ```

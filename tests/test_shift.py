@@ -160,7 +160,9 @@ def test_a_zero_edge_fills_the_boundary_and_not_an_absence_that_was_already_ther
         'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
     }
     with differential(NARROWED_INTERIOR, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 2, 'the boundary row and the one that reads a live slot, and no other'
+        assert run.engine.diagnostics().metrics.rows == 2, (
+            'the boundary row and the one that reads a live slot, and no other'
+        )
         assert run.oracle == pytest.approx(10.0), (
             'take[2] reaches its bound because no row caps it — 0.0 would mean the absent slot was read as a zero'
         )
@@ -216,7 +218,7 @@ def test_a_per_entity_offset_fills_its_own_edge_and_not_the_condition_under_it()
         'usable': pd.Series([1.0, 0.0, 1.0], index=pd.Index([0, 1, 2], name='t')),
     }
     with differential(BY_PARAMETER, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 2, 'the vacated month and the one reading a live slot'
+        assert run.engine.diagnostics().metrics.rows == 2, 'the vacated month and the one reading a live slot'
         assert run.oracle == pytest.approx(10.0), 'take at the last month is capped by nothing'
 
 
@@ -234,7 +236,7 @@ def test_a_grouped_shift_fills_each_groups_edge_and_not_the_condition_under_it()
         'usable': pd.Series([0.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
     }
     with differential(IN_GROUPS, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, "both seasons' opening rows, and the one reading a live slot"
+        assert run.engine.diagnostics().metrics.rows == 3, "both seasons' opening rows, and the one reading a live slot"
         assert run.oracle == pytest.approx(10.0), 'the snapshot whose predecessor is absent is capped by nothing'
 
 
@@ -249,7 +251,7 @@ def test_a_coordinate_the_relation_sends_nowhere_is_absent_rather_than_vacated()
     """
     partial = override(IN_GROUPS_WITHOUT_WHERE, **{'relations.season_of.missing': 'absent'})
     with differential(partial, GROUPLESS_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, (
+        assert run.engine.diagnostics().metrics.rows == 3, (
             "each season's opening row and the one reading a live slot — not the group-less snapshot"
         )
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
@@ -264,7 +266,7 @@ def test_a_group_less_coordinate_stays_absent_under_a_condition_that_removes_not
     sources = {**GROUPLESS_SOURCES, 'usable': pd.Series([1.0, 1.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t'))}
     partial = override(IN_GROUPS, **{'relations.season_of.missing': 'absent'})
     with differential(partial, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'a condition that removes nothing changes no row'
+        assert run.engine.diagnostics().metrics.rows == 3, 'a condition that removes nothing changes no row'
         assert run.oracle == pytest.approx(10.0), 'take at the group-less snapshot is capped by nothing'
 
 
@@ -293,7 +295,7 @@ def test_a_per_entity_offset_writes_a_nonzero_edge_where_that_entity_vacates():
         'eff': pd.DataFrame({'g': ['a'] * 3, 't': [0, 1, 2], 'value': [1.0, 2.0, 4.0]}),
     }
     with differential(BY_PARAMETER_CONSTANT, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'every month is capped, the first by the edge it was given'
+        assert run.engine.diagnostics().metrics.rows == 3, 'every month is capped, the first by the edge it was given'
         assert run.oracle == pytest.approx(25.0), '10 + 10 + 5'
 
 
@@ -375,7 +377,7 @@ def test_a_per_group_offset_translates_each_group_by_its_own_lag():
         assert list(run.model.constraints['reads'].coords) == ['t'], (
             'the row is the snapshot, and the period its lag was read at is not a coordinate of it'
         )
-        assert run.model.constraints['reads'].size == run.engine.diagnostics().rows == 6, (
+        assert run.model.constraints['reads'].size == run.engine.diagnostics().metrics.rows == 6, (
             'one row per snapshot, and the same number of them on both lanes'
         )
         assert _by_t(run.result, 'p') == [0.0, 10.0, 20.0, 0.0, 0.0, 40.0], (
@@ -401,7 +403,9 @@ def test_a_per_group_offset_over_a_variable_vacates_each_groups_opening_rows():
         'cap': pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], index=pd.Index(range(7), name='t')),
     }
     with differential(PER_GROUP_OFFSET_TERMS, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 6, 'one row per snapshot in a season, and none for the one in no season'
+        assert run.engine.diagnostics().metrics.rows == 6, (
+            'one row per snapshot in a season, and none for the one in no season'
+        )
         assert _by_t(run.result, 'take') == [0.0, 10.0, 20.0, 0.0, 0.0, 40.0, 100.0], (
             'each season reaches back its own lead, and the group-less snapshot is capped by nothing'
         )
@@ -728,7 +732,7 @@ def test_an_absent_offset_leaves_the_shift_absent(edge: str, mask: str | None, r
     """
     data = {'t': [0, 1, 2], 'u': ['a', 'b'], 'off': pd.Series({'a': 1}, index=pd.Index(['a'], name='u'))}
     with differential(_absent_offset_spec(edge, mask), data) as run:
-        assert run.engine.diagnostics().rows == rows, 'only u=a builds rows, less any x the condition removes'
+        assert run.engine.diagnostics().metrics.rows == rows, 'only u=a builds rows, less any x the condition removes'
         assert run.oracle == pytest.approx(objective), 'each y[t, b] is free, so u=b adds 30'
 
 

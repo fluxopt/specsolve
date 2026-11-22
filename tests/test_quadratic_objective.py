@@ -228,7 +228,7 @@ def test_a_pattern_that_moves_reloads_the_solver_rather_than_pushing():
         model.solve()
         model.update(zeroed)
         model.solve()
-        assert model.diagnostics().solver_instances == 2, 'a pair that vanished is a model to load again'
+        assert model.diagnostics().metrics.solver_instances == 2, 'a pair that vanished is a model to load again'
 
 
 def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
@@ -295,8 +295,8 @@ def test_a_moved_quadratic_coefficient_is_pushed_rather_than_reloaded():
         model.update(tighter)
         second = model.solve().objective
         assert second == pytest.approx(4 * first), 'four times the curvature at the same optimum'
-        assert model.diagnostics().solver_instances == 1, (
+        assert model.diagnostics().metrics.solver_instances == 1, (
             'a coefficient that moved must not reload the solver — only the Hessian pattern is '
             'structure, and this one did not move'
         )
-        assert model.diagnostics().solves == 2
+        assert model.diagnostics().metrics.solves == 2

@@ -146,7 +146,7 @@ def test_a_window_over_only_absent_slots_is_zero_and_its_row_stands():
     dropped instead, which left `take[1]` capped by nothing (#2092).
     """
     with differential(NARROWED_WINDOW, NARROWED_WINDOW_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 4, 'the snapshot whose whole window is absent holds its row'
+        assert run.engine.diagnostics().metrics.rows == 4, 'the snapshot whose whole window is absent holds its row'
         assert run.oracle == pytest.approx(0.0), 'take[1] is capped at 0 — 10.0 would mean its row was dropped'
 
 
@@ -175,7 +175,9 @@ def test_a_window_whose_every_width_is_zero_builds_no_row():
     A min-up-time model on a fleet with no committable unit (#1306).
     """
     with differential(ZERO_WIDTH, ZERO_WIDTH_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'only the three meet rows are built; every window reached nothing'
+        assert run.engine.diagnostics().metrics.rows == 3, (
+            'only the three meet rows are built; every window reached nothing'
+        )
         assert run.oracle == pytest.approx(6.0), 'the objective is the demand alone, no window row binding'
 
 
@@ -205,7 +207,9 @@ UNMAPPED_WIDTH_SOURCES = {
 def test_a_width_read_through_a_relation_that_maps_nothing_there_builds_no_row():
     """A coordinate in no group has no width, which is a window of nothing (#1535)."""
     with differential(UNMAPPED_WIDTH, UNMAPPED_WIDTH_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'the snapshot in no season carries no width, so it holds no row'
+        assert run.engine.diagnostics().metrics.rows == 3, (
+            'the snapshot in no season carries no width, so it holds no row'
+        )
         assert run.oracle == pytest.approx(13.0), (
             'the three seasoned snapshots are capped at 8 between them; the unmapped one reaches its own bound of 5'
         )
@@ -221,7 +225,9 @@ def test_an_absent_slot_the_window_reaches_is_a_zero_rather_than_a_dropped_row(w
     losing a row would show up as an uncapped `take` worth 10 (#1059, #1060).
     """
     with differential(narrowed_window_spec(window), NARROWED_WINDOW_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 4, 'a window reaching one live slot is a row, absent neighbour or not'
+        assert run.engine.diagnostics().metrics.rows == 4, (
+            'a window reaching one live slot is a row, absent neighbour or not'
+        )
         assert run.oracle == pytest.approx(0.0), 'every take is capped, so raising one costs more than it earns'
 
 
@@ -257,7 +263,7 @@ def test_a_per_entity_window_over_only_absent_slots_keeps_that_entitys_row():
         'usable': pd.Series([1.0, 0.0, 1.0, 1.0], index=pd.Index([0, 1, 2, 3], name='t')),
     }
     with differential(PER_ENTITY_WINDOW, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 8, "every row, narrow's at the absent snapshot included"
+        assert run.engine.diagnostics().metrics.rows == 8, "every row, narrow's at the absent snapshot included"
         assert run.oracle == pytest.approx(0.0), 'every take is capped, take[narrow, 1] at 0 by a window of nothing'
 
 
@@ -369,7 +375,7 @@ def test_an_hour_the_relation_places_in_no_day_reaches_nothing():
         days=[*DAYS[:5], None],
     )
     with differential(spec, sources) as run:
-        assert run.engine.diagnostics().rows == 11, (
+        assert run.engine.diagnostics().metrics.rows == 11, (
             'five window rows — one per hour in a day, none for the hour in none — and six starts_when_told rows'
         )
 
@@ -514,7 +520,7 @@ def test_a_window_over_only_absent_terms_is_zero_and_its_row_stands():
         'live': pd.Series([False, False, True], index=pd.Index([0, 1, 2], name='t')),
     }
     with differential(ONLY_ABSENT_TERMS, sources, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'every snapshot holds its window row, absent terms or not'
+        assert run.engine.diagnostics().metrics.rows == 3, 'every snapshot holds its window row, absent terms or not'
         assert run.oracle == pytest.approx(10.0), 'y[0] and y[1] are held at 0 by a window of nothing'
 
 
@@ -555,5 +561,5 @@ def test_an_entity_whose_width_is_absent_has_no_window_and_no_row(narrowed: bool
     once its operand's absence stopped travelling through the window (#2095).
     """
     with differential(absent_width_spec(narrowed=narrowed), ABSENT_WIDTH_SOURCES, lp=True) as run:
-        assert run.engine.diagnostics().rows == 3, 'only the three rows at u=b, whose width is defined'
+        assert run.engine.diagnostics().metrics.rows == 3, 'only the three rows at u=b, whose width is defined'
         assert run.oracle == pytest.approx(30.0), 'y[a, *] is capped by no row, each at its bound of 10'

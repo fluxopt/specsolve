@@ -33,7 +33,8 @@ for start in ('previous', None):
     model.solve()
     for numbers in steps:
         model.update(numbers).solve(start=start)
-    print(start, model.diagnostics().seconds['solve'], model.diagnostics().solver_instances)
+    seen = model.diagnostics().metrics
+    print(start, seen.solve_seconds, seen.solver_instances)
 ```
 
 Take the faster one. `solver_instances` equal to the number of solves means

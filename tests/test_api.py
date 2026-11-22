@@ -621,6 +621,7 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     assert sorted(p.name for p in out.iterdir()) == [
         'expression',
         'format.json',
+        'metrics.parquet',
         'primal',
         'reasons.parquet',
         'record.parquet',
@@ -743,8 +744,8 @@ def test_a_result_saved_over_a_sweep_leaves_none_of_the_sweep(dispatch_result, d
     out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario')).save(tmp_path / 'answer')
     dispatch_result.save(out)
     held = sorted(path.name for path in out.iterdir())
-    assert held == ['dual', 'format.json', 'primal', 'record.parquet', 'spec.yaml'], (
-        'the answer of one solve, and no key, manifest or per-slice record of the sweep'
+    assert held == ['dual', 'format.json', 'metrics.parquet', 'primal', 'record.parquet', 'spec.yaml'], (
+        'the answer of one solve, and no key, manifest or per-slice record or metrics of the sweep'
     )
 
 

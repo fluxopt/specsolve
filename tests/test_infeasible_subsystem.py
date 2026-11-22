@@ -118,7 +118,7 @@ def test_the_last_solve_is_the_one_explained(solver_name: str) -> None:
         model.solve(solver_name)
         model.update({'demand': pl.DataFrame({'snapshot': [0, 1], 'value': [200.0, 60.0]})})
         model.solve(solver_name)
-        assert model.diagnostics().solver_instances == 1, 'only numbers moved, so the solver kept the model'
+        assert model.diagnostics().metrics.solver_instances == 1, 'only numbers moved, so the solver kept the model'
         found = model.infeasible_subsystem()
     assert found.constraints['balance'].to_dicts() == [{'snapshot': 0, 'sense': '==', 'rhs': 200.0}], (
         'the shortfall is at snapshot 0 now'

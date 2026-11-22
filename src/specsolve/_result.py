@@ -15,12 +15,14 @@ from typing import TYPE_CHECKING, Literal
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
+    METRICS_FILE,
     RECORD_FILE,
     check_format,
     clear_the_answer,
     read_outputs,
     read_reasons,
     read_spec,
+    row_of,
     saved_tables,
     write_format,
     write_reasons,
@@ -40,7 +42,7 @@ from specsolve._outputs import (
     not_requested_message,
     outputs_of,
 )
-from specsolve._records import NO_PROVENANCE, RECORD_SCHEMA, Metrics, Provenance, Record
+from specsolve._records import METRICS_SCHEMA, NO_PROVENANCE, RECORD_SCHEMA, Metrics, Provenance, Record
 from specsolve.errors import LayoutError, NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -237,10 +239,10 @@ class Diagnostics:
     Advisory, all of it: no answer depends on any field.
     """
 
-    #: The shape the build produced: columns, rows, and coefficients.
-    columns: int
-    rows: int
-    nonzeros: int
+    #: This model's sizes, counters and clocks over its whole life:
+    #: ``solves`` counts every solve, and each clock sums every lap of its
+    #: phase. [`Result.metrics`][specsolve.types.Result.metrics] is one solve's share of it.
+    metrics: Metrics
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
     #: the solver: one emptied of all its terms, and one a propagated absence
@@ -277,47 +279,6 @@ class Diagnostics:
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
-
-    #: How many times this model has been solved, and how many solver
-    #: instances those solves took: a new one wherever the solver could not
-    #: keep the model and take its new values. ``solver_instances == solves``
-    #: on an iterating driver means the model has a condition on a parameter
-    #: that varies.
-    solves: int
-    solver_instances: int
-
-    #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
-    #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
-    #: ``handoff``, ``solve``, ``readback``, ``write`` and ``archive``, as
-    #: [`Metrics`][specsolve._records.Metrics] defines each. A phase that
-    #: never ran has no key; one that ran again holds the sum.
-    seconds: Mapping[str, float]
-
-    @property
-    def metrics(self) -> Metrics:
-        """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
-
-        [`Metrics`][specsolve._records.Metrics] says what each
-        field means. A phase this build never entered reads zero, and
-        ``specsolve_run`` is null.
-        """
-        clocks = self.seconds
-        return Metrics(
-            columns=self.columns,
-            rows=self.rows,
-            nonzeros=self.nonzeros,
-            solves=self.solves,
-            solver_instances=self.solver_instances,
-            load_seconds=clocks.get('load', 0.0),
-            tidy_seconds=clocks.get('tidy', 0.0),
-            attach_seconds=clocks.get('attach', 0.0),
-            build_seconds=clocks.get('build', 0.0),
-            handoff_seconds=clocks.get('handoff', 0.0),
-            solve_seconds=clocks.get('solve', 0.0),
-            readback_seconds=clocks.get('readback', 0.0),
-            write_seconds=clocks.get('write', 0.0),
-            archive_seconds=clocks.get('archive', 0.0),
-        )
 
 
 def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
@@ -403,6 +364,8 @@ class Result:
     #: The directory this answer's tables are scanned off, which a save must
     #: not clear. ``None`` for an answer held in memory.
     _scanned_from: Path | None = None
+    #: What reaching this answer took. ``None`` for an answer no solve produced.
+    _metrics: Metrics | None = None
 
     @property
     def status(self) -> str:
@@ -446,6 +409,18 @@ class Result:
     def solved_at(self) -> datetime | None:
         """When the solver returned, in UTC — ``None`` where the solve carried no clock."""
         return self._solved_at
+
+    @property
+    def metrics(self) -> Metrics | None:
+        """What reaching this answer took — its solve's share of the model's clocks — or ``None`` for one built by hand.
+
+        The share runs from where the model's previous answer was handed back,
+        so the first answer of a model carries its load and its build, and a
+        later one the update, handoff and solve that led to it.
+        ``solves`` is ``1``. An answer solved with ``archive=`` also carries
+        the archive, as the archive records it. Read back as it was written.
+        """
+        return self._metrics
 
     @property
     def provenance(self) -> Provenance:
@@ -792,8 +767,10 @@ class Result:
         the solve was asked for, such as ``activity/`` per constraint.
         ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
         deliberately left out — one row per failed expression, one with an
-        empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
-        record and the spec alone. The same model and data write the same bytes.
+        empty *name* for the duals — and is absent when nothing is.
+        ``metrics.parquet`` holds the [`metrics`][] row, and is absent for an
+        answer built by hand. A solve that left no values writes the
+        record, the metrics and the spec alone. The same model and data write the same tables.
 
         ``format.json`` stamps the layout, the specsolve that wrote it and the
         outputs the answer carries:
@@ -812,15 +789,30 @@ class Result:
             SpecsolveError: This result was closed, or this polars has no
                 parquet.
         """
+        import polars as pl
+
         parquet.require('Result.save')
-        return self._save(Path(directory), write_whole)
+        out = Path(directory)
+        if self._is_scanned_from(out):
+            return out
+        self._save(out, write_whole)
+        if self._metrics is not None:
+            write_whole(pl.DataFrame([self._metrics._asdict()], schema_overrides=METRICS_SCHEMA), out / METRICS_FILE)
+        return out
+
+    def _is_scanned_from(self, out: Path) -> bool:
+        return self._scanned_from is not None and self._scanned_from.resolve() == out.resolve()
 
     def _save(self, out: Path, write: TableWriter) -> Path:
-        """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
+        """[`save`][] but the metrics row, each table written with *write*.
+
+        An archive passes the writer that adds its run, and writes the metrics
+        row itself, last, so that its clock covers every other member.
+        """
         import polars as pl
 
         carried = self._unclosed('the solution')
-        if self._scanned_from is not None and self._scanned_from.resolve() == out.resolve():
+        if self._is_scanned_from(out):
             return out
         clear_the_answer(out)
         write_format(out, outputs_of(kind for kind in carried if kind in OUTPUT_KINDS))
@@ -941,6 +933,7 @@ def _answer_under(out: Path, *, eager: bool) -> Result:
     status = record.solve_status
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
+    metrics_file = out / METRICS_FILE
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda table=table: table.pipe(collected))
         for name, table in saved_tables(out / 'expression', eager=eager).items()
@@ -957,4 +950,7 @@ def _answer_under(out: Path, *, eager: bool) -> Result:
         _run=record.specsolve_run,
         _provenance=record.provenance,
         _scanned_from=None if eager else out,
+        _metrics=row_of(Metrics, parquet.read(metrics_file).row(0, named=True), metrics_file)
+        if metrics_file.is_file()
+        else None,
     )

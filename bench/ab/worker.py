@@ -138,8 +138,8 @@ class _Built:
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
-        diagnostics = model.diagnostics()
-        self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
+        metrics = model.diagnostics().metrics
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
 
     def numbers(self) -> dict[str, np.ndarray]:
         """The fields ``tests/test_order.py`` holds two builds of one model to."""

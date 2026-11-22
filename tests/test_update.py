@@ -3,7 +3,7 @@
 **An update answers what a fresh build answers**: `build(spec, sources |
 change)` is the reference for every rung below. The fast path is *only* a fast
 path: an update that changes which coordinates a condition admits renumbers solver indices, so the engine rebuilds and
-solves cold, and `diagnostics().solver_instances` says which happened.
+solves cold, and `diagnostics().metrics.solver_instances` says which happened.
 """
 
 from __future__ import annotations
@@ -204,7 +204,9 @@ def test_an_update_and_its_undoing_answer_on_one_loaded_solver(dispatch_yaml, ru
 
         assert moved != first, 'the rung has to move the answer, or the way back proves nothing'
         assert back == first, 'the solver kept a number the second update took back'
-        assert model.diagnostics().solver_instances == 1, 'each update moved only numbers, so the solver stayed loaded'
+        assert model.diagnostics().metrics.solver_instances == 1, (
+            'each update moved only numbers, so the solver stayed loaded'
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +325,7 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
                         _laid_out_alike(got.dual(name), wanted[name], values=exact, where=f'{where} {name} price')
 
             if not step:
-                assert model.diagnostics().solver_instances == 1, (
+                assert model.diagnostics().metrics.solver_instances == 1, (
                     'the same numbers updated have to hash alike, or no driver ever takes the fast path'
                 )
 
@@ -333,17 +335,17 @@ def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch
     """The fast path is taken exactly when the structure held.
 
     The first solve always loads — there was nothing to keep — so a driver on
-    the fast path leaves `diagnostics().solver_instances` at one however many times round.
+    the fast path leaves `diagnostics().metrics.solver_instances` at one however many times round.
     The rule is the digest's, so it is the same rule for every sink that can
     stay loaded.
     """
     spec, given = _case(rung, dispatch_yaml)
     with sps.build(spec, given) as model:
         model.solve(solver_name=solver_name)
-        assert model.diagnostics().solver_instances == 1, 'the first solve has nothing loaded to keep'
+        assert model.diagnostics().metrics.solver_instances == 1, 'the first solve has nothing loaded to keep'
 
         model.update(rung.change).solve(solver_name=solver_name)
-        seen = model.diagnostics()
+        seen = model.diagnostics().metrics
         expected = 1 if rung.keeps_the_solver else 2
         assert seen.solves == 2, 'both solves are counted whichever path each took'
         assert seen.solver_instances == expected, (
@@ -427,14 +429,14 @@ def test_a_rebuild_takes_the_evidence_and_the_fast_path_still_holds(model, monke
     taken = _hashes(monkeypatch)
     model.solve()
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}).solve()
-    assert model.diagnostics().solver_instances == 1, 'a pushable update still takes the fast path'
+    assert model.diagnostics().metrics.solver_instances == 1, 'a pushable update still takes the fast path'
     assert len(taken) == 2, (
         f'two solves take two digests — the outgoing model at the rebuild and the incoming one at the '
         f'comparison — and not {len(taken)}'
     )
 
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [11.0, 21.0, 31.0, 41.0]})}).solve()
-    assert model.diagnostics().solver_instances == 1, 'and again'
+    assert model.diagnostics().metrics.solver_instances == 1, 'and again'
     assert len(taken) == 3, f'each further solve adds one, not two: {len(taken)} after three solves'
 
 
@@ -446,7 +448,7 @@ def test_solving_the_same_model_twice_keeps_it_without_a_rebuild_between(model, 
     taken = _hashes(monkeypatch)
     model.solve()
     model.solve()
-    assert model.diagnostics().solver_instances == 1, 'and keeping it means not loading it twice'
+    assert model.diagnostics().metrics.solver_instances == 1, 'and keeping it means not loading it twice'
     assert len(taken) == 2, f'the outgoing model and the incoming one, as ever, not {len(taken)}'
 
 
@@ -480,10 +482,12 @@ def test_a_solve_asking_for_other_options_loads_the_model_again(model, solver_na
     option = LIMITS[solver_name]
     model.solve(solver_name=solver_name, solver_options={option: 60.0})
     model.solve(solver_name=solver_name, solver_options={option: 120.0})
-    assert model.diagnostics().solver_instances == 2, 'a solver told the first options cannot be told others'
+    assert model.diagnostics().metrics.solver_instances == 2, 'a solver told the first options cannot be told others'
 
     model.solve(solver_name=solver_name, solver_options={option: 120.0})
-    assert model.diagnostics().solver_instances == 2, 'the same options ask for the model the solver already holds'
+    assert model.diagnostics().metrics.solver_instances == 2, (
+        'the same options ask for the model the solver already holds'
+    )
 
 
 def test_a_update_takes_a_change_at_a_time_and_keeps_the_rest(dispatch_yaml, model):
@@ -502,7 +506,7 @@ def test_a_update_may_be_repeated_and_each_answer_is_its_own(model):
         served.append(model.update({'load': load}).solve().primal('p')['value'].sum())
 
     assert served == sorted(served), f'{served} — more load must dispatch more power'
-    assert model.diagnostics().solver_instances == 1, 'a scaled right-hand side moves no solver index'
+    assert model.diagnostics().metrics.solver_instances == 1, 'a scaled right-hand side moves no solver index'
 
 
 def test_a_result_from_before_a_update_keeps_reading(model):
@@ -615,7 +619,9 @@ def test_a_update_can_grow_a_dimension():
 
         assert grown.objective == pytest.approx(reference.objective)
         assert grown.primal('cap').equals(reference.primal('cap'))
-        assert model.diagnostics().solver_instances == 2, 'more rows than the solver holds is a load, not a push'
+        assert model.diagnostics().metrics.solver_instances == 2, (
+            'more rows than the solver holds is a load, not a push'
+        )
 
 
 def test_a_written_file_follows_the_update(model, tmp_path):
@@ -651,20 +657,20 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """
     with sps.build(dispatch_yaml, sources() | COORDINATES) as model:
         model.solve()
-        seen = model.diagnostics()
+        seen = model.diagnostics().metrics
 
         assert (seen.columns, seen.rows) == (len(SNAPSHOTS) * len(GENERATORS), len(SNAPSHOTS))
         assert seen.nonzeros == seen.columns, 'one balance row per snapshot, one coefficient per generator in it'
-        assert seen.omissions.is_empty(), 'every declared row reached the solver'
+        assert model.diagnostics().omissions.is_empty(), 'every declared row reached the solver'
 
-    assert model.diagnostics().nonzeros == seen.nonzeros, 'a released model still says how big it was'
+    assert model.diagnostics().metrics.nonzeros == seen.nonzeros, 'a released model still says how big it was'
 
 
 def test_a_condition_that_removes_a_column_removes_it_from_the_shape(dispatch_yaml):
     """Read off the built model, so a condition that admits other coordinates changes the counts with it."""
     zeroed = {**sources(), 'p_max': pl.DataFrame({'generator': GENERATORS, 'value': [100.0, 60.0, 0.0]})}
     with sps.build(dispatch_yaml, zeroed | COORDINATES) as model:
-        assert model.diagnostics().columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
+        assert model.diagnostics().metrics.columns == len(SNAPSHOTS) * (len(GENERATORS) - 1)
 
 
 def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
@@ -678,7 +684,7 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     with sps.build(REACH, given) as model:
         model.solve()
         before = model._engine._model.handoff.obj.height
-        assert model.diagnostics().solver_instances == 1, 'the first solve has nothing loaded to keep'
+        assert model.diagnostics().metrics.solver_instances == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
         updated = model.update({'cost': zeroed}).solve()
@@ -686,7 +692,9 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         assert model._engine._model.handoff.obj.height == before - 1, (
             'the zero cost should have left the objective table'
         )
-        assert model.diagnostics().solver_instances == 1, 'a cost is pushed, so a cost falling to zero may not reload'
+        assert model.diagnostics().metrics.solver_instances == 1, (
+            'a cost is pushed, so a cost falling to zero may not reload'
+        )
 
     with sps.build(REACH, {**given, 'cost': zeroed}) as fresh:
         assert updated.objective == fresh.solve().objective, (
