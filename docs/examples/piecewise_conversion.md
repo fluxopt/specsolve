@@ -105,7 +105,7 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -221,9 +221,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve(to_spec('examples/piecewise_conversion.yaml').expand(), sources) as solution:
-        solution.objective  # 5990.0
+    # sources: parameter name -> table or parquet path
+    with sps.solve(to_spec('examples/piecewise_conversion.yaml').expand(), sources) as result:
+        result.objective  # 5990.0
     ```
 
 === "linopy"

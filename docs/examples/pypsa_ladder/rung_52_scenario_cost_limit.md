@@ -726,8 +726,8 @@ F_{l} \le \overline{\mathrm{f}}^{\mathrm{nom}}_{\xi,l} \qquad \forall\, \xi \in 
         'Load_active': per_component('Load', first_scenario(loads['active']), bool),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_52_scenario_cost_limit.yaml', sources) as solution:
-        solution.objective  # 15630.0
+    with sps.solve('differential/pypsa/rungs/rung_52_scenario_cost_limit.yaml', sources) as result:
+        result.objective  # 15630.0
     ```
 
 === "PyPSA"

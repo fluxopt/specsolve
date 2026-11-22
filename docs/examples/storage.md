@@ -1,6 +1,6 @@
 # storage
 
-Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle over the horizon.
+Dispatch plus a battery that carries its charge from one snapshot to the next, closed into a cycle, so it ends where it started.
 
 > **✔ Agrees with hand-written linopy 0.10.0** — objective **5650**, matched to `rtol=1e-09`.
 
@@ -10,9 +10,10 @@ State of charge links each snapshot to the one before it, cyclically:
 
 $$\mathrm{soc}_s = \mathrm{soc}_{s-1} + 0.9\,\mathrm{charge}_s - \mathrm{discharge}_s$$
 
-with $s-1$ wrapping at the horizon, so the battery ends where it started. The
-model writes the charging efficiency as the literal `0.9` rather than
-declaring a parameter, so it appears here as a number and not as an $\eta$.
+with $s-1$ wrapping from the first snapshot to the last, so the battery ends
+where it started. The model writes the charging efficiency as the literal
+`0.9` rather than declaring a parameter, so it appears here as a number and
+not as an $\eta$.
 
 ## The model
 
@@ -20,13 +21,13 @@ declaring a parameter, so it appears here as a number and not as an $\eta$.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-Dispatch plus a battery whose state of charge is closed into a cycle: the horizon ends where it began.
+Dispatch plus a battery whose state of charge is closed into a cycle: the level ends where it began.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, cyclic at the horizon |
+| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
 
 #### Parameters
@@ -101,18 +102,18 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the horizo
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
       Dispatch plus a battery whose state of charge is closed into a cycle: the
-      horizon ends where it began.
+      level ends where it began.
 
     dimensions:
       snapshot:
-        description: dispatch periods, cyclic at the horizon
+        description: dispatch periods, the last wrapping to the first
         dtype: int
         ordered: true
       generator:
@@ -164,7 +165,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       soc_balance:
         description: >-
           the level carried out of a snapshot is the one carried in plus what was
-          stored, minus what was taken — and it wraps at the horizon, so the first
+          stored, minus what was taken — and it wraps at the last snapshot, so the first
           snapshot inherits from the last
         dims: [snapshot]
         expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge
@@ -176,10 +177,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/storage.yaml', sources) as solution:
-        solution.objective  # 5650.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/storage.yaml', sources) as result:
+        result.objective  # 5650.0
+        result.dual('power_balance')
     ```
 
 === "linopy"

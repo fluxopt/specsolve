@@ -2486,8 +2486,8 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
             **global_constraints(n, multi),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_03_expansion.yaml', sources) as solution:
-        solution.objective  # 7633.908502024291
+    with sps.solve('differential/pypsa/rungs/rung_03_expansion.yaml', sources) as result:
+        result.objective  # 7633.908502024291
     ```
 
 === "PyPSA"

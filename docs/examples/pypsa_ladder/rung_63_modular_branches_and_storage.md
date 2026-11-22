@@ -1534,8 +1534,8 @@ e_{\xi,t,v} = \mathit{Store\_energy\_carried\_in}_{\xi,t,v} - q_{\xi,t,v} \cdot 
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_63_modular_branches_and_storage.yaml', sources) as solution:
-        solution.objective  # 13927.0
+    with sps.solve('differential/pypsa/rungs/rung_63_modular_branches_and_storage.yaml', sources) as result:
+        result.objective  # 13927.0
     ```
 
 === "PyPSA"

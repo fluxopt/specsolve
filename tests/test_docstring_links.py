@@ -1,7 +1,7 @@
 """Every link a docstring in `src/` writes lands on a specsolve object.
 
 The strict site build checks the links of the docstrings it renders, which is
-the public surface. Most links sit in modules the site never renders, where a
+the public API. Most links sit in modules the site never renders, where a
 target that was renamed or removed leaves a link to nothing and no build
 notices. This walks every docstring the package holds, resolves each link the
 way the site does — in the docstring's own scope, walking outward — and

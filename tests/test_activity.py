@@ -69,9 +69,9 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
             run.result.dual('balance')
 
 
-def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_frame_inputs):
+def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_table_inputs):
     """On an `==` row activity equals the rhs up to solver tolerance, by construction."""
-    data = dispatch_frame_inputs
+    data = dispatch_table_inputs
     with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         got = sol.activity('power_balance').sort('snapshot')['value'].to_numpy()
         assert got == pytest.approx(data['load'].sort('snapshot')['value'].to_numpy(), rel=ACTIVITY_RTOL), (
@@ -93,9 +93,9 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
             result.activity('power_balance')
 
 
-def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
-    """close() releases the activity frames with the primal and dual ones."""
-    data = dispatch_frame_inputs
+def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_table_inputs):
+    """close() releases the activity tables with the primal and dual ones."""
+    data = dispatch_table_inputs
     with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         pass
     with pytest.raises(SpecsolveError, match='closed'):

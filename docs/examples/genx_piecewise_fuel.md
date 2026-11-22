@@ -250,7 +250,7 @@ GenX's piecewise-fuel case: a day of dispatch for two carbon-capture plants and 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -590,4 +590,4 @@ happened to preserve the total would still move one of these.
 `shift(edge='wrap')` on a representative day, a piecewise curve as a floor per
 piece rather than a formulation, and a carbon budget whose coefficients carry
 capture and uptake. No new construct: a framework's dispatch model, settings
-and all, is a page of declarations.
+and all, is a page of entries.

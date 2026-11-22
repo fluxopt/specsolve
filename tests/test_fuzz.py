@@ -149,7 +149,7 @@ REDUCED = [
             id=f'{operator} over a {label} term without the dimension',
         )
         for operator, amount in [('shift', 'offset=1, edge=0'), ('sum_back', 'window=2')]
-        for label, missing in [('masked', {}), ('neutral', {'missing': 'neutral'})]
+        for label, missing in [('partly absent', {}), ('neutral', {'missing': 'neutral'})]
     ),
     pytest.param(
         _case(
@@ -161,7 +161,7 @@ REDUCED = [
             ),
             {'t': [1, 2, 3], 'g': ['a', 'b']},
         ),
-        id='sum over a term without the dimension beside a masked term',
+        id='sum over a term without the dimension beside a partly absent term',
     ),
     pytest.param(
         _case(
@@ -179,7 +179,7 @@ REDUCED = [
                 'q': pl.DataFrame({'t': [1, 2, 3], 'value': [1.0, 0.5, 0.25]}),
             },
         ),
-        id='a parameter window over a masked term without its dimension',
+        id='a parameter window over a partly absent term without its dimension',
     ),
     pytest.param(
         _case(
@@ -555,7 +555,7 @@ REDUCED = [
             ),
             {'t': [0, 9], 'p': pl.DataFrame({'t': [0], 'value': [2.0]})},
         ),
-        id='oracle: a divisor with no row beside a neutral variable masked there',
+        id='oracle: a divisor with no row beside a neutral variable absent there',
     ),
     pytest.param(
         _case(
@@ -632,7 +632,7 @@ REDUCED = [
             {'b': ['b8'], 'g': ['g6', 'g7']},
             'x - y',
         ),
-        id='an absent summand beside a broadcast term',
+        id='an absent term of a sum beside a broadcast term',
     ),
     pytest.param(
         _case(
@@ -789,7 +789,7 @@ REDUCED = [
                 'r': pl.DataFrame({'g': ['g5'], 'k': [6]}),
             },
         ),
-        id='oracle: an at() in a where over a frame with its column',
+        id='oracle: an at() in a where over dimensions that hold its column',
     ),
     pytest.param(
         _case(

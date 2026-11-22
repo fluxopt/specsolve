@@ -65,7 +65,7 @@ def slice_for(spec, **extra):
     models says which slice it means.
     """
     known = {**spec.parameters, **spec.dimensions}
-    return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
+    return {name: table for name, table in {**SOURCES, **extra}.items() if name in known}
 
 
 EMPTY = {
@@ -76,7 +76,7 @@ EMPTY = {
 }
 
 
-def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def slope_at(result: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """How the subproblem's value moves with capacity, and its value there.
 
     The capacity constraint's shadow price is that derivative, weighted by
@@ -84,7 +84,7 @@ def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.Dat
     ``dual`` and a join against the model's own ``avail`` table.
     """
     slope = (
-        solution.dual('capacity')
+        result.dual('capacity')
         .join(SOURCES['avail'], on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')
@@ -94,7 +94,7 @@ def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.Dat
     return slope, here
 
 
-def cut_from_ray(solution: sps.types.Result) -> tuple[pl.DataFrame, float]:
+def cut_from_ray(result: sps.types.Result) -> tuple[pl.DataFrame, float]:
     """The feasibility cut carried by a certificate that this capacity cannot be dispatched.
 
     ``dual_ray`` weights the subproblem's rows so that together they
@@ -105,14 +105,14 @@ def cut_from_ray(solution: sps.types.Result) -> tuple[pl.DataFrame, float]:
     slope ``Σ_s u·avail`` per generator, against ``minus Σ_s v·load``.
     """
     slope = (
-        solution.dual_ray('capacity')
+        result.dual_ray('capacity')
         .join(SOURCES['avail'], on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')
         .agg(pl.col('term').sum().alias('slope'))
     )
     against = (
-        solution.dual_ray('balance')
+        result.dual_ray('balance')
         .join(SOURCES['load'], on='snapshot', suffix='_load')
         .select((pl.col('value') * pl.col('value_load')).sum())
         .item()
