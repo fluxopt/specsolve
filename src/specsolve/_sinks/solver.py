@@ -216,7 +216,7 @@ class Solver(ABC):
     def _change_coefficients(
         self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
     ) -> None:
-        """Set the loaded matrix entry at each ``(rows[i], cols[i])``, one that exists, to ``values[i]``."""
+        """Set the loaded coefficient at each ``(rows[i], cols[i])``, one that exists, to ``values[i]``."""
 
     def start_from_basis(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.

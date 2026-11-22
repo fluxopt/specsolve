@@ -712,8 +712,8 @@ Values are not varied, because a push sends whole vectors whatever they hold.
 parameter it was given, and builds every entry — so
 it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
-multiplies a variable: the matrix's entries change, and the loaded solver takes
-them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
+multiplies a variable: the matrix's coefficients change, and the loaded solver
+takes them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
 name one; the other cases skip it. A `start=` changes only what the solver
 begins from, which moves the solve and not anything timed here;
 `bench/warm_payoff.py` is where a carried basis is weighed.
