@@ -268,10 +268,10 @@ class Solver(ABC):
         answer = self._run(handoff)
         if basis and answer.primal is not None:
             answer = replace(answer, basis=self._seated(handoff))
-        self._check_span('primal', answer.primal, handoff.column_count)
-        self._check_span('dual', answer.dual, handoff.row_count)
-        self._check_span('activity', answer.activity, handoff.row_count)
-        self._check_span('dual ray', answer.dual_ray, handoff.row_count)
+        self._refuse_another_length('primal', answer.primal, handoff.column_count)
+        self._refuse_another_length('dual', answer.dual, handoff.row_count)
+        self._refuse_another_length('activity', answer.activity, handoff.row_count)
+        self._refuse_another_length('dual ray', answer.dual_ray, handoff.row_count)
         return answer
 
     def _seated(self, handoff: Handoff) -> Basis | None:
@@ -280,8 +280,8 @@ class Solver(ABC):
         if read is None:
             return None
         columns, rows = read
-        self._check_span('column basis', columns, handoff.column_count)
-        self._check_span('row basis', rows, handoff.row_count)
+        self._refuse_another_length('column basis', columns, handoff.column_count)
+        self._refuse_another_length('row basis', rows, handoff.row_count)
         return seated(handoff, columns, rows)
 
     @abstractmethod
@@ -294,7 +294,7 @@ class Solver(ABC):
         equal bounds either bound's: [`_seated`][] reads both off the model.
         """
 
-    def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:
+    def _refuse_another_length(self, quantity: str, values: Sized | None, expected: int) -> None:
         """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
