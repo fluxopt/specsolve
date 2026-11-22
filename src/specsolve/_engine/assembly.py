@@ -367,7 +367,7 @@ class Assembly:
     def _quadratic_share(
         self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
     ) -> pl.DataFrame | None:
-        """One constraint's quadratic entries as ``(row, col_l, col_r, coeff)``, in that order.
+        """One constraint's quadratic coefficients as ``(row, col_l, col_r, coeff)``, in that order.
 
         Pairs are ordered by column index for [`_objective_quadratic`][]'s
         reason.
@@ -619,7 +619,7 @@ def _pruned(matrix: pl.DataFrame) -> pl.DataFrame:
 
 
 def _row_starts(ordered: pl.DataFrame, row_count: int) -> np.ndarray[tuple[int, ...], np.dtype[np.int64]]:
-    """Each row's first entry in the row-ordered *ordered* — CSR's own index.
+    """Each row's first coefficient in the row-ordered *ordered* — CSR's own index.
 
     *ordered* must ascend in ``ROW``: a row in two runs silently gets wrong spans.
     """

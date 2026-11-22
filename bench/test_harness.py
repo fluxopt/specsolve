@@ -844,7 +844,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     """The LP file at *path* as HiGHS reads it, with nothing left that depends on a name or an order.
 
     A column is its cost, bounds and integrality. A row is its bounds and the
-    multiset of its entries, each a coefficient with its column's description.
+    multiset of its coefficients, each with its column's description.
     Two models with the same rows and columns in another order, or under other
     names, compare equal. A model that is the other one relabelled along time is also equal,
     which is why the objective test above stays beside this one.
@@ -864,11 +864,11 @@ def _canonical(path: Path) -> dict[str, Any]:
     a = lp.a_matrix_
     assert a.format_ == highspy.MatrixFormat.kColwise, 'HiGHS reads an LP file into a column-wise matrix'
     start, index, value = np.asarray(a.start_), np.asarray(a.index_), np.asarray(a.value_)
-    entries: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
+    coefficients: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
     for j in range(n):
         for e in range(start[j], start[j + 1]):
-            entries[int(index[e])].append((_rounded(value[e]), columns[j]))
-    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(entries[i]))) for i in range(m)]
+            coefficients[int(index[e])].append((_rounded(value[e]), columns[j]))
+    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(coefficients[i]))) for i in range(m)]
     return {
         'sense': str(lp.sense_),
         'offset': _rounded(lp.offset_),

@@ -53,7 +53,7 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
 
     Raises:
         DataError: Naming the divisor parameters of *expressions* and the
-            count of undefined entries.
+            count of undefined coefficients.
     """
     coeff = stacked.get_column(COEFF)
     divisors = program.parameters_of(*divisors_of(*expressions))

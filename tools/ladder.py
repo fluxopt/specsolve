@@ -121,14 +121,16 @@ def prep_slice(declared: list[str]) -> str:
     """The lines of ``prep.sources`` that make *declared*, with the helpers they call — the rung's prep."""
     text = (LADDER / 'prep.py').read_text()
     body = text[text.index('def sources(') :]
-    entries = dict(re.findall(r"^        '(\w+)': (.+?),\n(?=        '|    \})", body, flags=re.DOTALL | re.MULTILINE))
+    expressions = dict(
+        re.findall(r"^        '(\w+)': (.+?),\n(?=        '|    \})", body, flags=re.DOTALL | re.MULTILINE)
+    )
     tail = re.findall(r"^    tables\['(\w+)'\] = (.+)$", body, flags=re.MULTILINE)
-    entries.update(tail)
+    expressions.update(tail)
     helpers = {
         m.group(1): m.group(0).rstrip()
         for m in re.finditer(r'^def (_\w+)\(.*?(?=^def |\Z)', text, flags=re.DOTALL | re.MULTILINE)
     }
-    lines = [f'    {name!r}: {entries[name]},' for name in declared if name in entries]
+    lines = [f'    {name!r}: {expressions[name]},' for name in declared if name in expressions]
     used = sorted({h for h in helpers if any(f'{h}(' in line for line in lines)})
     closure = set(used)
     for h in used:

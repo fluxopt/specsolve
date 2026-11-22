@@ -91,7 +91,7 @@ def test_every_rung_page_is_in_the_nav():
 
 
 def test_the_reasons_file_names_each_pypsa_name_once():
-    """A YAML loader keeps the last of two mappings for one key, so a second entry silently drops the first's reasons."""
+    """A YAML loader keeps the last of two mappings for one key, so a second key silently drops the first's reasons."""
     import re
 
     keys = re.findall(r'^([^\s#][^:\n]*):$', (ladder.LADDER / 'deviations.yaml').read_text(), flags=re.MULTILINE)
@@ -117,7 +117,7 @@ def test_every_negated_dual_is_checked_rather_than_excused():
     stamped = json.loads((ladder.LADDER / 'references.json').read_text())
     reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
     index = ladder.INDEX.read_text()
-    recorded = {name for name, entry in reasons.items() if 'negated' in entry}
+    recorded = {name for name, noted in reasons.items() if 'negated' in noted}
     assert not [n for n in recorded if 'duals' in reasons[n]], (
         'a name recorded as negated and also excused by a `duals:` reason, which would hide a difference'
     )
@@ -126,10 +126,10 @@ def test_every_negated_dual_is_checked_rather_than_excused():
         duals = stamped[stem]['parity']['duals']
         for name, reason in duals['negated'].items():
             assert reasons.get(name, {}).get('negated') == reason, f'{stem}: {name} negated for an unrecorded reason'
-            entry = duals['per_name'][name]
-            assert entry['matches'] and not entry.get('outside'), (
+            compared = duals['per_name'][name]
+            assert compared['matches'] and not compared.get('outside'), (
                 f"{stem}: {name} is recorded negated but its dual is neither the negative of PyPSA's nor inside "
-                f"the range of duals PyPSA's model admits, off by {entry['max_abs_diff']}"
+                f"the range of duals PyPSA's model admits, off by {compared['max_abs_diff']}"
             )
             assert f'`{name}' in index and reason in index, f'{name} and why it is negated are not on the index'
             checked.add(name)

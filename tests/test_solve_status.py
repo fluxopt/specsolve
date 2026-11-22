@@ -57,14 +57,14 @@ def test_the_gurobi_mapping_matches_linopy_where_it_claims_to():
     for code, condition in theirs.items():
         if code in _LINOPY_DIVERGENCES:
             assert _CONDITION_OF_GUROBI_STATUS[code] != condition, (
-                f'linopy now agrees with us on status {code} — drop the entry from _LINOPY_DIVERGENCES'
+                f'linopy now agrees with us on status {code} — drop the key from _LINOPY_DIVERGENCES'
             )
         else:
             assert _CONDITION_OF_GUROBI_STATUS[code] == condition
 
 
 def test_the_xpress_mapping_matches_linopy():
-    """Copied entry for entry, with nothing claimed as an exception.
+    """Copied key for key, with nothing claimed as an exception.
 
     The map is keyed by ``SolStatus`` *value* here and by the enum member
     there, so a member renamed upstream fails here.
@@ -158,7 +158,7 @@ def test_a_solve_that_left_no_values_writes_the_record_and_no_tables(tmp_path):
     """An export of a run that did not solve is the record alone."""
     with sps.solve(*CASES['INFEASIBLE']) as result:
         out = result.save(tmp_path / 'infeasible')
-    assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
+    assert sorted(path.name for path in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
         'the record, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
     )
     record = pl.read_parquet(out / 'record.parquet')

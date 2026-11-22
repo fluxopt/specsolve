@@ -221,7 +221,7 @@ def _call_snippet(name: str) -> str:
     checks — a projection of `references.json`, and this is its one home. A
     model with a formulation is handed over written out.
     """
-    entry = constructs.REFERENCES[name]
+    recorded = constructs.REFERENCES[name]
     ports_yaml = constructs.ROOT / 'examples' / 'ports' / f'{name}.yaml'
     path = f'examples/ports/{name}.yaml' if ports_yaml.exists() else f'examples/{name}.yaml'
     written = to_spec(constructs.ROOT / path)
@@ -229,10 +229,10 @@ def _call_snippet(name: str) -> str:
     lines = [
         '# sources: parameter name -> table or parquet path',
         f'with sps.solve({handed}, sources) as result:',
-        f'    result.objective  # {entry["objective"]!r}',
+        f'    result.objective  # {recorded["objective"]!r}',
     ]
-    if entry.get('duals'):
-        lines.append(f"    result.dual('{next(iter(entry['duals']))}')")
+    if recorded.get('duals'):
+        lines.append(f"    result.dual('{next(iter(recorded['duals']))}')")
     return '\n'.join(lines) + '\n'
 
 

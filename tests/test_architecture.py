@@ -489,7 +489,7 @@ def _families() -> dict[str, set[str]]:
     }
 
 
-def test_each_sink_is_its_module_and_its_registry_entry():
+def test_each_sink_is_its_module_and_its_registry_key():
     """One shape per family, checked off the registry.
 
     A solver is a module named for it, a ``Solver`` subclass defined in that
@@ -503,7 +503,7 @@ def test_each_sink_is_its_module_and_its_registry_entry():
     shared = {'__init__', 'handoff', 'capabilities', *FAMILY_SHARED.values()}
     held = families['solvers'] | families['writers']
     on_disk = {path.stem for path in SINKS.glob('*.py')} - shared
-    assert held == on_disk, f'sink modules and registry entries disagree: {sorted(held ^ on_disk)}'
+    assert held == on_disk, f'sink modules and registry keys disagree: {sorted(held ^ on_disk)}'
     assert not families['solvers'] & families['writers'], 'a module serves both families'
 
     assert set(SOLVERS) == families['solvers'], 'a solver is keyed by the name of its module'
@@ -552,7 +552,7 @@ def test_the_door_gives_every_declared_dimension_dtype_a_column():
 
 
 def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
-    """Every declared dtype has a column table entry, and ``int`` for ``float`` is the only widening."""
+    """Every declared dtype has a key in the column table, and ``int`` for ``float`` is the only widening."""
     from mathspec.program import ParameterDtype
 
     from specsolve._sources import _COLUMNS, ACCEPTED_VALUE_TYPES

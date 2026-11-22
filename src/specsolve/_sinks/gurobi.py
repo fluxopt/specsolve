@@ -281,9 +281,9 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
     cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
     rows = handoff.dense_rows(gurobipy.GRB.INFINITY)
     (linear,) = handoff.row_chunks(None)
-    entries = linear.entries
+    coefficients = linear.coefficients
     matrix = scipy.sparse.csr_matrix(
-        (entries[COEFF].to_numpy(), entries[COL].to_numpy(), np.append(linear.starts, entries.height)),
+        (coefficients[COEFF].to_numpy(), coefficients[COL].to_numpy(), np.append(linear.starts, coefficients.height)),
         shape=(linear.height, handoff.column_count),
     ).tocsc()
     quad = handoff.quad
@@ -332,11 +332,11 @@ def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowV
             (pairs[COEFF].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
         )
         on = [columns[col] for col in held]
-        entries = handoff.matrix_chunk(row, row + 1)
-        linear = [columns[col] for col in entries[COL]]
+        coefficients = handoff.matrix_chunk(row, row + 1)
+        linear = [columns[col] for col in coefficients[COL]]
         m.addMQConstr(
             quadratic,
-            entries[COEFF].to_numpy() if linear else None,
+            coefficients[COEFF].to_numpy() if linear else None,
             spelling[rows.sense[row]],
             float(rows.rhs[row]),
             on,
