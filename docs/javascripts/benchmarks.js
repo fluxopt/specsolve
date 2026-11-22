@@ -186,9 +186,9 @@ async function mount(root) {
   }
 
   /* A tooltip's number columns. Each row lays out on its own, value right-aligned in tabular
-     digits, so a column lines up only if every entry has one shape: one unit for the column (the
+     digits, so a column lines up only if every cell has one shape: one unit for the column (the
      smallest value's), fixed decimals, and figure spaces, a digit wide, padding the left. Each
-     entry is one value or a projection's range. */
+     cell is one value or a projection's range. */
   const UNITS = { seconds: [['ms', 1e-3], ['s', 1]], gigabytes: [['MB', 1e-3], ['GB', 1]] };
   const padded = texts => texts.map(t => t.padStart(Math.max(...texts.map(x => x.length)), '\u2007'));
   function amounts(spans, format) {

@@ -101,7 +101,7 @@ def test_which_shipped_sinks_refuse_what_the_language_can_say():
         'and MPS spells it in a section this writer does not write'
     )
     assert _refusing(WITH_A_QUADRATIC_ROW) == {'highs', 'xpress', '.mps'}, (
-        'and a quadratic row, which HiGHS has no entry point for at all'
+        'and a quadratic row, which HiGHS has no method for at all'
     )
 
 

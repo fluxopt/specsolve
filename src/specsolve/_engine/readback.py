@@ -47,12 +47,12 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
 
     at, ordered = _row_index(model, name, coordinate)
     starts = model.handoff.row_starts
-    entries = model.handoff.matrix.slice(int(starts[at]), int(starts[at + 1] - starts[at]))
+    coefficients = model.handoff.matrix.slice(int(starts[at]), int(starts[at + 1] - starts[at]))
     stated = model.handoff.rows.slice(at, 1)
     return ConstraintRow(
         name=name,
         coordinate=ordered,
-        terms=_named_terms(model, entries),
+        terms=_named_terms(model, coefficients),
         sense=str(stated.item(0, 'sense')),
         rhs=float(stated.item(0, 'rhs')),
     )
@@ -147,7 +147,7 @@ def _label(name: str, dim: str, value: object, dtype: pl.DataType) -> pl.Expr:
         ) from refused
 
 
-def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
+def _named_terms(model: BuiltModel, coefficients: pl.DataFrame) -> pl.DataFrame:
     """``(variable, coordinate, coefficient)`` for one row's coefficients, in the matrix's order.
 
     Each entry owns a contiguous run of column indices, so a term's variable
@@ -155,7 +155,7 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
     ``coordinate`` is one string because one row's terms may span variables
     with different dimensions.
     """
-    wanted = entries[COL].to_numpy()
+    wanted = coefficients[COL].to_numpy()
     named = []
     for variable, held in model.variables.items():
         inside = wanted[(wanted >= held.start) & (wanted < held.start + held.height)]
@@ -179,7 +179,7 @@ def _named_terms(model: BuiltModel, entries: pl.DataFrame) -> pl.DataFrame:
         else pl.DataFrame(schema={COL: pl.Int64, 'variable': pl.String, 'coordinate': pl.String})
     )
     return (
-        entries.with_columns(pl.col(COL).cast(pl.Int64))
+        coefficients.with_columns(pl.col(COL).cast(pl.Int64))
         .join(owners.with_columns(pl.col(COL).cast(pl.Int64)), on=COL, how='left', maintain_order='left')
         .select('variable', 'coordinate', pl.col(COEFF).alias('coefficient'))
     )
@@ -215,10 +215,10 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
         return column.to_numpy().astype(np.int64)
 
     obj, quad, matrix, qmatrix = handoff.obj, handoff.quad, handoff.matrix, handoff.qmatrix
-    entry_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
+    coefficient_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
     reduced = np.zeros(handoff.column_count, dtype=np.float64)
     reduced += summed(obj[COL], obj[COEFF].to_numpy())
-    reduced -= summed(matrix[COL], matrix[COEFF].to_numpy() * y[entry_rows])
+    reduced -= summed(matrix[COL], matrix[COEFF].to_numpy() * y[coefficient_rows])
     for table, weights in (
         (quad, quad[COEFF].to_numpy()),
         (qmatrix, -qmatrix[COEFF].to_numpy() * y[index(qmatrix[ROW])]),
@@ -391,7 +391,7 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     holds starts nonbasic at a bound, and a row only this build holds starts
     basic, which is how a row gained between two builds enters without moving
     the vertex. An entry whose dimensions changed is new. The result is then
-    [`_counted`][] to one basic entry per row, which is what a solver needs to
+    [`_counted`][] to as many basic statuses as rows, which is what a solver needs to
     take it, and [`seated`][specsolve._sinks.solver.seated]
     on this build's bounds.
 
@@ -472,7 +472,7 @@ def _place(
 
 
 def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """*columns* and *rows* with exactly one basic entry per row, the count every solver's simplex needs.
+    """*columns* and *rows* with exactly as many basic statuses as rows, the count every solver's simplex needs.
 
     A basis carried across a rebuild has one too many for each nonbasic row
     the rebuild dropped, and one too few for each basic column it dropped.

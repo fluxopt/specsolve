@@ -28,7 +28,7 @@ cannot make. An LP with alternative optima has many optimal primal and dual
 solutions, so comparing answers compares which vertex a solver happened to
 reach: `genx_piecewise_fuel` agrees on the objective to nine decimals and
 disagrees on a quarter of one dual vector, while its two matrices are
-identical to the entry ([#992]). Duals and primals are therefore **never**
+identical coefficient for coefficient ([#992]). Duals and primals are therefore **never**
 compared lane to lane. A read at a point is the exception that proves
 it: `at_a_point()` holds every variable at a seeded value rather than asking a
 solver for one, so the point is the test's choice, and each lane's value of an

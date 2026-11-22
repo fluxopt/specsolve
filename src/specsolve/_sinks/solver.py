@@ -235,7 +235,7 @@ class Solver(ABC):
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
         if len(values) != expected:
             raise SpecsolveError(
-                f'this {what} carries {len(values)} entries for a model with {expected} {axis}. It is '
+                f'this {what} carries {len(values)} elements for a model with {expected} {axis}. It is '
                 f'positional, so one laid out for a differently shaped model would start the solve from a '
                 f'state about a different one. This is an engine bug rather than a problem with the model '
                 f'— please report it.'

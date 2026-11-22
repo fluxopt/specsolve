@@ -57,7 +57,7 @@ REACH = {
 
 
 def reaching(*served: tuple[str, str, float]) -> pl.DataFrame:
-    """A `reach` table. An absent row is a zero coefficient (the data-attachment rules), so it drops the entry."""
+    """A `reach` table. An absent row is a zero coefficient (the data-attachment rules), so it drops the coefficient."""
     return pl.DataFrame(
         {'zone': [z for z, _, _ in served], 'plant': [p for _, p, _ in served], 'value': [v for _, _, v in served]},
         schema={'zone': pl.String, 'plant': pl.String, 'value': pl.Float64},
@@ -132,7 +132,7 @@ RUNGS = [
             {'reach': reaching(('north', 'c', 1.0), ('north', 'd', 1.0), ('south', 'a', 1.0), ('south', 'b', 1.0))},
             False,
         ),
-        id='an entry changed column',
+        id='a coefficient changed column',
     ),
     pytest.param(
         Rung(
@@ -140,7 +140,7 @@ RUNGS = [
             {'reach': reaching(('north', 'a', 1.0), ('south', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
             False,
         ),
-        id='an entry changed row',
+        id='a coefficient changed row',
     ),
     pytest.param(Rung('knapsack', {'capacity': pl.DataFrame({'value': [9.0]})}, True), id='integer'),
 ]
@@ -734,7 +734,7 @@ def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
         seen = model.diagnostics()
 
         assert (seen.columns, seen.rows) == (len(SNAPSHOTS) * len(GENERATORS), len(SNAPSHOTS))
-        assert seen.nonzeros == seen.columns, 'one balance row per snapshot, one entry per generator in it'
+        assert seen.nonzeros == seen.columns, 'one balance row per snapshot, one coefficient per generator in it'
         assert seen.omissions.is_empty(), 'every declared row reached the solver'
 
     assert model.diagnostics().nonzeros == seen.nonzeros, 'a released model still says how big it was'
