@@ -409,13 +409,88 @@ def test_an_archive_carries_the_answer_beside_the_question(
         )
 
 
-def test_a_live_answer_carries_no_sources_or_axis(dispatch_yaml: Path, dispatch_table_inputs) -> None:
-    """Only an answer read out of an archive holds what it was solved from; a live one holds ``None`` there."""
-    with sps.solve(dispatch_yaml, dispatch_table_inputs) as result:
-        assert result.sources is None, 'a live result was read out of no archive'
+def _solved(how: str, spec: Path, sources: dict, tmp_path: Path) -> sps.types.Result:
+    """One answer of *spec* over *sources*, reached as *how* names."""
+    if how == 'a regular solve':
+        return sps.solve(spec, sources)
+    if how == 'solve, archive=dir':
+        return sps.solve(spec, sources, archive=tmp_path / 'case')
+    if how == 'Model.solve, archive=dir':
+        return sps.build(spec, sources).solve(archive=tmp_path / 'case')
+    if how == 'solve, archive=zip':
+        return sps.solve(spec, sources, archive=tmp_path / 'case.zip')
+    sps.solve(spec, sources, archive=tmp_path / 'case')
+    return sps.read_archive(tmp_path / 'case')
+
+
+@pytest.mark.parametrize(
+    ('how', 'held'),
+    [
+        pytest.param('a regular solve', None, id='a regular solve holds none'),
+        pytest.param('solve, archive=dir', 'paths', id='solve into a directory points at its sources'),
+        pytest.param('Model.solve, archive=dir', 'paths', id='Model.solve into a directory points at its sources'),
+        pytest.param('solve, archive=zip', 'tables', id='solve into a zip holds the tables it wrote'),
+        pytest.param('read back', 'tables', id='read back holds the tables'),
+    ],
+)
+def test_an_answer_carries_its_sources_exactly_where_an_archive_holds_it(
+    how: str, held: str | None, dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
+) -> None:
+    """An archive always carries its sources and a regular answer does not, so `sources` is `None` only for the latter."""
+    result = _solved(how, dispatch_yaml, dispatch_table_inputs, tmp_path)
+    if held is None:
+        assert result.sources is None, 'no archive holds this answer, so it holds no sources'
+        return
+    assert result.sources is not None, 'an archive holds this answer, so it carries the sources'
+    assert set(result.sources) == set(tidy_sources(as_program(to_spec(dispatch_yaml)), dispatch_table_inputs)), (
+        'one source per key the file declares'
+    )
+    if held == 'paths':
+        assert all(
+            path == tmp_path / 'case' / 'sources' / f'{name}.parquet' for name, path in result.sources.items()
+        ), "each source is the path to the archive's member"
+        assert all(path.is_file() for path in result.sources.values()), 'and each path is there'
+    else:
+        assert all(isinstance(table, (pl.DataFrame, pl.LazyFrame)) for table in result.sources.values()), (
+            'each source is a table in memory'
+        )
+    with sps.solve(result.spec, result.sources) as again:
+        assert again.objective == pytest.approx(result.objective, rel=1e-9), 'the sources ask the question again'
+
+
+@pytest.mark.parametrize(
+    'archive',
+    [
+        pytest.param(None, id='a regular sweep'),
+        pytest.param('runs', id='a sweep into a directory'),
+        pytest.param('runs.zip', id='a sweep into a zip'),
+    ],
+)
+def test_a_sweep_carries_its_axis_and_its_sources_where_an_archive_holds_it(
+    archive: str | None, dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
+) -> None:
+    """`solve_over` always knows its axis; its sources are the archive's, so a regular sweep holds none."""
+    axis = sps.EachLabel('scenario')
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
-    sweep = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'))
-    assert (sweep.sources, sweep.axis) == (None, None), 'and neither was a live sweep'
+    sweep = sps.solve_over(dispatch_yaml, sources, axis, archive=None if archive is None else tmp_path / archive)
+    assert sweep.axis == axis, 'the axis the sweep was cut by'
+    if archive is None:
+        assert sweep.sources is None, 'no archive holds this sweep, so it holds no sources'
+        return
+    assert sweep.sources is not None, 'an archive holds this sweep, so it carries the sources'
+    if archive == 'runs':
+        assert all(path == tmp_path / 'runs' / 'sources' / f'{name}.parquet' for name, path in sweep.sources.items()), (
+            "each source is the path to the archive's member"
+        )
+        assert all(path.is_file() for path in sweep.sources.values()), 'and each path is there'
+    else:
+        assert all(isinstance(table, (pl.DataFrame, pl.LazyFrame)) for table in sweep.sources.values()), (
+            'each source is a table in memory'
+        )
+    again = sps.solve_over(sweep.spec, sweep.sources, sweep.axis)
+    assert again.records['objective'].to_list() == pytest.approx(sweep.records['objective'].to_list(), rel=1e-9), (
+        'the sources and the axis run the sweep again'
+    )
 
 
 def test_two_archives_of_one_spec_over_different_numbers_are_told_apart(

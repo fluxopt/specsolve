@@ -330,12 +330,14 @@ class Sweep:
     #: whose answer holds none.
     spec: Spec | None
     #: The data the sweep was cut from, uncut and keyed as the file declares
-    #: it, where it was read out of an archive; ``None`` for a live sweep. A
-    #: source an EachLabel axis cuts holds the axis column first. Each is a
-    #: table read whole, or the path to its member from a scan.
+    #: it, as its archive holds it; ``None`` where no archive holds this
+    #: sweep. A source an EachLabel axis cuts holds the axis column first.
+    #: Each is held as [`Result.sources`][specsolve._result.Result.sources]
+    #: holds one: a path into a directory archive, a table for a ``.zip`` and
+    #: for a read, a path for a scan.
     sources: Mapping[str, Source] | None = None
     #: What cut the sources, with the ``carry=`` it chained the slices with,
-    #: where the sweep was read out of an archive; ``None`` for a live sweep.
+    #: archived or not; ``None`` only for a sweep no ``solve_over`` made.
     #: ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis)`` runs it again.
     axis: Axis | None = None
     #: ``{kind: {name: table}}``, every slice's table of a name as one, keyed,

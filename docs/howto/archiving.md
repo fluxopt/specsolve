@@ -45,9 +45,22 @@ sps.solve(result.spec, result.sources)  # the same question, asked again
 ```
 
 **`read_archive` returns the answer itself**: the `Result`, or the `Sweep` of a
-sweep archive. It carries the `spec`, the `sources` and, for one solve, the
-`metrics` reaching it took; a sweep also carries its `axis`. An answer that
-did not come from an archive holds `None` there.
+sweep archive. It carries the `spec`, the `sources` and the `metrics` reaching
+it took; a sweep also carries its `axis`.
+
+**An archive always carries its sources, and a regular answer does not:**
+
+```python
+result = sps.solve(spec, sources)  # result.sources is None: no archive
+result = sps.solve(spec, sources, archive='case/')  # the paths under case/sources/
+result = sps.solve(spec, sources, archive='case.zip')  # the tables it wrote
+result = sps.read_archive('case/')  # the tables
+sps.solve(result.spec, result.sources)
+```
+
+A directory archive's answer points at its members and holds no table in
+memory. A zip has no file to point at, so its answer holds the tables. A sweep
+carries its `axis` whether or not it was archived.
 
 **`read_inputs` reads the spec and the data, and never the answer.** It still
 reads an archive whose answer layout `read_archive` refuses.

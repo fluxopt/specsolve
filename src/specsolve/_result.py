@@ -400,12 +400,16 @@ class Result:
 
     @property
     def sources(self) -> Mapping[str, Source] | None:
-        """The data this answered, keyed as the file declares it, where it was read out of an archive; else ``None``.
+        """The data this answered, keyed as the file declares it, as its archive holds it; ``None`` where no archive holds this answer.
 
-        Each source is the table [`tidy`][specsolve._api.tidy] returns, read
-        whole by [`read_archive`][specsolve._archive.read_archive], or the
-        path to its member from [`scan_archive`][specsolve._archive.scan_archive].
-        ``sps.solve(result.spec, result.sources)`` asks the question again.
+        An answer solved with ``archive=`` into a directory holds the path to
+        each ``sources/<key>.parquet`` and no table in memory; into a ``.zip``,
+        which has no file to point at, the tables the archive was written
+        from. [`read_archive`][specsolve._archive.read_archive] gives each
+        source as the table [`tidy`][specsolve._api.tidy] returns, and
+        [`scan_archive`][specsolve._archive.scan_archive] the path to its
+        member. ``sps.solve(result.spec, result.sources)`` asks the question
+        again.
         """
         return self._sources
 
