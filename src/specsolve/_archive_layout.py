@@ -32,10 +32,11 @@ from specsolve._answer_layout import (
     write_format,
     write_whole,
 )
+from specsolve._collect import collected
 from specsolve._inputs import as_program
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
 from specsolve._outputs import OUTPUT_KINDS
-from specsolve.errors import LayoutError
+from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
@@ -169,7 +170,10 @@ def sweep_archive(
     staging = _staging_for(out) if zipped else None
     tree = out if staging is None else staging / 'tree'
     try:
-        _write_inputs(tree, spec, tables, axis, write)
+        if staging is None and (tree / AXIS_MEMBER).is_file():
+            _refuse_other_inputs(tree, spec, tables, axis)
+        else:
+            _write_inputs(tree, spec, tables, axis, write)
         yield tree / ANSWER_DIR, write
         _write_catalogs(as_program(spec), tree, run, axis)
         if staging is not None:
@@ -215,6 +219,42 @@ def carried_sources(out: Path, tables: Mapping[str, pl.LazyFrame]) -> dict[str, 
     if out.suffix == '.zip':
         return dict(tables)
     return {name: out / SOURCES_DIR / f'{name}.parquet' for name in tables}
+
+
+def _refuse_other_inputs(
+    tree: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
+) -> None:
+    """Refuse a resume of the sweep archived at *tree* from another spec, axis or sources than it holds.
+
+    The slices on disk were solved from what *tree* holds, so a resume either
+    matches it and writes none of it again, or would describe answers it did
+    not produce. ``sweep.json`` names the keys and not the carry or the
+    lookahead, so the axis is compared here as ``axis.json`` holds it. A
+    source is compared as the table it is written as, without its run, rather
+    than hashed: encoding it again costs what writing it did. Called before
+    anything is written, so a refused directory is left as it was found.
+
+    Raises:
+        SpecsolveError: A spec, an axis or a source that differs, each named.
+    """
+    differ = [SPEC_MEMBER] if (tree / SPEC_MEMBER).read_text() != spec.to_yaml() else []
+    held_axis, asked_axis = json.loads((tree / AXIS_MEMBER).read_text()), json.loads(json.dumps(axis))
+    if held_axis != asked_axis:
+        differ.append(f'{AXIS_MEMBER} (holding {held_axis}, and this call asks for {asked_axis})')
+    held = {member.stem: member for member in (tree / SOURCES_DIR).glob('*.parquet')}
+    differ += [
+        f'{SOURCES_DIR}/{name}.parquet'
+        for name in sorted(held.keys() | tables.keys())
+        if name not in held
+        or name not in tables
+        or not parquet.read(held[name]).drop(RUN, strict=False).equals(tables[name].pipe(collected))
+    ]
+    if differ:
+        raise SpecsolveError(
+            f'{str(tree)!r} holds this sweep solved from other inputs than this call passes: '
+            f'{", ".join(differ)} differ, and the slices it holds were solved from what it holds. Archive to a '
+            f'new directory, or delete this one to solve it again.'
+        )
 
 
 #: ``catalog.parquet``'s columns, in order.

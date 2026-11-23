@@ -139,7 +139,7 @@ sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, th
 |---|---|
 | **`scan` reads lazily** | `sweep.scan(name, kind='primal')` returns a `LazyFrame` over the files. |
 | **one file per slice and name** | `answer/<kind>/<name>/<position>.parquet`, plus `answer/record/` and `answer/metrics/`, with `specsolve_run` added to each table. |
-| **an interrupted sweep resumes** | Run the same call at the same directory. A finished slice is read back, and a slice interrupted part way is solved again. The archive then holds the sources of the run that finished it. |
+| **an interrupted sweep resumes** | Run the same call at the same directory. A finished slice is read back, and a slice interrupted part way is solved again. The spec, the axis and the sources the archive holds are not written again, and a resume from other ones is refused, since the slices there were solved from them. |
 | **a directory holds one sweep** | A different sweep is refused, and so is a directory that holds anything else. Changed data or a changed spec is not detected, so delete the directory to solve again. |
 | **a zip is packed at the end** | A `.zip` archive is written whole once the sweep ends, and the sweep it returns holds its answer in memory. An interrupted one leaves no file, so it is not resumed. |
 | **every reader answers off the archive** | `per_window=True` included, since every window is there. A directory a sweep left when it stopped reads back the slices it finished. |
