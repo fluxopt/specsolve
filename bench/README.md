@@ -905,7 +905,14 @@ the report prints how many such cells to expect. Re-run a lone verdict with
 that `pytest bench` takes, and refuses a busy machine.
 
 Paste the table into the PR's `<details>` with its header: the header names
-both commits, what the clock counts, and the machine.
+both commits, what the clock counts, and the machine. `--raw ab.parquet` keeps
+every round's numbers as one long table, one row per number, which the medians
+are taken from:
+
+```python
+pl.read_parquet('ab.parquet').filter(phase='build', metric='seconds')  # each round's build, both sides
+pl.concat([pl.read_parquet(p) for p in ('ab.parquet', 'more.parquet')])  # a re-run pooled with the first
+```
 
 ## The same suite, a third instrument: CodSpeed
 
