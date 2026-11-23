@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
-from time import perf_counter
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -42,8 +41,6 @@ class AttachedSources:
     ``first`` is its position. ``settled`` is each atom of a ``where`` that the
     data settles: ``True`` where it holds everywhere, ``False`` where
     nowhere ([`settle`][]).
-    ``seconds`` is how long attaching took, for the
-    build these are handed to, which did not run the attach itself.
     """
 
     parameters: Mapping[str, pl.LazyFrame]
@@ -54,7 +51,6 @@ class AttachedSources:
     consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
-    seconds: float = 0.0
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
@@ -82,7 +78,6 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         DataError: A parameter or a relation that refuses a missing row has none
             at some coordinate.
     """
-    started = perf_counter()
     with in_memory():
         dimensions = {d: _position_table(d, sources[d]).pipe(collected) for d in program.dimensions}
         relations = {name: sources[name].pipe(collected) for name in program.relations}
@@ -129,7 +124,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
-    return replace(attached, settled=settle(program, attached), seconds=perf_counter() - started)
+    return replace(attached, settled=settle(program, attached))
 
 
 def refuse_a_negative_window(data: AttachedSources, name: str) -> None:

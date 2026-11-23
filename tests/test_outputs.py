@@ -1,9 +1,9 @@
 """``outputs=``: an answer carries the primal, the duals and the declared expressions, and the rest only on request.
 
-One rule for every verb and every shape an answer takes: a live result, a saved
-or scanned one, an archived one, and a sweep held in memory, spilled, saved,
-scanned or archived. Each carries what the solve was asked for, and each
-refuses the rest with the same message naming the rewrite.
+One rule for every verb and every shape an answer takes: a live result, one read
+or scanned off its archive, and a sweep in memory, archived as it went, or read
+or scanned off its archive. Each carries what the solve was asked for, and
+each refuses the rest with the same message naming the rewrite.
 """
 
 from __future__ import annotations
@@ -105,19 +105,16 @@ def _live(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     return sps.solve(DISPATCH, ONE, outputs=outputs)
 
 
-def _read(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.read_result(_live(outputs, tmp_path).save(tmp_path / 'saved'))
-
-
 def _scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.scan_result(_live(outputs, tmp_path).save(tmp_path / 'saved'))
+    sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run')
+    return sps.scan_archive(tmp_path / 'run')
 
 
 def _archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.types.ResultArchive)
-    return archive.result
+    assert isinstance(archive, sps.types.Result)
+    return archive
 
 
 def _swept(outputs: frozenset[Output], tmp_path: Path) -> Answer:
@@ -134,28 +131,29 @@ def _in_processes(outputs: frozenset[Output], tmp_path: Path) -> Answer:
         return sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, executor=pool)
 
 
-def _spilled(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, spill_to=tmp_path / 'spill')
+def _archiving(outputs: frozenset[Output], tmp_path: Path) -> Answer:
+    return sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=tmp_path / 'run')
 
 
 def _sweep_read(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.read_sweep(_swept(outputs, tmp_path).save(tmp_path / 'sweep'))
+    _archiving(outputs, tmp_path)
+    return sps.read_archive(tmp_path / 'run')
 
 
 def _sweep_scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
-    return sps.scan_sweep(_swept(outputs, tmp_path).save(tmp_path / 'sweep'))
+    _archiving(outputs, tmp_path)
+    return sps.scan_archive(tmp_path / 'run')
 
 
 def _sweep_archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.types.SweepArchive)
-    return archive.sweep
+    assert isinstance(archive, sps.types.Sweep)
+    return archive
 
 
 RESULTS = [
     pytest.param(_live, id='result'),
-    pytest.param(_read, id='read-result'),
     pytest.param(_scanned, id='scanned-result'),
     pytest.param(_archived, id='archived-result'),
 ]
@@ -163,7 +161,7 @@ SWEEPS = [
     pytest.param(_swept, id='sweep'),
     pytest.param(_threaded, id='threaded-sweep'),
     pytest.param(_in_processes, id='sweep-in-processes'),
-    pytest.param(_spilled, id='spilled-sweep'),
+    pytest.param(_archiving, id='archiving-sweep'),
     pytest.param(_sweep_read, id='read-sweep'),
     pytest.param(_sweep_scanned, id='scanned-sweep'),
     pytest.param(_sweep_archived, id='archived-sweep'),
@@ -229,45 +227,42 @@ def test_an_answer_not_asked_for_an_output_writes_none(answered, tmp_path: Path)
 @pytest.mark.parametrize(
     'written',
     [
-        pytest.param(lambda outputs, at: sps.solve(DISPATCH, ONE, outputs=outputs).save(at), id='result'),
+        pytest.param(lambda outputs, at: sps.solve(DISPATCH, ONE, outputs=outputs, archive=at), id='result'),
         pytest.param(
-            lambda outputs, at: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, spill_to=at),
-            id='spill',
-        ),
-        pytest.param(
-            lambda outputs, at: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs).save(at),
-            id='saved-sweep',
+            lambda outputs, at: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=at),
+            id='sweep',
         ),
     ],
 )
 def test_the_stamp_names_the_outputs_the_answer_carries(written, outputs: frozenset[Output], tmp_path: Path) -> None:
-    written(outputs, tmp_path / 'answer')
-    stamp = json.loads((tmp_path / 'answer' / 'format.json').read_text())
+    written(outputs, tmp_path / 'run')
+    stamp = json.loads((tmp_path / 'run' / 'answer' / 'format.json').read_text())
     assert stamp['outputs'] == sorted(outputs), 'what a reader refuses as not asked for, rather than as absent'
 
 
 def test_an_output_a_later_specsolve_wrote_is_ignored_rather_than_refused(tmp_path: Path) -> None:
     """A new output adds no layout bump, so this package can meet a name it has no reader for."""
-    out = sps.solve(DISPATCH, ONE, outputs=ACTIVITY).save(tmp_path / 'saved')
-    stamp = json.loads((out / 'format.json').read_text())
-    (out / 'format.json').write_text(json.dumps({**stamp, 'outputs': ['activity', 'from_the_future']}))
-    assert sps.read_result(out).activity('balance')['value'].to_list() == pytest.approx(LOAD), (
+    out = tmp_path / 'run'
+    sps.solve(DISPATCH, ONE, outputs=ACTIVITY, archive=out)
+    stamp = json.loads((out / 'answer' / 'format.json').read_text())
+    (out / 'answer' / 'format.json').write_text(json.dumps({**stamp, 'outputs': ['activity', 'from_the_future']}))
+    assert sps.read_archive(out).activity('balance')['value'].to_list() == pytest.approx(LOAD), (
         'the outputs this package knows still read back'
     )
 
 
-def test_a_spill_solved_with_other_outputs_is_refused_rather_than_resumed(tmp_path: Path) -> None:
+def test_an_archive_solved_with_other_outputs_is_refused_rather_than_resumed(tmp_path: Path) -> None:
     """A slice on disk carries what it was solved with, so a resume asking for more would mix two answers."""
-    at = tmp_path / 'spill'
-    sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, spill_to=at)
+    at = tmp_path / 'run'
+    sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, archive=at)
     with pytest.raises(sps.errors.SpecsolveError, match=r"outputs=\[\], and this run asks for outputs=\['activity'\]"):
-        sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, spill_to=at, outputs=ACTIVITY)
+        sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, archive=at, outputs=ACTIVITY)
 
 
-def test_a_spill_solved_with_the_same_outputs_resumes(tmp_path: Path) -> None:
-    at = tmp_path / 'spill'
-    first = sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, spill_to=at, outputs=ACTIVITY)
-    again = sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, spill_to=at, outputs=ACTIVITY)
+def test_an_archive_solved_with_the_same_outputs_resumes(tmp_path: Path) -> None:
+    at = tmp_path / 'run'
+    first = sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, archive=at, outputs=ACTIVITY)
+    again = sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, archive=at, outputs=ACTIVITY)
     assert again.activity('balance').equals(first.activity('balance'))
 
 
@@ -291,6 +286,6 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
         'an equality balance, so each snapshot carries its own load'
     )
     archive = sps.read_archive(tmp_path / 'run')
-    assert isinstance(archive, sps.types.SweepArchive)
-    assert archive.sweep.activity('balance').sort('snapshot').equals(stitched)
-    assert archive.sweep.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))
+    assert isinstance(archive, sps.types.Sweep)
+    assert archive.activity('balance').sort('snapshot').equals(stitched)
+    assert archive.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))
