@@ -145,7 +145,7 @@ def test_a_constraint_without_a_where_is_indexed_only_inside_its_presences(monke
 
     monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
-        assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
+        assert model.metrics().rows == 1, '`limit` has one row, so `capped` keeps one'
     assert not unnarrowed, (
         f'`capped` was indexed over its full product {unnarrowed} before the presences that narrow it'
     )
@@ -186,9 +186,7 @@ def test_a_count_over_a_dimension_without_a_label_is_zero_without_a_query(monkey
     monkeypatch.setattr(conditions, '_counted', spied)
     spec = {**COUNTED_SPEC, 'variables': {'x': {**COUNTED_SPEC['variables']['x'], 'where': where}}}
     with sps.build(spec, COUNTED_SOURCES) as model:
-        assert model.diagnostics().columns == columns, (
-            f'a count over nothing is 0, so `{where}` holds at {columns} of 3'
-        )
+        assert model.metrics().columns == columns, f'a count over nothing is 0, so `{where}` holds at {columns} of 3'
     assert not counted, f'counted over {counted}, a dimension without a label, with a query'
 
 
@@ -272,5 +270,5 @@ def test_a_build_with_assumptions_reports_the_time_its_attach_took():
     """
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     with sps.build(spec, TABLED_SOURCES) as model:
-        seconds = model.diagnostics().seconds
-    assert seconds.get('attach', 0.0) > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
+        attach = model.metrics().attach_seconds
+    assert attach > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'

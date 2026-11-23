@@ -27,7 +27,6 @@ from specsolve.errors import DataError
 if TYPE_CHECKING:
     from mathspec.program import Dimension, Program, Relation
 
-    from specsolve._engine.attaching import AttachedSources
     from specsolve._inputs import Label, Source
 
 
@@ -69,20 +68,19 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
-    return tidied_and_attached(program, data)[0]
+    sources = tidied(program, data)
+    validate_assumptions(program, sources)
+    return sources
 
 
-def tidied_and_attached(
-    program: Program, data: Mapping[str, Source]
-) -> tuple[dict[str, pl.LazyFrame], AttachedSources | None]:
-    """[`tidy_sources`][], and the attach its assumptions were read against, so a build attaches once.
+def tidied(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+    """[`tidy_sources`][] short of the assumptions, which a build checks where it clocks the attach they share.
 
-    The attach is ``None`` where the assumptions attached nothing, and a build
-    attaches itself.
+    Raises:
+        DataError: As [`tidy_sources`][] raises, but for an assumption.
     """
     refuse_unknown_sources(program, data)
-    sources = _read(program, data)
-    return sources, validate_assumptions(program, sources)
+    return _read(program, data)
 
 
 @in_memory()
