@@ -7,35 +7,31 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.12.0 (2026-11-23)
 
-**A smaller public API with fewer concepts, one word for each meaning, and a
-clock on every phase of a solve.** An answer is kept on disk in one form, the
-archive. A sweep is one call over one axis. Messages, docs and code use each
-word in the one sense the glossary gives it, and a result says what each phase
-took. Code written for 0.11 needs these changes:
+**This release will not read archives written by 0.11, and code that saves, reads or sweeps answers needs changes.**
 
-- `Result.save`, `Sweep.save`, `load_result`, `load_sweep`, `scan_result`,
-  `scan_sweep` and `solve_over(spill_to=)` are gone. `solve(archive=)` and
-  `solve_over(archive=)` write an answer, and a sweep fills its archive slice
-  by slice.
-- `load_archive` and `load_inputs` are `read_archive` and `read_inputs`, and
-  `read_archive` and `scan_archive` return the `Result` or the `Sweep` itself.
-- An archive written by 0.11 is refused by name: its answer is now layout 5 and
-  its spec and sources layout 3. Solve it again.
-- `Diagnostics` holds only its tables. The size, counts and clocks are
-  `model.metrics()` and `result.metrics`, and `loads` is `solver_instances`.
-- `record_options` is `also_record`, and `model.check` for a sink is
-  `model.check_sink`.
-- On a sweep, `EachCoordinate` is `EachLabel`, `EachWindow` takes `horizon=`
-  rather than `steps=`, and `sweep.record` is `sweep.records`. `solve_over`
-  takes `over=` rather than `axis=`, and no `key_name`, `workers_share_fs` or
-  `keep_windows`. Slices written by hand and `axis.slices` are gone, and
-  `build_slice` gives one slice's model.
+This release makes the public API smaller and gives each concept one name. An
+answer is kept on disk only as an archive. A result says what each phase of its
+solve took. Messages, docs and code use the words the glossary defines. Spec
+files are unaffected.
 
-**Archives and answers**
+### What to change in Python code
+
+- Replace `result.save(path)` with `sps.solve(..., archive=path)`, and `load_result` or `scan_result` with `read_archive` or `scan_archive` ([#2192](https://github.com/fluxopt/specsolve/pull/2192)).
+- Replace `sweep.save`, `load_sweep`, `scan_sweep` and `solve_over(spill_to=)` with `solve_over(archive=)`. A sweep writes its archive slice by slice and resumes from it ([#2192](https://github.com/fluxopt/specsolve/pull/2192)).
+- Rename `load_archive` to `read_archive` and `load_inputs` to `read_inputs` ([#2179](https://github.com/fluxopt/specsolve/pull/2179)). Both readers return the `Result` or the `Sweep` itself, which carries `.spec` and `.sources` ([#2193](https://github.com/fluxopt/specsolve/pull/2193)).
+- Solve a 0.11 archive again. It is refused: this release reads answer layout 5 and inputs layout 3.
+- Read sizes, counts and clocks from `model.metrics()` or `result.metrics`. `model.diagnostics()` keeps only its tables. Rename `loads` to `solver_instances` ([#2180](https://github.com/fluxopt/specsolve/pull/2180), [#2188](https://github.com/fluxopt/specsolve/pull/2188)).
+- Rename `record_options=` to `also_record=`, and `model.check(sink)` to `model.check_sink(sink)` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)).
+- In `solve_over`, rename `axis=` to `over=`. Remove `key_name=`: the axis names its own key column. Remove `keep_windows=` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)) and `workers_share_fs=` ([#2191](https://github.com/fluxopt/specsolve/pull/2191)). Pass an axis, not slices written by hand ([#2102](https://github.com/fluxopt/specsolve/pull/2102)).
+- Rename `EachCoordinate` to `EachLabel` and `sweep.record` to `sweep.records` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)). Pass `EachWindow(horizon=)` instead of `steps=` ([#2166](https://github.com/fluxopt/specsolve/pull/2166)). Call `build_slice` instead of `axis.slices` ([#2126](https://github.com/fluxopt/specsolve/pull/2126)).
+
+The pull requests in this release:
+
+### Archives
 
 - refactor(api): an answer is kept on disk only as an archive, which a sweep writes slice by slice, and read_archive returns the result or the sweep, which carries its spec and sources ([#2192](https://github.com/fluxopt/specsolve/pull/2192), [#2193](https://github.com/fluxopt/specsolve/pull/2193), [#2179](https://github.com/fluxopt/specsolve/pull/2179), [#2100](https://github.com/fluxopt/specsolve/pull/2100))
 
-**Metrics**
+### Metrics
 
 - feat(api): the metrics time every phase from the spec to the archive ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
 - feat(api): each result carries the metrics of the solve that produced it, and a model's own are model.metrics(), apart from its diagnostics ([#2188](https://github.com/fluxopt/specsolve/pull/2188))
@@ -43,7 +39,7 @@ took. Code written for 0.11 needs these changes:
 - docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))
 - docs: the benchmarks page shows how each of specsolve's phases grows along a model's size ladder ([#2185](https://github.com/fluxopt/specsolve/pull/2185))
 
-**Sweeps**
+### Sweeps
 
 - refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
 - refactor(api): EachCoordinate is EachLabel, solve_over takes its axis as over, and an axis names its own key column ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
@@ -63,7 +59,7 @@ took. Code written for 0.11 needs these changes:
 - fix(sweep): a spilled sweep that stops before it ends keeps its reasons on resume ([#2121](https://github.com/fluxopt/specsolve/pull/2121))
 - fix(sweep): an archived sweep rebuilds each slice with the carry it was solved with ([#2124](https://github.com/fluxopt/specsolve/pull/2124))
 
-**Models**
+### Models
 
 - fix(engine): a quadratic row whose every term is zero is still built ([#2187](https://github.com/fluxopt/specsolve/pull/2187))
 - fix(engine): a dimension may be called row, coeff, cval or ord, as any other name ([#2170](https://github.com/fluxopt/specsolve/pull/2170))
