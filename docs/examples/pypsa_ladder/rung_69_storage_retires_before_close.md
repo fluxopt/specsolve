@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-69--storage-that-retires-before-the-close): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **350.0** on both sides; structure ✔ 16 constraints · 7 variables, name for name; size ✔ 37 rows · ✔ 16 columns · ✔ 52 nonzeros; duals ✔ 37 rows; **model for model**: 23 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **350.0** on both sides; structure ✔ 16 constraints · 7 variables, name for name; size ✔ 37 rows · ✔ 16 columns · ✔ 52 nonzeros; duals ✔ 37 rows; **model for model**: 23 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

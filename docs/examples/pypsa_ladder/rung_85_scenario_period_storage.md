@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-85--a-global-constraint-for-one-period-over-storage-that-reopens-per-period-on-a-network-with-scenarios): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **14670.0** on both sides; structure ✔ 17 constraints · 7 variables, name for name; size ✔ 276 rows · ✔ 128 columns · ✔ 432 nonzeros; duals ✔ 276 rows; **model for model**: 24 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **14670.0** on both sides; structure ✔ 17 constraints · 7 variables, name for name; size ✔ 276 rows · ✔ 128 columns · ✔ 432 nonzeros; duals ✔ 276 rows; **model for model**: 24 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1541,8 +1541,8 @@ q^{-}_{\xi,t,v} \le \mathrm{Store\_charge\_cap\_pu}_{\xi,t,v} \cdot \mathrm{e}^{
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_85_scenario_period_storage.yaml', sources) as solution:
-        solution.objective  # 14670.0
+    with sps.solve('differential/pypsa/rungs/rung_85_scenario_period_storage.yaml', sources) as result:
+        result.objective  # 14670.0
     ```
 
 === "PyPSA"

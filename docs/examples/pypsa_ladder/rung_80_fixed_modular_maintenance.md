@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-80--maintenance-of-fixed-modular-committable-units): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **16026.25** on both sides; structure ✔ 41 constraints · 21 variables, name for name; size ✔ 179 rows · ✔ 100 columns · ✔ 345 nonzeros; duals — integer model, no duals; **model for model**: 62 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **16026.25** on both sides; structure ✔ 41 constraints · 21 variables, name for name; size ✔ 179 rows · ✔ 100 columns · ✔ 345 nonzeros; duals — integer model, no duals; **model for model**: 62 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1802,8 +1802,8 @@ u^{z}_{j,\xi,t} \le \mathrm{N}^{z,\mathrm{fix}}_{j,\xi} \qquad \forall\, j \in \
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_80_fixed_modular_maintenance.yaml', sources) as solution:
-        solution.objective  # 16026.25
+    with sps.solve('differential/pypsa/rungs/rung_80_fixed_modular_maintenance.yaml', sources) as result:
+        result.objective  # 16026.25
     ```
 
 === "PyPSA"

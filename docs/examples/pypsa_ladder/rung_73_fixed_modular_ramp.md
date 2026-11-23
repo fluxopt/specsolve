@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-73--the-ramp-of-a-fixed-modular-unit): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **12300.0** on both sides; structure ✔ 14 constraints · 5 variables, name for name; size ✔ 80 rows · ✔ 32 columns · ✔ 127 nonzeros; duals — integer model, no duals; **model for model**: 19 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **12300.0** on both sides; structure ✔ 14 constraints · 5 variables, name for name; size ✔ 80 rows · ✔ 32 columns · ✔ 127 nonzeros; duals — integer model, no duals; **model for model**: 19 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1116,8 +1116,8 @@ f_{l,\xi,t} \le \overline{\mathrm{f}}_{l,\xi,t} \cdot \mathrm{f}^{\mathrm{nom}}_
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_73_fixed_modular_ramp.yaml', sources) as solution:
-        solution.objective  # 12300.0
+    with sps.solve('differential/pypsa/rungs/rung_73_fixed_modular_ramp.yaml', sources) as result:
+        result.objective  # 12300.0
     ```
 
 === "PyPSA"

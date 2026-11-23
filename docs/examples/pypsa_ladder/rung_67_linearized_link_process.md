@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-67--relaxed-link-and-process-commitment): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **47777.333333** on both sides; structure ✔ 39 constraints · 10 variables, name for name; size ✔ 194 rows · ✔ 65 columns · ✔ 446 nonzeros; duals ✔ 194 rows, 2 negated, 9 inside PyPSA's range; **model for model**: 49 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **47777.333333** on both sides; structure ✔ 39 constraints · 10 variables, name for name; size ✔ 194 rows · ✔ 65 columns · ✔ 446 nonzeros; duals ✔ 194 rows, 2 negated, 9 inside PyPSA's range; **model for model**: 49 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

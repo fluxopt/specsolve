@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-70--a-risk-preference-of-weight-zero): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **7946.733333** on both sides; structure ✔ 12 constraints · 6 variables, name for name; size ✔ 87 rows · ✔ 37 columns · ✔ 148 nonzeros; duals ✔ 87 rows; objective only — the linopy oracle (`tests/linopy_lane`) stops at `OracleCannotBuildError: the linopy lane cannot build a quadratic constraint, and no reformulation of it is exact. The language accepts it and specsolve builds it, so this is a limit of the lane rather`.
+> ✔ Verified against pypsa master at 3625c816 — objective **7946.733333** on both sides; structure ✔ 12 constraints · 6 variables, name for name; size ✔ 87 rows · ✔ 37 columns · ✔ 148 nonzeros; duals ✔ 87 rows; objective only — the linopy lane (`tests/linopy_lane`) stops at `OracleCannotBuildError: the linopy lane cannot build a quadratic constraint, and no reformulation of it is exact. The language accepts it and specsolve builds it, so this is a limit of the lane rather`.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

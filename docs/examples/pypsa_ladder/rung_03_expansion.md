@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-3--expansion): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **7633.908502024291** on both sides; structure ≠ `tech_capacity_expansion_limit` 5 vs 1+2+2 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_expansion_cost_limit` 2 vs 1+1 — one block per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 200 rows · ✔ 81 columns · ✔ 344 nonzeros; duals ✔ 200 rows, 2 negated, 2 inside PyPSA's range; **model for model**: 62 blocks equal, 2 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **7633.908502024291** on both sides; structure ≠ `tech_capacity_expansion_limit` 5 vs 1+2+2 — one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; `transmission_expansion_cost_limit` 2 vs 1+1 — one entry per sense — ==, <=, >= — where PyPSA writes one row per labelled constraint whatever its sense; size ✔ 200 rows · ✔ 81 columns · ✔ 344 nonzeros; duals ✔ 200 rows, 2 negated, 2 inside PyPSA's range; **model for model**: 62 entries equal, 2 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

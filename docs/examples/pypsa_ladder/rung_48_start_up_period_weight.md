@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-48--a-start-and-a-stop-weighted-by-the-period): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **7125.0** on both sides; structure ✔ 10 constraints · 4 variables, name for name; size ✔ 72 rows · ✔ 36 columns · ✔ 118 nonzeros; duals — integer model, no duals; **model for model**: 11 blocks equal, 0 documented splits, 4 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **7125.0** on both sides; structure ✔ 10 constraints · 4 variables, name for name; size ✔ 72 rows · ✔ 36 columns · ✔ 118 nonzeros; duals — integer model, no duals; **model for model**: 11 entries equal, 0 documented splits, 4 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -789,8 +789,8 @@ u_{g,\xi,t} \le \mathrm{N}^{\mathrm{fix}}_{g,\xi} \qquad \forall\, g \in \mathca
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_48_start_up_period_weight.yaml', sources) as solution:
-        solution.objective  # 7125.0
+    with sps.solve('differential/pypsa/rungs/rung_48_start_up_period_weight.yaml', sources) as result:
+        result.objective  # 7125.0
     ```
 
 === "PyPSA"

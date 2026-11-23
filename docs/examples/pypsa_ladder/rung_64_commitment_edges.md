@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-64--commitment-edges): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **9140.0** on both sides; structure ✔ 29 constraints · 13 variables, name for name; size ✔ 205 rows · ✔ 97 columns · ✔ 361 nonzeros; duals — integer model, no duals; **model for model**: 33 blocks equal, 0 documented splits, 10 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **9140.0** on both sides; structure ✔ 29 constraints · 13 variables, name for name; size ✔ 205 rows · ✔ 97 columns · ✔ 361 nonzeros; duals — integer model, no duals; **model for model**: 33 entries equal, 0 documented splits, 10 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1447,8 +1447,8 @@ u^{z}_{j,\xi,t} \le \mathrm{N}^{z,\mathrm{fix}}_{j,\xi} \qquad \forall\, j \in \
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_64_commitment_edges.yaml', sources) as solution:
-        solution.objective  # 9140.0
+    with sps.solve('differential/pypsa/rungs/rung_64_commitment_edges.yaml', sources) as result:
+        result.objective  # 9140.0
     ```
 
 === "PyPSA"

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-81--a-piecewise-marginal-cost-curve): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **30890.0** on both sides; structure ✔ 8 constraints · 3 variables, name for name; size ✔ 60 rows · ✔ 20 columns · ✔ 84 nonzeros; duals ≠ 40 rows, `Generator-marginal_cost_piecewise_chord` off by 0.0 — the expanded curve keys a segment's line by `breakpoint`, linopy by `_breakpoint_piece`, so no row joins, and the rows differ by the segment's width; `Generator-marginal_cost_piecewise_domain_hi` off by 0.0 — the expanded curve keys the cap of the domain by `breakpoint`, which linopy's row has no coordinate for; `Generator-marginal_cost_piecewise_domain_lo` off by 0.0 — the expanded curve keys the floor of the domain by `breakpoint`, which linopy's row has no coordinate for; **model for model**: 8 blocks equal, 0 documented splits, 4 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **30890.0** on both sides; structure ✔ 8 constraints · 3 variables, name for name; size ✔ 60 rows · ✔ 20 columns · ✔ 84 nonzeros; duals ≠ 40 rows, `Generator-marginal_cost_piecewise_chord` off by 0.0 — the expanded curve keys a segment's line by `breakpoint`, linopy by `_breakpoint_piece`, so no row joins, and the rows differ by the segment's width; `Generator-marginal_cost_piecewise_domain_hi` off by 0.0 — the expanded curve keys the cap of the domain by `breakpoint`, which linopy's row has no coordinate for; `Generator-marginal_cost_piecewise_domain_lo` off by 0.0 — the expanded curve keys the floor of the domain by `breakpoint`, which linopy's row has no coordinate for; **model for model**: 8 entries equal, 0 documented splits, 4 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -723,8 +723,8 @@ f_{l,\xi,t} \le \overline{\mathrm{f}}_{l,\xi,t} \cdot \mathrm{f}^{\mathrm{nom}}_
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_81_piecewise_marginal_cost.yaml', sources) as solution:
-        solution.objective  # 30890.0
+    with sps.solve('differential/pypsa/rungs/rung_81_piecewise_marginal_cost.yaml', sources) as result:
+        result.objective  # 30890.0
     ```
 
 === "PyPSA"

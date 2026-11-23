@@ -594,7 +594,7 @@
         "differences": {},
         "inside": 2,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative",
           "Link-p-ramp_limit_down": "the file states the ramp as p[t-1] - p[t] <= rd * p_nom where PyPSA writes p[t] - p[t-1] >= -rd * p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
@@ -9264,7 +9264,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {
@@ -21505,7 +21505,7 @@
         "differences": {},
         "inside": 0,
         "negated": {
-          "Generator-p-ramp_limit_down": "the initial-snapshot block states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
+          "Generator-p-ramp_limit_down": "the initial-snapshot entry states \u2212p on the left where PyPSA writes p[t] \u2212 p[t\u22121] \u2265 \u2212rd\u00b7p_nom \u2014 the same row negated, so its dual is the negative"
         },
         "per_name": {
           "Bus-nodal_balance": {

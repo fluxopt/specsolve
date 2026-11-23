@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-77--energy-limits-on-every-dispatching-component): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **11618.75** on both sides; structure ✔ 19 constraints · 6 variables, name for name; size ✔ 143 rows · ✔ 64 columns · ✔ 255 nonzeros; duals ✔ 143 rows; **model for model**: 25 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **11618.75** on both sides; structure ✔ 19 constraints · 6 variables, name for name; size ✔ 143 rows · ✔ 64 columns · ✔ 255 nonzeros; duals ✔ 143 rows; **model for model**: 25 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1279,8 +1279,8 @@ q^{-}_{\xi,t,v} \le \mathrm{Store\_charge\_cap\_pu}_{\xi,t,v} \cdot \mathrm{e}^{
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_77_energy_limits.yaml', sources) as solution:
-        solution.objective  # 11618.75
+    with sps.solve('differential/pypsa/rungs/rung_77_energy_limits.yaml', sources) as result:
+        result.objective  # 11618.75
     ```
 
 === "PyPSA"

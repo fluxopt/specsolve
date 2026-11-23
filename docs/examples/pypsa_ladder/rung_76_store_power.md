@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-76--a-store-that-covers-a-storage-unit): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **11362.944444** on both sides; structure ✔ 20 constraints · 7 variables, name for name; size ✔ 139 rows · ✔ 66 columns · ✔ 246 nonzeros; duals ✔ 139 rows, 5 inside PyPSA's range; **model for model**: 27 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **11362.944444** on both sides; structure ✔ 20 constraints · 7 variables, name for name; size ✔ 139 rows · ✔ 66 columns · ✔ 246 nonzeros; duals ✔ 139 rows, 5 inside PyPSA's range; **model for model**: 27 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1153,8 +1153,8 @@ q_{\xi,t,v} + q^{-}_{\xi,t,v} \le \frac{\overline{\mathrm{q}}_{\xi,t,v}}{\mathrm
         'snapshot_weightings_stores': weighting(n, 'stores'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_76_store_power.yaml', sources) as solution:
-        solution.objective  # 11362.944444
+    with sps.solve('differential/pypsa/rungs/rung_76_store_power.yaml', sources) as result:
+        result.objective  # 11362.944444
     ```
 
 === "PyPSA"

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-13--transmission-losses): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **10805.29588** on both sides; structure ≠ `objective_constant` 1 vs 0 — PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it; size ✔ 150 rows · ≠ 46 vs 45 columns · ✔ 290 nonzeros; duals ✔ 150 rows; **model for model**: 22 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **10805.29588** on both sides; structure ≠ `objective_constant` 1 vs 0 — PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it; size ✔ 150 rows · ≠ 46 vs 45 columns · ✔ 290 nonzeros; duals ✔ 150 rows; **model for model**: 22 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

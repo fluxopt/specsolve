@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-72--modular-down-time): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **17190.0** on both sides; structure ✔ 19 constraints · 7 variables, name for name; size ✔ 111 rows · ✔ 50 columns · ✔ 202 nonzeros; duals — integer model, no duals; **model for model**: 26 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **17190.0** on both sides; structure ✔ 19 constraints · 7 variables, name for name; size ✔ 111 rows · ✔ 50 columns · ✔ 202 nonzeros; duals — integer model, no duals; **model for model**: 26 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1033,8 +1033,8 @@ f_{l,\xi,t} \le \overline{\mathrm{f}}_{l,\xi,t} \cdot \mathrm{f}^{\mathrm{nom}}_
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_72_modular_down_time.yaml', sources) as solution:
-        solution.objective  # 17190.0
+    with sps.solve('differential/pypsa/rungs/rung_72_modular_down_time.yaml', sources) as result:
+        result.objective  # 17190.0
     ```
 
 === "PyPSA"

@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-71--a-unit-that-is-not-committable-comes-in-running): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **4836.111111** on both sides; structure ✔ 13 constraints · 5 variables, name for name; size ✔ 72 rows · ✔ 32 columns · ✔ 113 nonzeros; duals — integer model, no duals; **model for model**: 15 blocks equal, 0 documented splits, 4 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **4836.111111** on both sides; structure ✔ 13 constraints · 5 variables, name for name; size ✔ 72 rows · ✔ 32 columns · ✔ 113 nonzeros; duals — integer model, no duals; **model for model**: 15 entries equal, 0 documented splits, 4 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1041,8 +1041,8 @@ f_{l,\xi,t} \le \overline{\mathrm{f}}_{l,\xi,t} \cdot \mathrm{f}^{\mathrm{nom}}_
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_71_running_unless_committable.yaml', sources) as solution:
-        solution.objective  # 4836.111111
+    with sps.solve('differential/pypsa/rungs/rung_71_running_unless_committable.yaml', sources) as result:
+        result.objective  # 4836.111111
     ```
 
 === "PyPSA"

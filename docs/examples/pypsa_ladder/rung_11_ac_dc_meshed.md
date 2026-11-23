@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-11--ac-dc-meshed): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **18441021.477729** on both sides; structure ≠ `objective_constant` 1 vs 0 — PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it; size ✔ 468 rows · ≠ 188 vs 187 columns · ✔ 1007 nonzeros; duals ✔ 468 rows; **model for model**: 18 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **18441021.477729** on both sides; structure ≠ `objective_constant` 1 vs 0 — PyPSA carries a nonzero objective constant as a fixed variable of that name; the file states no constant, and the objective is compared net of it; size ✔ 468 rows · ≠ 188 vs 187 columns · ✔ 1007 nonzeros; duals ✔ 468 rows; **model for model**: 18 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

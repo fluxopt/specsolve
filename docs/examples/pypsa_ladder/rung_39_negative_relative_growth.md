@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-39--a-negative-relative-growth): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **8600.0** on both sides; structure ✔ 11 constraints · 5 variables, name for name; size ✔ 56 rows · ✔ 28 columns · ✔ 82 nonzeros; duals ✔ 56 rows; **model for model**: 16 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **8600.0** on both sides; structure ✔ 11 constraints · 5 variables, name for name; size ✔ 56 rows · ✔ 28 columns · ✔ 82 nonzeros; duals ✔ 56 rows; **model for model**: 16 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

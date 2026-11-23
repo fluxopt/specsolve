@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-41--operating-data-per-scenario): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **17964.0** on both sides; structure ✔ 5 constraints · 2 variables, name for name; size ✔ 96 rows · ✔ 40 columns · ✔ 136 nonzeros; duals ✔ 96 rows; **model for model**: 7 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **17964.0** on both sides; structure ✔ 5 constraints · 2 variables, name for name; size ✔ 96 rows · ✔ 40 columns · ✔ 136 nonzeros; duals ✔ 96 rows; **model for model**: 7 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>

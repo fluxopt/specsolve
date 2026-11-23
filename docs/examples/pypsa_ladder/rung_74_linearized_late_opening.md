@@ -4,7 +4,7 @@
 
 One rung of [the PyPSA corpus](https://github.com/energy-models/mathspec/blob/main/examples/references/pypsa/README.md#rung-74--a-relaxed-unit-that-opens-in-a-later-period): the file `pypsa.yaml` projected onto what this network builds, attached to that network, and held to what PyPSA solves it to.
 
-> ✔ Verified against pypsa master at 3625c816 — objective **24825.277778** on both sides; structure ✔ 16 constraints · 4 variables, name for name; size ✔ 74 rows · ✔ 24 columns · ✔ 164 nonzeros; duals ✔ 74 rows, 1 negated; **model for model**: 20 blocks equal, 0 documented splits, 1 recorded deviations.
+> ✔ Verified against pypsa master at 3625c816 — objective **24825.277778** on both sides; structure ✔ 16 constraints · 4 variables, name for name; size ✔ 74 rows · ✔ 24 columns · ✔ 164 nonzeros; duals ✔ 74 rows, 1 negated; **model for model**: 20 entries equal, 0 documented splits, 1 recorded deviations.
 
 <details markdown="1">
 <summary>Rows and columns, PyPSA against specsolve, name for name</summary>
@@ -1112,8 +1112,8 @@ u_{g,\xi,t} \le \mathrm{N}^{\mathrm{fix}}_{g,\xi} \qquad \forall\, g \in \mathca
         'snapshot_weightings_objective': weighting(n, 'objective'),
     }
 
-    with sps.solve('differential/pypsa/rungs/rung_74_linearized_late_opening.yaml', sources) as solution:
-        solution.objective  # 24825.277778
+    with sps.solve('differential/pypsa/rungs/rung_74_linearized_late_opening.yaml', sources) as result:
+        result.objective  # 24825.277778
     ```
 
 === "PyPSA"
