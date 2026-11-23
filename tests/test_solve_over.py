@@ -366,7 +366,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
 
     assert len(runs) == 3, 'three slices'
     assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped updating'
-    seen = built[0].diagnostics()
+    seen = built[0].metrics()
     assert (seen.solver_instances, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 
@@ -1471,46 +1471,70 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
     assert runs.primal('p').height == 3 * 4 * 2
 
 
-def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path, monkeypatch):
-    """`shared_filesystem` is inferred from the pool, and only paths are affected.
-
-    A `ProcessPoolExecutor`'s workers are this machine's, so a path stays a
-    path. An executor this package did not ship could be anywhere, so its paths
-    travel as their own bytes. `shared_filesystem=` says it outright when the
-    guess is wrong.
-    """
+def _p_max_as_a_path(directory) -> tuple[dict[str, object], pl.DataFrame]:
+    """The scenario sources with `p_max` written under *directory* and given as its file name, beside the table."""
     sources = scenario_sources()
-    path = tmp_path / 'p_max.parquet'
     table = sources.pop('p_max')
     assert isinstance(table, pl.DataFrame)
-    table.write_parquet(path)
-    sources['p_max'] = str(path)
+    table.write_parquet(directory / 'p_max.parquet')
+    return {**sources, 'p_max': 'p_max.parquet'}, table
 
+
+class Elsewhere(Inline):
+    """An executor whose worker runs in another directory, as a cluster's worker does on another machine."""
+
+    def __init__(self, directory):
+        self.directory = directory
+
+    def submit(self, fn, /, *args, **kwargs):
+        with contextlib.chdir(self.directory):
+            return super().submit(fn, *args, **kwargs)
+
+
+def test_a_path_crosses_to_any_executor_as_the_path(tmp_path, monkeypatch):
+    """A path is never read here and shipped: the workers read it, whichever executor runs them."""
+    monkeypatch.chdir(tmp_path)
+    sources, _ = _p_max_as_a_path(tmp_path)
     crossed: list[object] = []
     original = driver._encode
 
-    def spy(sliced, memo, **kwargs):
+    def spy(sliced, memo):
         """Record what `p_max` crossed as; the same helper also encodes answers back."""
-        encoded = original(sliced, memo, **kwargs)
+        encoded = original(sliced, memo)
         if 'p_max' in encoded:
             crossed.append(encoded['p_max'])
         return encoded
 
     monkeypatch.setattr(driver, '_encode', spy)
     with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
-        local = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=pool)
-        assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
+        pooled = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=pool)
+    inline = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=Inline())
 
-        crossed.clear()
-        remote = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=pool, shared_filesystem=False)
-        assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
+    assert len(crossed) == 6, 'p_max crosses once per slice, three slices under each executor'
+    assert set(crossed) == {'p_max.parquet'}, 'a path was read here and shipped as bytes'
+    assert answer_of(inline).equals(answer_of(pooled)), 'both executors read the same file'
 
-    assert answer_of(remote).equals(answer_of(local)), 'the path and the bytes are the same numbers'
-    assert remote.primal('p').equals(local.primal('p'))
 
-    crossed.clear()
-    sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=Inline())
-    assert all(v == path.read_bytes() for v in crossed), 'an executor we did not ship was assumed local'
+def test_a_worker_that_cannot_read_a_path_says_to_pass_the_table(tmp_path, monkeypatch):
+    """A worker in another directory does not see a relative path, and the refusal names the source and the fix.
+
+    Without the refusal the worker raises polars' own `FileNotFoundError`,
+    which names the file but not that a table would have crossed.
+    """
+    monkeypatch.chdir(tmp_path)
+    sources, table = _p_max_as_a_path(tmp_path)
+    elsewhere = tmp_path / 'worker'
+    elsewhere.mkdir()
+
+    with pytest.raises(
+        sps.errors.SpecsolveError, match=r"source 'p_max'.*cannot read 'p_max\.parquet'.*pl\.read_parquet"
+    ):
+        sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=Elsewhere(elsewhere))
+
+    shipped = sps.solve_over(
+        DISPATCH, {**sources, 'p_max': table}, sps.EachLabel('scenario'), executor=Elsewhere(elsewhere)
+    )
+    assert shipped.keys == ['high', 'low', 'mid'], 'the table crosses as bytes and every slice solves'
 
 
 # ---------------------------------------------------------------------------

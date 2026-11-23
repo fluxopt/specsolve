@@ -139,9 +139,9 @@ class _Built:
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
-        diagnostics = model.diagnostics()
-        self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
-        self.phases = dict(diagnostics.seconds)
+        metrics = model.metrics()
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
+        self.phases = _clocked(metrics)
 
     def numbers(self) -> dict[str, np.ndarray]:
         """The fields ``tests/test_order.py`` holds two builds of one model to."""
@@ -189,10 +189,14 @@ def _build(target: Cell) -> _Built:
 
 
 def _solve(target: Cell) -> _Solved:
-    """``sps.solve``, spelled out so the model's clocks are read before it closes."""
-    with sps.build(target.spec, target.sources) as model:
-        result = model.solve('highs')
-        return _Solved(result, dict(model.diagnostics().seconds))
+    result = sps.solve(target.spec, target.sources, solver_name='highs')
+    assert result.metrics is not None, 'a solve hands back what it took'
+    return _Solved(result, _clocked(result.metrics))
+
+
+def _clocked(metrics: Any) -> dict[str, float]:
+    """The seconds of each phase *metrics* entered; one it never entered is left out, as [`phase_table`][bench.ab.compare.phase_table] expects."""
+    return {phase: seconds for phase, seconds in metrics.phases.iter_rows() if seconds}
 
 
 if __name__ == '__main__':
