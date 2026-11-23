@@ -245,7 +245,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_messages.py` | a wording two modules raise |
 | `_solve_over.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
-| `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `read_sweep` / `scan_sweep` |
+| `_sweep.py` | `Sweep`, and its answer as an archive holds it, written slice by slice and read back |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
@@ -260,7 +260,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned, its save on disk, and `read_result` / `scan_result` |
+| `_result.py` | what a solve returned, written into an archive and read back out of one |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
@@ -351,9 +351,13 @@ The names the code uses for its own parts. The names a caller meets are in
 : The `specsolve_run` column an archive adds to every table. Names that start
   with `specsolve_` are reserved.
 
-**Slice**, **stitch** and **spill**
-: One model of a sweep; windowed tables put back over the dimension they cut;
-  a sweep's answers on disk (`_axes.py`, `_sweep.py`).
+**Slice** and **stitch**
+: One model of a sweep; windowed tables put back over the dimension they cut
+  (`_axes.py`).
+
+**Slice files**
+: A sweep's answer on disk, one file per slice and name, written into its
+  archive as the fold goes (`SliceFiles`, `_sweep.py`).
 
 **Carry** and **the wire**
 : One slice's answer copied into the next slice's data; how a slice's sources

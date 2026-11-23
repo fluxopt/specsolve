@@ -342,15 +342,7 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'build_slice', 'EachLabel', 'EachWindow'},
     'see what it reads': {'tidy'},
-    'read it back': {
-        'read_archive',
-        'read_inputs',
-        'read_result',
-        'read_sweep',
-        'scan_archive',
-        'scan_result',
-        'scan_sweep',
-    },
+    'read it back': {'read_archive', 'read_inputs', 'scan_archive'},
 }
 
 #: The two public submodules, and every name each one binds.

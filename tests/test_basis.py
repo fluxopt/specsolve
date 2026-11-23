@@ -64,11 +64,10 @@ def test_a_basis_reads_back_as_an_enum_of_the_five_statuses() -> None:
     assert dtype == pl.Enum(['basic', 'at_lower', 'at_upper', 'fixed', 'superbasic']), 'the five words, in order'
 
 
-def test_a_saved_answer_reads_back_its_basis(tmp_path: Path) -> None:
-    with sps.solve(SPEC, {}, outputs=BASIS) as answer:
+def test_an_archived_answer_reads_back_its_basis(tmp_path: Path) -> None:
+    with sps.solve(SPEC, {}, outputs=BASIS, archive=tmp_path) as answer:
         live = answer.variable_basis('u'), answer.constraint_basis('cap')
-        answer.save(tmp_path)
-    loaded = sps.read_result(tmp_path)
+    loaded = sps.read_archive(tmp_path).result
     assert loaded.variable_basis('u').equals(live[0])
     assert loaded.constraint_basis('cap').equals(live[1])
 
@@ -81,8 +80,8 @@ def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) ->
     """
     constraints = {('x' if name == 'loose' else name): row for name, row in SPEC['constraints'].items()}
     spec = {**SPEC, 'constraints': constraints}
-    sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case').save(tmp_path / 'saved')
-    loaded = sps.read_result(tmp_path / 'saved')
+    sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case')
+    loaded = sps.scan_archive(tmp_path / 'case').result
     archived = sps.read_archive(tmp_path / 'case')
     assert isinstance(archived, sps.types.ResultArchive)
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet').filter(pl.col('name') == 'x')
@@ -151,7 +150,7 @@ def test_a_model_with_a_quadratic_constraint_ends_on_no_basis() -> None:
 
 #: The dispatch model of ``test_solve_over``: ``balance`` is an equality, so it
 #: is ``fixed`` or ``basic`` in every scenario, never at one side.
-SHAPES = [pytest.param(how, id=how) for how in ('held', 'process-pool', 'spilled', 'archived')]
+SHAPES = [pytest.param(how, id=how) for how in ('held', 'process-pool', 'archiving', 'archived')]
 
 
 def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Sweep:
@@ -166,8 +165,8 @@ def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Swee
     if how == 'process-pool':
         with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
             return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, executor=pool)
-    spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
-    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, **spill)
+    archiving = {'archive': tmp_path / 'run'} if how == 'archiving' else {}
+    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, **archiving)
 
 
 @pytest.mark.parametrize('how', SHAPES)

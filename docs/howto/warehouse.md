@@ -25,8 +25,8 @@ sweep, solve the base as a sweep of one slice.
 ## The three tables
 
 A single solve writes one file per table. A sweep writes one file per slice,
-in a directory of the same name, as `spill_to=` and `Sweep.save` do. So a
-table of the answer is two globs. polars refuses a glob that matches no file,
+in a directory of the same name, as it solves them, so a glob also reads the
+slices a running sweep has finished. So a table of the answer is two globs. polars refuses a glob that matches no file,
 so expand them first, and a folder of only solves or only sweeps reads too:
 
 ```python

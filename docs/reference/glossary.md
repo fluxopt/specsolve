@@ -207,10 +207,6 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   next as data: the value at a window's horizon end becomes the next window's
   initial condition.
 
-**held** · **spilled**
-: A held sweep keeps its answers in memory. A spilled one writes them to
-  `spill_to=` ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
-
 ## Words this project does not use
 
 Each word on the left has a word above that means the same, or is vague.
@@ -240,6 +236,7 @@ word to write. A plural is refused with its word.
 | `handover`, `owned` | horizon end, the window's horizon |
 | `matrix entry` | coefficient |
 | `door` | the function by name: `tidy_sources`, `as_program` |
+| `held sweep`, `spilled sweep` | a sweep in memory, an archived sweep |
 
 A dimension's labels are its labels, never its index: an index is a solver's
 position of a column or a row, or a pandas index.

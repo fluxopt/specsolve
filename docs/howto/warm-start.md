@@ -81,7 +81,7 @@ The solver takes the values as its first incumbent. Pass an earlier answer, or
 values per variable under `'primal'`:
 
 ```python
-yesterday = sps.read_result('runs/monday')
+yesterday = sps.read_archive('runs/monday').result
 today = sps.solve('commitment.yaml', sources, start=yesterday)
 today = sps.solve('commitment.yaml', sources, start={'primal': {'on': 1.0}})
 ```

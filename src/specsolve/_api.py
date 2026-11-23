@@ -308,15 +308,15 @@ class Model:
                 ``reduced_cost`` for each variable's reduced cost, ``slack``
                 for each constraint's distance to binding, and ``basis`` for
                 the basis status each variable and constraint ended on, read
-                with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
+                with ``variable_basis`` and ``constraint_basis``. The result and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
             start: What the solve begins from; it changes how the solver gets
                 to the optimum, never which one. ``'previous'``, the default,
                 carries on from the last solve while the solver stays loaded,
                 and begins from nothing after an update that loads it again.
-                ``None`` begins from nothing. An earlier answer, live, read
-                with [`read_result`][specsolve._result.read_result] or from an archive, or a
+                ``None`` begins from nothing. An earlier answer, live or read
+                from an archive, or a
                 [`Start`][specsolve.types.Start] of tables keyed by reader, is
                 matched by coordinate, so one from another build of the spec,
                 with rows or columns gained or lost, starts it too. An LP starts from a basis where one is given, which an
@@ -376,7 +376,7 @@ class Model:
         """*answer* as [`solve`][] hands it back: the engine's, with what only this model knows of the solve.
 
         That is the record fields for when the solve ended and its provenance,
-        and the spec a save writes beside them; the engine fills the status and
+        and the spec an archive writes beside them; the engine fills the status and
         the objective. Every step between the engine and the caller lives here,
         so the read benchmark, which builds an answer without a solver, pays
         what a solve pays.
@@ -399,7 +399,7 @@ class Model:
     def _archive(self, out: Path, answered: Result) -> None:
         """Write this model, what is attached to it now, and *answered* to *out*.
 
-        The metrics row is written here, not by [`Result.save`][]: it spans the
+        The metrics row is written here, not with the answer: it spans the
         model's life, not one solve. It is the last member written, so its
         ``archive_seconds`` covers every other one; writing and landing it are
         in the model's own clock alone.
@@ -413,7 +413,6 @@ class Model:
             out,
             self._spec,
             with_positions(self._program, self._tidied),
-            axis=None,
             answer=answered._save,
             metrics=metrics,
         )

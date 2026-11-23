@@ -60,7 +60,7 @@ archived.sweep.scan('p')  # read at the collect, one name at a time
 |---|---|---|
 | a source | the table the member holds | the path to it |
 | the answer | tables in memory | read at the call that asks |
-| a sweep's answer | held: `sweep.primal('p')` | spilled: `sweep.scan('p')` |
+| a sweep's answer | in memory: `sweep.primal('p')` | on disk: `sweep.scan('p')` |
 | a zip's `into=` | optional, and scratch without one | required, and kept |
 
 ## Archive a sweep
@@ -76,12 +76,17 @@ archived = sps.read_archive('roll/')
 sps.solve_over(archived.spec, archived.sources, archived.axis)
 ```
 
-A sweep's `answer/` is the layout `spill_to=` writes, one file per slice of
-each name, so `primal(..., per_window=True)` reads off the archive too.
+A sweep's `answer/` holds one file per slice of each name, so
+`primal(..., per_window=True)` reads off the archive too. **A directory archive
+is written as the sweep goes**, one slice at a time, so the sweep holds one
+slice in memory. Run the same call at the same directory again and the slices
+already there are read back rather than solved, which is how a sweep that
+stopped resumes. A `.zip` is packed once the sweep ends, and is not resumed.
 
 ## What an archive will not take
 
-- **A directory that already holds something.** A `.zip` target is replaced.
+- **A directory that already holds something**, unless it is the sweep
+  archive that sweep resumes. A `.zip` target is replaced.
 
 A directory of archives reads as one set of tables:
 [reading a directory of runs](warehouse.md).
