@@ -13,12 +13,9 @@ on:
       - .readthedocs.yaml
       - .pre-commit-config.yaml
       - .github/dependabot.yml
-  # labeled, so applying trigger:bench to an open PR reaches the walltime job.
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
-# main never cancels: a dropped run leaves a commit with no baseline for the next PR.
+# main never cancels: a dropped run leaves a commit with no baseline in the history.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -28,7 +25,7 @@ jobs:
     name: Memory (heap)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    # A report, not a gate: bench.yml fails a PR, and CodSpeed's app check is set not to fail.
+    # A history, not a gate: CodSpeed's app check is set not to fail.
     continue-on-error: true
     permissions:
       contents: read
@@ -58,14 +55,11 @@ jobs:
   walltime:
     name: Wall time (macro runner)
     # An allowlist, so CodSpeed's own workflow_dispatch backfills never reach the metered runner.
-    if: >-
-      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' &&
-           contains(github.event.pull_request.labels.*.name, 'trigger:bench')) }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # Metered bare metal: walltime on a shared runner is noise, so do not swap in a free one.
     runs-on: codspeed-macro
     timeout-minutes: 30
-    # A report, not a gate: bench.yml fails a PR, and CodSpeed's app check is set not to fail.
+    # A history, not a gate: CodSpeed's app check is set not to fail.
     continue-on-error: true
     permissions:
       contents: read
@@ -89,46 +83,3 @@ jobs:
         with:
           mode: walltime
           run: pixi run -e codspeed pytest bench --sizes 2xs m l --codspeed
-
-  phases:
-    name: Phases A/B (macro runner)
-    # After walltime, whatever it concluded, so the two never share the metered runner.
-    needs: walltime
-    if: >-
-      ${{ !cancelled() && github.event_name == 'pull_request' &&
-          contains(github.event.pull_request.labels.*.name, 'trigger:bench') }}
-    runs-on: codspeed-macro
-    timeout-minutes: 30
-    # A report, not a gate, as walltime is: a red run names a slower cell and fails nothing.
-    continue-on-error: true
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0  # the A/B checks the base commit out beside this one
-          persist-credentials: false
-      - uses: prefix-dev/setup-pixi@v0.10.2
-        with:
-          run-install: false
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/rattler/cache
-          key: pixi-bench-macro-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: pixi-bench-macro-${{ runner.os }}-
-      - run: pixi install -e bench
-
-      - name: A/B of every phase, base against this PR
-        run: >-
-          pixi run -e bench python -m bench.ab.compare
-          ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
-          --op solve --sizes tiny s --out ab.md
-
-      - name: report
-        if: always()
-        run: |
-          {
-            echo '## Phases A/B: base → this PR'
-            echo
-            cat ab.md 2>/dev/null || echo 'The A/B wrote no table: its step above says why.'
-          } >> "$GITHUB_STEP_SUMMARY"
