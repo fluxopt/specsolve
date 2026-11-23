@@ -37,12 +37,17 @@ limit or a gap. Any other option is `<not recorded>` unless you name it in
 ## Read it back
 
 ```python
-case = sps.read_archive('case/')
+result = sps.read_archive('case/')
 
-case.result.objective  # what it reached
-case.result.primal('p')  # the values it came back with
-sps.solve(case.spec, case.sources)  # the same question, asked again
+result.objective  # what it reached
+result.primal('p')  # the values it came back with
+sps.solve(result.spec, result.sources)  # the same question, asked again
 ```
+
+**`read_archive` returns the answer itself**: the `Result`, or the `Sweep` of a
+sweep archive. It carries the `spec`, the `sources` and, for one solve, the
+`metrics` reaching it took; a sweep also carries its `axis`. An answer that
+did not come from an archive holds `None` there.
 
 **`read_inputs` reads the spec and the data, and never the answer.** It still
 reads an archive whose answer layout `read_archive` refuses.
@@ -52,8 +57,8 @@ reads an archive whose answer layout `read_archive` refuses.
 **`scan_archive` reads nothing until asked:**
 
 ```python
-archived = sps.scan_archive('sweep.zip', 'sweep/')
-archived.sweep.scan('p')  # read at the collect, one name at a time
+sweep = sps.scan_archive('sweep.zip', 'sweep/')
+sweep.scan('p')  # read at the collect, one name at a time
 ```
 
 | | `read_archive` | `scan_archive` |
@@ -72,8 +77,8 @@ runs again from the archive alone:
 axis = sps.EachWindow('snapshot', horizon=24, lookahead=24, carry={'soc_initial': 'soc'})
 sps.solve_over('window.yaml', sources, axis, archive='roll/')
 
-archived = sps.read_archive('roll/')
-sps.solve_over(archived.spec, archived.sources, archived.axis)
+sweep = sps.read_archive('roll/')
+sps.solve_over(sweep.spec, sweep.sources, sweep.axis)
 ```
 
 A sweep's `answer/` holds one file per slice of each name, so

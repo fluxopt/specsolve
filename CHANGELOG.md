@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): read_archive returns the result or the sweep, which carries its spec and sources ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
 - refactor(api): an answer is kept on disk only as an archive, which a sweep writes slice by slice ([#2192](https://github.com/fluxopt/specsolve/pull/2192))
 - fix(engine): a quadratic row whose every term is zero is still built ([#2187](https://github.com/fluxopt/specsolve/pull/2187))
 - docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))

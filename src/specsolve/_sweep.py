@@ -50,7 +50,8 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer_layout import TableWriter
-    from specsolve._inputs import Label
+    from specsolve._axes import Axis
+    from specsolve._inputs import Label, Source
     from specsolve._outputs import Output
 
 
@@ -328,6 +329,15 @@ class Sweep:
     #: The spec every slice answered, as written; ``None`` only for an archive
     #: whose answer holds none.
     spec: Spec | None
+    #: The data the sweep was cut from, uncut and keyed as the file declares
+    #: it, where it was read out of an archive; ``None`` for a live sweep. A
+    #: source an EachLabel axis cuts holds the axis column first. Each is a
+    #: table read whole, or the path to its member from a scan.
+    sources: Mapping[str, Source] | None = None
+    #: What cut the sources, with the ``carry=`` it chained the slices with,
+    #: where the sweep was read out of an archive; ``None`` for a live sweep.
+    #: ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis)`` runs it again.
+    axis: Axis | None = None
     #: ``{kind: {name: table}}``, every slice's table of a name as one, keyed,
     #: in memory or scanned off disk; a kind no slice produced is absent.
     _slices: dict[str, dict[str, pl.LazyFrame]] = field(repr=False, default_factory=dict)
@@ -667,7 +677,7 @@ class Sweep:
         no_model = (
             'this sweep has no model behind it, so a quantity the file never named cannot be read from it: a '
             'sweep holds the values of each slice without the models that solved them. Solve it with '
-            "archive=, and sps.read_archive(path).sweep reads any expression at each slice's solution; a name "
+            "archive=, and sps.read_archive(path) reads any expression at each slice's solution; a name "
             'the spec declares is readable either way.'
         )
         if not isinstance(expression, str):

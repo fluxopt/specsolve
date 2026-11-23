@@ -91,8 +91,8 @@ def test_one_solvers_basis_starts_another(solver_name: str) -> None:
 def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
     sps.solve(DISPATCH, snapshots(40), outputs=BASIS, archive=tmp_path / kept)
     archive = sps.read_archive(tmp_path / kept)
-    assert isinstance(archive, sps.types.ResultArchive)
-    before = archive.result
+    assert isinstance(archive, sps.types.Result)
+    before = archive
     _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
     assert warm == 0, 'the tables on disk are the tables the live answer held'
 
@@ -196,7 +196,7 @@ def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_instan
     from specsolve import _sinks as sinks
 
     sps.solve(DISPATCH, snapshots(40), archive=tmp_path / 'answer')
-    loaded = sps.read_archive(tmp_path / 'answer').result
+    loaded = sps.read_archive(tmp_path / 'answer')
     monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
     with pytest.raises(SpecsolveError, match='no value at any coordinate'):
         sps.solve(KNAPSACK, knapsack_sources(), start=loaded)
@@ -510,8 +510,8 @@ def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path)
 
     earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
     archived = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archived, sps.types.SweepArchive)
-    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived.sweep)
+    assert isinstance(archived, sps.types.Sweep)
+    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived)
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'the answer over the hours is all a window needs, kept windows or not'
     )

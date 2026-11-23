@@ -79,14 +79,6 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.types.ResultArchive
-    options:
-      heading_level: 4
-
-::: specsolve.types.SweepArchive
-    options:
-      heading_level: 4
-
 ::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4

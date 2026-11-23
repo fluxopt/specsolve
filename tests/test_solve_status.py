@@ -181,7 +181,7 @@ def test_a_result_hands_back_the_row_its_archive_writes(case, tmp_path):
         record = result.record
     written = Record(**pl.read_parquet(tmp_path / case / 'answer' / 'record.parquet').row(0, named=True))
     assert record == written._replace(specsolve_run=None), 'the property and the file are one row'
-    assert sps.read_archive(tmp_path / case).result.record == written, (
+    assert sps.read_archive(tmp_path / case).record == written, (
         'and a result read back hands back the row it was read from'
     )
     assert (record.objective is None) == (not record.has_primal), 'null where nothing was reached, never nan'

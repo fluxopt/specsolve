@@ -199,7 +199,7 @@ parameter is then what the slice before left in the sweep, so the model is the
 one the sweep solved. A sweep that stopped is read back off its archive:
 
 ```python
-stopped = sps.scan_archive('runs/').sweep
+stopped = sps.scan_archive('runs/')
 model = sps.build_slice('window.yaml', sources, axis, stopped.keys[-1], sweep=stopped)
 ```
 

@@ -175,8 +175,8 @@ def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
         again = sps.solve_over(study.spec, study.sources, study.axis)
     finally:
         parquet._polars_has_parquet.cache_clear()
-    assert study.sweep.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
-    assert study.sweep.primal('p').equals(runs.primal('p')), 'and every value'
+    assert study.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
+    assert study.primal('p').equals(runs.primal('p')), 'and every value'
     assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
         'and it solves again from what the archive holds'
     )

@@ -95,10 +95,10 @@ model again. Write the report in five steps:
 2. **Paste the phases, the model's size and the versions.**
 
     ```python
-    archive = sps.read_archive('runs/slow.zip')
-    print(archive.metrics.phases)
-    print(archive.metrics.columns, archive.metrics.rows, archive.metrics.nonzeros)
-    print(archive.result.provenance)
+    result = sps.read_archive('runs/slow.zip')
+    print(result.metrics.phases)
+    print(result.metrics.columns, result.metrics.rows, result.metrics.nonzeros)
+    print(result.provenance)
     ```
 
     The provenance names the solver, its version and options, and the
@@ -109,7 +109,7 @@ model again. Write the report in five steps:
    90 s at 10,000" shows a phase that grows faster than the model.
 
 4. **Attach the archive if you may share the data.** Anyone can solve it again
-   from the file alone, with `sps.solve(archive.spec, archive.sources)`. If you
+   from the file alone, with `sps.solve(result.spec, result.sources)`. If you
    may not, attach the spec and give the number of labels in each dimension.
 
 5. **Name the machine.** Give its cores, its memory and its operating system,

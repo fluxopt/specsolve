@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer_layout import TableWriter
+    from specsolve._inputs import Source
     from specsolve._status import SolveStatus
 
 
@@ -403,6 +404,12 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
+    #: What the archive this was read out of holds of the data it answered;
+    #: ``None`` for a live solve.
+    _sources: Mapping[str, Source] | None = None
+    #: What reaching this answer took, as the archive it was read out of
+    #: recorded it; ``None`` for a live solve.
+    _metrics: Metrics | None = None
 
     @property
     def status(self) -> str:
@@ -441,6 +448,26 @@ class Result:
         perhaps over other data.
         """
         return self._spec
+
+    @property
+    def sources(self) -> Mapping[str, Source] | None:
+        """The data this answered, keyed as the file declares it, where it was read out of an archive; else ``None``.
+
+        Each source is the table [`tidy`][specsolve._api.tidy] returns, read
+        whole by [`read_archive`][specsolve._archive.read_archive], or the
+        path to its member from [`scan_archive`][specsolve._archive.scan_archive].
+        ``sps.solve(result.spec, result.sources)`` asks the question again.
+        """
+        return self._sources
+
+    @property
+    def metrics(self) -> Metrics | None:
+        """What reaching this answer took, as its archive recorded it; ``None`` for a live solve.
+
+        A live model says the same through
+        [`diagnostics`][specsolve._api.Model.diagnostics].
+        """
+        return self._metrics
 
     @property
     def solved_at(self) -> datetime | None:
