@@ -271,11 +271,7 @@ class SliceFiles:
     def written(self, kind: str, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
         """The named tables of *kind* a done slice wrote; a name it did not write is absent."""
         found = {name: self._file(kind, position, name) for name in names}
-        return {
-            name: parquet.read(path).drop(self.key_name, RUN, strict=False)
-            for name, path in found.items()
-            if path.exists()
-        }
+        return {name: parquet.read(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
     def tables(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
         """``{kind: {name: table}}``, every slice's table of a name as one, keyed and in slice order.
