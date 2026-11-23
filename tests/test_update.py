@@ -823,7 +823,7 @@ def test_a_changed_coefficient_is_taken_in_place_and_taken_back(solver_name):
             with sps.build(PER_ROW, data) as reference:
                 got = model.update({'eff': data['eff']}).solve(solver_name).objective
                 assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 1, 'the coefficients changed in place, so the solver stayed loaded'
+        assert model.metrics().solver_instances == 1, 'the coefficients changed in place, so the solver stayed loaded'
 
 
 def test_a_quadratic_constraint_whose_linear_part_changed_loads_again():
@@ -835,4 +835,4 @@ def test_a_quadratic_constraint_whose_linear_part_changed_loads_again():
         model.solve('gurobi')
         got = model.update(changed).solve('gurobi').objective
         assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
-        assert model.diagnostics().loads == 2, 'a quadratic row whose linear part changed was kept'
+        assert model.metrics().solver_instances == 2, 'a quadratic row whose linear part changed was kept'
