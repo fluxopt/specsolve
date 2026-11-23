@@ -818,8 +818,8 @@ compare to another library*, and it wants a different metric — but it does not
 want a different harness. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # head
 pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
     --columns peak --fail-on peak:20%
 ```
@@ -827,7 +827,9 @@ pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_
 That is what `.github/workflows/bench.yml` runs on a pull request labelled
 `trigger:bench` — the base's `src/` and then the head's, under one harness —
 and the memray peak at 20% is what it gates on. Wall time and `rss` are
-reported beside it and never gated. The sweep is left out, because it solves.
+reported beside it and never gated. It runs the ladder alone, not the harness's
+own tests. The sweep is left out, because it solves, and `test_fresh`, because
+its work is in a child process that memray does not follow.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 

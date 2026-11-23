@@ -8,8 +8,9 @@ env:
   SELECT: >-
     --sizes s m
     --cases dispatch nodal transport profiled
-  # The sweep solves, so its peak is the solver's as much as ours; CodSpeed leaves it out too.
-  UNGATED: not test_sweep
+  # The sweep solves, so its peak is the solver's as much as ours; `test_fresh` works in a
+  # child process memray does not follow. CodSpeed leaves both out too.
+  UNGATED: not test_sweep and not test_fresh
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -54,11 +55,11 @@ jobs:
       - name: baseline — the engine as it is on the base branch
         run: |
           git checkout ${{ github.event.pull_request.base.sha }} -- src/
-          pixi run -e bench pytest bench $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
+          pixi run -e bench pytest bench/test_ladder.py $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
           git checkout ${{ github.event.pull_request.head.sha }} -- src/
 
       - name: this PR's engine
-        run: pixi run -e bench pytest bench $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
+        run: pixi run -e bench pytest bench/test_ladder.py $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
 
       - name: report
         if: always()
