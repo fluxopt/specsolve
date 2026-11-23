@@ -1,6 +1,6 @@
 """Is the data there where an entry needs it? The positions that ask.
 
-Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
+Elsewhere a missing row of a ``missing: 0`` parameter reads as a zero coefficient. A divisor and a
 constant term have no such reading, so each is asked at the last moment the
 gap is still visible:
 
@@ -25,7 +25,7 @@ from mathspec import program
 
 from specsolve._collect import collected, collected_all
 from specsolve._engine.conditions import narrowed
-from specsolve._engine.scope import join_on
+from specsolve._engine.scope import join_on, missing_value
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from specsolve._names import COEFF, CONSTANT, ROW
@@ -136,7 +136,7 @@ def constant_side(
     owed: one whose parameters all stand beside a variable is a coefficient,
     and its zero is not a bound. A term built under a ``cases:`` region is
     owed only inside it. A gap a reduction summed away leaves the sum one term
-    fewer, as it is for a ``missing: neutral`` row anywhere inside a sum.
+    fewer, as it is for a ``missing: 0`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant term with no value at a row it is owed.
@@ -149,7 +149,8 @@ def constant_side(
         aggregated = constant_scalar(p).rename({CONSTANT: column})
         carrier = join_on(carrier, aggregated, p.dims, 'left')
         accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
-        if not p.parameters:
+        owed = frozenset(name for name in p.parameters if missing_value(scope.program, name) is None)
+        if not owed:
             continue
         gap = pl.col(column).is_null()
         if p.region is not None:
@@ -158,7 +159,7 @@ def constant_side(
             carrier = join_on(carrier, claimed, c.dims, 'left')
             gap = gap & pl.col(inside).fill_null(False)
         carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
-        gaps[f'__gap {i}__'] = p.parameters
+        gaps[f'__gap {i}__'] = owed
 
     built = carrier.select(
         ROW,

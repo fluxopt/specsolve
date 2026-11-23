@@ -24,9 +24,9 @@ PyPSA energy-total bounds: a generator's dispatch reduced over every snapshot an
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
@@ -43,40 +43,40 @@ PyPSA energy-total bounds: a generator's dispatch reduced over every snapshot an
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} \cdot \mathrm{weighting}_{t}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} \cdot \mathrm{weighting}_{t}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
 **`energy_cap`**
 
 ```math
-\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \le \mathrm{e}^{\mathrm{sum,max}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,max}}_{g} \text{ is defined}
+\sum_{t \in \mathcal{T}} p_{g,t} \cdot \mathrm{weighting}_{t} \le \mathrm{e}^{\mathrm{sum,max}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,max}}_{g} \text{ is defined}
 ```
 
 **`energy_floor`**
 
 ```math
-\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}
+\sum_{t \in \mathcal{T}} p_{g,t} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 </details>

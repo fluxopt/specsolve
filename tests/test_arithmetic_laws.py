@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from mathspec.errors import SchemaError
 
 import specsolve as sps
 from specsolve.errors import DataError
@@ -170,7 +171,7 @@ def test_a_term_whose_variable_is_absent_is_not_a_term_worth_zero():
 
 
 def test_absence_zero_says_at_the_entry_what_two_entries_said_at_the_rows():
-    """``missing: neutral`` builds the model the two complementary ``where`` entries build."""
+    """``missing: 0`` builds the model the two complementary ``where`` entries build."""
     minimise_x = 'sum((-1) * x)'
     two_entries = _objective_of(
         'x + y >= 60',
@@ -180,12 +181,12 @@ def test_absence_zero_says_at_the_entry_what_two_entries_said_at_the_rows():
     )
 
     spec = _spec('x + y >= 60', objective=minimise_x, dims=['f', 't'])
-    spec['variables']['y']['missing'] = 'neutral'
+    spec['variables']['y']['missing'] = 0
     with differential(spec, DATA, lp=True) as run:
         declared = float(run.result.objective)
 
     assert declared == pytest.approx(two_entries, rel=RTOL), (
-        'missing: neutral builds the model the two complementary entries build'
+        'missing: 0 builds the model the two complementary entries build'
     )
     assert declared == pytest.approx(-(10.0 + 10.0 + 60.0 + 60.0), rel=RTOL), (
         'f=b keeps its row, and with y worth zero there x carries the whole 60 itself'
@@ -193,17 +194,17 @@ def test_absence_zero_says_at_the_entry_what_two_entries_said_at_the_rows():
 
 
 def test_absence_zero_does_not_disturb_a_reduction():
-    """A reduction sums the y's that exist, so ``missing: neutral`` changes nothing there."""
+    """A reduction sums the y's that exist, so ``missing: 0`` changes nothing there."""
     total = 'sum(y, over=f) <= 40'
     undefined = _objective_of(total, objective='sum(y)')
 
     spec = _spec(total, objective='sum(y)')
-    spec['variables']['y']['missing'] = 'neutral'
+    spec['variables']['y']['missing'] = 0
     with differential(spec, DATA, lp=True) as run:
         zero = float(run.result.objective)
 
     assert zero == pytest.approx(undefined, rel=RTOL), (
-        'a reduction sums what exists under either reading — missing: neutral adds zeros to it'
+        'a reduction sums what exists under either reading — missing: 0 adds zeros to it'
     )
 
 
@@ -250,8 +251,8 @@ def _wide_objective_of(expression: str, *, dims: list[str]) -> float:
         'dimensions': dimensions,
         **({'relations': {'grp': {'key': 'f', 'values': 'g'}}} if grouped else {}),
         'parameters': {
-            'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
-            'gate2': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
+            'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
+            'gate2': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
             'w': {'dims': ['f']},
         },
         'variables': {
@@ -306,7 +307,7 @@ def test_a_condition_on_a_dim_the_reduction_does_not_touch_still_propagates():
     """
     spec = {
         'dimensions': {'f': {}, 't': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'tgate': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'}},
+        'parameters': {'tgate': {'dims': ['t'], 'dtype': 'bool', 'missing': False}},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'dims': ['f', 't'], 'where': 'tgate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -350,7 +351,7 @@ def test_shift_created_absence_reaches_a_reduction_like_any_other():
 #: The divisor fixture, varied per test by :func:`override`.
 DIVISOR_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'d': {'dims': ['f'], 'missing': 'neutral'}},
+    'parameters': {'d': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {'c': {'dims': ['f'], 'expression': 'x / d <= 10'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
@@ -360,26 +361,57 @@ DIVISOR_SPEC = {
 SPARSE_D = {'f': ['a', 'b'], 'd': pd.Series([2.0], index=pd.Index(['a'], name='f'))}
 
 
-def test_a_sparse_divisor_is_refused_rather_than_read_as_zero():
-    """A divisor has no defensible fill (#312).
+#: ``d`` declared ``missing: 0``, so a missing row would make the divisor 0.
+SPARSE_DIVISOR_SPEC = override(DIVISOR_SPEC, **{'parameters.d.missing': 0})
 
-    0 divides by zero, 1 silently rescales, and dropping the term rewrites
-    what the constraint asserts.
+
+@pytest.mark.parametrize(
+    'patch',
+    [
+        pytest.param({}, id='a-quotient'),
+        pytest.param({'constraints.c.expression': 'x / (d ** 2) <= 10'}, id='a-power'),
+        pytest.param(
+            {
+                'variables.x.bounds.lower': 1,
+                'constraints.c.expression': 'x <= 10',
+                'objective.sense': 'minimize',
+                'objective.expression': 'sum(x / d, over=f)',
+            },
+            id='the-objective',
+        ),
+        pytest.param({'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'}, id='a-constant-side'),
+        pytest.param(
+            {
+                'parameters.active': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
+                'constraints.c.where': 'active',
+            },
+            id='a-mask-that-does-not-read-d',
+        ),
+    ],
+)
+def test_a_divisor_that_a_missing_row_makes_zero_is_refused_at_load(patch):
+    """mathspec refuses the divisor before any data arrives, where specsolve refused it at build (#312).
+
+    A mask that reads another name guards nothing mathspec can see, so it is refused too.
     """
-    with pytest.raises(DataError, match='used as a divisor'), differential(DIVISOR_SPEC, SPARSE_D) as run:
-        _ = run.result.objective
+    with pytest.raises(SchemaError, match="the divisor contains 'd', which is declared missing: 0"):
+        schema_of(override(SPARSE_DIVISOR_SPEC, **patch))
 
+
+def test_a_missing_row_under_a_divisor_reads_as_its_zero():
+    """`1 + d` is 1 where `d` has no row, so the quotient divides by 1 there rather than being refused."""
+    spec = override(SPARSE_DIVISOR_SPEC, **{'constraints.c.expression': 'x / (1 + d) <= 10'})
+    with differential(spec, SPARSE_D, lp=True) as run:
+        assert float(run.result.objective) == pytest.approx(40.0, rel=RTOL), 'f=a: x <= 10 * 3; f=b: x <= 10 * 1'
+
+
+def test_a_covered_divisor_builds_and_binds():
+    """With a row at every coordinate, the quotient builds and the row binds on both lanes."""
     dense = {'f': ['a', 'b'], 'd': pd.Series([2.0, 5.0], index=pd.Index(['a', 'b'], name='f'))}
     with differential(DIVISOR_SPEC, dense, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(70.0, rel=RTOL), (
             'covered, the same model builds and the row binds on both lanes'
         )
-
-
-def test_a_sparse_divisor_written_as_a_power_is_named_and_refused_on_both_lanes():
-    """The same gap under `**`: both lanes name `d` and refuse in one sentence (#1536)."""
-    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': 'x / (d ** 2) <= 10'})
-    both_lanes_refuse(spec, SPARSE_D, match="parameter 'd' is used as a divisor")
 
 
 def test_a_divisor_that_adds_is_added_up_before_it_divides():
@@ -395,63 +427,16 @@ def test_a_divisor_that_adds_is_added_up_before_it_divides():
         )
 
 
-def test_a_sparse_divisor_that_adds_is_named_and_refused_on_both_lanes():
-    """`1 + d` has no value where `d` has no row: the constant beside it does not fill the gap."""
-    spec = override(DIVISOR_SPEC, **{'constraints.c.expression': 'x / (1 + d) <= 10'})
-    both_lanes_refuse(spec, SPARSE_D, match="parameter 'd' is used as a divisor")
-
-
-def test_a_sparse_divisor_in_the_objective_is_refused_too():
-    """The refusal holds in the objective, the one entry with no rows for a condition to remove."""
-    spec = override(
-        DIVISOR_SPEC,
-        **{
-            'variables.x.bounds.lower': 1,
-            'constraints.c.expression': 'x <= 10',
-            'objective.sense': 'minimize',
-            'objective.expression': 'sum(x / d, over=f)',
-        },
-    )
-    with pytest.raises(DataError, match='used as a divisor'), differential(spec, SPARSE_D) as run:
-        _ = run.result.objective
-
-
-def test_a_sparse_divisor_on_a_constant_side_is_refused_too():
-    """`x <= h / d` divides where no variable stands, and is refused the same (#1465)."""
-    spec = override(
-        DIVISOR_SPEC,
-        **{'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d'},
-    )
-    data = SPARSE_D | {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
-    both_lanes_refuse(spec, data, match="parameter 'd' is used as a divisor")
-
-
 def test_a_sparse_divisor_on_a_constant_side_has_the_same_escape():
-    """On the constant side too, the refusal is keyed to the rows built."""
+    """On the constant side too, a row masked by the divisor's own presence divides only where it has a row."""
     spec = override(
-        DIVISOR_SPEC,
+        SPARSE_DIVISOR_SPEC,
         **{'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d', 'constraints.c.where': 'd'},
     )
     data = SPARSE_D | {'h': pd.Series([10.0, 10.0], index=pd.Index(['a', 'b'], name='f'))}
     with differential(spec, data, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(105.0, rel=RTOL), (
             'f=a: the row binds at x <= 5. f=b: absent, so x runs to its bound'
-        )
-
-
-def test_a_divisor_may_be_sparse_where_the_row_is_absent():
-    """The check is keyed to the rows built, not the coordinate product."""
-    spec = override(
-        DIVISOR_SPEC,
-        **{
-            'parameters.active': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'},
-            'constraints.c.where': 'active',
-        },
-    )
-    data = SPARSE_D | {'active': pd.Series([True], index=pd.Index(['a'], name='f'))}
-    with differential(spec, data, lp=True) as run:
-        assert float(run.result.objective) == pytest.approx(120.0, rel=RTOL), (
-            'f=a: the row binds at x <= 20. f=b: absent, so x runs to its bound'
         )
 
 
@@ -464,7 +449,7 @@ def test_a_divisor_may_be_sparse_where_the_row_is_absent():
 )
 def test_a_sparse_divisor_has_an_escape(patch, expected):
     """A condition on the row or the variable lifts the refusal."""
-    with differential(override(DIVISOR_SPEC, **patch), SPARSE_D, lp=True) as run:
+    with differential(override(SPARSE_DIVISOR_SPEC, **patch), SPARSE_D, lp=True) as run:
         assert float(run.result.objective) == pytest.approx(expected, rel=RTOL), (
             'either spelling of "this coordinate has no row" lifts the refusal'
         )
@@ -645,19 +630,14 @@ def test_an_operand_that_is_a_sum_is_taken_whole(constraint, expected):
         assert run.oracle == pytest.approx(expected, rel=RTOL), 'the optimum reads the sum as its total, 3'
 
 
-def test_a_sparse_divisor_under_a_summed_divisor_is_still_refused():
-    """A null term is a divisor's hole, so adding the sum up keeps it null rather than skipping it.
-
-    `w / d` has no value at `b`. Added up by skipping nulls, the outer divisor
-    read 2 instead of refusing, and the build solved `x / 2 >= 1` with no error.
-    """
+def test_a_sparse_divisor_under_a_summed_divisor_is_refused_at_load():
+    """`w / d` under a sum is a divisor's divisor, and its `missing: 0` is refused at load like any other."""
     spec = override(
         WHOLE_SUM,
         **{
-            'parameters.d': {'dims': ['g'], 'missing': 'neutral'},
+            'parameters.d': {'dims': ['g'], 'missing': 0},
             'constraints.c': {'dims': ['t'], 'expression': 'x / sum(w / d, over=g) >= 1'},
         },
     )
-    data = WHOLE_SUM_DATA | {'d': pl.DataFrame({'g': ['a'], 'value': [1.0]})}
-    with pytest.raises(DataError, match='used as a divisor'):
-        sps.build(spec, data).close()
+    with pytest.raises(SchemaError, match="the divisor contains 'd', which is declared missing: 0"):
+        schema_of(spec)

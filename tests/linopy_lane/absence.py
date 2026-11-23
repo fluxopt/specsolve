@@ -46,7 +46,7 @@ def unmapped(key: object) -> bool:
     return key is None or key != key
 
 
-def variable_term(variable: Any, missing: str) -> Any:
+def variable_term(variable: Any, missing: str | float) -> Any:
     """The variable as it enters an expression, carrying its declared ``missing:``.
 
     The ``where:`` stays on the variable either way — it is what keeps the absent
@@ -55,18 +55,18 @@ def variable_term(variable: Any, missing: str) -> Any:
     per-expression escape back to the other reading: the slot contributes
     nothing and the row stands.
     """
-    return variable.fillna(0) if missing == 'neutral' else variable
+    return variable if isinstance(missing, str) else variable.fillna(missing)
 
 
-def variable_value(variable: Any, missing: str) -> Any:
+def variable_value(variable: Any, missing: str | float) -> Any:
     """The variable's primal as it enters a read, carrying its declared ``missing:``.
 
     :func:`variable_term`'s two readings over values: an absent slot is NaN,
     which propagates through the arithmetic the way the absent term takes its
-    row, and ``missing: neutral`` fills it.
+    row, and ``missing: 0`` fills it.
     """
     solution = variable.solution
-    return solution.fillna(0.0) if missing == 'neutral' else solution
+    return solution if isinstance(missing, str) else solution.fillna(float(missing))
 
 
 def coefficient(parameter: Any) -> Any:

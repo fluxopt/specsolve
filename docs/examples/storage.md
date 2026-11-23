@@ -29,22 +29,23 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 |---|---|
 | $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
+| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, cyclic at the horizon |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 | $`c`$ | `cost` over $`\mathcal{G}`$ — marginal cost |
 | $`\ell`$ | `load` over $`\mathcal{S}`$ — demand to be met |
+| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
 | $`\mathrm{charge}`$ | `charge` over $`\mathcal{S}`$ — energy into the store |
 | $`\mathrm{discharge}`$ | `discharge` over $`\mathcal{S}`$ — energy out of the store |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S}`$ — output of a generator in a snapshot |
 | $`\mathrm{soc}`$ | `soc` over $`\mathcal{S}`$ — state of charge carried into the next snapshot |
 
 #### Notation
@@ -54,12 +55,6 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 | $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G}
-```
 
 **`charge`**
 
@@ -73,6 +68,12 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 0 \le \mathrm{discharge}_{s} \le 30 \qquad \forall\, s \in \mathcal{S}
 ```
 
+**`p`**
+
+```math
+0 \le p_{g,s} \le \bar p_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S}
+```
+
 **`soc`**
 
 ```math
@@ -82,7 +83,7 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 #### Objective
 
 ```math
-\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+\min \sum_{g \in \mathcal{G},\ s \in \mathcal{S}} p_{g,s} \cdot c_{g}
 ```
 
 #### Subject to
@@ -90,7 +91,7 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 **`power_balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{s,g} + \mathrm{discharge}_{s} - \mathrm{charge}_{s} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
+\sum_{g \in \mathcal{G}} p_{g,s} + \mathrm{discharge}_{s} - \mathrm{charge}_{s} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
 ```
 
 **`soc_balance`**

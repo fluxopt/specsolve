@@ -31,9 +31,9 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{S}`$ | index $`s`$ — `store` with $`\mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}`$ — energy stores, each sitting on one bus |
 
 #### Parameters
@@ -45,17 +45,20 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 | $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
 | $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the modelled period |
 | $`\mathrm{e}^{\mathrm{initial}}`$ | `e_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
+| $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{standing\_loss}`$ | `standing_loss` over $`\mathcal{S}`$ — share of the carried-over level lost between snapshots |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`\mathit{store\_p}`$ | `store_p` over $`\mathcal{T} \times \mathcal{S}`$ — power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
 | $`e`$ | `e` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 | $`e^{\mathrm{nom}}`$ | `e_nom` over $`\mathcal{S}`$ — energy capacity built at a store |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
+| $`\mathit{store\_p}`$ | `store_p` over $`\mathcal{T} \times \mathcal{S}`$ — power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
 
 #### Notation
 
@@ -64,18 +67,6 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 | $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`store_p`**
-
-```math
-\mathit{store\_p}_{t,s} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
 
 **`e`**
 
@@ -89,24 +80,30 @@ e_{t,s} \ge 0 \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 0 \le e^{\mathrm{nom}}_{s} \le \mathrm{e}^{\mathrm{nom,max}}_{s} \qquad \forall\, s \in \mathcal{S}
 ```
 
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`store_p`**
+
+```math
+\mathit{store\_p}_{t,s} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot \mathrm{e}^{\mathrm{capital,cost}}_{s}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot \mathrm{e}^{\mathrm{capital,cost}}_{s}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
+**`energy_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{store\_bus}(s) = b} \mathit{store\_p}_{t,s} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`within_capacity`**
-
-```math
-e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 **`energy_balance_initial`**
@@ -115,10 +112,16 @@ e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mat
 e_{t,s} = \mathrm{e}^{\mathrm{initial}}_{s} - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{pos}(t) = 0
 ```
 
-**`energy_balance`**
+**`nodal_balance`**
 
 ```math
-e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{s \in \mathcal{S} \,:\, \mathrm{store\_bus}(s) = b} \mathit{store\_p}_{t,s} = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 </details>

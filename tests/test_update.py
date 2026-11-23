@@ -44,7 +44,7 @@ PLANTS = ['a', 'b', 'c', 'd']
 REACH = {
     'dimensions': {'zone': {'dtype': 'str'}, 'plant': {'dtype': 'str'}},
     'parameters': {
-        'reach': {'dims': ['zone', 'plant'], 'missing': 'neutral'},
+        'reach': {'dims': ['zone', 'plant'], 'missing': 0},
         'cost': {'dims': ['plant']},
         'demand': {'dims': ['zone']},
         'levy': {'dims': []},

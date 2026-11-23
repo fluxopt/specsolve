@@ -196,7 +196,7 @@ parameters:
       `v_ang_max`; infinite, and so no row, by default. A line whose carrier is not AC has no row either.
       The deprecated `v_ang_min` is ignored, as PyPSA ignores it with a `DeprecationWarning` (`constraints.py:1702-1709`)
     dims: [scenario, line]
-    missing: neutral
+    missing: 0
   Line_x_pu_eff:
     description: the line's effective series reactance — PyPSA's `x_pu_eff`, `x` over the square of its
       bus's nominal voltage, data prep
@@ -206,7 +206,7 @@ parameters:
       data prep; a line in no cycle has no row. PyPSA builds the cycle basis from the first scenario only
       (`networks.py:1430-1437`)
     dims: [period, line, cycle]
-    missing: neutral
+    missing: 0
   Transformer_s_nom:
     description: nominal apparent power
     dims: [scenario, transformer]
@@ -222,7 +222,7 @@ parameters:
       may be either way, in degrees — PyPSA's `v_ang_max`; infinite, and so no row, by default. The deprecated
       `v_ang_min` is ignored, as a line's
     dims: [scenario, transformer]
-    missing: neutral
+    missing: 0
   Transformer_x_pu_eff:
     description: the transformer's effective series reactance — PyPSA's `x_pu_eff`, `x` over its `s_nom`
       times its tap ratio, data prep
@@ -232,14 +232,14 @@ parameters:
       orientation in the cycle — PyPSA's `x_pu_eff`, the cycle basis, data prep; a transformer in no cycle
       has no row. From the first scenario only, as a line's
     dims: [period, transformer, cycle]
-    missing: neutral
+    missing: 0
   Transformer_phase_shift_weight:
     description: a fixed transformer's phase shift in radians at each snapshot, signed by its orientation
       in the cycle — a constant added to the cycle sum, data prep; zero for a varying transformer, whose
       shift is a decision instead, so the constant and the variable term never both count a shift. A transformer
       with no shift or in no cycle of its snapshot's period has no row
     dims: [snapshot, transformer, cycle]
-    missing: neutral
+    missing: 0
   Transformer_phase_shift_varying:
     description: whether a transformer's phase shift is a decision — PyPSA's `phase_shift_min < phase_shift_max`,
       read as a flag in data prep; false is a fixed shift carried by `phase_shift`. The shift parameters
@@ -290,7 +290,7 @@ variables:
       and zero in the cycle sum, where the shift is fixed'
     dims: [scenario, snapshot, transformer]
     where: Transformer_phase_shift_varying AND Transformer_active
-    missing: neutral
+    missing: 0
     bounds: {lower: Transformer_phase_shift_min, upper: Transformer_phase_shift_max}
   Process_p:
     description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its

@@ -317,25 +317,25 @@ parameters:
       without it (`global_constraints.py:364-369`)'
     dims: [scenario, global_constraint, snapshot]
     dtype: bool
-    missing: neutral
+    missing: false
   Generator_primary_energy_weight:
     description: the constrained attribute per unit of energy at the bus — the carrier's `co2_emissions`
       over the generator's efficiency at the snapshot, data prep; a generator of an unweighted carrier
       has no row
     dims: [scenario, global_constraint, snapshot, generator]
-    missing: neutral
+    missing: 0
   Generator_operational_limit_weight:
     description: one where the generator is in the row's set — data prep; one outside it has no row
     dims: [scenario, global_constraint, generator]
-    missing: neutral
+    missing: 0
   StorageUnit_operational_limit_weight:
     description: one where the storage unit is in the row's set — data prep; one outside it has no row
     dims: [scenario, global_constraint, storage_unit]
-    missing: neutral
+    missing: 0
   Store_operational_limit_weight:
     description: one where the store is in the row's set — data prep; one outside it has no row
     dims: [scenario, global_constraint, store]
-    missing: neutral
+    missing: 0
 variables:
   Generator_p:
     description: '`Generator-p` — output of a generator in a snapshot'

@@ -3,8 +3,8 @@ The whole architecture, one model, one stage at a time — run it and read.
 spec: examples/walkthrough/walkthrough.yaml
 
 [1] YAML text -> validated Spec  (mathspec.to_spec)
-    dimensions   snapshot, generator
-    parameters   p_max, load, cost
+    dimensions   generator, snapshot
+    parameters   cost, load, p_max
     variables    p
     constraints  power_balance
     expressions  total_supply    <- tier 2, still present
@@ -17,7 +17,7 @@ spec: examples/walkthrough/walkthrough.yaml
 
 [3] a spec -> the program both lanes build from  (Spec.program)
     Program(
-      p: Variable(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0, dims=()), upper=ParameterReference(name='p_max', dims=('generator',)), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
+      p: Variable(dims=('generator', 'snapshot'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0, dims=()), upper=ParameterReference(name='p_max', dims=('generator',)), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
       power_balance: Constraint(dims=('snapshot',), lhs=ExpressionReference(name='total_supply', body=Sum(operand=VariableReference(name='p', dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), dims=('snapshot',)), sense='==', rhs=ParameterReference(name='load', dims=('snapshot',)), where=None, description='the fleet meets the load exactly in every snapshot')
       Objective(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=()), description='total cost of generation over every snapshot')
     )
@@ -51,11 +51,11 @@ spec: examples/walkthrough/walkthrough.yaml
     min
     
     obj:
-    +50.0 x2
-    +50.0 x5
-    +50.0 x8
-    +50.0 x11
+    +50.0 x12
+    +50.0 x13
     +50.0 x14
+    +50.0 x15
+    +50.0 x16
     +50.0 x17
     
     s.t.
@@ -65,18 +65,18 @@ spec: examples/walkthrough/walkthrough.yaml
     status     ok (optimal)
     objective  1,000.0
     shape: (6, 3)
-    ┌──────────┬───────────┬───────┐
-    │ snapshot ┆ generator ┆ value │
-    │ ---      ┆ ---       ┆ ---   │
-    │ i64      ┆ str       ┆ f64   │
-    ╞══════════╪═══════════╪═══════╡
-    │ 0        ┆ wind      ┆ 80.0  │
-    │ 0        ┆ solar     ┆ 0.0   │
-    │ 0        ┆ gas       ┆ 0.0   │
-    │ 1        ┆ wind      ┆ 60.0  │
-    │ 1        ┆ solar     ┆ 60.0  │
-    │ 1        ┆ gas       ┆ 0.0   │
-    └──────────┴───────────┴───────┘
+    ┌───────────┬──────────┬───────┐
+    │ generator ┆ snapshot ┆ value │
+    │ ---       ┆ ---      ┆ ---   │
+    │ str       ┆ i64      ┆ f64   │
+    ╞═══════════╪══════════╪═══════╡
+    │ wind      ┆ 0        ┆ 80.0  │
+    │ wind      ┆ 1        ┆ 60.0  │
+    │ wind      ┆ 2        ┆ 90.0  │
+    │ wind      ┆ 3        ┆ 100.0 │
+    │ wind      ┆ 4        ┆ 80.0  │
+    │ wind      ┆ 5        ┆ 100.0 │
+    └───────────┴──────────┴───────┘
     shape: (3, 2)
     ┌──────────┬───────┐
     │ snapshot ┆ value │

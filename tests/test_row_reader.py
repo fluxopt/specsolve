@@ -63,7 +63,7 @@ def test_a_row_is_its_terms_its_comparison_and_its_right_hand_side() -> None:
     with sps.build(DISPATCH_SPEC, DATA) as model:
         row = model.row('balance', snapshot=2)
 
-    assert _terms(row) == [('p', 'snapshot=2, generator=wind', 1.0), ('p', 'snapshot=2, generator=gas', 1.0)]
+    assert _terms(row) == [('p', 'generator=wind, snapshot=2', 1.0), ('p', 'generator=gas, snapshot=2', 1.0)]
     assert (row.sense, row.rhs) == ('==', 100.0), 'the right-hand side is the bound value, not the parameter name'
 
 
@@ -72,7 +72,7 @@ def test_printing_a_row_gives_one_line_with_every_coordinate_named() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         printed = str(model.row('commit', t=1, g='gas'))
 
-    assert printed == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
+    assert printed == 'commit[g=gas, t=1]: +1 p[g=gas, t=1] -200 u[g=gas, t=1] <= 0'
 
 
 _HOUR = datetime.datetime(2026, 1, 1, 1)
@@ -99,7 +99,7 @@ def test_a_term_prints_its_coordinate_as_the_row_prints_its_own(
     """One line, one way of writing a coordinate: named, and the same text for a label wherever it sits.
 
     The row printed its own coordinate named and through Python's `str()`, and
-    its terms by position through polars: `p[1, gas]` beside `commit[t=1, g=gas]`,
+    its terms by position through polars: `p[gas, 1]` beside `commit[g=gas, t=1]`,
     `2026-01-01 01:00:00.000000` beside `2026-01-01 01:00:00`, `1e-7` beside `1e-07`.
     """
     spec = {
@@ -173,7 +173,7 @@ def test_a_row_spanning_two_entries_names_both() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert _terms(row) == [('p', 't=1, g=gas', 1.0), ('u', 't=1, g=gas', -200.0)], (
+    assert _terms(row) == [('p', 'g=gas, t=1', 1.0), ('u', 'g=gas, t=1', -200.0)], (
         'p - p_max*u <= 0, with p_max the bound value for gas'
     )
     assert (row.sense, row.rhs) == ('<=', 0.0)
@@ -193,7 +193,7 @@ def test_a_term_whose_variable_is_absent_is_absent_from_the_row() -> None:
     with sps.build(spec, COMMITMENT_DATA) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', 't=0, g=gas', 1.0)], 'wind is absent from p, so the balance row lost its term'
+    assert _terms(row) == [('p', 'g=gas, t=0', 1.0)], 'wind is absent from p, so the balance row lost its term'
 
 
 def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
@@ -279,7 +279,7 @@ def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
     with sps.build(PRECISE, PRECISE_DATA) as model:
         printed = str(model.row('balance', t=0))
 
-    assert printed == 'balance[t=0]: +1.0000001 p[t=0, g=a] +12345678 p[t=0, g=b] >= 12345678.9', (
+    assert printed == 'balance[t=0]: +1.0000001 p[g=a, t=0] +12345678 p[g=b, t=0] >= 12345678.9', (
         'every digit the data carried survives, and a whole coefficient still reads as linopy prints it'
     )
 
@@ -289,17 +289,17 @@ def test_a_row_echoed_at_a_prompt_is_the_line_not_the_table() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert repr(row) == str(row) == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
+    assert repr(row) == str(row) == 'commit[g=gas, t=1]: +1 p[g=gas, t=1] -200 u[g=gas, t=1] <= 0'
 
 
 def test_a_row_has_one_spelling_whatever_order_its_coordinate_was_given_in() -> None:
-    """One row, one identity: the entry orders the coordinate, not the caller's keywords."""
+    """One row, one identity: its dimensions sorted by name order the coordinate, not the caller's keywords."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
-        by_declaration = model.row('commit', t=1, g='gas')
-        reversed_kwargs = model.row('commit', g='gas', t=1)
+        by_name = model.row('commit', g='gas', t=1)
+        reversed_kwargs = model.row('commit', t=1, g='gas')
 
-    assert str(by_declaration) == str(reversed_kwargs)
-    assert list(reversed_kwargs.coordinate) == ['t', 'g'], "the entry's dimension order, not the call's"
+    assert str(by_name) == str(reversed_kwargs)
+    assert list(reversed_kwargs.coordinate) == ['g', 't'], "the dimensions sorted by name, not the call's order"
 
 
 def test_an_entry_over_no_dims_carries_no_bracket() -> None:
@@ -341,7 +341,7 @@ def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
     with sps.build(PRECISE, zeroed) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', 't=0, g=b', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
+    assert _terms(row) == [('p', 'g=b, t=0', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
 
 
 @pytest.mark.parametrize(
