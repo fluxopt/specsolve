@@ -40,9 +40,6 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
 | $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the modelled period |
 | $`\mathrm{e}^{\mathrm{initial}}`$ | `e_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
 | $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |

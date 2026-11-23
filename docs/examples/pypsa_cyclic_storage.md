@@ -37,11 +37,10 @@ PyPSA linear optimal power flow whose storage is closed into a cycle — the fir
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, cyclic at the horizon |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters

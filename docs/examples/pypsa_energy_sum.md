@@ -32,12 +32,12 @@ PyPSA energy-total bounds: a generator's dispatch reduced over every snapshot an
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over every snapshot, for the generators that have such a limit |
 | $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over every snapshot, for the generators that owe one |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
 
 #### Variables
 

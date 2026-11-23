@@ -43,9 +43,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{activity}`$ | `activity` over $`\mathcal{G} \times \mathcal{E}`$ — 1 where a generator stands in a period and 0 where it does not |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
 | $`\mathrm{capped\_carrier}`$ | `capped_carrier` over $`\mathcal{C}`$ — 1 for the carrier whose growth is capped, 0 for the rest — the selection PyPSA makes by reading its carrier table |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
@@ -53,7 +51,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 | $`\mathrm{max\_relative\_growth}`$ | `max_relative_growth` (scalar) — how much of the previous period's new capacity is added to that allowance — what makes the limit a growth rate rather than a flat cap |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period |
 
 #### Variables
 

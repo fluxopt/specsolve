@@ -36,16 +36,16 @@ spec: examples/walkthrough/walkthrough.yaml
     where "p_max > 0" is not a mask array — it is row absence:
     p has 18 rows, not 24: retired oil never becomes a column.
     shape: (4, 3)
-    ┌──────────┬───────────┬───────────────┐
-    │ snapshot ┆ generator ┆ specsolve_col │
-    │ ---      ┆ ---       ┆ ---           │
-    │ i64      ┆ enum      ┆ i64           │
-    ╞══════════╪═══════════╪═══════════════╡
-    │ 0        ┆ wind      ┆ 0             │
-    │ 0        ┆ solar     ┆ 1             │
-    │ 0        ┆ gas       ┆ 2             │
-    │ 1        ┆ wind      ┆ 3             │
-    └──────────┴───────────┴───────────────┘
+    ┌───────────┬──────────┬───────────────┐
+    │ generator ┆ snapshot ┆ specsolve_col │
+    │ ---       ┆ ---      ┆ ---           │
+    │ enum      ┆ i64      ┆ i64           │
+    ╞═══════════╪══════════╪═══════════════╡
+    │ wind      ┆ 0        ┆ 0             │
+    │ wind      ┆ 1        ┆ 1             │
+    │ wind      ┆ 2        ┆ 2             │
+    │ wind      ┆ 3        ┆ 3             │
+    └───────────┴──────────┴───────────────┘
 
 [5] sink: stream the tables to an LP file  (_sinks/lp_file.py)
     min

@@ -197,6 +197,12 @@ def span_sources(periods: int = 12) -> dict[str, object]:
     }
 
 
+def charging_at_each_horizon_end() -> dict[str, object]:
+    """`span_sources` with a low load at rows 2, 5 and 8, so under a horizon of three the store is charging, not empty, where a window hands its state on."""
+    load = [5.0, 9.0, 8.0, 40.0, 6.0, 8.0, 35.0, 45.0, 7.0, 10.0, 25.0, 50.0]
+    return span_sources(12) | {'load': pl.DataFrame({'snapshot': range(12), 'value': load})}
+
+
 def coordinate_sources(coordinates: list, load: float = 5.0) -> dict[str, object]:
     """Six coordinates of flat load, whatever the coordinates are."""
     return {
@@ -996,12 +1002,12 @@ def test_the_carried_row_is_the_horizon_end_and_not_the_last_one_solved():
 
     The first assertion is what makes the rest discriminating: where the two
     rows hold the same level, reading either passes. The load at each window's
-    last owned row is low, so the store is charging there and not empty.
+    horizon end is low, so the store is charging there and not empty.
     """
-    load = [5.0, 9.0, 8.0, 40.0, 6.0, 8.0, 35.0, 45.0, 7.0, 10.0, 25.0, 50.0]
-    sources = span_sources(12) | {'load': pl.DataFrame({'snapshot': range(12), 'value': load})}
     runs = sps.solve_over(
-        WINDOW, sources, sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'})
+        WINDOW,
+        charging_at_each_horizon_end(),
+        sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'}),
     )
 
     def at(name: str, start: int, t: int) -> float:
@@ -2835,7 +2841,7 @@ def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_swe
     sweep solved.
     """
     axis = sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'})
-    sources = span_sources()
+    sources = charging_at_each_horizon_end()
     sweep = sps.solve_over(WINDOW, sources, axis, archive=tmp_path / 'runs')
     solved = sweep.records['objective'].to_list()
 

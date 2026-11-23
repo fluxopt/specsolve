@@ -428,7 +428,7 @@ def test_a_divisor_that_adds_is_added_up_before_it_divides():
 
 
 def test_a_sparse_divisor_on_a_constant_side_has_the_same_escape():
-    """On the constant side too, a row masked by the divisor's own presence divides only where it has a row."""
+    """On the constant side too, a row the divisor's own presence leaves absent divides only where it has a row."""
     spec = override(
         SPARSE_DIVISOR_SPEC,
         **{'parameters.h': {'dims': ['f']}, 'constraints.c.expression': 'x <= h / d', 'constraints.c.where': 'd'},

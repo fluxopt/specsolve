@@ -42,13 +42,14 @@ PyPSA's global constraints: four limits over four different selected sets — th
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{bus\_capacity\_cap}`$ | `bus_capacity_cap` over $`\mathcal{B} \times \mathcal{C}`$, `absent` where the data has no row — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
-| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
+| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over every snapshot, for the carriers that have such a limit |
 | $`\mathrm{expansion\_cost\_cap}`$ | `expansion_cost_cap` (scalar) — money the whole network may spend building links |
 | $`\mathrm{gen\_capital\_cost}`$ | `gen_capital_cost` over $`\mathcal{E}`$ — annualised cost of a unit of generator capacity |
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{L}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_length}`$ | `link_length` over $`\mathcal{L}`$ — how far a link reaches — what turns built capacity into a volume |
-| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over every snapshot, for the carriers that have such a limit |
-| $`\mathrm{bus\_capacity\_cap}`$ | `bus_capacity_cap` over $`\mathcal{B} \times \mathcal{C}`$, `absent` where the data has no row — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{max,pu}}`$ | `p_max_pu` over $`\mathcal{E} \times \mathcal{T}`$ — share of built capacity a generator can produce in a snapshot |
 | $`\mathrm{volume\_cap}`$ | `volume_cap` (scalar) — capacity times length the whole network may build |
 
 #### Variables

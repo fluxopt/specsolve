@@ -32,8 +32,8 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$, `absent` where the data has no row — the capacity a generator is to hold, for the generators whose capacity is already decided |

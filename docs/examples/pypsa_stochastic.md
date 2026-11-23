@@ -50,9 +50,8 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 

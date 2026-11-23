@@ -39,7 +39,7 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions the whole horizon is allowed |
+| $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions allowed across every snapshot |
 | $`\mathrm{co2\_per\_mwh}`$ | `co2_per_mwh` over $`\mathcal{C}`$ — emissions per unit of carrier burned, a property of the carrier |
 | $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, $`0`$ where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
 | $`\mathrm{efficiency}`$ | `efficiency` over $`\mathcal{E}`$ — share of the carrier's energy a generator turns into output |
@@ -48,8 +48,10 @@ PyPSA linear optimal power flow on a meshed AC-DC network whose generators sit o
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{I}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_p\_max\_pu}`$ | `link_p_max_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry forwards |
 | $`\mathrm{link\_p\_min\_pu}`$ | `link_p_min_pu` over $`\mathcal{I}`$ — share of its capacity a link may carry backwards, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{Y} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of impedance times direction. A line may belong to several cycles, so this cannot be a coordinate. |
-| $`\mathrm{co2\_limit}`$ | `co2_limit` (scalar) — emissions allowed across every snapshot |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{max,pu}}`$ | `p_max_pu` over $`\mathcal{E} \times \mathcal{T}`$ — share of built capacity a generator can produce in a snapshot |
+| $`\mathrm{p}^{\mathrm{nom,min}}`$ | `p_nom_min` over $`\mathcal{E}`$ — capacity a generator already has, and cannot fall below |
 
 #### Variables
 

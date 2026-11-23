@@ -186,7 +186,7 @@ construct, or every combination.
 | [telephone_routing](../examples/telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](../examples/transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [transport_modes](../examples/transport_modes.md) | **✔** 1715 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | **✓** |
+| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | **✓** |
 | [tsp_mtz](../examples/tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | **✓** |
 <!-- constructs:end -->
 

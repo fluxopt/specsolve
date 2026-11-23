@@ -89,7 +89,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
     program = schema_of(TRANSPORT_YAML).program
 
     (c,) = program.constraints.values()
-    assert c.dims == ('bus', 'snapshot'), 'the dims sorted by name'
+    assert c.dims == ('bus', 'snapshot'), 'the dimensions sorted by name'
     terms = _flatten(c.lhs)
     grouped = {
         (t.operand.operand.name, t.operand.columns.dropped_dims, t.operand.columns.name, t.operand.columns.added_dims)

@@ -31,9 +31,8 @@ PyPSA modular capacity expansion: a technology bought in whole units. The capaci
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom,mod}}`$ | `p_nom_mod` over $`\mathcal{G}`$ — capacity of one module — what a single unit of this technology adds |
-| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{p}^{\mathrm{nom,mod}}`$ | `p_nom_mod` over $`\mathcal{G}`$ — capacity of one module — what a single unit of this technology adds |

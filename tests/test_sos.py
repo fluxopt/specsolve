@@ -358,7 +358,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
 def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     """The one shape where the stream is not already in ``(set, weight)`` order.
 
-    The dims sort by name, so ``over`` leads where its name sorts first:
+    The dimensions sort by name, so ``over`` leads where its name sorts first:
     `site` renamed `unit` puts `size` ahead of it. A set's members are then
     ``|unit|`` apart in index order, so every set interleaves with every other.
     The sinks read a set's edges off neighbouring rows, so an ungrouped stream

@@ -45,12 +45,8 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{alpha}`$ | `alpha` (scalar) — where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{omega}`$ | `omega` (scalar) — how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |

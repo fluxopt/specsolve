@@ -54,7 +54,7 @@ PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one ne
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit ends the modelled period where it began. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand to be met at a bus |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of generation |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — the level a seeded unit begins with. A cyclic unit has one in the data and never reads it — its own last snapshot is its opening level |

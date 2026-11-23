@@ -298,7 +298,7 @@ def test_every_verb_opens_a_model_the_way_the_language_does(dispatch_yaml, dispa
 def test_check_and_the_spec_program_need_no_data(dispatch_yaml):
     """The program is read from the model alone, with no data."""
     for program in (sps.check(dispatch_yaml), to_spec(dispatch_yaml).program):
-        assert program.variables['p'].dims == ('generator', 'snapshot'), 'the dims sorted by name'
+        assert program.variables['p'].dims == ('generator', 'snapshot'), 'the dimensions sorted by name'
         assert program.parameters['load'].dims == ('snapshot',)
 
 

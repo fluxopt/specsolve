@@ -27,9 +27,8 @@ Dispatch plus a battery whose state of charge is closed into a cycle: the level 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
-| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, cyclic at the horizon |
+| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 
 #### Parameters
 

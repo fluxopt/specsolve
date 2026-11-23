@@ -37,14 +37,12 @@ PyPSA multi-period investment: a build year and a lifetime decide which periods 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period — the discount that makes a 2040 decision comparable with a 2030 one |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{activity}`$ | `activity` over $`\mathcal{G} \times \mathcal{E}`$ — 1 where a generator exists in a period and 0 where it does not — PyPSA derives this from a build year and a lifetime, and it decides both what may run and what is paid for |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start — the discount that makes a 2040 decision comparable with a 2030 one |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period — the discount that makes a 2040 decision comparable with a 2030 one |
 
 #### Variables
 
