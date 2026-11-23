@@ -35,7 +35,7 @@ def _dense() -> pl.DataFrame:
 
 def test_a_dense_table_with_one_row_per_coordinate_builds():
     with sps.build(SPEC, _sources(_dense())) as model:
-        assert model.diagnostics().columns == 60_000, 'one column per row of `cap`'
+        assert model.metrics().columns == 60_000, 'one column per row of `cap`'
 
 
 @pytest.mark.parametrize(

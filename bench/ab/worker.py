@@ -88,6 +88,7 @@ def _measure(
         'calls': clock.calls if clock else None,
         'total_seconds': seconds,
         'peak_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
+        'phases': out.phases,
         **out.sizes,
         'fingerprint': _saved(out.numbers(), fingerprint) if fingerprint else None,
     }
@@ -134,12 +135,13 @@ def _column(table: Any, name: str) -> Any:
 
 
 class _Built:
-    """A built model's size, and its numbers as its fingerprint."""
+    """A built model's size, the seconds its build spent in each phase, and its numbers as its fingerprint."""
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
-        diagnostics = model.diagnostics()
-        self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
+        metrics = model.metrics()
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
+        self.phases = _clocked(metrics)
 
     def numbers(self) -> dict[str, np.ndarray]:
         """The fields ``tests/test_order.py`` holds two builds of one model to."""
@@ -161,11 +163,12 @@ class _Built:
 
 
 class _Solved:
-    """A solve's status and objective as its fingerprint."""
+    """A solve's status and objective as its fingerprint, and the seconds its model spent in each phase."""
 
-    def __init__(self, result: sps.Result) -> None:
+    def __init__(self, result: sps.Result, phases: dict[str, float]) -> None:
         self.result = result
         self.sizes = {'columns': None, 'rows': None}
+        self.phases = phases
 
     def numbers(self) -> dict[str, np.ndarray]:
         return {'status': np.array([self.result.status]), 'objective': np.array([self.result.objective])}
@@ -186,7 +189,14 @@ def _build(target: Cell) -> _Built:
 
 
 def _solve(target: Cell) -> _Solved:
-    return _Solved(sps.solve(target.spec, target.sources, 'highs'))
+    result = sps.solve(target.spec, target.sources, solver_name='highs')
+    assert result.metrics is not None, 'a solve hands back what it took'
+    return _Solved(result, _clocked(result.metrics))
+
+
+def _clocked(metrics: Any) -> dict[str, float]:
+    """The seconds of each phase *metrics* entered; one it never entered is left out, as [`phase_table`][bench.ab.compare.phase_table] expects."""
+    return {phase: seconds for phase, seconds in metrics.phases.iter_rows() if seconds}
 
 
 if __name__ == '__main__':

@@ -69,12 +69,10 @@ def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_y
 
 def _saved(dispatch_yaml: Path, inputs: dict[str, object], tmp_path: Path) -> dict[str, Path]:
     """One of each thing on disk a reader takes, written while parquet still works."""
-    sps.solve(dispatch_yaml, inputs).save(tmp_path / 'result')
     sps.solve(dispatch_yaml, inputs, archive=tmp_path / 'archive')
-    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
+    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp_path / 'sweep')
     inputs['load'].write_parquet(tmp_path / 'load.parquet')
     return {
-        'result': tmp_path / 'result',
         'archive': tmp_path / 'archive',
         'sweep': tmp_path / 'sweep',
         'path': tmp_path / 'load.parquet',
@@ -103,24 +101,14 @@ CALLS: list[tuple[str, Callable[..., object], str]] = [
         'archive=',
     ),
     (
-        'solve-over-spill',
+        'solve-over-zip',
         lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), spill_to=tmp / 'new'
+            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp / 'new.zip'
         ),
-        'spill_to=',
+        'archive=',
     ),
-    ('result-save', lambda yaml, inputs, saved, tmp: sps.solve(yaml, inputs).save(tmp / 'new'), 'Result.save'),
-    (
-        'sweep-save',
-        lambda yaml, inputs, saved, tmp: sps.solve_over(yaml, _by_scenario(inputs), sps.EachLabel('scenario')).save(
-            tmp / 'new'
-        ),
-        'Sweep.save',
-    ),
-    ('read-result', lambda yaml, inputs, saved, tmp: sps.read_result(saved['result']), 'reading a saved answer'),
-    ('scan-result', lambda yaml, inputs, saved, tmp: sps.scan_result(saved['result']), 'reading a saved answer'),
-    ('read-sweep', lambda yaml, inputs, saved, tmp: sps.read_sweep(saved['sweep']), 'reading a saved sweep'),
-    ('scan-sweep', lambda yaml, inputs, saved, tmp: sps.scan_sweep(saved['sweep']), 'reading a saved sweep'),
+    ('read-sweep-archive', lambda yaml, inputs, saved, tmp: sps.read_archive(saved['sweep']), 'reading an archive'),
+    ('scan-sweep-archive', lambda yaml, inputs, saved, tmp: sps.scan_archive(saved['sweep']), 'reading an archive'),
     ('read-archive', lambda yaml, inputs, saved, tmp: sps.read_archive(saved['archive']), 'reading an archive'),
     ('scan-archive', lambda yaml, inputs, saved, tmp: sps.scan_archive(saved['archive']), 'reading an archive'),
     ('read-inputs', lambda yaml, inputs, saved, tmp: sps.read_inputs(saved['archive']), 'reading an archive'),
@@ -141,7 +129,7 @@ def test_every_call_that_needs_parquet_says_so_by_name(
         parquet._polars_has_parquet.cache_clear()
     assert names in str(raised.value), 'the refusal names the call'
     assert 'Load pyarrow first' in str(raised.value), 'and names what lifts it'
-    assert not (tmp_path / 'new').exists(), 'nothing was written before the refusal'
+    assert not list(tmp_path.glob('new*')), 'nothing was written before the refusal'
 
 
 @pytest.mark.parametrize('call', [pytest.param(call, id=label) for label, call, _ in CALLS])
@@ -187,8 +175,8 @@ def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
         again = sps.solve_over(study.spec, study.sources, study.axis)
     finally:
         parquet._polars_has_parquet.cache_clear()
-    assert study.sweep.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
-    assert study.sweep.primal('p').equals(runs.primal('p')), 'and every value'
+    assert study.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
+    assert study.primal('p').equals(runs.primal('p')), 'and every value'
     assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
         'and it solves again from what the archive holds'
     )

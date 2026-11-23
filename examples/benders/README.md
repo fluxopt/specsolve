@@ -254,8 +254,8 @@ decomposed: 9600.00 in 2 steps
 monolithic: 9600.00
 difference: 0.0e+00
 cuts: 1 optimality, 1 feasibility
-the subproblem loaded the solver 1 time(s) in 2 solves
-the master loaded the solver 2 time(s) in 2 solves
+the subproblem took 1 solver instance(s) in 2 solves
+the master took 2 solver instance(s) in 2 solves
 ```
 
 One capacity is excluded as undispatchable, and the first optimality cut then

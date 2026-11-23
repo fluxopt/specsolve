@@ -27,9 +27,7 @@ from specsolve import types as types
 from specsolve._api import build, check, evaluate, solve, tidy, write
 from specsolve._archive import read_archive, read_inputs, scan_archive
 from specsolve._axes import EachLabel, EachWindow
-from specsolve._result import read_result, scan_result
 from specsolve._solve_over import build_slice, solve_over
-from specsolve._sweep import read_sweep, scan_sweep
 
 __all__ = [
     'EachLabel',
@@ -40,11 +38,7 @@ __all__ = [
     'evaluate',
     'read_archive',
     'read_inputs',
-    'read_result',
-    'read_sweep',
     'scan_archive',
-    'scan_result',
-    'scan_sweep',
     'solve',
     'solve_over',
     'tidy',
