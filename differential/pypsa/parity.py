@@ -468,7 +468,7 @@ def _dual_rows(constraint) -> pd.DataFrame:
     if not constraint.dual.ndim:
         return pd.DataFrame({'dual': [float(constraint.dual)], ROW: [int(constraint.labels)]})
     table = constraint.dual.to_dataframe('dual')
-    return table.assign(row=constraint.labels.to_series().reindex(table.index).to_numpy()).reset_index()
+    return table.assign(**{ROW: constraint.labels.to_series().reindex(table.index).to_numpy()}).reset_index()
 
 
 def _gc_dual(constraint, label: str) -> pd.DataFrame:
@@ -570,7 +570,7 @@ def duals(result, n, declared, gc_kinds: dict[str, str], reasons: dict) -> dict[
         record['rows'] += len(joined)
         record['max_abs_diff'] = round(max(record['max_abs_diff'], float(gaps.max()) if len(gaps) else 0.0), 9)
         sign = -1.0 if record['negated'] else 1.0
-        differing.extend((their_name, int(r.row), sign * r.ours, r.dual) for r in joined[gaps > 1e-6].itertuples())
+        differing.extend((their_name, int(getattr(r, ROW)), sign * r.ours, r.dual) for r in joined[gaps > 1e-6].itertuples())
     ranges = slope_ranges(n.model, {row for _, row, _, _ in differing}) if differing else {}
     for their_name, row, ours, theirs in differing:
         assert inside(theirs, ranges[row]), (
