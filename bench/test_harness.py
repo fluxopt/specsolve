@@ -302,7 +302,9 @@ def test_the_memory_gate_measures_only_the_peaks_that_are_ours() -> None:
     passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
     assert len(passes) == 2, 'a base pass and a head pass'
     assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
-    assert all('pytest bench/test_ladder.py ' in run for run in passes), 'the gate runs the ladder, not the harness tests'
+    assert all('pytest bench/test_ladder.py ' in run for run in passes), (
+        'the gate runs the ladder, not the harness tests'
+    )
     assert workflow['env']['UNGATED'] == 'not test_sweep and not test_fresh', (
         'the sweep solves, and `test_fresh` allocates in a child process memray does not follow'
     )
