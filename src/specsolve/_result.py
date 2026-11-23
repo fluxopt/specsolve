@@ -14,10 +14,12 @@ from typing import TYPE_CHECKING, Literal
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
+    METRICS_FILE,
     RECORD_FILE,
     read_outputs,
     read_reasons,
     read_spec,
+    row_of,
     saved_tables,
     write_format,
     write_reasons,
@@ -230,22 +232,11 @@ _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 @dataclass(frozen=True)
 class Diagnostics:
-    """What a build and its solves did that the answer does not show.
+    """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
 
-    Advisory, all of it: no answer depends on any field.
+    Advisory, all of it: no answer depends on any field. What the build and
+    its solves cost is [`Model.metrics`][specsolve._api.Model.metrics].
     """
-
-    #: How many columns the build produced: one per variable at each coordinate
-    #: it exists at.
-    columns: int
-    #: How many rows the build produced: one per constraint at each coordinate
-    #: it is built at. A row with no term is not built; one whose terms sum
-    #: to zero is.
-    rows: int
-    #: How many coefficients the constraint matrix holds: one per row and
-    #: column a linear term reaches, the terms at one pair summed and a sum of
-    #: exactly zero dropped. A quadratic term is not one.
-    nonzeros: int
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
     #: the solver: one emptied of all its terms, and one a propagated absence
@@ -282,46 +273,6 @@ class Diagnostics:
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
-
-    #: How many times this model has been solved, and how many solver
-    #: instances those solves took: a new one wherever the solver could not
-    #: keep the model and take its new values. ``solver_instances == solves``
-    #: on an iterating driver means the model has a condition on a parameter
-    #: that varies.
-    solves: int
-    solver_instances: int
-
-    #: Cumulative wall-clock seconds per phase, keyed by the phase's name, in
-    #: the order the phases run: ``load``, ``tidy``, ``attach``, ``build``,
-    #: ``handoff``, ``solve``, ``readback``, ``write`` and ``archive``, as
-    #: [`Metrics`][specsolve._records.Metrics] defines each. A phase that
-    #: never ran has no key; one that ran again holds the sum.
-    seconds: Mapping[str, float]
-
-    def metrics(self) -> Metrics:
-        """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
-
-        [`Metrics`][specsolve._records.Metrics] says what each
-        field means. A phase this build never entered reads zero, and
-        ``specsolve_run`` is null.
-        """
-        clocks = self.seconds
-        return Metrics(
-            columns=self.columns,
-            rows=self.rows,
-            nonzeros=self.nonzeros,
-            solves=self.solves,
-            solver_instances=self.solver_instances,
-            load_seconds=clocks.get('load', 0.0),
-            tidy_seconds=clocks.get('tidy', 0.0),
-            attach_seconds=clocks.get('attach', 0.0),
-            build_seconds=clocks.get('build', 0.0),
-            handoff_seconds=clocks.get('handoff', 0.0),
-            solve_seconds=clocks.get('solve', 0.0),
-            readback_seconds=clocks.get('readback', 0.0),
-            write_seconds=clocks.get('write', 0.0),
-            archive_seconds=clocks.get('archive', 0.0),
-        )
 
 
 def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
@@ -404,11 +355,9 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
-    #: What the archive this was read out of holds of the data it answered;
-    #: ``None`` for a live solve.
+    #: The data this answered, where an archive holds it. ``None`` where none does.
     _sources: Mapping[str, Source] | None = None
-    #: What reaching this answer took, as the archive it was read out of
-    #: recorded it; ``None`` for a live solve.
+    #: What reaching this answer took. ``None`` for an answer no solve produced.
     _metrics: Metrics | None = None
 
     @property
@@ -461,18 +410,21 @@ class Result:
         return self._sources
 
     @property
-    def metrics(self) -> Metrics | None:
-        """What reaching this answer took, as its archive recorded it; ``None`` for a live solve.
-
-        A live model says the same through
-        [`diagnostics`][specsolve._api.Model.diagnostics].
-        """
-        return self._metrics
-
-    @property
     def solved_at(self) -> datetime | None:
         """When the solver returned, in UTC — ``None`` where the solve carried no clock."""
         return self._solved_at
+
+    @property
+    def metrics(self) -> Metrics | None:
+        """What reaching this answer took — its solve's share of the model's clocks — or ``None`` for one built by hand.
+
+        The share runs from where the model's previous answer was handed back,
+        so the first answer of a model carries its load and its build, and a
+        later one the update, handoff and solve that led to it.
+        ``solves`` is ``1``. An answer solved with ``archive=`` also carries
+        the archive, as the archive records it. Read back as it was written.
+        """
+        return self._metrics
 
     @property
     def provenance(self) -> Provenance:
@@ -887,6 +839,7 @@ def read_answer(out: Path, *, eager: bool) -> Result:
     status = record.solve_status
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
+    metrics_file = out / METRICS_FILE
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda table=table: table.pipe(collected))
         for name, table in saved_tables(out / 'expression', eager=eager).items()
@@ -902,4 +855,5 @@ def read_answer(out: Path, *, eager: bool) -> Result:
         _solved_at=record.solved_at,
         _run=record.specsolve_run,
         _provenance=record.provenance,
+        _metrics=row_of(Metrics, parquet.read(metrics_file).row(0, named=True), metrics_file),
     )

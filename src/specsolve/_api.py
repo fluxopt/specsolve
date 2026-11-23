@@ -36,7 +36,7 @@ from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
 from specsolve._outputs import checked_outputs
-from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
+from specsolve._records import METRICS_SCHEMA, Metrics, Provenance, installed_version
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
 from specsolve._sources import refuse_unknown_sources, tidied, tidy_sources, with_positions
@@ -190,6 +190,9 @@ class Model:
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._engine = Engine()
+        #: The model's metrics when its last answer was handed back, which the
+        #: next answer's share runs from; ``None`` before the first.
+        self._handed_back: Metrics | None = None
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
         self._engine.lap('load')
@@ -233,7 +236,7 @@ class Model:
         whatever changed. Data that changes which coordinates a condition admits
         renumbers solver indices, so the model is rebuilt and solved cold rather
         than pushed onto a loaded solver;
-        [`solver_instances`][specsolve._result.Diagnostics.solver_instances] says which ran.
+        [`solver_instances`][specsolve._records.Metrics.solver_instances] says which ran.
 
         Results taken before the update keep reading their own tables, and
         keep their build's index tables alive until dropped or until
@@ -362,9 +365,16 @@ class Model:
         )
         answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
         self._engine.lap('readback')
+        answered = replace(answered, _metrics=self._share())
         if out is not None:
-            self._archive(out, answered)
+            answered = self._archive(out, answered)
+        self._handed_back = self._engine.metrics()
         return answered
+
+    def _share(self) -> Metrics:
+        """What the model took since its last answer was handed back: the answer about to be handed back's row."""
+        now = self._engine.metrics()
+        return now if self._handed_back is None else now.since(self._handed_back)
 
     def _with_record_fields(
         self,
@@ -396,18 +406,20 @@ class Model:
         """
         return read_start(start, self._program, self._tidied)
 
-    def _archive(self, out: Path, answered: Result) -> None:
-        """Write this model, what is attached to it now, and *answered* to *out*.
+    def _archive(self, out: Path, answered: Result) -> Result:
+        """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
 
-        The metrics row is written here, not with the answer: it spans the
-        model's life, not one solve. It is the last member written, so its
-        ``archive_seconds`` covers every other one; writing and landing it are
-        in the model's own clock alone.
+        The metrics row is the last member written, so its ``archive_seconds``
+        covers every other one; writing and landing it are in [`metrics`][]
+        alone.
         """
+        recorded = answered.metrics
 
         def metrics() -> pl.DataFrame:
+            nonlocal recorded
             self._engine.lap('archive')
-            return pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
+            recorded = self._share()
+            return pl.DataFrame([recorded._asdict()], schema_overrides=METRICS_SCHEMA)
 
         write_archive(
             out,
@@ -417,6 +429,7 @@ class Model:
             metrics=metrics,
         )
         self._engine.lap('archive')
+        return replace(answered, _metrics=recorded)
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -534,8 +547,20 @@ class Model:
         assert evaluate is not None, 'a model built from a spec as written compiles an ad-hoc expression'
         return evaluate
 
+    def metrics(self) -> Metrics:
+        """This model's size, counters and clocks over its whole life, taken now.
+
+        ``solves`` counts every solve, and each clock sums every lap of its
+        phase, so the [`metrics`][specsolve.types.Result.metrics] of every
+        result this model handed back add up to it, but for whatever came
+        after the last one and the landing of each archive. Answerable after
+        [`close`][], and after a build that raised, which leaves the sizes
+        at zero.
+        """
+        return self._engine.metrics()
+
     def diagnostics(self) -> Diagnostics:
-        """What this build and its solves did that the answer does not show.
+        """What the build looks like that the answer does not show: what it left out and how its numbers spread.
 
         Answerable after [`close`][], and after a build that raised. A raise
         leaves the sizes at zero, since they are taken once a model is whole,

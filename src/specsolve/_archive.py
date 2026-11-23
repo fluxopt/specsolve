@@ -20,7 +20,7 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, other_layout, row_of
+from specsolve._answer_layout import ANSWER_LAYOUT, other_layout
 from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -34,7 +34,6 @@ from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._records import Metrics
 from specsolve._result import read_answer
 from specsolve._sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
@@ -175,8 +174,7 @@ def _read(under: Path, archive: Path, *, eager: bool) -> Result | Sweep:
     saved = under / ANSWER_DIR
     if inputs.axis is None:
         answer = _attach_readers(read_answer(saved, eager=eager), spec, sources)
-        metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return replace(answer, _spec=spec, _sources=sources, _metrics=metrics)
+        return replace(answer, _spec=spec, _sources=sources)
     answer = _attach_sweep_readers(read_sweep_answer(saved, eager=eager), spec, sources, inputs.axis)
     return replace(answer, spec=spec, sources=sources, axis=inputs.axis)
 

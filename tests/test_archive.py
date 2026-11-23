@@ -409,10 +409,10 @@ def test_an_archive_carries_the_answer_beside_the_question(
         )
 
 
-def test_a_live_answer_carries_no_sources_metrics_or_axis(dispatch_yaml: Path, dispatch_table_inputs) -> None:
+def test_a_live_answer_carries_no_sources_or_axis(dispatch_yaml: Path, dispatch_table_inputs) -> None:
     """Only an answer read out of an archive holds what it was solved from; a live one holds ``None`` there."""
     with sps.solve(dispatch_yaml, dispatch_table_inputs) as result:
-        assert (result.sources, result.metrics) == (None, None), 'a live result was read out of no archive'
+        assert result.sources is None, 'a live result was read out of no archive'
     sources = {**dispatch_table_inputs, 'load': _by_scenario(['low', 'high'])}
     sweep = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'))
     assert (sweep.sources, sweep.axis) == (None, None), 'and neither was a live sweep'
@@ -767,13 +767,14 @@ def test_an_archive_records_what_reaching_its_answer_cost(
 def test_the_cost_row_says_how_many_solves_its_clocks_cover(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """A row off a model that solved before covers every solve, and `solves` says how many."""
+    """A row off a model that solved before covers its own solve alone, and `solves` says so."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         model.solve()
         model.solve(archive=tmp_path / 'second')
 
-    assert sps.read_archive(tmp_path / 'second').metrics.solves == 2, (
-        'two solves ran before the archive was written, and the row it carries counts both'
+    taken = sps.read_archive(tmp_path / 'second').metrics
+    assert (taken.solves, taken.build_seconds) == (1, 0.0), (
+        "an archive of a later solve records that answer's share: one solve, the build being the first answer's"
     )
 
 
