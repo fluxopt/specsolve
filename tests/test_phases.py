@@ -17,7 +17,7 @@ import yaml
 import specsolve as sps
 from specsolve import _api, _archive_layout, _assumptions
 from specsolve._engine import assembly, engine
-from specsolve._records import PHASES
+from specsolve._records import PHASES, Metrics
 from specsolve._result import Result
 from specsolve._sinks.solver import Solver
 
@@ -94,14 +94,13 @@ def _timed(call: Callable[[], sps.types.Model], out: Path, clock: Callable[[], f
     started = clock()
     model = call()
     wall = clock() - started
-    kept = model.diagnostics().seconds
+    kept = model.metrics()
     model.close()
-    taken = sps.read_archive(out).metrics
-    return Timed(
-        wall,
-        {phase: kept.get(phase, 0.0) for phase in PHASES},
-        {phase: getattr(taken, f'{phase}_seconds') for phase in PHASES},
-    )
+    return Timed(wall, _clocks(kept), _clocks(sps.read_archive(out).metrics))
+
+
+def _clocks(metrics: Metrics) -> dict[str, float]:
+    return {phase: getattr(metrics, f'{phase}_seconds') for phase in PHASES}
 
 
 def _archived(spec: object, sources: Mapping[str, object], out: Path, **solve: object) -> Callable[[], sps.types.Model]:
@@ -145,7 +144,11 @@ def test_the_phases_add_up_to_a_build_solved_into_an_archive(
 
 
 def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_yaml, dispatch_table_inputs, tmp_path):
-    """The clocks accumulate over a model's life, and still account for all of it."""
+    """The model's clocks accumulate over its life, and still account for all of it.
+
+    The archive of the second solve records that answer's share: the update
+    and the solve after it, not the build, the write or the first solve.
+    """
     load = dispatch_table_inputs['load']
 
     out = tmp_path / 'case.zip'
@@ -160,8 +163,52 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_
 
     timed = _timed(call, out)
 
-    assert all(spent > 0 for spent in timed.recorded.values()), f'this model entered every phase: {timed.recorded}'
+    assert all(spent > 0 for spent in timed.kept.values()), f'this model entered every phase: {timed.kept}'
+    entered = {phase for phase, spent in timed.recorded.items() if spent > 0}
+    assert entered == set(PHASES) - {'load', 'write'}, (
+        f"the second answer reads its update, its solve and its archive, and the load and the write are the first's: "
+        f'{timed.recorded}'
+    )
     timed.check()
+
+
+def test_each_answer_carries_its_share_and_the_shares_add_up_to_the_model(
+    dispatch_yaml, dispatch_table_inputs, tmp_path
+):
+    """Two answers of one model split its clocks between them, and every phase adds back up.
+
+    Only the archive's landing, which comes after its row is written, is the
+    model's alone.
+    """
+    load = dispatch_table_inputs['load']
+    with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
+        model.write(tmp_path / 'model.lp')
+        first = model.solve()
+        model.update({'load': load.with_columns(value=load['value'] * 0.5)})
+        second = model.solve(archive=tmp_path / 'case.zip')
+        kept = model.metrics()
+    assert first.metrics is not None and second.metrics is not None, 'a solve hands back what it took'
+    assert (first.metrics.solves, second.metrics.solves, kept.solves) == (1, 1, 2), 'a row per answer, one solve each'
+    assert first.metrics.load_seconds > 0, 'the first answer carries the load'
+    assert second.metrics.load_seconds == 0, 'and the second does not carry it again'
+    assert first.metrics.write_seconds > 0, 'a write before a solve is in that answer'
+    assert second.metrics.write_seconds == 0, 'and in no later one'
+    shared = {phase: _clocks(first.metrics)[phase] + _clocks(second.metrics)[phase] for phase in PHASES}
+    whole = _clocks(kept)
+    assert {phase: shared[phase] for phase in PHASES if phase != 'archive'} == pytest.approx(
+        {phase: whole[phase] for phase in PHASES if phase != 'archive'}
+    ), 'every second outside the archive is in exactly one answer'
+    assert shared['archive'] <= whole['archive'], 'the landing comes after the row, so only the model holds it'
+    assert second.metrics == sps.read_archive(tmp_path / 'case.zip').metrics._replace(specsolve_run=None), (
+        'the answer handed back carries the row its archive recorded'
+    )
+
+
+def test_a_saved_answer_reads_back_what_it_took(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    result = sps.solve(dispatch_yaml, dispatch_table_inputs)
+    assert sps.read_result(result.save(tmp_path / 'saved')).metrics == result.metrics, (
+        'save writes the metrics row and read_result reads it back'
+    )
 
 
 def _slowed(real: Callable[..., object], clock: Clock) -> Callable[..., object]:
@@ -231,7 +278,7 @@ def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispa
     """The row adds the archive's time so far itself, so the model's own clocks are checked apart from it."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         model.solve(archive=tmp_path / 'case.zip')
-        kept = model.diagnostics().seconds.get('archive', 0.0)
+        kept = model.metrics().archive_seconds
     recorded = sps.read_archive(tmp_path / 'case.zip').metrics.archive_seconds
     assert kept >= recorded > 0, f'the model keeps the {recorded} s its archive row recorded, and the rest: {kept}'
 
@@ -273,13 +320,13 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
 def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs, tmp_path, call):
     """Each call starts the clock, so a caller who waits between two calls is not billed for the wait."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
-        before = model.diagnostics().seconds
+        before = _clocks(model.metrics())
         time.sleep(WAIT)
         started = time.perf_counter()
         call(model, tmp_path, dispatch_table_inputs['load'])
         wall = time.perf_counter() - started
-        after = model.diagnostics().seconds
-    grown = {phase: after.get(phase, 0.0) - before.get(phase, 0.0) for phase in PHASES}
+        after = _clocks(model.metrics())
+    grown = {phase: after[phase] - before[phase] for phase in PHASES}
     assert sum(grown.values()) <= wall, f'the wait before the call is in a phase: {grown} sum past the call, {wall}'
 
 

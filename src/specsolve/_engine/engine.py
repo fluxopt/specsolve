@@ -31,7 +31,7 @@ from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
-from specsolve._records import PHASES
+from specsolve._records import PHASES, Metrics
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -394,13 +394,35 @@ class Engine:
             raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
 
+    def metrics(self) -> Metrics:
+        """This model's sizes, counters and clocks over its whole life; answerable after [`close`][].
+
+        The one place a [`Metrics`][] is built from the model: a result's, an
+        archive's and a sweep slice's rows are differences of two of these.
+        No table is built, so it costs what reading the counters costs.
+        """
+        measured, clocks = self._measured, self._seconds
+        return Metrics(
+            columns=measured.columns,
+            rows=measured.rows,
+            nonzeros=measured.nonzeros,
+            solves=self._solves,
+            solver_instances=self._solver_instances,
+            load_seconds=clocks.get('load', 0.0),
+            tidy_seconds=clocks.get('tidy', 0.0),
+            attach_seconds=clocks.get('attach', 0.0),
+            build_seconds=clocks.get('build', 0.0),
+            handoff_seconds=clocks.get('handoff', 0.0),
+            solve_seconds=clocks.get('solve', 0.0),
+            readback_seconds=clocks.get('readback', 0.0),
+            write_seconds=clocks.get('write', 0.0),
+            archive_seconds=clocks.get('archive', 0.0),
+        )
+
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured
         return Diagnostics(
-            columns=measured.columns,
-            rows=measured.rows,
-            nonzeros=measured.nonzeros,
             omissions=_per_name('constraint', measured.omitted, rows_not_built=pl.UInt32),
             coefficient_range=_per_name('constraint', measured.coefficients, smallest=pl.Float64, largest=pl.Float64),
             bound_range=_per_name('variable', measured.bounds, smallest=pl.Float64, largest=pl.Float64),
@@ -413,9 +435,6 @@ class Engine:
                 missing=pl.UInt64,
             ),
             objective_range=measured.objective_range,
-            solves=self._solves,
-            solver_instances=self._solver_instances,
-            seconds=dict(self._seconds),
         )
 
     def _read_back(

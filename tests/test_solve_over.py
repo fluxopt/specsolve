@@ -366,7 +366,7 @@ def test_a_serial_fold_builds_once_and_updates(builds):
 
     assert len(runs) == 3, 'three slices'
     assert len(built) == 1, f'{len(built)} builds for three slices — the fold stopped updating'
-    seen = built[0].diagnostics()
+    seen = built[0].metrics()
     assert (seen.solver_instances, seen.solves) == (1, 3), 'one solver load, the slices differing only in numbers'
 
 

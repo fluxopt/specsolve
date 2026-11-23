@@ -750,13 +750,14 @@ def test_an_archive_records_what_reaching_its_answer_cost(
 def test_the_cost_row_says_how_many_solves_its_clocks_cover(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """A row off a model that solved before covers every solve, and `solves` says how many."""
+    """A row off a model that solved before covers its own solve alone, and `solves` says so."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         model.solve()
         model.solve(archive=tmp_path / 'second')
 
-    assert sps.read_archive(tmp_path / 'second').metrics.solves == 2, (
-        'two solves ran before the archive was written, and the row it carries counts both'
+    taken = sps.read_archive(tmp_path / 'second').metrics
+    assert (taken.solves, taken.build_seconds) == (1, 0.0), (
+        "an archive of a later solve records that answer's share: one solve, the build being the first answer's"
     )
 
 
@@ -1380,17 +1381,18 @@ def test_saving_an_answer_twice_leaves_only_the_second(
         sps.read_result(out).primal('p')
 
 
-def test_saving_an_answer_into_an_unpacked_archive_takes_its_metrics_row_with_it(
+def test_saving_an_answer_into_an_unpacked_archive_replaces_its_metrics_row(
     dispatch_yaml: Path, dispatch_table_inputs, tmp_path: Path
 ) -> None:
-    """A metrics row belongs to the answer beside it, so a second save removes it."""
+    """A metrics row belongs to the answer beside it, so a second save writes its own."""
     sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case')
     answer = tmp_path / 'case' / ANSWER_DIR
     assert (answer / METRICS_FILE).is_file(), 'the archive wrote one, or this proves nothing'
 
-    sps.solve(dispatch_yaml, dispatch_table_inputs).save(answer)
+    saved = sps.solve(dispatch_yaml, dispatch_table_inputs)
+    saved.save(answer)
 
-    assert not (answer / METRICS_FILE).exists(), 'and a saved answer carries no metrics, so none is left behind'
+    assert sps.read_result(answer).metrics == saved.metrics, 'the row beside the answer is the answer saved there'
 
 
 def test_saved_cases_say_whether_they_are_comparable(dispatch_yaml: Path, dispatch_table_inputs, tmp_path) -> None:
