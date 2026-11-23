@@ -2551,6 +2551,38 @@ def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     assert resumed.keys == [0, 3, 6, 9], 'the sweep comes back whole'
 
 
+@pytest.mark.xfail(strict=True, reason='a slice solved again leaves the tables its first attempt wrote')
+def test_a_slice_solved_again_leaves_none_of_its_first_attempt(monkeypatch, tmp_path):
+    """A slice whose record did not land is solved again, and the retry wrote
+    only the tables it produced, so a primal its first attempt left beside it
+    was read as part of the answer."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    answered = driver._answers
+
+    def without_a_primal(result):
+        answer = answered(result)
+        return replace(answer, tables={kind: held for kind, held in answer.tables.items() if kind != 'primal'})
+
+    monkeypatch.setattr(driver, '_answers', without_a_primal)
+    resumed = _scenarios()(tmp_path)
+    assert sorted(resumed.scan('p').collect()['scenario'].unique()) == ['high', 'mid'], (
+        "the retried slice wrote no primal, so its first attempt's is gone"
+    )
+
+
+@pytest.mark.xfail(strict=True, reason='an archive read back holds the tables of a slice with no record')
+@pytest.mark.parametrize('read', [pytest.param(sps.read_archive, id='read'), pytest.param(sps.scan_archive, id='scan')])
+def test_an_interrupted_archive_reads_back_only_the_slices_it_finished(read, tmp_path):
+    """The tables were read off every file under a name, so a slice whose
+    record never landed was in the answer and missing from the records."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    stopped = read(tmp_path).sweep
+    assert stopped.keys == ['high', 'mid'], 'the records hold the two slices that finished'
+    assert sorted(stopped.scan('p').collect()['scenario'].unique()) == stopped.keys, 'and so do the tables'
+
+
 def test_a_directory_holding_another_sweep_is_refused(tmp_path):
     """A directory answers for one sweep. Another one pointed at it would read
     the first one's slices back as its own, so the mismatch is refused."""
@@ -2559,6 +2591,88 @@ def test_a_directory_holding_another_sweep_is_refused(tmp_path):
     with pytest.raises(sps.errors.SpecsolveError, match='holds a sweep keyed by'):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path)
     assert (tmp_path / 'sources' / 'load.parquet').read_bytes() == before, 'and its data is left as it was found'
+
+
+def _the_files_under(directory) -> dict[str, bytes]:
+    return {
+        str(file.relative_to(directory)): file.read_bytes() for file in sorted(directory.rglob('*')) if file.is_file()
+    }
+
+
+@pytest.mark.xfail(strict=True, reason='a resume rewrites the inputs it holds')
+def test_a_resume_with_the_same_inputs_writes_none_of_them_again(tmp_path):
+    """A resume rewrote the spec, the sources, the axis and their stamp, so a
+    stop part way through that write left a stamp no reader could parse."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    inputs = [
+        *sorted((tmp_path / 'sources').glob('*.parquet')),
+        *(tmp_path / name for name in ('spec.yaml', 'axis.json', 'format.json')),
+    ]
+    written = {file.name: file.stat().st_mtime_ns for file in inputs}
+    _scenarios()(tmp_path)
+    assert {file.name: file.stat().st_mtime_ns for file in inputs} == written, 'no input was written again'
+
+
+def _scenarios(spec: dict = DISPATCH, sources: dict | None = None):
+    """The scenario sweep of *spec* over *sources*, archived where it is given."""
+    return lambda out: sps.solve_over(spec, sources or scenario_sources(), sps.EachLabel('scenario'), archive=out)
+
+
+def _windows(axis: sps.EachWindow):
+    """The priced rolling horizon over *axis*, archived where it is given."""
+    return lambda out: sps.solve_over(SPENDING, span_sources(12), axis, archive=out)
+
+
+def _a_load_raised() -> dict[str, object]:
+    sources = scenario_sources()
+    return {**sources, 'load': sources['load'].with_columns(pl.col('value') + 1.0)}
+
+
+def _a_generator_added() -> dict[str, object]:
+    added = [*GENERATORS, 'coal']
+    return {
+        **scenario_sources(),
+        'generator': pl.DataFrame({'generator': added}),
+        'p_max': pl.DataFrame({'generator': added, 'value': [10.0, 100.0, 0.0]}),
+        'cost': pl.DataFrame({'generator': added, 'value': [1.0, 50.0, 0.0]}),
+    }
+
+
+CARRIED = replace(PRICED_AXIS, carry=PRICED_CARRY)
+
+
+@pytest.mark.xfail(strict=True, reason='a resume rewrites sources/ and axis.json with what the second call passed')
+@pytest.mark.parametrize(
+    ('first', 'second', 'named'),
+    [
+        pytest.param(_scenarios(), _scenarios(sources=_a_load_raised()), 'sources/load.parquet', id='a parameter'),
+        pytest.param(
+            _scenarios(),
+            _scenarios(sources=_a_generator_added()),
+            'sources/generator.parquet',
+            id="a dimension's labels",
+        ),
+        pytest.param(
+            _scenarios(),
+            _scenarios({**DISPATCH, 'objective': {'sense': 'minimize', 'expression': 'sum(p * cost) * 2'}}),
+            'spec.yaml',
+            id='the spec',
+        ),
+        pytest.param(_windows(CARRIED), _windows(PRICED_AXIS), 'axis.json', id='the carry'),
+        pytest.param(_windows(CARRIED), _windows(replace(CARRIED, lookahead=2)), 'axis.json', id='the lookahead'),
+    ],
+)
+def test_a_resume_from_other_inputs_is_refused_and_touches_nothing(first, second, named, tmp_path):
+    """A resume rewrote `sources/`, `spec.yaml` and `axis.json` with what the
+    second call passed, so the archive described inputs its slices on disk were
+    not solved from. The manifest held neither the carry nor the lookahead."""
+    first(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    before = _the_files_under(tmp_path)
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(named)):
+        second(tmp_path)
+    assert _the_files_under(tmp_path) == before, 'the directory is left byte for byte as it was found'
 
 
 def test_a_directory_holding_a_single_solve_is_refused(dispatch_yaml, dispatch_table_inputs, tmp_path):
