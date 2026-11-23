@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - feat(api): each result carries the metrics of the solve that produced it ([#2188](https://github.com/fluxopt/specsolve/pull/2188))
+- docs: the benchmarks page shows how each of specsolve's phases grows along a model's size ladder ([#2185](https://github.com/fluxopt/specsolve/pull/2185))
 - fix(engine): a quadratic row whose every term is zero is still built ([#2187](https://github.com/fluxopt/specsolve/pull/2187))
 - docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))
 - feat(api): the metrics time every phase from the spec to the archive, and an older answer reads as another layout ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
