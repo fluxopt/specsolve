@@ -5,7 +5,6 @@ on:
     types: [labeled]
 
 env:
-  CASES: --cases dispatch nodal transport profiled
   # The sweep solves, so its peak is the solver's as much as ours; `test_fresh` works in a
   # child process memray does not follow. CodSpeed leaves both out too.
   UNGATED: not test_sweep and not test_fresh
@@ -20,7 +19,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  # One job per side and size, so the wall time is the slowest pass rather than four in a row.
+  # One job per case and size, each measuring base then head on the same runner: a peak
+  # depends on the machine too (polars sizes its thread pool by cores), so a pair never splits.
   measure:
     if: github.event.label.name == 'trigger:bench'
     runs-on: ubuntu-24.04
@@ -29,8 +29,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        side: [base, head]
         size: [s, m]
+        case: [dispatch, nodal, transport, profiled]
+    env:
+      CELL: ${{ matrix.case }}-${{ matrix.size }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,24 +52,24 @@ jobs:
           pixi run -e bench python - <<'PY'
           from bench.cases import CASES
 
-          for case in ('dispatch', 'nodal', 'transport', 'profiled'):
-              CASES[case].data(CASES[case].shape('${{ matrix.size }}'))
+          CASES['${{ matrix.case }}'].data(CASES['${{ matrix.case }}'].shape('${{ matrix.size }}'))
           PY
 
       # Only src/ from the base, so a harness change cannot read as a performance change.
-      - name: the engine as it is on the base branch
-        if: matrix.side == 'base'
-        run: git checkout ${{ github.event.pull_request.base.sha }} -- src/
+      - name: baseline — the engine as it is on the base branch
+        run: |
+          git checkout ${{ github.event.pull_request.base.sha }} -- src/
+          pixi run -e bench pytest bench/test_ladder.py --sizes ${{ matrix.size }} --cases ${{ matrix.case }} -k "$UNGATED" --benchmark-memory --benchmark-json=base-$CELL.json -q
+          git checkout ${{ github.event.pull_request.head.sha }} -- src/
 
-      - name: measure
-        run: >-
-          pixi run -e bench pytest bench/test_ladder.py --sizes ${{ matrix.size }} $CASES -k "$UNGATED"
-          --benchmark-memory --benchmark-json=${{ matrix.side }}-${{ matrix.size }}.json -q
+      - name: this PR's engine
+        run: pixi run -e bench pytest bench/test_ladder.py --sizes ${{ matrix.size }} --cases ${{ matrix.case }} -k "$UNGATED" --benchmark-memory --benchmark-json=head-$CELL.json -q
 
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
-          name: peaks-${{ matrix.side }}-${{ matrix.size }}
-          path: ${{ matrix.side }}-${{ matrix.size }}.json
+          name: peaks-${{ matrix.case }}-${{ matrix.size }}
+          path: '*-${{ matrix.case }}-${{ matrix.size }}.json'
 
   gate:
     needs: measure
@@ -95,9 +97,9 @@ jobs:
         run: |
           {
             echo '## Benchmarks: base → this PR'
-            for size in s m; do
+            for base in base-*.json; do
               echo
-              pixi run -e bench benchmem compare base-$size.json head-$size.json \
+              pixi run -e bench benchmem compare "$base" "head-${base#base-}" \
                 --columns peak,rss,time --diff --format md
             done
             echo
@@ -109,10 +111,12 @@ jobs:
       - name: gate
         run: |
           failed=0
-          for size in s m; do
-            pixi run -e bench benchmem compare base-$size.json head-$size.json \
+          for base in base-*.json; do
+            [ -f "head-${base#base-}" ] || { echo "no head pass for ${base#base-}"; failed=1; continue; }
+            pixi run -e bench benchmem compare "$base" "head-${base#base-}" \
               --columns peak --fail-on peak:20% || failed=1
           done
+          [ '${{ needs.measure.result }}' = success ] || { echo 'a measure job did not finish'; failed=1; }
           exit $failed
 
       # Best-effort: a fork PR's token is read-only, and housekeeping must not fail the run.

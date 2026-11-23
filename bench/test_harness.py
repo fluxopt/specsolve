@@ -295,16 +295,19 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 def test_the_memory_gate_measures_only_the_peaks_that_are_ours() -> None:
     """`bench.yml` fails a pull request on a memray peak, so a benchmark that
     solves would hold it to the solver's own allocations, and one that works in
-    a child process would gate a peak that holds none of its work. One pass
-    runs on each side and size, so base and head take the same selection.
+    a child process would gate a peak that holds none of its work. Base and
+    head run in the same job, one after the other, because a peak also depends
+    on the machine; both passes take the same selection.
     """
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
     measure = workflow['jobs']['measure']
-    passes = [step['run'] for step in measure['steps'] if 'pytest bench' in step.get('run', '')]
-    assert len(passes) == 1, 'one pass, which the matrix runs once per side and size'
-    assert measure['strategy']['matrix']['side'] == ['base', 'head'], 'each size is measured on both sides'
-    assert '-k "$UNGATED"' in passes[0], 'the pass leaves out what the gate cannot read'
-    assert 'pytest bench/test_ladder.py ' in passes[0], 'the gate runs the ladder, not the harness tests'
+    passes = [line for step in measure['steps'] for line in step.get('run', '').splitlines() if 'pytest bench' in line]
+    assert len(passes) == 2, 'a base pass and a head pass, on one runner'
+    assert passes[0].replace('base-', 'head-') == passes[1], 'both passes take the same selection'
+    assert all('-k "$UNGATED"' in run for run in passes), 'both passes leave out what the gate cannot read'
+    assert all('pytest bench/test_ladder.py ' in run for run in passes), (
+        'the gate runs the ladder, not the harness tests'
+    )
     assert workflow['env']['UNGATED'] == 'not test_sweep and not test_fresh', (
         'the sweep solves, and `test_fresh` allocates in a child process memray does not follow'
     )
