@@ -168,7 +168,7 @@ def test_a_constraint_with_a_where_and_presences_reads_its_where_once(monkeypatc
 
     monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(spec, sources) as model:
-        assert model.diagnostics().rows == 1, '`limit` has one row, so `capped` keeps one'
+        assert model.metrics().rows == 1, '`limit` has one row, so `capped` keeps one'
     assert read == [('g', 'h')], f'`capped` read its `where` {len(read)} times, where once indexes it'
 
 
