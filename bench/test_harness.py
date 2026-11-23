@@ -2188,6 +2188,8 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
 
     emitted = module.build_and_emit('lp', prepared)['phases']
     assert {'attach', 'build', 'write'} <= emitted.keys(), 'an LP emit is attached, built and written'
+    loaded = module.build_and_emit('highs', prepared)['phases']
+    assert {'attach', 'build', 'handoff'} <= loaded.keys(), 'a solver emit loads the solver in the handoff'
     assert {'attach', 'build'} <= module.build_only(prepared)['phases'].keys(), 'a build is attached and built'
 
     args, kwargs = module.window_setup('highs', prepared, prepared, 'values')

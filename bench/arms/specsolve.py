@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import inspect
 import tempfile
 from pathlib import Path
@@ -84,8 +83,8 @@ def _clocks(model: Any) -> dict[str, float]:
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
 
-    A solver is constructed straight off the tables, so its load is in no
-    phase: it is the wall time less the phases.
+    A solver is loaded through ``Engine.handoff``, as a solve loads it, so its
+    load is the ``handoff`` phase.
     """
     import specsolve as sps
 
@@ -94,16 +93,9 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         if sink in ('lp', 'mps'):
             model.write(Path(tmp) / f'model.{sink}')
         else:
-            _loaded(sink, model).close()
+            _handed_off(model, sink)
 
         return _counts(_handoff(model), nonzeros=True) | {'phases': _clocks(model)}
-
-
-def _loaded(sink: str, model: Any) -> Any:
-    """A solver holding *model*, for a sink that has one: its class, or the ``build_<sink>`` an older checkout loads through."""
-    module = importlib.import_module(f'specsolve._sinks.{sink}')
-    load = getattr(module, f'build_{sink}', None) or getattr(module, sink.capitalize())
-    return load(_handoff(model))
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
