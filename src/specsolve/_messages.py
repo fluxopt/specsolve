@@ -128,7 +128,7 @@ def no_model_behind_this_answer_message() -> str:
     return (
         'this answer has no model behind it, so a quantity the file never named cannot be read from '
         'it: an answer read back off disk carries the values without the model to splice the '
-        'expression into. Re-ask with sps.solve(archive.spec, archive.sources), which reads any '
+        'expression into. Re-ask with sps.solve(result.spec, result.sources), which reads any '
         'expression; a name the spec declares is readable either way.'
     )
 

@@ -421,7 +421,7 @@ def as_built(
     """Each slice as it is built: its sources are its cut, and what the slice before it handed on.
 
     This is the one place a carry is threaded, whether the slices are being
-    solved, read back off a spill, or rebuilt from an archive. *primals_of*
+    solved, read back on a resume, or rebuilt from an archive. *primals_of*
     gives a slice's primal. It is asked for a slice only when the one after
     it is asked for, so a caller that solves as it goes has the primal by
     then, and it is never asked for the last slice, which hands nothing on.

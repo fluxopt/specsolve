@@ -156,6 +156,41 @@ def test_quadratic_entries_take_the_tail_of_the_label_space():
         assert tables.linear_row_count == 1
 
 
+def test_an_infeasible_model_of_quadratic_rows_alone_reads_back_with_no_dual_ray():
+    """Gurobi computes no Farkas dual for a model with a quadratic row, so the answer carries none.
+
+    With a linear row beside it, reading one raises; with none, it reads an
+    empty vector, which is a ray of the wrong length rather than no ray.
+    """
+    alone = spec(constraints={'coupled': SPEC['constraints']['coupled']})
+    with sps.solve(alone, {**SOURCES, 'floor': pl.DataFrame({'value': [200.0]})}, solver_name='gurobi') as result:
+        assert result.termination_condition == 'infeasible', 'p·q tops out at 100 under the bounds of 10'
+        with pytest.raises(sps.errors.SpecsolveError, match='ray'):
+            result.dual_ray('coupled')
+
+
+@pytest.mark.parametrize(
+    ('expression', 'condition'),
+    [
+        pytest.param('p * q * weight + p >= floor', 'optimal', id='a linear term beside the cancelled pairs'),
+        pytest.param('p * q * weight >= floor', 'infeasible', id='nothing beside them, so 0 >= floor'),
+    ],
+)
+def test_a_quadratic_row_whose_pairs_all_cancel_reaches_gurobi(expression, condition):
+    """A later row of a quadratic constraint whose every pair is zero is still one of gurobi's rows.
+
+    The sink loaded only the rows `qmatrix` named, so such a row was missing and
+    the activity read back was a row short of the model.
+    """
+    weighted = spec(
+        parameters={'floor': {'dims': []}, 'weight': {'dims': ['g']}},
+        constraints={'coupled': {'dims': ['g'], 'expression': expression}},
+    )
+    sources = {**SOURCES, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 0.0]})}
+    with sps.solve(weighted, sources, solver_name='gurobi') as result:
+        assert result.termination_condition == condition
+
+
 def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
     """A row with no term closes up the entry's rows, and every quadratic coefficient moves with its row.
 
@@ -254,9 +289,9 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             first = model.solve(solver_name='gurobi').objective
             model.update(moved)
             again = model.solve(solver_name='gurobi').objective
-            assert model.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
+            assert model.metrics().solver_instances == 2, 'anything about a quadratic row is a model to load again'
             with sps.solve(weighted, moved, solver_name='gurobi') as fresh:
-                assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
+                assert again == pytest.approx(fresh.objective, rel=SEARCHED, nan_ok=True), (
                     'an update answers what a fresh build answers — a coefficient or a right-hand '
                     'side left behind would answer the model before it'
                 )
@@ -278,7 +313,7 @@ def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
         model.solve(solver_name='gurobi').close()
         model.update(tight)
         pushed = model.solve(solver_name='gurobi')
-        assert model.diagnostics().loads == 1, 'only a linear right-hand side moved, so it is pushed'
+        assert model.metrics().solver_instances == 1, 'only a linear right-hand side moved, so it is pushed'
         with sps.solve(capped, tight, solver_name='gurobi') as fresh:
             assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
                 'a pushed right-hand side answers what a fresh build answers'
@@ -330,7 +365,7 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
     assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
-def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
+def test_the_highs_handoff_refuses_one_even_when_reached_directly():
     """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""

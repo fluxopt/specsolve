@@ -30,16 +30,16 @@ import polars as pl
 from mathspec import advice
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import METRICS_FILE
-from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._archive_layout import carried_sources, check_the_target, write_archive
+from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
 from specsolve._outputs import checked_outputs
-from specsolve._records import METRICS_SCHEMA, Provenance, installed_version
+from specsolve._records import METRICS_SCHEMA, Metrics, Provenance, installed_version
 from specsolve._result import Result
 from specsolve._sinks import solver, writer
-from specsolve._sources import refuse_unknown_sources, tidied_and_attached, tidy_sources, with_positions
+from specsolve._sources import refuse_unknown_sources, tidied, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
-    from specsolve._answer_layout import TableWriter
     from specsolve._outputs import Output
     from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem
     from specsolve._start import Start
@@ -190,12 +189,16 @@ class Model:
     """
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
+        self._engine = Engine()
+        #: The model's metrics when its last answer was handed back, which the
+        #: next answer's share runs from; ``None`` before the first.
+        self._handed_back: Metrics | None = None
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
+        self._engine.lap('load')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.LazyFrame] = {}
-        self._engine = Engine()
         self._fill()
 
     def _lower(self, written: str | Mapping[str, object]) -> Expression:
@@ -213,7 +216,10 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            self._tidied, attached = tidied_and_attached(self._program, self._sources)
+            self._tidied = tidied(self._program, self._sources)
+            self._engine.lap('tidy')
+            attached = validate_assumptions(self._program, self._tidied)
+            self._engine.lap('attach')
             self._engine.build(self._program, self._tidied, attached)
         except BaseException:
             self._engine.close()
@@ -230,7 +236,7 @@ class Model:
         whatever changed. Data that changes which coordinates a condition admits
         renumbers solver indices, so the model is rebuilt and solved cold rather
         than pushed onto a loaded solver;
-        [`loads`][specsolve._result.Diagnostics.loads] says which ran.
+        [`solver_instances`][specsolve._records.Metrics.solver_instances] says which ran.
 
         Results taken before the update keep reading their own tables, and
         keep their build's index tables alive until dropped or until
@@ -251,6 +257,7 @@ class Model:
                 anything changes. Data the build refuses releases the model, as
                 a build that raises does.
         """
+        self._engine.start()
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
         self._fill()
@@ -298,21 +305,24 @@ class Model:
                 [`Metrics`][specsolve._records.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
+                The answer returned carries the archived
+                [`sources`][specsolve._result.Result.sources]: the paths
+                under ``sources/`` for a directory, the tables for a zip.
             outputs: Each [`Output`][specsolve.types.Output] the answer
                 carries beside the primal, the duals and the declared
                 expressions: ``activity`` for each constraint's left-hand side,
                 ``reduced_cost`` for each variable's reduced cost, ``slack``
                 for each constraint's distance to binding, and ``basis`` for
                 the basis status each variable and constraint ended on, read
-                with ``variable_basis`` and ``constraint_basis``. The result, its save and its archive
+                with ``variable_basis`` and ``constraint_basis``. The result and its archive
                 carry these and nothing else, and the reader of one not asked
                 for refuses.
             start: What the solve begins from; it changes how the solver gets
                 to the optimum, never which one. ``'previous'``, the default,
                 carries on from the last solve while the solver stays loaded,
                 and begins from nothing after an update that loads it again.
-                ``None`` begins from nothing. An earlier answer, live, read
-                with [`read_result`][specsolve._result.read_result] or from an archive, or a
+                ``None`` begins from nothing. An earlier answer, live or read
+                from an archive, or a
                 [`Start`][specsolve.types.Start] of tables keyed by reader, is
                 matched by coordinate, so one from another build of the spec,
                 with rows or columns gained or lost, starts it too. An LP starts from a basis where one is given, which an
@@ -340,6 +350,7 @@ class Model:
             LayoutError: An *archive* directory that already holds something,
                 refused before the solve.
         """
+        self._engine.start()
         out = None if archive is None else Path(archive)
         if out is not None:
             parquet.require('archive=')
@@ -351,21 +362,22 @@ class Model:
             )
         asked = checked_outputs(outputs)
         refuse_unknown_start_word(start)
-        answered = self._with_record_fields(
-            self._engine.solve(
-                solver_name,
-                solver_options=solver_options,
-                lower=self._lower,
-                outputs=asked,
-                start=start if start is None or isinstance(start, (str, Result)) else self._read_start(start),
-            ),
-            solver_name,
-            solver_options,
-            also_record or (),
+        read = start if start is None or isinstance(start, (str, Result)) else self._read_start(start)
+        solved = self._engine.solve(
+            solver_name, solver_options=solver_options, lower=self._lower, outputs=asked, start=read
         )
+        answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
+        self._engine.lap('readback')
+        answered = replace(answered, _metrics=self._share())
         if out is not None:
-            self._archive(out, answered)
+            answered = self._archive(out, answered)
+        self._handed_back = self._engine.metrics()
         return answered
+
+    def _share(self) -> Metrics:
+        """What the model took since its last answer was handed back: the answer about to be handed back's row."""
+        now = self._engine.metrics()
+        return now if self._handed_back is None else now.since(self._handed_back)
 
     def _with_record_fields(
         self,
@@ -377,7 +389,7 @@ class Model:
         """*answer* as [`solve`][] hands it back: the engine's, with what only this model knows of the solve.
 
         That is the record fields for when the solve ended and its provenance,
-        and the spec a save writes beside them; the engine fills the status and
+        and the spec an archive writes beside them; the engine fills the status and
         the objective. Every step between the engine and the caller lives here,
         so the read benchmark, which builds an answer without a solver, pays
         what a solve pays.
@@ -397,19 +409,25 @@ class Model:
         """
         return read_start(start, self._program, self._tidied)
 
-    def _archive(self, out: Path, answered: Result) -> None:
-        """Write this model, what is attached to it now, and *answered* to *out*.
+    def _archive(self, out: Path, answered: Result) -> Result:
+        """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
 
-        The metrics row is written here, not by [`Result.save`][]: it spans the
-        model's life, not one solve.
+        The metrics row is the last member written, so its ``archive_seconds``
+        covers every other one; writing and landing it are in [`metrics`][]
+        alone.
         """
-        taken = pl.DataFrame([self._engine.diagnostics().metrics()._asdict()], schema_overrides=METRICS_SCHEMA)
+        recorded = answered.metrics
 
-        def answer(under: Path, write: TableWriter) -> None:
-            answered._save(under, write)
-            write(taken, under / METRICS_FILE)
+        def metrics() -> pl.DataFrame:
+            nonlocal recorded
+            self._engine.lap('archive')
+            recorded = self._share()
+            return pl.DataFrame([recorded._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        write_archive(out, self._spec, with_positions(self._program, self._tidied), axis=None, answer=answer)
+        tables = with_positions(self._program, self._tidied)
+        write_archive(out, self._spec, tables, answer=answered._save, metrics=metrics)
+        self._engine.lap('archive')
+        return replace(answered, _metrics=recorded, _sources=carried_sources(out, tables))
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.
@@ -419,6 +437,7 @@ class Model:
             SpecsolveError: A construct the format has no section for, as
                 [`check_sink`][] refuses it.
         """
+        self._engine.start()
         self._engine.write(path)
 
     def check_sink(self, sink: str) -> None:
@@ -526,8 +545,20 @@ class Model:
         assert evaluate is not None, 'a model built from a spec as written compiles an ad-hoc expression'
         return evaluate
 
+    def metrics(self) -> Metrics:
+        """This model's size, counters and clocks over its whole life, taken now.
+
+        ``solves`` counts every solve, and each clock sums every lap of its
+        phase, so the [`metrics`][specsolve.types.Result.metrics] of every
+        result this model handed back add up to it, but for whatever came
+        after the last one and the landing of each archive. Answerable after
+        [`close`][], and after a build that raised, which leaves the sizes
+        at zero.
+        """
+        return self._engine.metrics()
+
     def diagnostics(self) -> Diagnostics:
-        """What this build and its solves did that the answer does not show.
+        """What the build looks like that the answer does not show: what it left out and how its numbers spread.
 
         Answerable after [`close`][], and after a build that raised. A raise
         leaves the sizes at zero, since they are taken once a model is whole,

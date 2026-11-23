@@ -88,6 +88,41 @@ flowchart TB
   `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
   `SpecsolveError`, naming the rewrite.
 
+## The phases
+
+**A model's life is clocked in nine phases, and every step is in exactly one.**
+[`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
+phase covers, and [the diagram](../howto/faster.md#find-where-the-time-goes)
+draws what each hands to the next. The clock
+is one mark: each public call starts it with `Engine.start()`, and
+`Engine.lap(phase)` adds the time since the mark to that phase and moves the
+mark, so the laps tile the call and a step between two named ones is in the
+phase of the one after it. `lap` refuses a name that has no `Metrics` column.
+`tests/test_phases.py` holds the phases' sum to the wall time of a call, within
+the return from one call and the entry into the next (50–110 µs, #2180), and
+slows each step to find it in its own phase.
+
+| phase | lapped in |
+| --- | --- |
+| `load` | `Model.__init__` |
+| `tidy` | `Model._fill` |
+| `attach` | `Model._fill`, or `Engine.build` where no assumption attached the tables |
+| `build` | `Engine.build` |
+| `handoff` | `Engine.handoff`; `Engine.build` for the held solver's digest |
+| `solve` | `Engine.solve` |
+| `readback` | `Model.solve` |
+| `write` | `Engine.write` |
+| `archive` | `Model._archive` |
+
+**A result's metrics row is its share of the model's clocks**: `Engine.metrics`
+builds the one `Metrics`, and `Model.solve` takes the difference from where
+the previous result was handed back. A sweep slice's row is its result's.
+**The row is the archive's last member**, written after the zip is packed, so
+`archive_seconds` covers every other member, and the result handed back
+carries that row. Writing the row and landing the archive are in
+`metrics()` alone (3.3–3.5 ms median, #2180). Closing the model comes
+after the archive, and no phase holds it.
+
 ## The public API
 
 **Three modules hold the public API.** `specsolve` holds what a caller calls,
@@ -214,7 +249,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_messages.py` | a wording two modules raise |
 | `_solve_over.py` | a sweep's driver: one plan per slice, folded |
 | `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
-| `_sweep.py` | `Sweep`, the one layout a spill, a save and an archive hold it in, and `read_sweep` / `scan_sweep` |
+| `_sweep.py` | `Sweep`, and its answer as an archive holds it, written slice by slice and read back |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
@@ -229,7 +264,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned, its save on disk, and `read_result` / `scan_result` |
+| `_result.py` | what a solve returned, written into an archive and read back out of one |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
@@ -321,9 +356,13 @@ The names the code uses for its own parts. The names a caller meets are in
 : The `specsolve_run` column an archive adds to every table. Names that start
   with `specsolve_` are reserved.
 
-**Slice**, **stitch** and **spill**
-: One model of a sweep; windowed tables put back over the dimension they cut;
-  a sweep's answers on disk (`_axes.py`, `_sweep.py`).
+**Slice** and **stitch**
+: One model of a sweep; windowed tables put back over the dimension they cut
+  (`_axes.py`).
+
+**Slice files**
+: A sweep's answer on disk, one file per slice and name, written into its
+  archive as the fold goes (`SliceFiles`, `_sweep.py`).
 
 **Carry** and **the wire**
 : One slice's answer copied into the next slice's data; how a slice's sources

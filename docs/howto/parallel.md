@@ -29,15 +29,28 @@ if __name__ == '__main__':  # spawn re-imports your module; without this it recu
 
 Four workers need four times the memory of one slice.
 
-## Hand the workers paths
+## Run on a cluster
 
-On a cluster, write the sources to a filesystem the workers mount and pass the
-paths. Without `shared_filesystem=True`, the paths are read here and shipped:
+A cluster's client is an executor too. **A path crosses to the workers as the
+path**, so each worker reads the file itself. Where the workers mount the same
+storage, pass the paths:
 
 ```python
 sources = {'load': '/shared/load.parquet', 'cost': '/shared/cost.parquet', 'p_max': '/shared/p_max.parquet'}
-sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client, shared_filesystem=True)
+sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client)
 ```
+
+Where they do not, pass the tables. Each crosses as parquet bytes, once per
+slice:
+
+```python
+import polars as pl
+
+sources = {name: pl.read_parquet(f'{name}.parquet') for name in ('load', 'cost', 'p_max')}
+sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client)
+```
+
+A worker that cannot read a path refuses the slice and names the source.
 
 ## Read the sweep back
 

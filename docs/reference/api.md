@@ -79,14 +79,6 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.types.ResultArchive
-    options:
-      heading_level: 4
-
-::: specsolve.types.SweepArchive
-    options:
-      heading_level: 4
-
 ::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4
@@ -119,6 +111,15 @@ The rows and tables those hand back:
 
 ### Read an answer back
 
+An answer carries its `sources` exactly where an archive holds it:
+
+```python
+result = sps.solve(spec, sources)  # result.sources is None: no archive
+result = sps.solve(spec, sources, archive='case/')  # the paths under case/sources/
+result = sps.read_archive('case/')  # the tables
+sps.solve(result.spec, result.sources)
+```
+
 ::: specsolve.read_archive
     options:
       heading_level: 4
@@ -127,23 +128,7 @@ The rows and tables those hand back:
     options:
       heading_level: 4
 
-::: specsolve.read_result
-    options:
-      heading_level: 4
-
-::: specsolve.read_sweep
-    options:
-      heading_level: 4
-
 ::: specsolve.scan_archive
-    options:
-      heading_level: 4
-
-::: specsolve.scan_result
-    options:
-      heading_level: 4
-
-::: specsolve.scan_sweep
     options:
       heading_level: 4
 
