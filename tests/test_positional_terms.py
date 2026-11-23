@@ -389,6 +389,6 @@ def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkey
     monkeypatch.setattr(QueryBuilder, '_variable_term', narrowed)
     monkeypatch.setattr(assembly.Assembly, '_placed_by_position', spied)
     with sps.build(spec, SOURCES) as model:
-        rows = model.diagnostics().rows
+        rows = model.metrics().rows
     assert not placed, 'a term whose presence its body does not hold is not read by position'
     assert rows == 2, f'the presence admits two rows, and {rows} were built'
