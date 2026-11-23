@@ -254,7 +254,7 @@ a `submit` that returns a `Future`.
 | `None` *(default)* | always, until measurement says otherwise | Sequential. |
 | `ThreadPoolExecutor` | rarely | Slices contend with polars' own thread pool, and peak memory adds up. |
 | `ProcessPoolExecutor` | local parallelism | **Must not use `fork`.** Sources cross as parquet. |
-| anything remote | a cluster you already run | dask's `Client`, ray, loky. Paths travel as bytes. |
+| anything remote | a cluster you already run | dask's `Client`, ray, loky. A path crosses as the path, so the workers must read it; a table crosses as parquet. |
 
 **A forked worker hangs** rather than raising.
 [Running a sweep in parallel](../howto/parallel.md) is the recipe.
