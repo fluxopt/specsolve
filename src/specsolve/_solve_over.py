@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator, Mapping
-from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from functools import partial
@@ -27,7 +27,7 @@ import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
-from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
 from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._inputs import as_spec
@@ -36,7 +36,7 @@ from specsolve._outputs import checked_outputs
 from specsolve._records import Metrics, Record
 from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
-from specsolve._sweep import SliceAnswer, Spill, Sweep, one_key_type
+from specsolve._sweep import SliceAnswer, SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
 from specsolve._tables import as_table
 from specsolve.errors import DataError, SpecsolveError
 
@@ -50,18 +50,8 @@ if TYPE_CHECKING:
     from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._outputs import Output
-    from specsolve._result import Diagnostics, Result
+    from specsolve._result import Result
     from specsolve._start import Start
-
-
-def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
-    """One slice's row of [`Sweep.metrics`][], off the model's cumulative counters.
-
-    A serial fold's model keeps summing across slices, so this slice's share is
-    *after* minus *before*; a model built for one slice has no *before*.
-    """
-    now = after.metrics()
-    return now if before is None else now.since(before.metrics())
 
 
 def solve_over(
@@ -70,11 +60,9 @@ def solve_over(
     over: Axis | Mapping[str, Any],  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     executor: Executor | None = None,
-    shared_filesystem: bool | None = None,
     solver_options: Mapping[str, object] | None = None,
     also_record: Sequence[str] | None = None,
     solver_name: str = 'highs',
-    spill_to: str | Path | None = None,
     archive: str | Path | None = None,
     outputs: Iterable[Output] = (),
     start: Sweep | Result | Start | Literal['previous'] | None = 'previous',
@@ -94,35 +82,34 @@ def solve_over(
             slices, and its ``key_name=`` names the slice column.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
             slices in order on one model. A process pool must be ``spawn``
-            or ``forkserver`` — a forked worker hangs.
-        shared_filesystem: Whether the executor's workers can read this
-            process's paths. Decided for the stdlib pools; anything else is
-            assumed not to, and paths travel as bytes.
+            or ``forkserver`` — a forked worker hangs. A source given as a
+            path crosses as the path, so every worker has to read it; pass
+            the table instead where they cannot, and it crosses as parquet
+            bytes.
         solver_options: As [`solve`][specsolve._api.Model.solve] takes them.
         also_record: As [`solve`][specsolve._api.Model.solve] takes them,
             reaching every slice.
         solver_name: As [`solve`][specsolve._api.Model.solve] takes it.
-        spill_to: A directory each slice's tables are written to as the fold
-            goes, so the sweep holds one slice in memory however many there
-            are; [`Sweep.scan`][] reads a name off it lazily. A directory
-            holds one sweep: the same sweep run at it again does not solve the
-            slices already there, which is how an interrupted sweep resumes.
         archive: Where to write the model, the sources the sweep was cut from,
             the axis that cut them and every slice's answer, so that
-            ``sps.read_archive`` gives all four back and the sweep runs again
-            from the file alone. A ``.zip`` suffix packs it into one file;
-            anything else is a directory. The answer is in the layout
-            *spill_to* writes, one file per slice of each name under
-            ``answer/<kind>/<name>/``, so [`Sweep.save`][], a spill and an
-            archive hold a sweep the same way. Beside *spill_to* the archive
-            copies the spill file for file, so a sweep too large to hold is
-            archived without being held; the archive is a second copy of the
-            answers on disk.
-            A sliced source is archived whole.
+            [`read_archive`][specsolve._archive.read_archive] gives all four
+            back and the sweep runs again from the file alone. A sliced source
+            is archived whole. Anything but a ``.zip`` is a directory, and
+            each slice's tables are written into it as the fold goes, one
+            file per slice of each name under ``answer/<kind>/<name>/``, so
+            the sweep holds one slice in memory however many there are and
+            [`Sweep.scan`][] reads a name off it lazily. A directory holds one
+            sweep: the same sweep run at it again does not solve the slices
+            already there, which is how an interrupted sweep resumes. A
+            ``.zip`` is packed into one file once the sweep ends, and the
+            sweep returned then holds its answer in memory; an interrupted one
+            leaves no file, and is not resumed. The sweep returned carries
+            the archived [`sources`][specsolve._sweep.Sweep.sources]: the
+            paths under ``sources/`` for a directory, the tables for a zip.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
-            every slice. The sweep, its spill and its archive carry these and
-            nothing else; a *spill_to* directory solved with others is
-            refused rather than resumed.
+            every slice. The sweep and its archive carry these and nothing
+            else; an *archive* directory solved with others is refused rather
+            than resumed.
         start: What each slice starts from, as
             [`solve`][specsolve._api.Model.solve] takes it: an earlier answer,
             an earlier sweep, or a [`Start`][specsolve.types.Start] of tables.
@@ -138,7 +125,7 @@ def solve_over(
             nothing.
 
     Returns:
-        The sweep, which reads its answer.
+        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.Sweep.axis] that cut it.
 
     Raises:
         SpecsolveError: Before a slice is taken: an *over* that is no axis,
@@ -146,10 +133,14 @@ def solve_over(
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
             with a column the tables carry; an axis the program does not
-            allow; a *spill_to* directory holding another sweep; *outputs* that [`solve`][specsolve._api.Model.solve]
+            allow; an *archive* directory holding another sweep, or this one
+            solved from another spec, axis or sources; *outputs* that [`solve`][specsolve._api.Model.solve]
             refuses; a *start* word other than ``'previous'`` — each answerable from the entries alone; keys of more than one
             type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
+        LayoutError: An *archive* directory that holds something other than
+            a sweep archive, or one in a layout that has changed since it was
+            written.
         DataError: No source carries an EachLabel axis, a labels table
             carries it, an EachWindow axis's dimension has no labels, or the
             axis produced no slices.
@@ -167,13 +158,13 @@ def solve_over(
             'carry and executor are mutually exclusive: a carried value makes slice i+1 depend on '
             "slice i's answer, so the slices cannot run concurrently. Drop the executor, or drop the carry."
         )
-    if archive is not None or spill_to is not None:
-        parquet.require('archive=' if archive is not None else 'spill_to=')
+    if archive is not None:
+        parquet.require('archive=')
     spec = as_spec(spec)
     sources = _materialised(sources)
     out = None if archive is None else Path(archive)
     if out is not None:
-        check_the_target(out)
+        check_the_target(out, resumable=True)
     asked = checked_outputs(outputs)
     program = check(spec)
     plan = carry_plan(program, axis)
@@ -193,15 +184,25 @@ def solve_over(
     keys = [current.key for current in slices]
     key_dtype = one_key_type(keys, key_name)
     starts = slice_starts(start, axis, slices, program)
-    spill = None if spill_to is None else Spill.opened(spill_to, key_name, keys, key_dtype, stitch, asked, spec)
-    if executor is None:
-        answered = _serially(spec, slices, solving, plan, spill, starts)
-    else:
-        answered = _pooled(executor, shared_filesystem, spec, slices, solving, spill, starts)
-    folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, spec)
-    if out is not None:
-        _archive_the_sweep(out, spec, program, axis, sources, folded, slices[0].sources)
-    return folded
+
+    def folded(on_disk: SliceFiles | None) -> Sweep:
+        if executor is None:
+            answered = _serially(spec, slices, solving, plan, on_disk, starts)
+        else:
+            answered = _pooled(executor, spec, slices, solving, on_disk, starts)
+        return replace(Sweep._folded(key_name, stitch, answered, on_disk, key_dtype, asked, spec), axis=axis)
+
+    if out is None:
+        return folded(None)
+    if out.suffix != '.zip':
+        refuse_another_sweep(out / ANSWER_DIR, sweep_manifest(key_name, keys, stitch, asked))
+    tables = _archived_sources(program, axis, sources, slices[0].sources)
+    with sweep_archive(out, spec, tables, axis.to_dict()) as (answer, write):
+        on_disk = SliceFiles.opened(answer, key_name, keys, key_dtype, stitch, asked, spec, write)
+        sweep = replace(folded(on_disk), sources=carried_sources(out, tables))
+        if out.suffix == '.zip':
+            sweep = replace(sweep, _slices=on_disk.tables(eager=True))
+    return sweep
 
 
 def build_slice(
@@ -321,29 +322,24 @@ def _materialised(sources: Mapping[str, Source]) -> dict[str, Source]:
     return {name: list(obj) if isinstance(obj, Iterator) else obj for name, obj in sources.items()}
 
 
-def _archive_the_sweep(
-    out: Path,
-    spec: Spec,
+def _archived_sources(
     program: Program,
     axis: Axis,
     sources: Mapping[str, Source],
-    folded: Sweep,
     one_slice: Mapping[str, Source],
-) -> None:
-    """Write the sweep's question and its answer to *out*.
+) -> dict[str, pl.LazyFrame]:
+    """The tidy table each source of the sweep is archived as, keyed as *sources* are.
 
     A windowed sweep's sources are the ones a single solve attaches, so they
     are tidied whole. An [`EachLabel`][] sweep's are tidied from *one_slice*, except
     the ones the axis cut, which [`_uncut`][] gives.
     """
     if isinstance(axis, EachWindow):
-        tables = with_positions(program, tidy_sources(program, sources))
-    else:
-        tidied = with_positions(program, tidy_sources(program, one_slice))
-        cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
-        held = {**tidied, **cut}
-        tables = {name: held[name] for name in sources}
-    write_archive(out, spec, tables, axis=axis.to_dict(), answer=folded._save)
+        return with_positions(program, tidy_sources(program, sources))
+    tidied = with_positions(program, tidy_sources(program, one_slice))
+    cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
+    held = {**tidied, **cut}
+    return {name: held[name] for name in sources}
 
 
 def _uncut(program: Program, axis: Axis, name: str, table: pl.LazyFrame) -> pl.LazyFrame:
@@ -398,13 +394,13 @@ def _serially(
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     plan: Mapping[str, CarryRule],
-    spill: Spill | None,
+    on_disk: SliceFiles | None,
     starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """Each slice's answer, off one model updated in place.
 
     A generator, since a slice is built from what the one before it left;
-    the caller closes it to release the model. A slice the spill holds is
+    the caller closes it to release the model. A slice the archive holds is
     read back, and one solved here is written before it is yielded.
     """
     model: Model | None = None
@@ -426,21 +422,19 @@ def _serially(
 
     try:
         for position, current in enumerate(as_built(slices, plan, left)):
-            if spill is not None and spill.done(position):
-                answer = spill.read_back(position)
-                primals = spill.written('primal', position, carried)
+            if on_disk is not None and on_disk.done(position):
+                answer = on_disk.read_back(position)
+                primals = on_disk.written('primal', position, carried)
             else:
                 with _named_slice(current.key, position, len(slices)):
                     if model is None:
-                        model, before = build(spec, current.sources), None
+                        model = build(spec, current.sources)
                     else:
-                        before = model.diagnostics()
                         model.update(current.sources)
-                    result = model.solve(**solving, start=starts[position])
-                    answer = _answers(result, _slice_metrics(model.diagnostics(), before))
+                    answer = _answers(model.solve(**solving, start=starts[position]))
                 primals = answer.tables.get('primal', {})
-                if spill is not None:
-                    answer = spill.write(position, current.key, answer)
+                if on_disk is not None:
+                    answer = on_disk.write(position, current.key, answer)
             last = (position, answer, primals)
             yield current.key, answer
     finally:
@@ -460,30 +454,28 @@ def _named_slice(key: Label, position: int, count: int) -> Generator[None, None,
 
 def _pooled(
     executor: Executor,
-    shared_filesystem: bool | None,
     spec: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
-    spill: Spill | None,
+    on_disk: SliceFiles | None,
     starts: Sequence[Start | Literal['previous'] | None],
 ) -> Generator[tuple[Label, SliceAnswer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
     Yielded in slice order, never completion order. A built model cannot cross
-    a process, so each slice builds its own. A slice the spill holds is never
+    a process, so each slice builds its own. A slice the archive holds is never
     submitted; one that comes back is written here, by the process that owns
-    the directory.
+    the archive.
     """
     crosses = _crosses_a_process(executor)
-    shared = _shares_filesystem(executor, shared_filesystem)
     memo: dict[str, tuple[Any, Any]] = {}  # pyrefly: ignore[explicit-any] — a source beside its encoding
     futures = [
         None
-        if spill is not None and spill.done(position)
+        if on_disk is not None and on_disk.done(position)
         else executor.submit(
             _run_slice,
             spec,
-            _encode(current.sources, memo, shared_filesystem=shared) if crosses else dict(current.sources),
+            _encode(current.sources, memo) if crosses else dict(current.sources),
             crosses,
             solving,
             starts[position],
@@ -492,21 +484,25 @@ def _pooled(
     ]
     for position, (current, future) in enumerate(zip(slices, futures, strict=True)):
         if future is None:
-            assert spill is not None, 'a slice is skipped only where a spill holds it'
-            yield current.key, spill.read_back(position)
+            assert on_disk is not None, 'a slice is skipped only where the archive holds it'
+            yield current.key, on_disk.read_back(position)
             continue
         with _named_slice(current.key, position, len(slices)):
             answer = future.result()
         answer = replace(answer, tables={kind: _decode(named) for kind, named in answer.tables.items()})
-        yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
+        yield current.key, on_disk.write(position, current.key, answer) if on_disk is not None else answer
 
 
-def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
+def _answers(result: Result) -> SliceAnswer:
     """One slice's answer as plain data, read out of *result*, every declared expression evaluated now.
 
     A slice with no primal, or with undefined duals, is not a failure: the
-    reason ``Result.dual`` gives is carried.
+    reason ``Result.dual`` gives is carried. Its metrics are the result's: a
+    serial fold's model keeps summing across slices, and a result's row is
+    already its own share.
     """
+    metrics = result.metrics
+    assert metrics is not None, 'a solve always hands back its metrics'
     if not result.has_primal:
         return SliceAnswer(result.record, metrics)
     held, no_expressions = result._all_tables()
@@ -524,11 +520,24 @@ def _run_slice(
     start: Start | Literal['previous'] | None,
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
-    with build(spec, _decode(encoded)) as model, model.solve(**call, start=start) as result:
-        answer = _answers(result, _slice_metrics(model.diagnostics(), None))
+    sources = _decode(encoded)
+    _refuse_a_path_the_worker_cannot_read(sources)
+    with build(spec, sources) as model, model.solve(**call, start=start) as result:
+        answer = _answers(result)
         if not encode_out:
             return answer
         return replace(answer, tables={kind: _encode(named, {}) for kind, named in answer.tables.items()})
+
+
+def _refuse_a_path_the_worker_cannot_read(sources: Mapping[str, Any]) -> None:  # pyrefly: ignore[explicit-any] — what crossed to the worker
+    """Refuse a path source the worker running the slice cannot see: a path crosses as itself, so only the caller can ship the table."""
+    for name, obj in sources.items():
+        if isinstance(obj, (str, Path)) and not Path(obj).exists():
+            raise SpecsolveError(
+                f'source {name!r}: the worker that runs this slice cannot read {str(obj)!r}, because a path '
+                f'crosses to the workers as the path. Pass the table instead, such as pl.read_parquet({str(obj)!r}), '
+                'and it crosses as parquet bytes.'
+            )
 
 
 def _key_column(axis: Axis, program: Program) -> str:
@@ -554,13 +563,6 @@ def _key_column(axis: Axis, program: Program) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _shares_filesystem(executor: Executor, declared: bool | None) -> bool:
-    """Whether *executor*'s workers can read this process's paths; an unknown executor is assumed remote."""
-    if declared is not None:
-        return declared
-    return isinstance(executor, ProcessPoolExecutor)
-
-
 def _crosses_a_process(executor: Executor) -> bool:
     """Whether a slice's sources have to be encoded to reach *executor*: all but a thread pool's."""
     return not isinstance(executor, ThreadPoolExecutor)
@@ -569,27 +571,23 @@ def _crosses_a_process(executor: Executor) -> bool:
 def _encode(
     sources: Mapping[str, Source],
     memo: dict[str, tuple[Any, Any]],  # pyrefly: ignore[explicit-any] — a source beside its encoding
-    *,
-    shared_filesystem: bool = False,
 ) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     """Sources in the shape a worker can be handed.
 
-    A path the workers reach stays a path; one they cannot travels as its own
-    bytes. A table becomes parquet ``bytes``; anything else crosses as itself.
+    A path stays a path, and a table becomes parquet ``bytes``; anything else
+    crosses as itself.
     *memo* encodes a source no slice rewrote once.
     """
     out: dict[str, Any] = {}  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     for name, obj in sources.items():
-        if isinstance(obj, (str, Path)) and shared_filesystem:
+        if isinstance(obj, (str, Path)):
             out[name] = obj
             continue
         cached = memo.get(name)
         if cached is not None and cached[0] is obj:
             out[name] = cached[1]
             continue
-        if isinstance(obj, (str, Path)):
-            out[name] = Path(obj).read_bytes()
-        elif (table := as_table(obj)) is None:
+        if (table := as_table(obj)) is None:
             out[name] = obj
         else:
             buffer = io.BytesIO()

@@ -33,11 +33,13 @@ for start in ('previous', None):
     model.solve()
     for numbers in steps:
         model.update(numbers).solve(start=start)
-    print(start, model.diagnostics().seconds['solve'], model.diagnostics().loads)
+    seen = model.metrics()
+    print(start, seen.solve_seconds, seen.solver_instances)
 ```
 
-Take the faster one. `loads` equal to the number of solves means each update
-changed which coordinates a `where:` keeps.
+Take the faster one. `solver_instances` equal to the number of solves means
+each update changed which coordinates a `where:` keeps, so each solve took a new
+solver.
 
 **Carrying on usually pays, and can lose by an order of magnitude.** It cut
 wall time by 1.5× to 5.7× on the bench's dispatch and storage models
@@ -56,7 +58,7 @@ before it, except under an executor. `start=None` turns it off. Pass an earlier
 sweep as `start=` to start each slice from the earlier slice of its key:
 
 ```python
-monday = sps.read_archive('runs/monday.zip').sweep
+monday = sps.read_archive('runs/monday.zip')
 tuesday = sps.solve_over('dispatch.yaml', tuesday_sources, axis, start=monday)
 ```
 
@@ -80,7 +82,7 @@ The solver takes the values as its first incumbent. Pass an earlier answer, or
 values per variable under `'primal'`:
 
 ```python
-yesterday = sps.read_result('runs/monday')
+yesterday = sps.read_archive('runs/monday')
 today = sps.solve('commitment.yaml', sources, start=yesterday)
 today = sps.solve('commitment.yaml', sources, start={'primal': {'on': 1.0}})
 ```

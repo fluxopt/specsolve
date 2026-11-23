@@ -87,17 +87,12 @@ def test_one_solvers_basis_starts_another(solver_name: str) -> None:
     assert warm == 0, "HiGHS's optimal basis is every solver's"
 
 
-@pytest.mark.parametrize('kept', ['saved', 'archived'])
+@pytest.mark.parametrize('kept', [pytest.param('run', id='directory'), pytest.param('run.zip', id='zip')])
 def test_an_answer_off_disk_starts_a_solve(tmp_path: Path, kept: str) -> None:
-    if kept == 'saved':
-        with sps.solve(DISPATCH, snapshots(40), outputs=BASIS) as answer:
-            answer.save(tmp_path / 'answer')
-        before = sps.read_result(tmp_path / 'answer')
-    else:
-        sps.solve(DISPATCH, snapshots(40), outputs=BASIS, archive=tmp_path / 'run.zip')
-        archive = sps.read_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.types.ResultArchive)
-        before = archive.result
+    sps.solve(DISPATCH, snapshots(40), outputs=BASIS, archive=tmp_path / kept)
+    archive = sps.read_archive(tmp_path / kept)
+    assert isinstance(archive, sps.types.Result)
+    before = archive
     _, warm = solved(DISPATCH, snapshots(40), 'highs', start=before)
     assert warm == 0, 'the tables on disk are the tables the live answer held'
 
@@ -194,14 +189,14 @@ def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
         sps.solve(DISPATCH, snapshots(40), start=before)
 
 
-def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_loads(
+def test_an_answer_off_disk_on_a_fresh_model_is_refused_before_the_solver_instances(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Neither an answer read back nor a model never solved bears a mark, and two absent marks are not one solve."""
     from specsolve import _sinks as sinks
 
-    sps.solve(DISPATCH, snapshots(40)).save(tmp_path / 'answer')
-    loaded = sps.read_result(tmp_path / 'answer')
+    sps.solve(DISPATCH, snapshots(40), archive=tmp_path / 'answer')
+    loaded = sps.read_archive(tmp_path / 'answer')
     monkeypatch.setattr(sinks, 'loaded', lambda *_: pytest.fail('the solver loaded before the refusal'))
     with pytest.raises(SpecsolveError, match='no value at any coordinate'):
         sps.solve(KNAPSACK, knapsack_sources(), start=loaded)
@@ -515,8 +510,8 @@ def test_an_archived_window_sweep_starts_a_sweep_from_its_answer(tmp_path: Path)
 
     earlier = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'run.zip')
     archived = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archived, sps.types.SweepArchive)
-    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived.sweep)
+    assert isinstance(archived, sps.types.Sweep)
+    again = sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, start=archived)
     assert again.records['objective'].to_list() == pytest.approx(earlier.records['objective'].to_list()), (
         'the answer over the hours is all a window needs, kept windows or not'
     )
@@ -585,9 +580,9 @@ def test_each_slice_carries_on_from_the_one_before_it_unless_start_is_none(
     cold = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, start=None)
     assert len(forgotten) == len(cold.keys) - 1, 'under start=None every slice after the first forgets the work'
     forgotten.clear()
-    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, spill_to=tmp_path)
-    assert not [path.name for path in tmp_path.iterdir() if path.name.endswith('_basis')], (
-        'no basis is read to chain the slices, so none is spilled'
+    chained = sps.solve_over(SWEPT, scenario_sources(), SCENARIOS, archive=tmp_path)
+    assert not [path.name for path in (tmp_path / 'answer').iterdir() if path.name.endswith('_basis')], (
+        'no basis is read to chain the slices, so none is archived'
     )
     assert not forgotten, 'by default every slice after the first carries on in the solver the slice before it left'
     assert chained.records['objective'].to_list() == pytest.approx(cold.records['objective'].to_list()), (
