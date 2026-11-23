@@ -15,7 +15,7 @@ Example::
 """
 
 from specsolve._api import Model
-from specsolve._archive import ArchivedInputs, ResultArchive, SweepArchive
+from specsolve._archive import ArchivedInputs
 from specsolve._outputs import Output
 from specsolve._records import Metrics, Provenance, Record
 from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Result
@@ -33,8 +33,6 @@ __all__ = [
     'Provenance',
     'Record',
     'Result',
-    'ResultArchive',
     'Start',
     'Sweep',
-    'SweepArchive',
 ]

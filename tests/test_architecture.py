@@ -342,15 +342,7 @@ PUBLIC_API = {
     'run it': {'build', 'check', 'evaluate', 'solve', 'write'},
     'run it many times': {'solve_over', 'build_slice', 'EachLabel', 'EachWindow'},
     'see what it reads': {'tidy'},
-    'read it back': {
-        'read_archive',
-        'read_inputs',
-        'read_result',
-        'read_sweep',
-        'scan_archive',
-        'scan_result',
-        'scan_sweep',
-    },
+    'read it back': {'read_archive', 'read_inputs', 'scan_archive'},
 }
 
 #: The two public submodules, and every name each one binds.
@@ -366,10 +358,8 @@ PUBLIC_MODULES = {
         'Provenance',
         'Record',
         'Result',
-        'ResultArchive',
         'Start',
         'Sweep',
-        'SweepArchive',
     },
     'errors': {
         'SpecsolveError',
@@ -651,8 +641,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
         'build': specsolve.build,
         'solve': specsolve.solve,
         'write': specsolve.write,
-        'ResultArchive': specsolve.types.ResultArchive.__init__,
-        'SweepArchive': specsolve.types.SweepArchive.__init__,
+        'ArchivedInputs': specsolve.types.ArchivedInputs.__init__,
         'Model': specsolve.types.Model.__init__,
         'Model.update': specsolve.types.Model.update,
         'solve_over': solve_over,

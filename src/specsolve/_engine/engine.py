@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import copy
 import warnings
-from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -36,12 +35,13 @@ from specsolve._engine.scope import Scope
 from specsolve._engine.specialize import specialized
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
+from specsolve._records import PHASES, Metrics
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
     import numpy as np
     from mathspec import program
@@ -118,11 +118,13 @@ class Engine:
         #: What the last solve concluded, or ``None`` once a load, a build or
         #: [`close`][] has changed what the solver holds.
         self._solved: SolveStatus | None = None
-        #: How many solves this model has been through, and how many loaded the solver from scratch.
+        #: How many solves this model has been through, and how many solver instances they took.
         self._solves = 0
-        self._loads = 0
+        self._solver_instances = 0
         #: Wall seconds each phase has spent, cumulative across rebuilds.
         self._seconds: dict[str, float] = {}
+        #: When the last lap ended, or the call began: where the next lap measures from.
+        self._mark = perf_counter()
 
     @property
     def _model(self) -> BuiltModel:
@@ -130,6 +132,24 @@ class Engine:
         if self._built is None:
             raise SpecsolveError(_no_built_model('to hand over'))
         return self._built
+
+    def start(self) -> None:
+        """Begin a call: the next [`lap`][] measures from now."""
+        self._mark = perf_counter()
+
+    def lap(self, phase: str) -> None:
+        """Add the wall time since the last lap, or since [`start`][], to *phase*, one of ``PHASES``.
+
+        Each lap begins where the one before it ended, so the laps of a call
+        add up to the whole call, and a step between two named steps is in the
+        phase of the one after it. The steps outside the engine lap here too,
+        so [`diagnostics`][] holds every phase of the model's life. A call
+        that raises keeps the laps it finished.
+        """
+        assert phase in PHASES, f'{phase!r} is not a phase, so no Metrics column would carry its clock'
+        now = perf_counter()
+        self._seconds[phase] = self._seconds.get(phase, 0.0) + now - self._mark
+        self._mark = now
 
     # ------------------------------------------------------------------
     # build
@@ -145,34 +165,34 @@ class Engine:
         """Attach *sources*, then build every entry into the model tables.
 
         *attached* is *sources* already attached, as reading the assumptions
-        left them, and is not attached again; the time that attach took is
-        recorded either way. A second call rebuilds over the same object. With
-        *changed*, the names whose sources differ from the last build's, a
-        change of numbers alone ([`numbers_only`][]) reads again only the
-        bounds, constant sides and objective they feed ([`spliced_model`][]);
-        anything else builds in full. The held solver reads its
+        left them, and is not attached again; whoever attached it lapped it.
+        A second call rebuilds over the same object. With *changed*, the names
+        whose sources differ from the last build's, a change of numbers alone
+        ([`numbers_only`][]) reads again only the bounds, constant sides and
+        objective they feed ([`spliced_model`][]); anything else builds in
+        full. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
         tables. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
             self._solver.structure()
+            self.lap('handoff')
         held, previous = self._built, self._measured
         self._built = None
         self._solved = None
         self._measured = Measured()
         if attached is None:
             attached = attach(program, sources)
-        self._seconds['attach'] = self._seconds.get('attach', 0.0) + attached.seconds
+            self.lap('attach')
         if held is not None and changed and numbers_only(program, held, previous, attached, changed):
             self._measured = copy.deepcopy(previous)
-            with _clocked(self._seconds, 'build'):
-                self._built = spliced_model(held, attached, changed, self._measured)
+            self._built = spliced_model(held, attached, changed, self._measured)
+            self.lap('build')
             return
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(specialized(program, attached), attached, self._measured)
-        with _clocked(self._seconds, 'build'):
-            self._built = assembly.run()
+        self._built = Assembly(specialized(program, attached), attached, self._measured).run()
+        self.lap('build')
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables
@@ -195,8 +215,8 @@ class Engine:
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
         self.check_sink(suffix)
-        with _clocked(self._seconds, 'write'):
-            chosen.write(self._model.handoff, path)
+        chosen.write(self._model.handoff, path)
+        self.lap('write')
 
     def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
@@ -213,24 +233,41 @@ class Engine:
         if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
             raise SpecsolveError(refused)
 
-    def _hand_off(
-        self, solver_name: str, solver_options: Mapping[str, object] | None, *, carry_on: bool = False
+    def handoff(
+        self,
+        solver_name: str,
+        solver_options: Mapping[str, object] | None,
+        *,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
     ) -> tuple[sinks.Solver, bool]:
-        """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
+        """The handoff phase whole: [`solve`][] up to the run, lapped as ``handoff``.
 
-        Returns the solver and whether it was loaded again, which
-        [`loaded`][specsolve._sinks.loaded] decides. A solver
-        kept forgets its last run unless *carry_on*. Counts toward neither
-        ``solves`` nor ``loads``, so timing this alone leaves them true.
+        *start* is matched, the sink checked, the solver loaded or the new
+        numbers pushed onto the one held, as [`loaded`][specsolve._sinks.loaded]
+        decides, and the start given. A solver kept forgets its last run unless
+        *start* is ``'previous'``. Counts toward neither ``solves`` nor
+        ``solver_instances``, so a benchmark that times this alone leaves them true.
+
+        Returns:
+            The solver, and whether it was loaded again.
+
+        Raises:
+            SpecsolveError: A *start* this model or this solver cannot start
+                from, or a sink that cannot take the built model.
         """
+        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
         self.check_sink(solver_name)
         self._solved = None
-        with _clocked(self._seconds, 'handoff'):
-            held = self._solver
-            self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
-            reloaded = self._solver is not held
-            if not reloaded and not carry_on:
-                self._solver.forget()
+        held = self._solver
+        self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
+        reloaded = self._solver is not held
+        if not reloaded and start != 'previous':
+            self._solver.forget()
+        if isinstance(matched, Basis):
+            self._solver.start_from_basis(matched)
+        elif matched is not None:
+            self._solver.start_from_values(matched)
+        self.lap('handoff')
         return self._solver, reloaded
 
     def solve(
@@ -276,19 +313,12 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, refused before the solver loads.
         """
-        carry_on = start == 'previous'
-        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
-        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
-        if isinstance(matched, Basis):
-            solver.start_from_basis(matched)
-        elif matched is not None:
-            solver.start_from_values(matched)
-        handoff = self._model.handoff
+        solver, reloaded = self.handoff(solver_name, solver_options, start=start)
         self._solves += 1
         if reloaded:
-            self._loads += 1
-        with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff, basis='basis' in outputs)
+            self._solver_instances += 1
+        answer = solver.run(self._model.handoff, basis='basis' in outputs)
+        self.lap('solve')
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
 
@@ -382,13 +412,35 @@ class Engine:
             raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
 
+    def metrics(self) -> Metrics:
+        """This model's sizes, counters and clocks over its whole life; answerable after [`close`][].
+
+        The one place a [`Metrics`][] is built from the model: a result's, an
+        archive's and a sweep slice's rows are differences of two of these.
+        No table is built, so it costs what reading the counters costs.
+        """
+        measured, clocks = self._measured, self._seconds
+        return Metrics(
+            columns=measured.columns,
+            rows=measured.rows,
+            nonzeros=measured.nonzeros,
+            solves=self._solves,
+            solver_instances=self._solver_instances,
+            load_seconds=clocks.get('load', 0.0),
+            tidy_seconds=clocks.get('tidy', 0.0),
+            attach_seconds=clocks.get('attach', 0.0),
+            build_seconds=clocks.get('build', 0.0),
+            handoff_seconds=clocks.get('handoff', 0.0),
+            solve_seconds=clocks.get('solve', 0.0),
+            readback_seconds=clocks.get('readback', 0.0),
+            write_seconds=clocks.get('write', 0.0),
+            archive_seconds=clocks.get('archive', 0.0),
+        )
+
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured
         return Diagnostics(
-            columns=measured.columns,
-            rows=measured.rows,
-            nonzeros=measured.nonzeros,
             omissions=_per_name('constraint', measured.omitted, rows_not_built=pl.UInt32),
             coefficient_range=_per_name('constraint', measured.coefficients, smallest=pl.Float64, largest=pl.Float64),
             bound_range=_per_name('variable', measured.bounds, smallest=pl.Float64, largest=pl.Float64),
@@ -401,9 +453,6 @@ class Engine:
                 missing=pl.UInt64,
             ),
             objective_range=measured.objective_range,
-            solves=self._solves,
-            loads=self._loads,
-            seconds=dict(self._seconds),
         )
 
     def _read_back(
@@ -632,13 +681,3 @@ def _no_duals_message(
         f'{termination_condition!r}. Duals come from a simplex basis, which a '
         f'run stopped short of one does not have.'
     )
-
-
-@contextmanager
-def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
-    """Add the block's wall time onto ``seconds[phase]``, on failure too."""
-    started = perf_counter()
-    try:
-        yield
-    finally:
-        seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started

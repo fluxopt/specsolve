@@ -168,40 +168,84 @@ RECORD_SCHEMA = _column_types(Record)
 
 
 class Metrics(NamedTuple):
-    """What a build and its solves took, as the row an archive records beside the answer.
+    """What a build and its solves took, as the row a result records beside its answer.
 
-    The scalars of [`Diagnostics`][specsolve._result.Diagnostics],
-    with the same columns whoever writes them, so rows from unrelated runs
-    concatenate into one table.
+    The same columns whoever writes them — a result, an archive, a sweep's
+    slice, or [`Model.metrics`][specsolve._api.Model.metrics] — so rows from
+    unrelated runs concatenate into one table.
 
-    **Cumulative over the solves it counts**, which [`solves`][] says: ``1``
-    for the archive [`specsolve.solve`][] writes and on each slice's row of a
-    sweep, whose clocks are that slice's own share. There [`loads`][] is ``1``
-    where the solver took the slice from scratch and ``0`` where values were
-    pushed onto the model it held, and [`write_seconds`][] is zero, a sweep
-    writing no model file.
+    **The ``*_seconds`` columns are the phases of a call**, in the order they
+    run: load, tidy, attach, build, handoff, solve, readback, write and
+    archive. Each starts from what the one before it produced, so together
+    they are the whole call and no step is in two of them; each column says
+    what its phase holds. A phase that never ran reads zero rather than no
+    column. [`phases`][] lays them out as a table.
+
+    **Cumulative over the solves it counts**, which [`solves`][] says: every
+    solve of the model on ``Model.metrics()``, and ``1`` on the row of a
+    result, an archive and a sweep's slice, whose clocks are that solve's own
+    share, from where the answer before it was handed back. There
+    [`solver_instances`][] is ``1`` where the solve took a new solver and
+    ``0`` where its values were pushed onto the one held, and
+    [`load_seconds`][] is on the row of the answer that built the model. A
+    slice's [`write_seconds`][] and [`archive_seconds`][] are zero: a sweep
+    writes no model file, and cutting, stitching and archiving the sweep are
+    not one slice's.
     """
 
-    #: The shape the build produced, in the solver's own vocabulary.
+    #: How many columns the build produced: one per variable at each coordinate
+    #: it exists at.
     columns: int
+    #: How many rows the build produced: one per constraint at each coordinate
+    #: it is built at. A row with no term is not built; one whose terms sum
+    #: to zero is.
     rows: int
+    #: How many coefficients the constraint matrix holds: one per row and
+    #: column a linear term reaches, the terms at one pair summed and a sum of
+    #: exactly zero dropped. A quadratic term is not one.
     nonzeros: int
-    #: How many solves the row covers, and how many of those loaded the solver
-    #: from scratch. The clocks are cumulative over exactly these solves.
+    #: How many solves the row covers. The clocks are cumulative over exactly
+    #: these solves.
     solves: int
-    loads: int
-    #: Wall-clock seconds in each phase a build clocks, in the order they run:
-    #: the caller's sources onto the program, the entries into the model
-    #: tables, the built model into a solver, the solver's own run, and the
-    #: built model streamed to an LP or MPS file. A phase that never ran writes
-    #: zero rather than no column. [`write_seconds`][] is
-    #: [`write`][specsolve._api.Model.write]'s clock, not the archive's: what
-    #: writing the archive cost is recorded nowhere.
+    #: How many solver instances those solves took: a new one wherever the
+    #: solver could not keep the model and take its new values. As many as
+    #: there are solves on an iterating driver means the model has a
+    #: condition on a parameter that varies.
+    solver_instances: int
+    #: mathspec's load: ``to_spec`` on the spec as given, a path read and
+    #: parsed, every rule that needs no data checked, and the program
+    #: compiled. Creating a solver is [`handoff_seconds`][]'s.
+    load_seconds: float
+    #: The source keys checked against the spec, and each source read into
+    #: its tidy table, the way [`tidy`][specsolve._api.tidy] returns it.
+    tidy_seconds: float
+    #: The tidy tables encoded against the program's dimensions, a
+    #: parameter's missing rows filled or refused, and the spec's
+    #: ``assumptions:`` checked on them.
     attach_seconds: float
+    #: Every entry into the model's columns, rows and matrix.
     build_seconds: float
+    #: A ``start=`` read and matched to this build, the solver checked to take
+    #: the model, the model loaded into a new solver or its new numbers pushed
+    #: onto the one held, and the start given. After an update it also holds
+    #: the held solver's digest of its last model, which decides between the
+    #: two.
     handoff_seconds: float
+    #: The solver's own run, up to the vectors it returns.
     solve_seconds: float
+    #: Those vectors laid out by coordinate as the result, and when and how it
+    #: was solved recorded on it. Its tables are read lazily, so turning one
+    #: into rows is spent where it is read: in [`archive_seconds`][] for an
+    #: archive, in your code otherwise.
+    readback_seconds: float
+    #: The format checked to take the model, and the model streamed to an LP
+    #: or MPS file by [`write`][specsolve._api.Model.write].
     write_seconds: float
+    #: The spec, the sources and the answer written to disk. Every member is
+    #: timed but this row itself, which is written last: writing it and
+    #: landing the archive are in
+    #: [`Model.metrics`][specsolve._api.Model.metrics] alone.
+    archive_seconds: float
     #: What the archive holding this row was called, as
     #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
     #: until one is written.
@@ -211,21 +255,26 @@ class Metrics(NamedTuple):
     slice_axis: str | None = None
     slice: str | None = None
 
+    @property
+    def phases(self) -> pl.DataFrame:
+        """The clocks as a table, one row per phase in the order the phases run: ``(phase, seconds)``.
+
+        A phase that never ran is a row of zero. Each phase is defined beside
+        its ``*_seconds`` column.
+        """
+        return pl.DataFrame({'phase': PHASES, 'seconds': [getattr(self, f'{phase}_seconds') for phase in PHASES]})
+
     def since(self, earlier: Metrics) -> Metrics:
         """This row less *earlier*'s counts and clocks: the share of the solves between the two."""
         return self._replace(**{name: getattr(self, name) - getattr(earlier, name) for name in _CUMULATIVE})
 
 
+#: The phases a model is clocked in, in the order they run, each named as its
+#: [`Metrics`][] column is less ``_seconds``.
+PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
+
 #: The [`Metrics`][] columns a model sums over its solves.
-_CUMULATIVE = (
-    'solves',
-    'loads',
-    'attach_seconds',
-    'build_seconds',
-    'handoff_seconds',
-    'solve_seconds',
-    'write_seconds',
-)
+_CUMULATIVE = ('solves', 'solver_instances', *(f'{phase}_seconds' for phase in PHASES))
 
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
