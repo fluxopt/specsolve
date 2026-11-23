@@ -127,23 +127,7 @@ The rows and tables those hand back:
     options:
       heading_level: 4
 
-::: specsolve.read_result
-    options:
-      heading_level: 4
-
-::: specsolve.read_sweep
-    options:
-      heading_level: 4
-
 ::: specsolve.scan_archive
-    options:
-      heading_level: 4
-
-::: specsolve.scan_result
-    options:
-      heading_level: 4
-
-::: specsolve.scan_sweep
     options:
       heading_level: 4
 

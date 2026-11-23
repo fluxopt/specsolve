@@ -183,36 +183,32 @@ def test_an_integer_variable_leaves_no_reduced_cost_and_says_why() -> None:
         answer.reduced_cost('p')
 
 
-@pytest.mark.parametrize('saved', [pytest.param(False, id='live'), pytest.param(True, id='saved')])
-def test_an_integer_answer_bridged_to_xarray_gives_the_duals_reason(tmp_path: Path, saved: bool) -> None:
+@pytest.mark.parametrize('archived', [pytest.param(False, id='live'), pytest.param(True, id='archived')])
+def test_an_integer_answer_bridged_to_xarray_gives_the_duals_reason(tmp_path: Path, archived: bool) -> None:
     """A bridge reads every name the output holds, and a mixed-integer answer holds none.
 
     It listed nothing and failed unpacking that, rather than giving the reason.
     """
     pytest.importorskip('xarray', reason='specsolve does not install xarray, and the floors environment has none')
     integer = spec('minimize', 'sum(p, over=g) >= total', domain='integer')
-    with sps.solve(integer, SOURCES, outputs=RC) as answer:
-        if saved:
-            answer.save(tmp_path)
-        read = sps.read_result(tmp_path) if saved else answer
+    with sps.solve(integer, SOURCES, outputs=RC, archive=tmp_path / 'case') as answer:
+        read = sps.read_archive(tmp_path / 'case').result if archived else answer
         with pytest.raises(SpecsolveError, match='mixed-integer'):
             read.to_dataset(kind='reduced_cost')
 
 
-def test_a_saved_answer_reads_back_the_reduced_costs_it_was_asked_for(tmp_path: Path) -> None:
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC) as answer:
+def test_an_archived_answer_reads_back_the_reduced_costs_it_was_asked_for(tmp_path: Path) -> None:
+    with sps.solve(spec('minimize', 'sum(p, over=g) >= total'), SOURCES, outputs=RC, archive=tmp_path) as answer:
         live = answer.reduced_cost('p')
-        answer.save(tmp_path)
-    assert sps.read_result(tmp_path).reduced_cost('p').equals(live)
+    assert sps.read_archive(tmp_path).result.reduced_cost('p').equals(live)
 
 
-def test_a_saved_integer_answer_gives_the_duals_reason(tmp_path: Path) -> None:
-    """The reason a mixed-integer solve has no duals is saved once, and the reduced costs read it back."""
-    with sps.solve(spec('minimize', 'sum(p, over=g) >= total', domain='integer'), SOURCES, outputs=RC) as answer:
-        answer.save(tmp_path)
-    assert not (tmp_path / 'reduced_cost').exists(), 'nothing to write where there are no duals'
+def test_an_archived_integer_answer_gives_the_duals_reason(tmp_path: Path) -> None:
+    """The reason a mixed-integer solve has no duals is archived once, and the reduced costs read it back."""
+    sps.solve(spec('minimize', 'sum(p, over=g) >= total', domain='integer'), SOURCES, outputs=RC, archive=tmp_path)
+    assert not (tmp_path / 'answer' / 'reduced_cost').exists(), 'nothing to write where there are no duals'
     with pytest.raises(SpecsolveError, match='mixed-integer'):
-        sps.read_result(tmp_path).reduced_cost('p')
+        sps.read_archive(tmp_path).result.reduced_cost('p')
 
 
 def test_a_solve_not_asked_for_reduced_costs_names_the_output() -> None:
@@ -270,11 +266,11 @@ def _swept(tmp_path: Path, model_spec: dict, how: str) -> Sweep:
         archive = sps.read_archive(tmp_path / 'run.zip')
         assert isinstance(archive, sps.types.SweepArchive)
         return archive.sweep
-    spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
-    return sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, **spill)
+    archiving = {'archive': tmp_path / 'run'} if how == 'archiving' else {}
+    return sps.solve_over(model_spec, SCENARIOS, axis, outputs=RC, **archiving)
 
 
-SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
+SHAPES = [pytest.param(how, id=how) for how in ('held', 'archiving', 'archived')]
 
 
 @pytest.mark.parametrize('how', SHAPES)

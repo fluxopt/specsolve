@@ -251,7 +251,8 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
 
     ``frames`` collects every variable's primal and every constraint's dual;
-    ``parquet`` is ``Result.save``. Both read the default answer, which holds
+    ``parquet`` writes the answer as an archive holds it, through
+    ``Result._save`` where a checkout has no ``Result.save``. Both read the default answer, which holds
     no optional output. The answer passes through
     ``Model._with_record_fields`` as a solve's does, so what `solve` attaches
     is timed too; a checkout older than it reads the engine's answer as it is.
@@ -269,8 +270,18 @@ def read(model: Any, answer: Any, into: str) -> Counts:
                 result.dual(name)
     else:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
-            result.save(Path(tmp) / 'answer')
+            _write_answer(result, Path(tmp) / 'answer')
     return _counts(_handoff(model), nonzeros=False)
+
+
+def _write_answer(result: Any, out: Path) -> None:
+    """*result*'s answer at *out*, as the checkout under test writes one."""
+    if (save := getattr(result, 'save', None)) is not None:
+        save(out)
+        return
+    from specsolve._answer_layout import write_whole
+
+    result._save(out, write_whole)
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:

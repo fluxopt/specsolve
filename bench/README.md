@@ -746,7 +746,7 @@ runs `pytest bench -k test_sweep`.
 out against the build as a `Result`, with what `solve` attaches to it
 (`Model._with_record_fields`), then every value read back — `frames`
 collects each variable's primal and each constraint's dual and activity,
-`parquet` is `Result.save`. The answer is built before the clock rather than
+`parquet` writes the answer as an archive holds it. The answer is built before the clock rather than
 solved for (`read_setup`): every column and row zero, reported optimal, and no
 duals for a model with an integer variable, which is what a real solve leaves.
 The cost is set by how many values are laid out, not what they are, so no

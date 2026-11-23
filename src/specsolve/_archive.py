@@ -34,8 +34,8 @@ from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._result import read_result, scan_result
-from specsolve._sweep import Sweep, read_sweep, scan_sweep, with_key
+from specsolve._result import read_answer
+from specsolve._sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -93,8 +93,8 @@ class SweepArchive:
             column first.
         axis: What cut them, with the ``carry=`` it chained the slices with.
         sweep: The archived answer, in memory from [`read_archive`][], on
-            disk from [`scan_archive`][], as [`read_sweep`][] and
-            [`scan_sweep`][] read a saved sweep.
+            disk from [`scan_archive`][]. An archive a sweep left when it
+            stopped holds the slices it finished.
     """
 
     spec: Spec
@@ -217,9 +217,9 @@ def _read(under: Path, archive: Path, *, eager: bool) -> ResultArchive | SweepAr
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers((read_result if eager else scan_result)(saved), spec, sources)
+        answer = _attach_readers(read_answer(saved, eager=eager), spec, sources)
         return ResultArchive(spec, sources, answer)
-    answer = _attach_sweep_readers((read_sweep if eager else scan_sweep)(saved), spec, sources, inputs.axis)
+    answer = _attach_sweep_readers(read_sweep_answer(saved, eager=eager), spec, sources, inputs.axis)
     return SweepArchive(spec, sources, inputs.axis, answer)
 
 
@@ -239,8 +239,7 @@ def _refuse_other_inputs(under: Path, archive: Path) -> None:
 def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
 
-    Checked before the answer is read, so this message wins over the generic
-    one [`read_result`][specsolve._result.read_result] gives, which names a scratch directory for a zip.
+    Checked before the answer is read, which assumes its layout.
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(

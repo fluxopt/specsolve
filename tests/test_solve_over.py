@@ -25,6 +25,7 @@ import pytest
 from mathspec import to_spec
 
 import specsolve as sps
+from specsolve import _archive_layout as archive_layout
 from specsolve import _solve_over as driver
 from specsolve import _sweep as sweep_module
 from specsolve._axes import CarryRule, Slice, as_built, axis_from
@@ -309,15 +310,14 @@ def _rolling(tmp_path) -> pl.DataFrame:
 
 def _scanned(tmp_path) -> pl.DataFrame:
     axis = sps.EachLabel('scenario')
-    sps.solve_over(DISPATCH, scenario_sources(), axis, spill_to=tmp_path / 'spill', solver_options=_OPTIONS)
-    return sps.scan_sweep(tmp_path / 'spill').records
+    sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'case', solver_options=_OPTIONS)
+    return sps.scan_archive(tmp_path / 'case').sweep.records
 
 
 def _read(tmp_path) -> pl.DataFrame:
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), solver_options=_OPTIONS).save(
-        tmp_path / 'saved'
-    )
-    return sps.read_sweep(tmp_path / 'saved').records
+    axis = sps.EachLabel('scenario')
+    sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'case.zip', solver_options=_OPTIONS)
+    return sps.read_archive(tmp_path / 'case.zip').sweep.records
 
 
 def _archived(tmp_path) -> pl.DataFrame:
@@ -332,8 +332,8 @@ def _archived(tmp_path) -> pl.DataFrame:
         pytest.param(_serial, id='serial'),
         pytest.param(_pooled, id='pooled'),
         pytest.param(_rolling, id='rolling'),
-        pytest.param(_scanned, id='scanned-spill'),
-        pytest.param(_read, id='read-save'),
+        pytest.param(_scanned, id='scanned-archive'),
+        pytest.param(_read, id='read-zip'),
         pytest.param(_archived, id='archive-file'),
     ],
 )
@@ -552,8 +552,8 @@ def test_stitch_keeps_the_whole_of_the_final_short_window():
     )
 
 
-def _spilled_by_label(tmp_path):
-    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'runs')
+def _archived_by_label(tmp_path):
+    return sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'runs')
 
 
 @pytest.mark.parametrize(
@@ -563,7 +563,7 @@ def _spilled_by_label(tmp_path):
         pytest.param(lambda sweep, tmp_path: sweep.dual('balance', per_window=True), id='a-coordinate-dual'),
         pytest.param(lambda sweep, tmp_path: sweep.to_dataset(per_window=True), id='a-coordinate-dataset'),
         pytest.param(
-            lambda sweep, tmp_path: _spilled_by_label(tmp_path).scan('p', per_window=True), id='a-spilled-scan'
+            lambda sweep, tmp_path: _archived_by_label(tmp_path).scan('p', per_window=True), id='an-archived-scan'
         ),
     ],
 )
@@ -1198,43 +1198,20 @@ def test_a_start_with_a_status_that_is_none_is_refused_before_a_slice_is_solved(
     bogus = basis.with_columns(
         pl.when(pl.col('snapshot') >= 4).then(pl.lit('bogus')).otherwise(pl.col('value')).alias('value')
     )
-    out = tmp_path / 'spill'
+    out = tmp_path / 'case'
     with pytest.raises(sps.errors.SpecsolveError, match="gives the basis status 'bogus'"):
-        sps.solve_over(WINDOW, sources, WINDOW_AXIS, start={'variable_basis': {'soc': bogus}}, spill_to=out)
-    assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
-
-
-def test_a_sweep_copied_halfway_is_solved_again_rather_than_read_back(monkeypatch, tmp_path):
-    """A copied sweep landed its records before its metrics, and a record is what says a slice is done.
-
-    A copy that stopped between the two left slices the next run read back,
-    and the read failed on the metrics that never landed.
-    """
-    spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'spill')
-    write = sweep_module.write_whole
-
-    def stops_at_the_metrics(table, path) -> None:
-        if path.parent.name == 'metrics':
-            raise _CrashError
-        write(table, path)
-
-    with monkeypatch.context() as patched:
-        patched.setattr(sweep_module, 'write_whole', stops_at_the_metrics)
-        with pytest.raises(_CrashError):
-            spilled.save(tmp_path / 'copy')
-
-    again = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'copy')
-    assert again.records['objective'].to_list() == spilled.records['objective'].to_list()
+        sps.solve_over(WINDOW, sources, WINDOW_AXIS, start={'variable_basis': {'soc': bogus}}, archive=out)
+    assert not out.exists(), 'refused before the archive is opened, so before any slice is solved'
 
 
 def test_a_sweep_whose_first_record_never_landed_is_no_sweep_to_read(tmp_path):
     """A `record/` with no file in it reached polars, which raised a `ValueError` about concatenating nothing."""
-    out = tmp_path / 'spill'
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=out)
-    for written in (out / 'record').glob('*.parquet'):
+    out = tmp_path / 'case'
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    for written in (out / 'answer' / 'record').glob('*.parquet'):
         written.unlink()
     with pytest.raises(sps.errors.LayoutError, match="holds no slice under 'record'"):
-        sps.read_sweep(out)
+        sps.read_archive(out)
 
 
 def test_a_carry_is_refused_before_a_single_source_is_read(tmp_path):
@@ -1605,12 +1582,11 @@ def test_every_bridge_takes_a_kind_on_a_sweep(priced):
         priced.to_pandas('soc', 'objective')
 
 
-def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(priced, builds, tmp_path):
-    """`save` is the spill after the fact: the same layout, all three
-    kinds and the record, so `scan` reads it and the same call pointed at it
-    with `spill_to=` reads it back without solving a slice."""
-    out = priced.save(tmp_path / 'sweep')
-    assert out == tmp_path / 'sweep', 'the directory comes back, not a dict nobody indexes'
+def test_an_archive_holds_every_kind_and_the_same_call_reads_it_back(priced, builds, tmp_path):
+    """The archive's answer holds all three kinds and the record, so the same
+    call pointed at it again reads it back without solving a slice."""
+    first = _archiving(tmp_path / 'sweep')
+    out = tmp_path / 'sweep' / 'answer'
     assert sorted(p.name for p in out.iterdir()) == [
         'dual',
         'expression',
@@ -1628,9 +1604,9 @@ def test_save_writes_what_a_spill_writes_and_the_directory_reads_back_as_one(pri
     )
 
     built = builds(driver)
-    reopened = _spilled(out)
-    assert built == [], 'a directory the export wrote is a sweep already done'
-    assert reopened.records.equals(priced.records)
+    reopened = _archiving(tmp_path / 'sweep')
+    assert built == [], 'an archive the sweep finished is a sweep already done'
+    assert reopened.records.equals(first.records)
     assert reopened.scan('soc').collect().equals(priced.primal('soc'))
     assert reopened.scan('balance', 'dual').collect().equals(priced.dual('balance'))
     assert reopened.scan('spend', 'expression').collect().equals(priced.evaluate('spend'))
@@ -1643,7 +1619,8 @@ def test_a_sweep_keys_every_file_it_writes_with_one_type(priced, tmp_path):
     `Int64`; polars joins across the two, but a concatenation of them is
     refused.
     """
-    out = priced.save(tmp_path / 'sweep')
+    _archiving(tmp_path / 'sweep')
+    out = tmp_path / 'sweep' / 'answer'
     keyed = {
         str(file.relative_to(out)): pl.read_parquet_schema(file)[priced.key_name]
         for file in sorted(out.rglob('*.parquet'))
@@ -1654,31 +1631,42 @@ def test_a_sweep_keys_every_file_it_writes_with_one_type(priced, tmp_path):
 
 
 def test_a_resume_checks_the_layout_it_is_extending_rather_than_restamping_it(tmp_path) -> None:
-    """`spill_to=` at a directory an earlier build wrote is the one place the stamp has to hold."""
+    """`archive=` at a directory an earlier build wrote is the one place the stamp has to hold."""
     out = tmp_path / 'sweep'
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=out)
-    (out / 'format.json').write_text(json.dumps({'layout': 99}))
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    stamp = out / 'answer' / 'format.json'
+    stamp.write_text(json.dumps({'layout': 99}))
 
     with pytest.raises(sps.errors.LayoutError, match='layout 99'):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=out)
-    assert json.loads((out / 'format.json').read_text()) == {'layout': 99}, (
-        'and the stamp it was refused over is left as it was found'
-    )
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    assert json.loads(stamp.read_text()) == {'layout': 99}, 'and the stamp it was refused over is left as it was found'
+
+
+def test_a_resume_checks_the_layout_of_the_spec_and_sources_it_is_extending(tmp_path) -> None:
+    """An archive whose spec and sources are in another layout is refused rather than written over."""
+    out = tmp_path / 'sweep'
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    stamp = out / 'format.json'
+    stamp.write_text(json.dumps({'layout': 99}))
+
+    with pytest.raises(sps.errors.LayoutError, match='spec and sources are in layout 99'):
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    assert json.loads(stamp.read_text()) == {'layout': 99}, 'and the stamp it was refused over is left as it was found'
 
 
 class _CrashError(Exception):
-    """The process dying while the spill directory is being stamped."""
+    """The process dying while an archive is being written."""
 
 
 @pytest.mark.parametrize('lost', ['keys.parquet', 'horizon.parquet'])
-def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatch, tmp_path, lost) -> None:
+def test_an_archive_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatch, tmp_path, lost) -> None:
     """``sweep.json`` lands after the files a scan reads beside it.
 
     It was written first, so a crash before ``keys.parquet`` or
     ``horizon.parquet`` left a directory the next run took for a stamped one and
-    resumed, and ``scan_sweep`` of it failed on the missing file.
+    resumed, and a scan of it failed on the missing file.
     """
-    write_whole = sweep_module.write_whole
+    write_whole = archive_layout.write_whole
 
     def crashing(table: pl.DataFrame, path) -> None:
         if path.name == lost:
@@ -1687,12 +1675,12 @@ def test_a_spill_stamped_halfway_is_stamped_again_rather_than_resumed(monkeypatc
 
     out = tmp_path / 'sweep'
     with monkeypatch.context() as patched:
-        patched.setattr(sweep_module, 'write_whole', crashing)
+        patched.setattr(archive_layout, 'write_whole', crashing)
         with pytest.raises(_CrashError):
-            sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, spill_to=out)
+            sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, archive=out)
 
-    ran = sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, spill_to=out)
-    assert sps.scan_sweep(out).records.equals(ran.records)
+    ran = sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, archive=out)
+    assert sps.scan_archive(out).sweep.records.drop('specsolve_run').equals(ran.records.drop('specsolve_run'))
 
 
 def _typed_apart(in_load: object, in_cost: object) -> dict[str, object]:
@@ -1761,21 +1749,21 @@ def test_keys_that_cannot_key_one_sweep_are_refused_before_a_slice_is_taken(tmp_
 
     Two sources that each carry a NaN give two keys of one text, which failed
     in polars' ``replace_strict`` when the fold ended — after every slice had
-    solved — and again on every ``scan_sweep`` of the spill. Integers that
+    solved — and again on every read of the archive. Integers that
     span more than any one integer type holds have no type to be written as.
     """
-    out = tmp_path / 'spill'
+    out = tmp_path / 'case'
     with pytest.raises(sps.errors.SpecsolveError, match=match):
-        sps.solve_over(DISPATCH, _typed_apart(in_load, in_cost), sps.EachLabel('draw'), spill_to=out)
-    assert not out.exists(), 'refused before the spill is opened, so before any slice is solved'
+        sps.solve_over(DISPATCH, _typed_apart(in_load, in_cost), sps.EachLabel('draw'), archive=out)
+    assert not out.exists(), 'refused before the archive is opened, so before any slice is solved'
 
 
-def test_a_saved_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
+def test_an_archived_result_carries_the_row_a_sweep_keys(sweep, tmp_path):
     """One solve's record is one slice's, so cases solved apart concatenate."""
     sources = scenario_sources()
     low = {**sources, 'load': sources['load'].filter(pl.col('scenario') == 'low').drop('scenario')}
-    with sps.solve(DISPATCH, low) as alone:
-        one = pl.read_parquet(alone.save(tmp_path / 'low') / 'record.parquet')
+    sps.solve(DISPATCH, low, archive=tmp_path / 'low')
+    one = pl.read_parquet(tmp_path / 'low' / 'answer' / 'record.parquet')
 
     assert one.columns == [column for column in sweep.records.columns if column != sweep.key_name], (
         'the fold keys the record it writes; a lone solve writes the same columns unkeyed'
@@ -1804,23 +1792,23 @@ def test_a_bulk_export_of_a_sweep_that_solved_nothing_is_refused():
         runs.to_dataset()
 
 
-def test_a_sweep_that_solved_nothing_still_saves_its_records(tmp_path):
-    """`save` is not an export, and an infeasible study is an answer.
+def test_a_sweep_that_solved_nothing_still_archives_its_records(tmp_path):
+    """An archive is not an export, and an infeasible study is an answer.
 
     A single solve that left no values writes its record and no tables, and a
     sweep of them does the same.
     """
     sources = scenario_sources()
     sources['load'] = sources['load'].with_columns(pl.col('value') + 1_000)
-    runs = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'))
+    sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), archive=tmp_path / 'sweep')
 
-    out = runs.save(tmp_path / 'sweep')
+    out = tmp_path / 'sweep' / 'answer'
     records = pl.read_parquet(sorted((out / 'record').glob('*.parquet')))
     assert records['termination_condition'].unique().to_list() == ['infeasible'], (
         'every slice terminated infeasible, and the record says so'
     )
     assert not (out / 'primal').exists(), 'and no tables are written, there being none'
-    assert sps.read_sweep(out).records.height == records.height, 'the saved study reads back'
+    assert sps.read_archive(tmp_path / 'sweep').sweep.records.height == records.height, 'the archived study reads back'
 
 
 @pytest.mark.parametrize('lost', ['record', 'metrics'], ids=str)
@@ -1830,29 +1818,30 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     Both are written per slice as the fold goes, so a directory holding one
     and not the other was edited or interrupted.
     """
-    out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
-    assert sps.read_sweep(out._spill.directory).records.height == 3, 'the whole one reads back first'
-    shutil.rmtree(out._spill.directory / lost)
+    out = tmp_path / 'sweep'
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
+    assert sps.read_archive(out).sweep.records.height == 3, 'the whole one reads back first'
+    shutil.rmtree(out / 'answer' / lost)
 
     with pytest.raises(sps.errors.LayoutError, match=f"holds no slice under '{lost}'"):
-        sps.read_sweep(out._spill.directory)
+        sps.read_archive(out)
 
 
-def test_a_sweep_read_whole_is_held_and_a_scanned_one_is_spilled(tmp_path):
+def test_a_sweep_read_whole_owes_its_archive_nothing_and_a_scanned_one_reads_it(tmp_path):
     """The two verbs give the same study and differ in where its tables are.
 
-    `scan_sweep` leaves the tables on disk, so it owes the directory every
-    read. `read_sweep` reads them in, so the directory is free afterwards.
+    `scan_archive` leaves the tables on disk, so it owes the directory every
+    read. `read_archive` reads them in, so the directory is free afterwards.
     """
-    spilled = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path / 'sweep')
-    expected = spilled.scan('p').collect()
-    loaded = sps.read_sweep(tmp_path / 'sweep')
-    scanned = sps.scan_sweep(tmp_path / 'sweep')
+    archived = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'sweep')
+    expected = archived.scan('p').collect()
+    loaded = sps.read_archive(tmp_path / 'sweep').sweep
+    scanned = sps.scan_archive(tmp_path / 'sweep').sweep
 
-    assert scanned.primal('p').equals(expected), 'both read the study the spill wrote'
+    assert scanned.primal('p').equals(expected), 'both read the study the archive holds'
     shutil.rmtree(tmp_path / 'sweep')
 
-    assert loaded.primal('p').equals(expected), 'the held sweep answers off no directory at all'
+    assert loaded.primal('p').equals(expected), 'the sweep read whole answers off no directory at all'
     with pytest.raises(FileNotFoundError):
         scanned.primal('p')
     assert loaded.keys == scanned.keys, 'and is keyed as the sweep was solved either way'
@@ -2227,7 +2216,7 @@ def test_a_key_named_like_a_metrics_column_is_refused_before_a_slice_is_solved(k
 
     The guard named only the `Record` columns, so a key named like a metric
     passed it: every slice solved, then polars refused the table with a
-    `DuplicateError`, and again on every read of a spilled sweep.
+    `DuplicateError`, and again on every read of an archived sweep.
     """
     with pytest.raises(sps.errors.SpecsolveError, match=f'key_name={key_name!r} .* column'):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario', key_name=key_name))
@@ -2357,16 +2346,16 @@ def test_a_sweep_reports_what_each_slice_cost(make_executor):
 
 
 # ---------------------------------------------------------------------------
-# spilling to disk
+# archiving as the fold goes
 # ---------------------------------------------------------------------------
 
 PRICED_AXIS = sps.EachWindow('snapshot', horizon=3, lookahead=3)
 PRICED_CARRY = {'soc_initial': 'soc'}
 
 
-def _spilled(directory, **kwargs) -> sweep_module.Sweep:
+def _archiving(directory, **kwargs) -> sweep_module.Sweep:
     return sps.solve_over(
-        SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), spill_to=directory, **kwargs
+        SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), archive=directory, **kwargs
     )
 
 
@@ -2375,11 +2364,11 @@ def _spilled(directory, **kwargs) -> sweep_module.Sweep:
     [pytest.param('record', 'records', Record, id='record'), pytest.param('metrics', 'metrics', Metrics, id='metrics')],
 )
 def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path, table, reader, row_type):
-    """The spill writes a slice's rows as `Record` and `Metrics` declare them, the slice named in
+    """The archive writes a slice's rows as `Record` and `Metrics` declare them, the slice named in
     `slice_axis` and `slice` rather than in a column of the key's own name, so a glob over sweeps
     and single solves reads one schema."""
-    runs = _spilled(tmp_path / 'sweep')
-    written = pl.read_parquet(sorted((tmp_path / 'sweep' / table).glob('*.parquet')))
+    runs = _archiving(tmp_path / 'sweep')
+    written = pl.read_parquet(sorted((tmp_path / 'sweep' / 'answer' / table).glob('*.parquet')))
 
     assert written.columns == list(row_type._fields), 'the columns the type declares, in its order, and no key column'
     assert written['slice_axis'].unique().to_list() == [runs.key_name], 'the axis the sweep is cut on'
@@ -2390,22 +2379,22 @@ def test_a_slices_rows_are_written_in_the_columns_a_single_solve_writes(tmp_path
 
 def test_a_slice_written_in_another_layout_is_refused_by_name(tmp_path):
     """A resume reads a slice's record back as values, so a file short of a column is refused by name."""
-    _spilled(tmp_path / 'sweep')
-    first = min((tmp_path / 'sweep' / 'metrics').glob('*.parquet'))
+    _archiving(tmp_path / 'sweep')
+    first = min((tmp_path / 'sweep' / 'answer' / 'metrics').glob('*.parquet'))
     pl.read_parquet(first).drop('solver_instances').write_parquet(first)
 
     with pytest.raises(sps.errors.LayoutError, match=r"Metrics row that is short of \['solver_instances'\]"):
-        _spilled(tmp_path / 'sweep')
+        _archiving(tmp_path / 'sweep')
 
 
-def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_path):
-    """`spill_to=` writes each slice's tables as the fold goes and keeps none of them.
+def test_an_archived_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_path):
+    """`archive=` writes each slice's tables as the fold goes and keeps none of them.
 
     What comes back through `scan` is the table the in-memory reader would
     have returned — primal, dual and expression, the answer or per window —
     so the two ways of running a sweep cannot answer differently.
     """
-    runs = _spilled(tmp_path / 'sweep')
+    runs = _archiving(tmp_path / 'sweep')
     assert answer_of(runs).equals(answer_of(priced))
     assert runs.scan('soc').collect().equals(priced.primal('soc'))
     assert runs.scan('balance', 'dual').collect().equals(priced.dual('balance'))
@@ -2425,27 +2414,21 @@ def test_a_spilled_sweep_holds_nothing_and_scans_back_what_it_wrote(priced, tmp_
         pytest.param(lambda runs: runs.evaluate('spend'), id='expression'),
     ],
 )
-def test_the_table_readers_answer_off_a_spilled_sweep_as_off_a_held_one(read, priced, tmp_path):
-    """A spilled sweep's tables lie on disk, and a table reader reads the one
-    name it is asked for, so it answers what the sweep held in memory answers."""
-    assert read(_spilled(tmp_path)).equals(read(priced))
+def test_the_table_readers_answer_off_an_archived_sweep_as_off_one_in_memory(read, priced, tmp_path):
+    """An archived sweep's tables lie on disk, and a table reader reads the one
+    name it is asked for, so it answers what the sweep in memory answers."""
+    assert read(_archiving(tmp_path)).equals(read(priced))
 
 
-def test_an_export_reads_a_spilled_sweep_as_a_held_one(priced, tmp_path):
+def test_an_export_reads_an_archived_sweep_as_one_in_memory(priced, tmp_path):
     """`to_dataset` reads each name off the files, as the table readers do."""
     pytest.importorskip('xarray')
-    assert _spilled(tmp_path).to_dataset().equals(priced.to_dataset())
-
-
-def test_a_spilled_sweep_saves_as_the_sweep_it_is(priced, tmp_path):
-    """`save` copies a spilled sweep's slices to another directory, as it writes a held one's."""
-    saved = _spilled(tmp_path / 'sweep').save(tmp_path / 'copy')
-    assert sps.read_sweep(saved).primal('soc').equals(priced.primal('soc'))
+    assert _archiving(tmp_path).to_dataset().equals(priced.to_dataset())
 
 
 def test_scan_reads_an_in_memory_sweep_too(sweep):
-    """`scan` means the same thing on both: code written for a spilled sweep
-    runs unchanged on one that fit in memory."""
+    """`scan` means the same thing on both: code written for an archived sweep
+    runs unchanged on one in memory."""
     assert sweep.scan('p').collect().equals(sweep.primal('p'))
     with pytest.raises(sps.errors.SpecsolveError, match="no variable 'nope'"):
         sweep.scan('nope')
@@ -2453,23 +2436,33 @@ def test_scan_reads_an_in_memory_sweep_too(sweep):
         sweep.scan('p', 'objective')
 
 
-def test_a_spilled_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
+def test_an_archived_sweep_resumes_after_the_slice_that_failed(builds, monkeypatch, tmp_path):
     """The slices that solved before the failure are not solved again.
 
-    Three scenarios, the third of which cannot build; the second run with the
-    same directory builds one model, and comes back identical to a sweep that
+    Three scenarios, the third of which fails; the second run with the same
+    directory builds one model, and comes back identical to a sweep that
     never failed.
     """
-    good, bad = _with_a_short_last_scenario()
     axis = sps.EachLabel('scenario')
-    with pytest.raises(sps.errors.DataError):
-        sps.solve_over(DISPATCH, bad, axis, spill_to=tmp_path)
+    answered = driver._answers
+    seen: list[int] = []
+
+    def two_then_fail(result):
+        if len(seen) == 2:
+            raise RuntimeError('the box went away')
+        seen.append(1)
+        return answered(result)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(driver, '_answers', two_then_fail)
+        with pytest.raises(RuntimeError, match='went away'):
+            sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path)
 
     built = builds(driver)
-    resumed = sps.solve_over(DISPATCH, good, axis, spill_to=tmp_path)
+    resumed = sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path)
     assert len(built) == 1, 'only the slice that failed is built again'
 
-    fresh = sps.solve_over(DISPATCH, good, axis)
+    fresh = sps.solve_over(DISPATCH, scenario_sources(), axis)
     assert answer_of(resumed).equals(answer_of(fresh))
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
 
@@ -2498,8 +2491,8 @@ def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypat
         'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}),
         'budget': pl.DataFrame({'draw': [1, 2], 'value': [5.0, 7.0]}),
     }
-    out = tmp_path / 'spill'
-    write = sweep_module.write_whole
+    out = tmp_path / 'case'
+    write = archive_layout.write_whole
 
     def stops_after_the_last_record(table, path) -> None:
         write(table, path)
@@ -2507,12 +2500,12 @@ def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypat
             raise _CrashError
 
     with monkeypatch.context() as patched:
-        patched.setattr(sweep_module, 'write_whole', stops_after_the_last_record)
+        patched.setattr(archive_layout, 'write_whole', stops_after_the_last_record)
         with pytest.raises(_CrashError):
-            sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
+            sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), archive=out)
 
-    resumed = sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), spill_to=out)
-    for read in (resumed, sps.scan_sweep(out)):
+    resumed = sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), archive=out)
+    for read in (resumed, sps.scan_archive(out).sweep):
         with pytest.raises(sps.errors.SpecsolveError, match='duals are undefined for a mixed-integer model'):
             read.evaluate('price')
 
@@ -2536,11 +2529,13 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
 
     monkeypatch.setattr(driver, '_answers', two_then_fail)
     with pytest.raises(RuntimeError, match='went away'):
-        _spilled(tmp_path, start=None)
+        _archiving(tmp_path, start=None)
     monkeypatch.setattr(driver, '_answers', answered)
-    assert sps.scan_sweep(tmp_path).keys == [0, 3], 'the interrupted spill reads back keyed by the two it finished'
+    assert sps.scan_archive(tmp_path).sweep.keys == [0, 3], (
+        'the interrupted archive reads back keyed by the two it finished'
+    )
 
-    resumed = _spilled(tmp_path, start=None)
+    resumed = _archiving(tmp_path, start=None)
     cold = sps.solve_over(SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
     assert answer_of(resumed).equals(answer_of(cold))
     assert resumed.scan('soc').collect().equals(cold.primal('soc'))
@@ -2555,53 +2550,165 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
 def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     """The objective file is written last and is what marks a slice done, so
     a slice whose tables landed but whose record did not is solved again."""
-    _spilled(tmp_path)
-    (tmp_path / 'record' / '000001.parquet').unlink()
+    _archiving(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
     built = builds(driver)
-    resumed = _spilled(tmp_path)
+    resumed = _archiving(tmp_path)
     assert len(built) == 1, 'the slice without its record is the one built'
     assert resumed.keys == [0, 3, 6, 9], 'the sweep comes back whole'
 
 
-def test_a_sweep_saved_over_another_leaves_none_of_its_files(tmp_path):
-    """A save wrote into what the directory held, so a file the new sweep lacks survived from the old one.
+def test_a_slice_solved_again_leaves_none_of_its_first_attempt(monkeypatch, tmp_path):
+    """A slice whose record did not land is solved again, and the retry wrote
+    only the tables it produced, so a primal its first attempt left beside it
+    was read as part of the answer."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    answered = driver._answers
 
-    Here the first sweep solves every scenario and the second leaves one
-    infeasible. Read back, that slice said it had no values and still
-    returned the first sweep's.
-    """
+    def without_a_primal(result):
+        answer = answered(result)
+        return replace(answer, tables={kind: held for kind, held in answer.tables.items() if kind != 'primal'})
+
+    monkeypatch.setattr(driver, '_answers', without_a_primal)
+    resumed = _scenarios()(tmp_path)
+    assert sorted(resumed.scan('p').collect()['scenario'].unique()) == ['high', 'mid'], (
+        "the retried slice wrote no primal, so its first attempt's is gone"
+    )
+
+
+@pytest.mark.parametrize('read', [pytest.param(sps.read_archive, id='read'), pytest.param(sps.scan_archive, id='scan')])
+def test_an_interrupted_archive_reads_back_only_the_slices_it_finished(read, tmp_path):
+    """The tables were read off every file under a name, so a slice whose
+    record never landed was in the answer and missing from the records."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    stopped = read(tmp_path).sweep
+    assert stopped.keys == ['high', 'mid'], 'the records hold the two slices that finished'
+    assert sorted(stopped.scan('p').collect()['scenario'].unique()) == stopped.keys, 'and so do the tables'
+
+
+@pytest.mark.parametrize('read', [pytest.param(sps.read_archive, id='read'), pytest.param(sps.scan_archive, id='scan')])
+def test_an_interrupted_archive_whose_finished_slices_left_no_primal_reads_back(read, tmp_path):
+    """Only the unfinished slice solved, so no finished one wrote a primal and
+    the primal is absent rather than read off no file."""
     sources = scenario_sources()
-    out = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario')).save(tmp_path / 'study')
-    beyond = sources['load'].with_columns(
-        pl.when(pl.col('scenario') == 'high').then(pl.col('value') + 1_000).otherwise(pl.col('value'))
+    sources['load'] = sources['load'].with_columns(
+        pl.when(pl.col('scenario') == 'low').then(pl.col('value')).otherwise(1000.0).alias('value')
     )
-    again = sps.solve_over(DISPATCH, {**sources, 'load': beyond}, sps.EachLabel('scenario'))
-    again.save(out)
-
-    saved = sps.read_sweep(out)
-    assert saved.records['has_primal'].to_list() == again.records['has_primal'].to_list()
-    assert saved.primal('p')['scenario'].unique().sort().to_list() == ['low', 'mid'], (
-        'the scenario that has no values now has none on disk either'
-    )
+    sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), archive=tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    stopped = read(tmp_path).sweep
+    assert stopped.keys == ['high', 'mid'], 'the records hold the two infeasible slices that finished'
+    assert not stopped.records['has_primal'].any(), 'and neither left a primal'
 
 
 def test_a_directory_holding_another_sweep_is_refused(tmp_path):
     """A directory answers for one sweep. Another one pointed at it would read
     the first one's slices back as its own, so the mismatch is refused."""
-    _spilled(tmp_path)
+    _archiving(tmp_path)
+    before = (tmp_path / 'sources' / 'load.parquet').read_bytes()
     with pytest.raises(sps.errors.SpecsolveError, match='holds a sweep keyed by'):
-        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path)
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path)
+    assert (tmp_path / 'sources' / 'load.parquet').read_bytes() == before, 'and its data is left as it was found'
+
+
+def _the_files_under(directory) -> dict[str, bytes]:
+    return {
+        str(file.relative_to(directory)): file.read_bytes() for file in sorted(directory.rglob('*')) if file.is_file()
+    }
+
+
+def test_a_resume_with_the_same_inputs_writes_none_of_them_again(tmp_path):
+    """A resume rewrote the spec, the sources, the axis and their stamp, so a
+    stop part way through that write left a stamp no reader could parse."""
+    _scenarios()(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    inputs = [
+        *sorted((tmp_path / 'sources').glob('*.parquet')),
+        *(tmp_path / name for name in ('spec.yaml', 'axis.json', 'format.json')),
+    ]
+    written = {file.name: file.stat().st_mtime_ns for file in inputs}
+    _scenarios()(tmp_path)
+    assert {file.name: file.stat().st_mtime_ns for file in inputs} == written, 'no input was written again'
+
+
+def _scenarios(spec: dict = DISPATCH, sources: dict | None = None):
+    """The scenario sweep of *spec* over *sources*, archived where it is given."""
+    return lambda out: sps.solve_over(spec, sources or scenario_sources(), sps.EachLabel('scenario'), archive=out)
+
+
+def _windows(axis: sps.EachWindow):
+    """The priced rolling horizon over *axis*, archived where it is given."""
+    return lambda out: sps.solve_over(SPENDING, span_sources(12), axis, archive=out)
+
+
+def _a_load_raised() -> dict[str, object]:
+    sources = scenario_sources()
+    return {**sources, 'load': sources['load'].with_columns(pl.col('value') + 1.0)}
+
+
+def _a_generator_added() -> dict[str, object]:
+    added = [*GENERATORS, 'coal']
+    return {
+        **scenario_sources(),
+        'generator': pl.DataFrame({'generator': added}),
+        'p_max': pl.DataFrame({'generator': added, 'value': [10.0, 100.0, 0.0]}),
+        'cost': pl.DataFrame({'generator': added, 'value': [1.0, 50.0, 0.0]}),
+    }
+
+
+CARRIED = replace(PRICED_AXIS, carry=PRICED_CARRY)
+
+
+@pytest.mark.parametrize(
+    ('first', 'second', 'named'),
+    [
+        pytest.param(_scenarios(), _scenarios(sources=_a_load_raised()), 'sources/load.parquet', id='a parameter'),
+        pytest.param(
+            _scenarios(),
+            _scenarios(sources=_a_generator_added()),
+            'sources/generator.parquet',
+            id="a dimension's labels",
+        ),
+        pytest.param(
+            _scenarios(),
+            _scenarios({**DISPATCH, 'objective': {'sense': 'minimize', 'expression': 'sum(p * cost) * 2'}}),
+            'spec.yaml',
+            id='the spec',
+        ),
+        pytest.param(_windows(CARRIED), _windows(PRICED_AXIS), 'axis.json', id='the carry'),
+        pytest.param(_windows(CARRIED), _windows(replace(CARRIED, lookahead=2)), 'axis.json', id='the lookahead'),
+    ],
+)
+def test_a_resume_from_other_inputs_is_refused_and_touches_nothing(first, second, named, tmp_path):
+    """A resume rewrote `sources/`, `spec.yaml` and `axis.json` with what the
+    second call passed, so the archive described inputs its slices on disk were
+    not solved from. The manifest held neither the carry nor the lookahead."""
+    first(tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    before = _the_files_under(tmp_path)
+    with pytest.raises(sps.errors.SpecsolveError, match=re.escape(named)):
+        second(tmp_path)
+    assert _the_files_under(tmp_path) == before, 'the directory is left byte for byte as it was found'
+
+
+def test_a_directory_holding_a_single_solve_is_refused(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    """A single solve's archive is not a sweep to resume, so a sweep pointed at it is refused before it solves."""
+    sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path)
+    with pytest.raises(sps.errors.LayoutError, match='already holds something'):
+        sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path)
 
 
 @pytest.mark.parametrize('make_executor', EXECUTORS)
-def test_every_executor_spills_the_same_files(make_executor, sweep, tmp_path):
+def test_every_executor_archives_the_same_files(make_executor, sweep, tmp_path):
     """Under a pool the answers still land in the directory, in slice order."""
     with _entered(make_executor()) as executor:
         runs = sps.solve_over(
-            DISPATCH, scenario_sources(), sps.EachLabel('scenario'), executor=executor, spill_to=tmp_path
+            DISPATCH, scenario_sources(), sps.EachLabel('scenario'), executor=executor, archive=tmp_path
         )
     assert runs.scan('p').collect().equals(sweep.primal('p'))
-    assert sorted(p.name for p in (tmp_path / 'primal' / 'p').iterdir()) == [
+    assert sorted(p.name for p in (tmp_path / 'answer' / 'primal' / 'p').iterdir()) == [
         '000000.parquet',
         '000001.parquet',
         '000002.parquet',
@@ -2611,21 +2718,21 @@ def test_every_executor_spills_the_same_files(make_executor, sweep, tmp_path):
 def test_a_pooled_sweep_resumes_too(builds, tmp_path):
     """A slice the directory holds is never submitted; the pool only sees the
     ones still to solve, and the fold reads the rest back in order."""
-    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), spill_to=tmp_path)
-    (tmp_path / 'record' / '000001.parquet').unlink()
+    sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
     built = builds(driver)
     with ThreadPoolExecutor(2) as pool:
         resumed = sps.solve_over(
-            DISPATCH, scenario_sources(), sps.EachLabel('scenario'), executor=pool, spill_to=tmp_path
+            DISPATCH, scenario_sources(), sps.EachLabel('scenario'), executor=pool, archive=tmp_path
         )
     assert len(built) == 1, 'the slice without its record is the one submitted'
     assert resumed.keys == ['high', 'low', 'mid'], 'the sweep comes back whole and in order'
 
 
-def test_scan_on_a_spilled_sweep_says_what_it_does_hold(tmp_path):
+def test_scan_on_an_archived_sweep_says_what_it_does_hold(tmp_path):
     """A name no slice wrote has no directory, and the message lists the
     names that do — the same sentence the in-memory reader gives."""
-    runs = _spilled(tmp_path)
+    runs = _archiving(tmp_path)
     with pytest.raises(
         sps.errors.SpecsolveError, match=r"no variable 'nope' in this sweep — it holds 'charge', 'discharge'"
     ):
@@ -2636,7 +2743,7 @@ def test_an_export_reads_the_key_off_each_row_and_skips_a_slice_with_none(sweep)
     """A name is held per slice that produced it, not per slice, so an export
     cannot count positions: it reads the key off the rows, and a slice with no
     rows of a name — a variable every row of which the slice left absent — has no
-    key, which is what the spill writes for it."""
+    key, which is what the archive writes for it."""
     index = sweep._by_slice('primal')['p']
     assert list(index) == ['high', 'low', 'mid'], 'one table per slice, keyed by its own key'
     assert all(sweep.key_name not in table.columns for table in index.values()), 'the key column is dropped'
@@ -2717,8 +2824,9 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
 @pytest.mark.parametrize(
     'read',
     [
-        pytest.param(lambda sweep, spilled: sweep, id='the-sweep-as-it-came-back'),
-        pytest.param(lambda sweep, spilled: sps.scan_sweep(spilled), id='its-spill-scanned'),
+        pytest.param(lambda sweep, archived: sweep, id='the-sweep-as-it-came-back'),
+        pytest.param(lambda sweep, archived: sps.scan_archive(archived).sweep, id='its-archive-scanned'),
+        pytest.param(lambda sweep, archived: sps.read_archive(archived).sweep, id='its-archive-read'),
     ],
 )
 def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_sweep(read, tmp_path):
@@ -2729,7 +2837,7 @@ def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_swe
     """
     axis = sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'})
     sources = span_sources()
-    sweep = sps.solve_over(WINDOW, sources, axis, spill_to=tmp_path / 'runs')
+    sweep = sps.solve_over(WINDOW, sources, axis, archive=tmp_path / 'runs')
     solved = sweep.records['objective'].to_list()
 
     from_the_seed = [_objective_alone(WINDOW, sources, axis, key) for key in sweep.keys]
@@ -2767,7 +2875,7 @@ def test_a_slice_starts_from_the_carried_parameter_its_sources_give():
     )
 
 
-def _stopped_at_the_second_window(spilled) -> tuple[sps.EachWindow, dict[str, object]]:
+def _stopped_at_the_second_window(archived) -> tuple[sps.EachWindow, dict[str, object]]:
     """A carried sweep run to where it stops: its second window cannot meet a load beyond every generator."""
     axis = sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'})
     sources = span_sources()
@@ -2776,14 +2884,14 @@ def _stopped_at_the_second_window(spilled) -> tuple[sps.EachWindow, dict[str, ob
     )
     stopped = {**sources, 'load': beyond}
     with pytest.raises(sps.errors.SpecsolveError, match='leaves nothing to carry'):
-        sps.solve_over(WINDOW, stopped, axis, spill_to=spilled)
+        sps.solve_over(WINDOW, stopped, axis, archive=archived)
     return axis, stopped
 
 
 def test_the_window_a_carried_sweep_stopped_at_builds_alone(tmp_path):
     """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
     axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
-    ran = sps.scan_sweep(tmp_path / 'runs')
+    ran = sps.scan_archive(tmp_path / 'runs').sweep
     assert ran.keys == [0, 3], 'the window that solved, and the one the sweep stopped at'
     with sps.build_slice(WINDOW, stopped, axis, 3, sweep=ran) as model:
         assert model.solve().termination_condition == 'infeasible', 'built alone, it is the window that failed'
@@ -2813,7 +2921,7 @@ def test_a_slice_the_sweep_never_reached_is_refused(key, refusal, tmp_path):
     """
     axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
     with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
-        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_sweep(tmp_path / 'runs'))
+        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_archive(tmp_path / 'runs').sweep)
 
 
 def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():

@@ -1,4 +1,4 @@
-"""The answer's layout on disk: what a result and a sweep write, and the writer that lands a file whole.
+"""The answer's layout on disk: what an archive holds of a result and of a sweep, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the
 [`KINDS`][specsolve._outputs.KINDS] the answer carries: one file per name from
@@ -21,7 +21,7 @@ from mathspec import to_spec
 
 from specsolve import _parquet as parquet
 from specsolve._names import RUN
-from specsolve._outputs import KINDS, is_output
+from specsolve._outputs import is_output
 from specsolve._records import installed_version
 from specsolve.errors import LayoutError
 
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 
     from specsolve._outputs import Output
 
-#: The layout a result and a sweep write to disk, and an archive under its
-#: ``answer/``. A change to any of them raises it. Compared, never branched on.
+#: The layout of what an archive holds under its ``answer/``, a result's or a
+#: sweep's. A change to any of them raises it. Compared, never branched on.
 ANSWER_LAYOUT = 8
 FORMAT_FILE = 'format.json'
 
@@ -52,7 +52,7 @@ def write_format(directory: Path, outputs: Iterable[Output] | None = None, layou
 
 
 def read_outputs(directory: Path) -> frozenset[Output]:
-    """The [`OUTPUTS`][specsolve._outputs.OUTPUTS] the answer under *directory* carries, as its stamp names them. Called after [`check_format`][].
+    """The [`OUTPUTS`][specsolve._outputs.OUTPUTS] the answer under *directory* carries, as its stamp names them. Called once the stamp's layout is checked.
 
     A name this package has no output for is dropped rather than refused: a
     later specsolve added it, it has no reader here, and the rest of the
@@ -74,22 +74,6 @@ def other_layout(directory: Path, layout: int = ANSWER_LAYOUT) -> str | None:
     return f'{which}{by}'
 
 
-def check_format(directory: Path) -> None:
-    """Refuse a saved answer whose layout is not the one this package reads.
-
-    Called after whatever identifies the directory as an answer at all.
-
-    Raises:
-        LayoutError: A missing stamp, or one that is not this package's.
-    """
-    if (other := other_layout(directory)) is not None:
-        raise LayoutError(
-            f'{str(directory)!r} holds a saved answer {other} and this package reads layout '
-            f'{ANSWER_LAYOUT}. The layout changes before 1.0 and nothing reads another one back: solve '
-            f'the model again and save it.'
-        )
-
-
 def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: Path) -> R:
     """One row read off disk as the type that declares its columns.
 
@@ -107,7 +91,7 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
         raise LayoutError(
             f'{str(found)!r} holds a saved {row_type.__name__} row that {short}, so it was written in a '
             f'layout this package does not read. The layout changes before 1.0 and '
-            f'nothing reads an older one back: solve the model again and save it.'
+            f'nothing reads an older one back: solve the model again and archive it.'
         )
     return row_type(**columns)
 
@@ -119,7 +103,7 @@ RECORD_FILE = 'record.parquet'
 SPEC_FILE = 'spec.yaml'
 METRICS_FILE = 'metrics.parquet'
 REASONS_FILE = 'reasons.parquet'
-#: A saved sweep's manifest, its keys as their own type, and the coordinates
+#: A sweep's manifest, its keys as their own type, and the coordinates
 #: of each window's horizon.
 MANIFEST_FILE = 'sweep.json'
 KEYS_FILE = 'keys.parquet'
@@ -144,22 +128,6 @@ def consolidated(under: Path, file: str) -> pl.DataFrame:
             f'whether or not a slice produced values.'
         )
     return pl.concat([parquet.read(path) for path in files])
-
-
-def clear_the_answer(directory: Path) -> None:
-    """Remove what a saved answer or a saved sweep holds, leaving anything else in *directory* alone.
-
-    Both are removed whichever is about to be written, so a directory never
-    reads as an answer and as a sweep at once.
-    """
-    import shutil
-
-    per_slice = (file.removesuffix('.parquet') for file in (RECORD_FILE, METRICS_FILE))
-    for held in (*KINDS, *per_slice):
-        shutil.rmtree(directory / held, ignore_errors=True)
-    whole = (RECORD_FILE, METRICS_FILE, REASONS_FILE, FORMAT_FILE, SPEC_FILE, MANIFEST_FILE, KEYS_FILE, HORIZON_FILE)
-    for member in whole:
-        (directory / member).unlink(missing_ok=True)
 
 
 def write_spec(directory: Path, spec: Spec | None) -> None:

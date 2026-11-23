@@ -45,6 +45,13 @@ def dispatch_result(dispatch_yaml, dispatch_table_inputs):
         yield result
 
 
+@pytest.fixture
+def dispatch_archived(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    """The dispatch model solved with its archive at ``solution/``, closed after the test."""
+    with sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'solution') as result:
+        yield result, tmp_path / 'solution'
+
+
 def test_solve(dispatch_result, dispatch_table_inputs):
     sources = dispatch_table_inputs
     assert dispatch_result.is_ok
@@ -553,23 +560,25 @@ def test_write_suffix_dispatch(dispatch_yaml, dispatch_table_inputs, tmp_path):
         sps.write(dispatch_yaml, sources, tmp_path / 'm.nc')
 
 
-def test_a_solution_saves_every_kind_it_answered_with(dispatch_result, dispatch_yaml, tmp_path):
-    """Every kind the solve answered with, tidy, as `<kind>/<name>.parquet`."""
+def test_an_archived_solution_holds_every_kind_it_answered_with(dispatch_archived, dispatch_yaml):
+    """Every kind the solve answered with, tidy, as `answer/<kind>/<name>.parquet`."""
+    dispatch_result, archive = dispatch_archived
     assert dispatch_result.is_ok
-    out = dispatch_result.save(tmp_path / 'solution')
-    assert out == tmp_path / 'solution'
+    out = archive / 'answer'
     table = pl.read_parquet(out / 'primal' / 'p.parquet')
-    assert set(table.columns) == {'snapshot', 'generator', 'value'}
+    assert set(table.columns) == {'snapshot', 'generator', 'value', 'specsolve_run'}, (
+        'the tidy columns, and the run every archived table carries'
+    )
     assert table.height == dispatch_result.primal('p').height
     assert {p.stem for p in (out / 'dual').iterdir()} == set(sps.check(dispatch_yaml).constraints), (
         'one dual file per constraint'
     )
 
 
-def test_a_saved_solution_says_how_it_terminated(dispatch_result, tmp_path):
+def test_an_archived_solution_says_how_it_terminated(dispatch_archived):
     """The record beside the tables, as the row a sweep writes per slice."""
-    out = dispatch_result.save(tmp_path / 'solution')
-    record = pl.read_parquet(out / 'record.parquet')
+    dispatch_result, archive = dispatch_archived
+    record = pl.read_parquet(archive / 'answer' / 'record.parquet')
     assert record.columns == [
         'status',
         'termination_condition',
@@ -592,7 +601,7 @@ def test_a_saved_solution_says_how_it_terminated(dispatch_result, tmp_path):
         'objective': dispatch_result.objective,
         'has_primal': dispatch_result.has_primal,
         'solved_at': dispatch_result.solved_at,
-        'specsolve_run': None,
+        'specsolve_run': 'solution',
         'slice_axis': None,
         'slice': None,
         **dispatch_result.provenance._asdict(),
@@ -612,8 +621,8 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
-    with sps.solve(spec, sources) as result:
-        out = result.save(tmp_path)
+    with sps.solve(spec, sources, archive=tmp_path / 'case') as result:
+        out = tmp_path / 'case' / 'answer'
         with pytest.raises(sps.errors.SpecsolveError):
             result.evaluate('ratio')
         with pytest.raises(sps.errors.SpecsolveError, match='integer'):
@@ -633,19 +642,20 @@ def test_an_export_writes_the_kinds_the_solve_answered_with(tmp_path):
     )
 
 
-def test_a_saved_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_table_inputs, tmp_path):
-    """An answer asked for its activities saves each row's left-hand side, and reads it back."""
-    with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}) as result:
-        out = result.save(tmp_path / 'solution')
+def test_an_archived_solution_carries_the_activities_it_was_asked_for(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    """An answer asked for its activities archives each row's left-hand side, and reads it back."""
+    with sps.solve(dispatch_yaml, dispatch_table_inputs, outputs={'activity'}, archive=tmp_path / 'case') as result:
+        out = tmp_path / 'case' / 'answer'
         constraints = set(sps.check(dispatch_yaml).constraints)
         assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
-        loaded = sps.read_result(out)
+        loaded = sps.read_archive(tmp_path / 'case').result
         for name in constraints:
-            assert pl.read_parquet(out / 'activity' / f'{name}.parquet').equals(result.activity(name))
+            written = pl.read_parquet(out / 'activity' / f'{name}.parquet').drop('specsolve_run')
+            assert written.equals(result.activity(name))
             assert loaded.activity(name).equals(result.activity(name))
 
 
-def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
+def test_an_archived_solution_says_why_a_kind_is_absent(tmp_path):
     """An absence is a fact about the answer, so it is written down with its reason."""
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -656,14 +666,13 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
-    with sps.solve(spec, sources) as result:
-        out = result.save(tmp_path)
+    with sps.solve(spec, sources, archive=tmp_path / 'case') as result:
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
         with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
             result.evaluate('ratio')
 
-    absent = pl.read_parquet(out / 'reasons.parquet')
+    absent = pl.read_parquet(tmp_path / 'case' / 'answer' / 'reasons.parquet').drop('specsolve_run')
     assert absent.columns == ['kind', 'name', 'reason'], 'the kind, what is missing under it, and why'
     assert absent.sort('kind', 'name').rows() == [
         ('dual', '', str(no_dual.value)),
@@ -671,9 +680,10 @@ def test_a_saved_solution_says_why_a_kind_is_absent(tmp_path):
     ], 'the whole kind for the duals, one name for the expression, each with the sentence the reader gives'
 
 
-def test_a_saved_solution_reads_back_as_the_result_it_was(dispatch_result, dispatch_yaml, tmp_path):
+def test_an_archived_solution_reads_back_as_the_result_it_was(dispatch_archived, dispatch_yaml):
     """Every reader answers what it answered, off the directory rather than a session."""
-    loaded = sps.read_result(dispatch_result.save(tmp_path / 'solution'))
+    dispatch_result, archive = dispatch_archived
+    loaded = sps.read_archive(archive).result
 
     assert (loaded.status, loaded.termination_condition) == (
         dispatch_result.status,
@@ -699,8 +709,8 @@ def test_a_result_read_back_gives_the_reason_the_solve_gave(tmp_path):
         'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
     }
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
-    with sps.solve(spec, sources) as result:
-        loaded = sps.read_result(result.save(tmp_path))
+    with sps.solve(spec, sources, archive=tmp_path / 'case') as result:
+        loaded = sps.read_archive(tmp_path / 'case').result
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
         with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
@@ -719,8 +729,8 @@ def test_a_result_read_back_gives_the_reason_the_solve_gave(tmp_path):
 
 def test_a_solve_that_left_no_values_reads_back_and_still_has_none(tmp_path):
     """A run that did not solve is an answer, and reads back as that answer."""
-    with sps.solve(*CASES['INFEASIBLE']) as result:
-        loaded = sps.read_result(result.save(tmp_path / 'infeasible'))
+    sps.solve(*CASES['INFEASIBLE'], archive=tmp_path / 'infeasible')
+    loaded = sps.read_archive(tmp_path / 'infeasible').result
     assert loaded.termination_condition == 'infeasible'
     assert not loaded.has_primal, 'the record says the solve produced none, so no reader is offered any'
     assert loaded.objective != loaded.objective, 'nan, as the solve reported it'
@@ -728,39 +738,18 @@ def test_a_solve_that_left_no_values_reads_back_and_still_has_none(tmp_path):
         loaded.primal('p')
 
 
-def test_a_scanned_result_saved_where_it_was_scanned_keeps_its_files(dispatch_result, tmp_path):
-    """A save clears what the directory held, and a scanned result had yet to read the files it cleared."""
-    saved = dispatch_result.save(tmp_path / 'answer')
-    with sps.scan_result(saved) as scanned:
-        assert scanned.save(saved) == saved
-    with sps.read_result(saved) as loaded:
-        assert loaded.primal('p').equals(dispatch_result.primal('p')), 'every value is still there'
-
-
-def test_a_result_saved_over_a_sweep_leaves_none_of_the_sweep(dispatch_result, dispatch_yaml, tmp_path):
-    """A save removed what a saved result holds and left a saved sweep's own files beside the new answer."""
-    from tests.test_solve_over import DISPATCH, scenario_sources
-
-    out = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario')).save(tmp_path / 'answer')
-    dispatch_result.save(out)
-    held = sorted(path.name for path in out.iterdir())
-    assert held == ['dual', 'format.json', 'metrics.parquet', 'primal', 'record.parquet', 'spec.yaml'], (
-        'the answer of one solve, and no key, manifest or per-slice record or metrics of the sweep'
-    )
-
-
-def test_a_directory_that_is_not_a_saved_answer_is_refused(tmp_path):
-    empty = tmp_path / 'nothing'
-    empty.mkdir()
+def test_an_archive_whose_answer_has_no_record_is_refused(dispatch_archived):
+    _, archive = dispatch_archived
+    (archive / 'answer' / 'record.parquet').unlink()
     with pytest.raises(sps.errors.LayoutError, match=r'record\.parquet'):
-        sps.read_result(empty)
+        sps.read_archive(archive)
 
 
-def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(dispatch_result, tmp_path):
-    """`read_result` holds the values when it returns; `scan_result` reads each table when asked."""
-    saved = dispatch_result.save(tmp_path / 'solution')
-    loaded = sps.read_result(saved)
-    scanned = sps.scan_result(saved)
+def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(dispatch_archived):
+    """`read_archive` holds the values when it returns; `scan_archive` reads each table when asked."""
+    dispatch_result, saved = dispatch_archived
+    loaded = sps.read_archive(saved).result
+    scanned = sps.scan_archive(saved).result
     expected = dispatch_result.primal('p')
     assert scanned.primal('p').equals(expected), 'both read the same answer while the directory is there'
     shutil.rmtree(saved)
@@ -770,13 +759,13 @@ def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(
         scanned.primal('p')
 
 
-def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_result, tmp_path):
+def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_archived):
     """A scan returns what the file holds at the read; a read, what it held at the read."""
-    saved = dispatch_result.save(tmp_path / 'solution')
-    loaded = sps.read_result(saved)
-    scanned = sps.scan_result(saved)
+    dispatch_result, saved = dispatch_archived
+    loaded = sps.read_archive(saved).result
+    scanned = sps.scan_archive(saved).result
     was = dispatch_result.primal('p')
-    was.with_columns(pl.col('value') * 2).write_parquet(saved / 'primal' / 'p.parquet')
+    was.with_columns(pl.col('value') * 2).write_parquet(saved / 'answer' / 'primal' / 'p.parquet')
 
     assert scanned.primal('p')['value'].to_list() == (was['value'] * 2).to_list(), 'the scan reads the file it finds'
     assert loaded.primal('p').equals(was), 'and the answer read whole is what the file held at the read'
@@ -799,8 +788,10 @@ def test_read_back_is_in_index_order_and_stays_there(dispatch_yaml, dispatch_tab
         )
         assert by_declaration.equals(by_declaration.sort('snapshot', 'ord'))
 
-        written = [(result.save(tmp_path / f'solution{i}') / 'primal' / 'p.parquet').read_bytes() for i in range(3)]
-        assert len(set(written)) == 1, 'the same solution writes the same bytes'
+    for i in range(3):
+        sps.solve(dispatch_yaml, sources, archive=tmp_path / str(i) / 'solution')
+    written = [(tmp_path / str(i) / 'solution' / 'answer' / 'primal' / 'p.parquet').read_bytes() for i in range(3)]
+    assert len(set(written)) == 1, 'the same model and data archive the same bytes'
 
 
 SCALAR_SPEC = {
@@ -846,10 +837,9 @@ def _left_absent(missing: str) -> dict:
     return {**SCALAR_SPEC, 'variables': {**SCALAR_SPEC['variables'], 'slack': slack}}
 
 
-def _saved(spec, sources, tmp_path):
-    with sps.solve(spec, sources) as result:
-        saved = result.save(tmp_path / 'answer')
-    with sps.read_result(saved) as loaded:
+def _archived(spec, sources, tmp_path):
+    sps.solve(spec, sources, archive=tmp_path / 'case')
+    with sps.read_archive(tmp_path / 'case').result as loaded:
         return loaded.evaluate('twice')
 
 
@@ -881,7 +871,7 @@ def _evaluated(expression):
         ),
         pytest.param(SCALAR_SPEC, _evaluated('sum(x, over=f) - slack'), [{'value': 120.0}], id='the-rows-left-side'),
         pytest.param(SCALAR_SPEC, _evaluated('twice'), [{'value': 20.0}], id='declared'),
-        pytest.param(SCALAR_SPEC, _saved, [{'value': 20.0}], id='save'),
+        pytest.param(SCALAR_SPEC, _archived, [{'value': 20.0}], id='archive'),
         pytest.param(SCALAR_SPEC, _swept, [{'value': 20.0}], id='solve_over'),
         pytest.param(
             _left_absent('neutral'), _evaluated('2 * slack'), [{'value': 0.0}], id='absent-under-missing-neutral'

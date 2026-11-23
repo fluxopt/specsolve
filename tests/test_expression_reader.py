@@ -480,16 +480,6 @@ def test_the_splice_steps_over_an_entry_of_its_own_name():
     ), "the splice lands beside the declared one, so the expression still reads the model's own entry"
 
 
-def test_an_answer_read_back_off_disk_says_why_it_cannot_evaluate(result, tmp_path):
-    """An answer carries the values and not the model, and a name the file never wrote needs the model."""
-    read_back = sps.read_result(result.save(tmp_path))
-    with pytest.raises(SpecsolveError, match='no model behind it'):
-        read_back.evaluate('sum(p, over=generator)')
-    assert read_back.evaluate('total_gen').equals(result.evaluate('total_gen')), (
-        'a declared name is readable either way — it was written, so nothing needs compiling'
-    )
-
-
 @pytest.fixture
 def archived(tmp_path):
     """A solve written to an archive, which carries the spec and sources back."""
@@ -539,7 +529,9 @@ def test_a_closed_result_refuses_to_evaluate():
         result.evaluate('sum(p, over=generator)')
 
 
-def test_an_evaluated_expression_names_nothing_and_so_is_not_a_kind(result, tmp_path):
-    """It is not written, spilled or enumerated: a quantity worth keeping across runs is worth declaring."""
-    written = {p.stem for p in (result.save(tmp_path) / 'expression').glob('*.parquet')}
-    assert written == set(SPEC['expressions']), 'save writes the declared names, and evaluate adds none'
+def test_an_evaluated_expression_names_nothing_and_so_is_not_a_kind(tmp_path):
+    """It is not archived or enumerated: a quantity worth keeping across runs is worth declaring."""
+    with sps.solve(SPEC, sources(), archive=tmp_path / 'case') as archived:
+        archived.evaluate('sum(p, over=generator)')
+    written = {p.stem for p in (tmp_path / 'case' / 'answer' / 'expression').glob('*.parquet')}
+    assert written == set(SPEC['expressions']), 'an archive holds the declared names, and evaluate adds none'

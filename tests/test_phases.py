@@ -204,10 +204,10 @@ def test_each_answer_carries_its_share_and_the_shares_add_up_to_the_model(
     )
 
 
-def test_a_saved_answer_reads_back_what_it_took(dispatch_yaml, dispatch_table_inputs, tmp_path):
-    result = sps.solve(dispatch_yaml, dispatch_table_inputs)
-    assert sps.read_result(result.save(tmp_path / 'saved')).metrics == result.metrics, (
-        'save writes the metrics row and read_result reads it back'
+def test_an_archived_answer_reads_back_what_it_took(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    result = sps.solve(dispatch_yaml, dispatch_table_inputs, archive=tmp_path / 'case')
+    assert sps.read_archive(tmp_path / 'case').result.metrics == result.metrics._replace(specsolve_run='case'), (
+        'the archive writes the metrics row, with its run, and read_archive reads it back'
     )
 
 

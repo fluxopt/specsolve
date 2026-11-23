@@ -460,9 +460,9 @@ class TestWhatBindRefusesAndWhatItTakes:
         sources = {'load': str(odd / 'load.parquet'), 'snapshot': str(odd / 'labels.parquet')}
 
         sps.write(spec, sources, odd / 'model.lp')
-        result = sps.solve(spec, sources)
+        result = sps.solve(spec, sources, archive=odd / 'solution')
         assert result.objective == pytest.approx(3.0)
-        assert (result.save(odd / 'solution') / 'primal' / 'p.parquet').exists()
+        assert (odd / 'solution' / 'answer' / 'primal' / 'p.parquet').exists()
 
     def test_a_dictionary_encoded_source_column_binds_like_a_plain_one(self):
         """A `Categorical` dimension column is a source encoding, not a different model.
