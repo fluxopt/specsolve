@@ -1455,6 +1455,27 @@ def test_the_phase_table_runs_along_the_ladder_in_the_order_the_engine_runs() ->
     assert rows['load'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
 
 
+def test_a_rung_without_clocks_keeps_its_column_as_a_dash() -> None:
+    """A case clocked at one rung and not another shows both rungs, the unclocked one as dashes.
+
+    The table kept only the rungs that carried clocks, so a rung measured
+    before the phases existed vanished from its case instead of reading `—`.
+    """
+    records = [
+        _timing('specsolve', sink='highs', size='s', counts={'columns': 1000, 'rows': 1, 'nonzeros': 1}),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 2.5},
+        ),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert rows['build'] == ['—', '2.5 s'], 'the rung no clock reached keeps its column, as a dash'
+
+
 def test_a_run_without_phase_clocks_renders_no_phase_table() -> None:
     assert report.phases(report.best([_timing('specsolve', sink='highs')])) == '', 'no clocks, no table'
 

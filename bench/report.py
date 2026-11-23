@@ -349,14 +349,10 @@ def phases(rows: dict[Key, Row], sink: str = 'highs') -> str:
     """
     tables = []
     for case in sorted({c for c, _, k, arm in rows if k == sink and arm == 'specsolve'}):
-        runs = [
-            run
-            for size in sizes_of(case, rows, sink)
-            if (run := rows.get((case, size, sink, 'specsolve'))) and run.get('phase_seconds')
-        ]
-        if not runs:
+        runs = [run for size in sizes_of(case, rows, sink) if (run := rows.get((case, size, sink, 'specsolve')))]
+        seen = [phase for run in runs for phase in run.get('phase_seconds') or {}]
+        if not seen:
             continue
-        seen = [phase for run in runs for phase in run['phase_seconds']]
         clocked = [*(p for p in PHASES if p in seen), *sorted(set(seen) - set(PHASES))]
         lines = [
             '<details markdown="1">',
@@ -366,7 +362,7 @@ def phases(rows: dict[Key, Row], sink: str = 'highs') -> str:
             '| --- |' + ' --: |' * len(runs),
         ]
         lines += [
-            f'| {phase} | ' + ' | '.join(_clock(run['phase_seconds'].get(phase)) for run in runs) + ' |'
+            f'| {phase} | ' + ' | '.join(_clock((run.get('phase_seconds') or {}).get(phase)) for run in runs) + ' |'
             for phase in clocked
         ]
         tables.append('\n'.join([*lines, '', '</details>']))
