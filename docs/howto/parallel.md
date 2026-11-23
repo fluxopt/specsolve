@@ -29,14 +29,13 @@ if __name__ == '__main__':  # spawn re-imports your module; without this it recu
 
 Four workers need four times the memory of one slice.
 
-## Hand the workers paths
+## Run on a cluster
 
-On a cluster, write the sources to a filesystem the workers mount and pass the
-paths. Without `shared_filesystem=True`, the paths are read here and shipped:
+A cluster's client is an executor too. A path source is read here and sent to
+the workers as bytes, as a table is:
 
 ```python
-sources = {'load': '/shared/load.parquet', 'cost': '/shared/cost.parquet', 'p_max': '/shared/p_max.parquet'}
-sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client, shared_filesystem=True)
+sweep = sps.solve_over('spec.yaml', sources, sps.EachLabel('scenario'), executor=client)
 ```
 
 ## Read the sweep back

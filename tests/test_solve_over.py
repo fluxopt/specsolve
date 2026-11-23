@@ -1494,13 +1494,12 @@ def test_a_parquet_path_slices_without_being_read_whole(tmp_path):
     assert runs.primal('p').height == 3 * 4 * 2
 
 
-def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_one(tmp_path, monkeypatch):
-    """`shared_filesystem` is inferred from the pool, and only paths are affected.
+def test_a_path_stays_a_path_for_a_process_pool_and_travels_as_bytes_for_any_other(tmp_path, monkeypatch):
+    """Which pool decides how a path crosses, and both ways give the same answer.
 
     A `ProcessPoolExecutor`'s workers are this machine's, so a path stays a
-    path. An executor this package did not ship could be anywhere, so its paths
-    travel as their own bytes. `shared_filesystem=` says it outright when the
-    guess is wrong.
+    path. An executor outside the standard library could be anywhere, so its
+    paths travel as their own bytes.
     """
     sources = scenario_sources()
     path = tmp_path / 'p_max.parquet'
@@ -1522,18 +1521,16 @@ def test_a_path_stays_a_path_for_a_local_pool_and_travels_as_bytes_for_a_remote_
     monkeypatch.setattr(driver, '_encode', spy)
     with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
         local = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=pool)
-        assert all(v == str(path) for v in crossed), 'a local pool shipped a file it could have opened'
+    assert crossed, 'the spy saw no source cross'
+    assert all(v == str(path) for v in crossed), 'a process pool shipped a file it could have opened'
 
-        crossed.clear()
-        remote = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=pool, shared_filesystem=False)
-        assert all(v == path.read_bytes() for v in crossed), 'the file did not travel as its own bytes'
+    crossed.clear()
+    remote = sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=Inline())
+    assert crossed, 'the spy saw no source cross'
+    assert all(v == path.read_bytes() for v in crossed), 'an executor outside the standard library was handed a path'
 
     assert answer_of(remote).equals(answer_of(local)), 'the path and the bytes are the same numbers'
     assert remote.primal('p').equals(local.primal('p'))
-
-    crossed.clear()
-    sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), executor=Inline())
-    assert all(v == path.read_bytes() for v in crossed), 'an executor we did not ship was assumed local'
 
 
 # ---------------------------------------------------------------------------

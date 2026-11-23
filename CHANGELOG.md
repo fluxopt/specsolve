@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): solve_over takes no shared_filesystem, and a pool outside the standard library is sent path sources as bytes ([#PR](https://github.com/fluxopt/specsolve/pull/PR))
 - fix(engine): a quadratic row whose every term is zero is still built ([#2187](https://github.com/fluxopt/specsolve/pull/2187))
 - docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))
 - feat(api): the metrics time every phase from the spec to the archive, and an older answer reads as another layout ([#2180](https://github.com/fluxopt/specsolve/pull/2180))

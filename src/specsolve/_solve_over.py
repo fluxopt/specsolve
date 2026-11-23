@@ -70,7 +70,6 @@ def solve_over(
     over: Axis | Mapping[str, Any],  # pyrefly: ignore[explicit-any] — plain data, as JSON reads it
     *,
     executor: Executor | None = None,
-    shared_filesystem: bool | None = None,
     solver_options: Mapping[str, object] | None = None,
     also_record: Sequence[str] | None = None,
     solver_name: str = 'highs',
@@ -94,10 +93,9 @@ def solve_over(
             slices, and its ``key_name=`` names the slice column.
         executor: Any `concurrent.futures.Executor`; ``None`` runs the
             slices in order on one model. A process pool must be ``spawn``
-            or ``forkserver`` — a forked worker hangs.
-        shared_filesystem: Whether the executor's workers can read this
-            process's paths. Decided for the stdlib pools; anything else is
-            assumed not to, and paths travel as bytes.
+            or ``forkserver`` — a forked worker hangs. A process pool's
+            workers read a path source themselves; any executor outside the
+            standard library is sent its bytes.
         solver_options: As [`solve`][specsolve._api.Model.solve] takes them.
         also_record: As [`solve`][specsolve._api.Model.solve] takes them,
             reaching every slice.
@@ -197,7 +195,7 @@ def solve_over(
     if executor is None:
         answered = _serially(spec, slices, solving, plan, spill, starts)
     else:
-        answered = _pooled(executor, shared_filesystem, spec, slices, solving, spill, starts)
+        answered = _pooled(executor, spec, slices, solving, spill, starts)
     folded = Sweep._folded(key_name, stitch, answered, spill, key_dtype, asked, spec)
     if out is not None:
         _archive_the_sweep(out, spec, program, axis, sources, folded, slices[0].sources)
@@ -460,7 +458,6 @@ def _named_slice(key: Label, position: int, count: int) -> Generator[None, None,
 
 def _pooled(
     executor: Executor,
-    shared_filesystem: bool | None,
     spec: Spec,
     slices: Sequence[Slice],
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
@@ -475,7 +472,7 @@ def _pooled(
     the directory.
     """
     crosses = _crosses_a_process(executor)
-    shared = _shares_filesystem(executor, shared_filesystem)
+    keep_paths = _shares_filesystem(executor)
     memo: dict[str, tuple[Any, Any]] = {}  # pyrefly: ignore[explicit-any] — a source beside its encoding
     futures = [
         None
@@ -483,7 +480,7 @@ def _pooled(
         else executor.submit(
             _run_slice,
             spec,
-            _encode(current.sources, memo, shared_filesystem=shared) if crosses else dict(current.sources),
+            _encode(current.sources, memo, keep_paths=keep_paths) if crosses else dict(current.sources),
             crosses,
             solving,
             starts[position],
@@ -554,10 +551,8 @@ def _key_column(axis: Axis, program: Program) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _shares_filesystem(executor: Executor, declared: bool | None) -> bool:
-    """Whether *executor*'s workers can read this process's paths; an unknown executor is assumed remote."""
-    if declared is not None:
-        return declared
+def _shares_filesystem(executor: Executor) -> bool:
+    """Whether *executor*'s workers can read this process's paths; an executor outside the standard library is assumed remote."""
     return isinstance(executor, ProcessPoolExecutor)
 
 
@@ -570,17 +565,17 @@ def _encode(
     sources: Mapping[str, Source],
     memo: dict[str, tuple[Any, Any]],  # pyrefly: ignore[explicit-any] — a source beside its encoding
     *,
-    shared_filesystem: bool = False,
+    keep_paths: bool = False,
 ) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     """Sources in the shape a worker can be handed.
 
-    A path the workers reach stays a path; one they cannot travels as its own
-    bytes. A table becomes parquet ``bytes``; anything else crosses as itself.
+    A path stays a path under *keep_paths*, and travels as its own bytes
+    otherwise. A table becomes parquet ``bytes``; anything else crosses as itself.
     *memo* encodes a source no slice rewrote once.
     """
     out: dict[str, Any] = {}  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     for name, obj in sources.items():
-        if isinstance(obj, (str, Path)) and shared_filesystem:
+        if isinstance(obj, (str, Path)) and keep_paths:
             out[name] = obj
             continue
         cached = memo.get(name)
