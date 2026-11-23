@@ -1,4 +1,4 @@
-scenario,link,value
-base,ext67,0
-base,tie67,2
-base,wire,0
+link,scenario,value
+ext67,base,0
+tie67,base,2
+wire,base,0

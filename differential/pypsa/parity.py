@@ -7,12 +7,12 @@ over it, and one `rung_*.py` per rung whose `build()` returns the PyPSA network 
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
-it needs a checkout of that repository at the tag `pypsa-parity.yml` names. No
+it needs a checkout of that repository at the commit `pypsa-parity.yml` names. No
 pixi environment carries pypsa, so run it locally with the workflow's own line:
 
     pixi exec -s uv uv run --with-editable . \
         --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
-        --with "pypsa @ git+https://github.com/PyPSA/PyPSA@51986084bfb68d38e5b64021649cb339448112cb" \
+        --with "pypsa @ git+https://github.com/PyPSA/PyPSA@3625c8168b0b45a7936ddcb3a4da99dd608125ca" \
         --with "highspy==1.15.1" --with "polars>=2.0" \
         python differential/pypsa/parity.py ../mathspec
 
@@ -83,10 +83,20 @@ TABLES = HERE / 'tables'
 PROJECTIONS = HERE / 'rungs'
 DEVIATIONS = HERE / 'deviations.yaml'
 KNOWN_FAILING_FILE = HERE / 'known_failing.yaml'
-#: Where a patched rung's file is written: the patch its script names laid over ``pypsa.yaml``.
+#: Where a rung's file is written: ``pypsa.yaml``, or the patch its script names laid over it, with its curves expanded.
 COMPOSED = Path(tempfile.mkdtemp(prefix='pypsa-parity-'))
 #: A patched file's name -> the patch it lays over ``pypsa.yaml``.
 PATCHES: dict[str, Path] = {}
+#: A suffix `Spec.expand` gives a curve's row or column -> the one linopy gives the same row or column, where they differ.
+LINOPY_SUFFIX = {
+    'order': 'order_binary',
+    'p': 'link',
+    'p_ungated': 'link',
+    'cost': 'output_link',
+    'cost_ungated': 'output_link',
+}
+#: A global-constraint type PyPSA writes as one constraint over its rows, rather than one constraint per row, and that constraint's name.
+ONE_CONSTRAINT = {'flow_based': 'GlobalConstraint-ram'}
 sys.path.insert(0, str(RUNGS))
 sys.path.insert(0, str(HERE))
 sys.path.append(str(HERE.parents[1]))  # the repository root, for the linopy lane in tests/
@@ -156,25 +166,54 @@ def intended(stem: str) -> float:
 def spec_of(stem: str) -> Path:
     """The spec file the rung reads: ``pypsa.yaml``, or the patch its script names as ``PATCH`` laid over it.
 
-    A patched file is written once under :data:`COMPOSED`, named as its patch
-    and with the base's symbols beside it, so it reads as a file of its own.
+    The file is written once under :data:`COMPOSED` with its ``piecewise:``
+    curves expanded into the rows specsolve builds, named as its patch or as
+    the base, and with the base's symbols beside it, so it reads as a file of
+    its own.
     """
     base = CORPUS / 'examples' / 'pypsa.yaml'
     patch = getattr(importlib.import_module(stem), 'PATCH', None)
-    if patch is None:
-        return base
-    path = COMPOSED / Path(patch).name
-    if path.name not in PATCHES:
-        PATCHES[path.name] = CORPUS / 'examples' / patch
-        path.write_text(mathspec.override(base, [PATCHES[path.name]]).to_yaml())
+    path = COMPOSED / (base.name if patch is None else Path(patch).name)
+    if not path.exists():
+        if patch is None:
+            spec = mathspec.to_spec(base)
+        else:
+            PATCHES[path.name] = CORPUS / 'examples' / patch
+            spec = mathspec.override(base, [PATCHES[path.name]])
+        path.write_text(expanded(spec))
         (COMPOSED / 'symbols').mkdir(exist_ok=True)
         shutil.copy(base.parent / 'symbols' / base.name, COMPOSED / 'symbols' / path.name)
     return path
 
 
+def expanded(spec) -> str:
+    """*spec* with its curves expanded, as YAML, every row and column the expansion writes opening with the PyPSA name linopy gives it.
+
+    `Spec.expand` names a curve's rows and columns ``{curve}_{suffix}`` and
+    leaves most undescribed; PyPSA names them after the variable the curve's
+    description opens with, plus linopy's suffix.
+    """
+    curves = {
+        name: stands_for(curve['description'])
+        for name, curve in (yaml.safe_load(spec.to_yaml()).get('piecewise') or {}).items()
+    }
+    raw = yaml.safe_load(spec.expand().to_yaml())
+    for section in ('constraints', 'variables'):
+        for name, block in list(raw.get(section, {}).items()):
+            curve = next((c for c in curves if name.startswith(f'{c}_')), None)
+            if curve is None:
+                continue
+            suffix = name.removeprefix(f'{curve}_')
+            said = block.get('description') or f'the `{suffix}` part of `{curve}`, as the expansion writes it'
+            block.pop('description', None)
+            their = f'{curves[curve]}_{LINOPY_SUFFIX.get(suffix, suffix)}'
+            raw[section][name] = {'description': f'`{their}` — {said}', **block}
+    return projection.dump(raw)
+
+
 def spec_named(name: str) -> Path:
-    """The spec file a stamp names — a patched one under :data:`COMPOSED`, else the corpus's own."""
-    return COMPOSED / name if name in PATCHES else CORPUS / 'examples' / name
+    """The spec file a stamp names, as :func:`spec_of` wrote it."""
+    return COMPOSED / name
 
 
 def owned(name: str) -> set[str] | None:
@@ -196,7 +235,7 @@ def stands_for(description: str | None, model=None) -> str:
     *model* has is chosen, else the first.
     """
     opening = re.match(r'((?:`[^`]+`(?:, )?)+)', description or '').group(1)
-    names = re.findall(r'`([^`]+)`', opening)
+    names = [ONE_CONSTRAINT.get(name, name) for name in re.findall(r'`([^`]+)`', opening)]
     if model is None or len(names) == 1:
         return names[0]
     present = [*model.constraints, *model.variables]
@@ -574,8 +613,14 @@ def legacy():
 PLAIN = [True]
 
 
-#: PyPSA's axis names for the file's dimensions — a multi-period model keys by ``(period, timestep)`` where the file has one snapshot, and the growth limit by ``Carrier`` and ``periods``.
-AXES = {'timestep': 'snapshot', 'Carrier': 'carrier', 'periods': 'period', 'secant': 'segment'}
+#: PyPSA's axis names for the file's dimensions — a multi-period model keys by ``(period, timestep)`` where the file has one snapshot, the growth limit by ``Carrier`` and ``periods``, and the flow-based balance by ``domain``.
+AXES = {
+    'timestep': 'snapshot',
+    'Carrier': 'carrier',
+    'periods': 'period',
+    'secant': 'segment',
+    'domain': 'flow_based_domain',
+}
 
 
 def _keyed(labels) -> dict:
