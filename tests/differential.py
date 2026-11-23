@@ -109,7 +109,7 @@ def differential(
             assert result.objective == pytest.approx(oracle, rel=RTOL), (
                 f'the lanes disagree on the objective — relational {result.objective}, linopy {oracle}'
             )
-            _same_shape(engine.diagnostics(), m)
+            _same_shape(engine.metrics(), m)
 
             lp_path = None
             if lp:
@@ -216,16 +216,16 @@ def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, A
     return str(relational.value)
 
 
-def _same_shape(diagnostics: Any, linopy_lane: Any) -> None:
+def _same_shape(metrics: Any, linopy_lane: Any) -> None:
     """The two lanes built the same *model*, not merely the same answer.
 
     An objective and a re-solved LP file are invariant to a column pinned to
     ``[0, 0]`` or a row that always holds, so the counts are compared. Counts
     rather than sets: the two lanes name their columns differently.
     """
-    assert diagnostics.columns == linopy_lane.nvars, (
-        f'the lanes disagree on how many columns this model has — relational {diagnostics.columns}, linopy {linopy_lane.nvars}'
+    assert metrics.columns == linopy_lane.nvars, (
+        f'the lanes disagree on how many columns this model has — relational {metrics.columns}, linopy {linopy_lane.nvars}'
     )
-    assert diagnostics.rows == linopy_lane.ncons, (
-        f'the lanes disagree on how many rows this model has — relational {diagnostics.rows}, linopy {linopy_lane.ncons}'
+    assert metrics.rows == linopy_lane.ncons, (
+        f'the lanes disagree on how many rows this model has — relational {metrics.rows}, linopy {linopy_lane.ncons}'
     )

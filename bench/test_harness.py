@@ -29,7 +29,7 @@ import yaml
 from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, _ask, checkouts, compare, same_model, verdict
+from bench.ab.compare import Row, Worker, _ask, checkouts, compare, phase_table, same_model, table, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -1423,6 +1423,63 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
 
 
+def _phase_rows(table: str) -> dict[str, list[str]]:
+    """The body rows of a rendered phase table, keyed by phase, each split into its cells."""
+    rows = [line for line in table.splitlines() if line.startswith('| ') and not line.startswith(('| phase', '| ---'))]
+    return {cells[0]: cells[1:] for cells in ([c.strip() for c in row.strip('|').split('|')] for row in rows)}
+
+
+def test_the_phase_table_runs_along_the_ladder_in_the_order_the_engine_runs() -> None:
+    """A phase is a row, a rung a column smallest first, and a phase a rung never clocked reads a dash."""
+    records = [
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='s',
+            counts={'columns': 1000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 0.004, 'attach': 0.001},
+        ),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'load': 0.0005, 'build': 2.5, 'attach': 0.002},
+        ),
+        _timing('linopy', sink='highs', size='m', counts={'columns': 10000, 'rows': 1, 'nonzeros': 1}),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert list(rows) == ['load', 'attach', 'build'], 'the phases in the order the engine runs them'
+    assert rows['build'] == ['4 ms', '2.5 s'], 'one column per rung, smallest first, each in its own unit'
+    assert rows['load'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
+
+
+def test_a_rung_without_clocks_keeps_its_column_as_a_dash() -> None:
+    """A case clocked at one rung and not another shows both rungs, the unclocked one as dashes.
+
+    The table kept only the rungs that carried clocks, so a rung measured
+    before the phases existed vanished from its case instead of reading `—`.
+    """
+    records = [
+        _timing('specsolve', sink='highs', size='s', counts={'columns': 1000, 'rows': 1, 'nonzeros': 1}),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 2.5},
+        ),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert rows['build'] == ['—', '2.5 s'], 'the rung no clock reached keeps its column, as a dash'
+
+
+def test_a_run_without_phase_clocks_renders_no_phase_table() -> None:
+    assert report.phases(report.best([_timing('specsolve', sink='highs')])) == '', 'no clocks, no table'
+
+
 def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
     """A launch-to-exit wall is slower than the build, so in the build's key it would never be published.
 
@@ -2087,7 +2144,7 @@ def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
 ) -> None:
     """`bench.yml` runs this harness against the base branch's `src/`.
 
-    A base with no `Engine._hand_off` raised in every window cell, which failed
+    A base with no `Engine.handoff` raised in every window cell, which failed
     the base pass, so the gate never compared anything.
     """
     assert unsupported(verb) is None, f'this checkout has Engine.{method}'
@@ -2305,7 +2362,7 @@ def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
 
     shape = SHAPES[name]
     model = sps.build(spec(shape), tables(shape, 24))
-    assert model.diagnostics().columns > 0
+    assert model.metrics().columns > 0
     if not shape.quadratic:
         assert sps.solve(spec(shape), tables(shape, 24), 'highs').status == 'ok'
 
@@ -2389,11 +2446,14 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
         'import os\n'
         'from types import SimpleNamespace\n'
         '\n'
+        'import polars as pl\n'
+        '\n'
         '\n'
         'def build(spec, sources):\n'
         "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
         "        log.write('built\\n')\n"
-        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(columns=1, rows=1))\n'
+        "    no_clocks = pl.DataFrame({'phase': [], 'seconds': []})\n"
+        '    return SimpleNamespace(metrics=lambda: SimpleNamespace(columns=1, rows=1, phases=no_clocks))\n'
     )
     log = tmp_path / 'builds'
     monkeypatch.setenv('AB_BUILDS', str(log))
@@ -2405,6 +2465,53 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
             worker.close()
     built = len(log.read_text().splitlines())
     assert built == builds, f'the worker built {built} times: a peak is of one build, a timing of the second of two'
+
+
+def _timed_run(seconds: float, **phases: float) -> dict[str, Any]:
+    """One worker answer: its total and the seconds it spent in each phase."""
+    return {'seconds': seconds, 'calls': None, 'fingerprint': None, 'columns': 1, 'rows': 1, 'phases': phases}
+
+
+def _phase_lines(row: Row) -> dict[str, list[str]]:
+    """*row*'s lines of the phase table, keyed by phase, each split into its cells."""
+    return {
+        cells[1]: cells
+        for cells in ([c.strip() for c in line.strip('|').split('|')] for line in phase_table([row])[5:])
+    }
+
+
+def test_a_slower_cell_names_the_phase_that_moved() -> None:
+    """The totals say a cell got slower; the phase table says it was the build, and the solve held."""
+    row = Row(
+        'c',
+        base=[_timed_run(2.0, build=1.0, solve=1.0)] * 6,
+        head=[_timed_run(3.0, build=2.0, solve=1.0)] * 6,
+    )
+    lines = _phase_lines(row)
+
+    assert row.verdict == 'slower', 'the total moved'
+    assert lines['build'][-1] == 'slower', f'the build moved: {lines["build"]}'
+    assert lines['solve'][-1] == 'no change', f'the solve held: {lines["solve"]}'
+
+
+def test_a_phase_only_head_clocked_reads_a_dash_and_takes_no_verdict() -> None:
+    """A base older than a phase has none of it, so there is nothing to compare it with."""
+    row = Row('c', base=[_timed_run(1.0, build=1.0)] * 6, head=[_timed_run(1.0, load=0.1, build=0.9)] * 6)
+    lines = _phase_lines(row)
+
+    assert list(lines) == ['load', 'build'], 'the phases in the order head ran them'
+    assert lines['load'][2] == '—', f'base has no load: {lines["load"]}'
+    assert lines['load'][-1] == '—', f'and no verdict on it: {lines["load"]}'
+
+
+def test_a_memory_comparison_reports_no_phases() -> None:
+    """The phases are clocks, and a memory run's verdict is on its peak, so their table would mislead."""
+    run = {**_timed_run(1.0, build=1.0), 'peak_mb': 100.0}
+
+    assert 'Where the time went' not in table(
+        [Row('c', base=[run] * 6, head=[run] * 6, metric='peak_mb')], [], 6, memory=True
+    )
+    assert 'Where the time went' in table([Row('c', base=[run] * 6, head=[run] * 6)], [], 6)
 
 
 def test_two_different_models_fail_however_fast() -> None:

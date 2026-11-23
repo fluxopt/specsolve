@@ -82,11 +82,10 @@ def test_an_integer_answer_has_a_slack() -> None:
         assert answer.slack('cap')['value'].item() == pytest.approx(2.0), 'two below a cap of 4'
 
 
-def test_a_saved_answer_reads_back_its_slack(tmp_path: Path) -> None:
-    with sps.solve(spec({'cap': 'x <= 4', 'floor': 'x >= 1'}), {}, outputs=SLACK) as answer:
+def test_an_archived_answer_reads_back_its_slack(tmp_path: Path) -> None:
+    with sps.solve(spec({'cap': 'x <= 4', 'floor': 'x >= 1'}), {}, outputs=SLACK, archive=tmp_path) as answer:
         live = answer.slack('cap')
-        answer.save(tmp_path)
-    assert sps.read_result(tmp_path).slack('cap').equals(live)
+    assert sps.read_archive(tmp_path).slack('cap').equals(live)
 
 
 def test_a_solve_not_asked_for_its_slack_names_the_output() -> None:
@@ -103,7 +102,7 @@ def test_a_solve_not_asked_for_its_slack_names_the_output() -> None:
 
 #: The dispatch model of ``test_solve_over``: ``balance`` is an equality, met at
 #: every snapshot, so its slack is zero in every scenario.
-SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
+SHAPES = [pytest.param(how, id=how) for how in ('held', 'archiving', 'archived')]
 
 
 def _swept(tmp_path: Path, how: str) -> Sweep:
@@ -113,10 +112,10 @@ def _swept(tmp_path: Path, how: str) -> Sweep:
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, archive=tmp_path / 'run.zip')
         archive = sps.read_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.types.SweepArchive)
-        return archive.sweep
-    spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
-    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, **spill)
+        assert isinstance(archive, sps.types.Sweep)
+        return archive
+    archiving = {'archive': tmp_path / 'run'} if how == 'archiving' else {}
+    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, **archiving)
 
 
 @pytest.mark.parametrize('how', SHAPES)

@@ -47,6 +47,7 @@ REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
     'README.md',
     'docs/run.md',
+    'docs/howto/faster.md',
     'docs/howto/warm-start.md',
     'docs/howto/fix-relax-remove.md',
     'docs/howto/solvers.md',
