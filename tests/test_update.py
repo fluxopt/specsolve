@@ -340,9 +340,11 @@ def _same_handoff(got: Any, want: Any, where: str) -> None:
     assert got.objective_constant == pytest.approx(want.objective_constant, rel=1e-12), f'{where}: another constant'
 
 
-def _same_diagnostics(got: Any, want: Any, where: str) -> None:
+def _same_diagnostics(model: Any, reference: Any, where: str) -> None:
     """Two models report the same shape and the same ranges, an entry at a time in build order."""
-    assert (got.columns, got.rows, got.nonzeros) == (want.columns, want.rows, want.nonzeros), f'{where}: another shape'
+    shapes = [(m.columns, m.rows, m.nonzeros) for m in (model.metrics(), reference.metrics())]
+    assert shapes[0] == shapes[1], f'{where}: another shape'
+    got, want = model.diagnostics(), reference.diagnostics()
     for table in ('omissions', 'sparse_parameters', 'coefficient_range', 'bound_range', 'rhs_range'):
         assert_frame_equal(getattr(got, table), getattr(want, table), rel_tol=1e-12, abs_tol=0.0)
     assert got.objective_range == pytest.approx(want.objective_range, rel=1e-12), f'{where}: another objective range'
@@ -384,7 +386,7 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
                 model.update(change)
                 where = f'{port["name"]} {name}'
                 _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, where)
-                _same_diagnostics(model.diagnostics(), reference.diagnostics(), where)
+                _same_diagnostics(model, reference, where)
             model.update({name: value})
 
 
@@ -472,7 +474,7 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
         assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
         assert bool(took) is spliced, f'the update {"skipped" if took else "ran"} the build'
         if spliced:
-            assert model.diagnostics().loads == 1, 'new numbers on the old indices are pushed, not loaded'
+            assert model.metrics().solver_instances == 1, 'new numbers on the old indices are pushed, not loaded'
 
 
 #: A variable whose coefficient a `cases:` condition picks: 2 where `flag`
