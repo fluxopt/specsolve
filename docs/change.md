@@ -52,7 +52,7 @@ left over when the load is low.
 `diagnostics` counts what the model did:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
-after_numbers = model.diagnostics()
+after_numbers = model.metrics()
 print(f'{after_numbers.solver_instances} solver instance, {after_numbers.solves} solves')
 ```
 
@@ -73,7 +73,7 @@ and the capacity goes back to the data:
 two_days = pl.DataFrame({'snapshot': range(8), 'value': 2 * load['value'].to_list()})
 
 longer = model.update({'snapshot': two_days['snapshot'], 'load': two_days, 'p_max': sources['p_max']}).solve()
-after_rows = model.diagnostics()
+after_rows = model.metrics()
 
 print(longer.objective)
 print(f'{after_rows.solver_instances} solver instances, {after_rows.solves} solves')

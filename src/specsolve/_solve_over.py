@@ -50,18 +50,8 @@ if TYPE_CHECKING:
     from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._outputs import Output
-    from specsolve._result import Diagnostics, Result
+    from specsolve._result import Result
     from specsolve._start import Start
-
-
-def _slice_metrics(after: Diagnostics, before: Diagnostics | None) -> Metrics:
-    """One slice's row of [`Sweep.metrics`][], off the model's cumulative counters.
-
-    A serial fold's model keeps summing across slices, so this slice's share is
-    *after* minus *before*; a model built for one slice has no *before*.
-    """
-    now = after.metrics()
-    return now if before is None else now.since(before.metrics())
 
 
 def solve_over(
@@ -430,12 +420,10 @@ def _serially(
             else:
                 with _named_slice(current.key, position, len(slices)):
                     if model is None:
-                        model, before = build(spec, current.sources), None
+                        model = build(spec, current.sources)
                     else:
-                        before = model.diagnostics()
                         model.update(current.sources)
-                    result = model.solve(**solving, start=starts[position])
-                    answer = _answers(result, _slice_metrics(model.diagnostics(), before))
+                    answer = _answers(model.solve(**solving, start=starts[position]))
                 primals = answer.tables.get('primal', {})
                 if spill is not None:
                     answer = spill.write(position, current.key, answer)
@@ -498,12 +486,16 @@ def _pooled(
         yield current.key, spill.write(position, current.key, answer) if spill is not None else answer
 
 
-def _answers(result: Result, metrics: Metrics) -> SliceAnswer:
+def _answers(result: Result) -> SliceAnswer:
     """One slice's answer as plain data, read out of *result*, every declared expression evaluated now.
 
     A slice with no primal, or with undefined duals, is not a failure: the
-    reason ``Result.dual`` gives is carried.
+    reason ``Result.dual`` gives is carried. Its metrics are the result's: a
+    serial fold's model keeps summing across slices, and a result's row is
+    already its own share.
     """
+    metrics = result.metrics
+    assert metrics is not None, 'a solve always hands back its metrics'
     if not result.has_primal:
         return SliceAnswer(result.record, metrics)
     held, no_expressions = result._all_tables()
@@ -522,7 +514,7 @@ def _run_slice(
 ) -> SliceAnswer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
     with build(spec, _decode(encoded)) as model, model.solve(**call, start=start) as result:
-        answer = _answers(result, _slice_metrics(model.diagnostics(), None))
+        answer = _answers(result)
         if not encode_out:
             return answer
         return replace(answer, tables={kind: _encode(named, {}) for kind, named in answer.tables.items()})

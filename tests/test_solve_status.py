@@ -158,9 +158,12 @@ def test_a_solve_that_left_no_values_writes_the_record_and_no_tables(tmp_path):
     """An export of a run that did not solve is the record alone."""
     with sps.solve(*CASES['INFEASIBLE']) as result:
         out = result.save(tmp_path / 'infeasible')
-    assert sorted(path.name for path in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
-        'the record, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
-    )
+    assert sorted(path.name for path in out.iterdir()) == [
+        'format.json',
+        'metrics.parquet',
+        'record.parquet',
+        'spec.yaml',
+    ], 'the record, the metrics, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
     record = pl.read_parquet(out / 'record.parquet')
     assert record.row(0, named=True)['termination_condition'] == 'infeasible'
     assert record['objective'].to_list() == [None], 'no objective was reached, so the column holds none'
