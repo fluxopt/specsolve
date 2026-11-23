@@ -81,9 +81,8 @@ whose horizon holds it. An `EachLabel` answer is keyed by slice.
 
 **A sweep holds only the outputs you ask for**, such as
 `outputs={'activity', 'reduced_cost'}`. A sweep that did not ask refuses the
-reader. A slice with no duals has no reduced costs, and the reader says why. A
-`spill_to=` directory solved with other outputs is refused rather than
-resumed.
+reader. A slice with no duals has no reduced costs, and the reader says why. An
+archive directory solved with other outputs is refused rather than resumed.
 
 **`per_window=True` reads each window as it was solved**, lookahead rows
 included, on every reader:
@@ -105,9 +104,8 @@ slice, keyed by 'scenario'. Read it without per_window.
 The reader refuses `sum(p * cost)`, and `to_dataset()` leaves it out. Read it
 with `per_window=True`.
 
-**`save` writes a held sweep as a spill**, which `sps.read_sweep` and
-`sps.scan_sweep` read back ([`read_sweep`](api.md#specsolve.read_sweep)). It
-replaces what an earlier save left in the directory, as a result's `save` does.
+**An archive keeps a sweep on disk**, and `sps.read_archive` and
+`sps.scan_archive` read it back ([archiving a sweep](#archiving-a-sweep)).
 **There is no per-slice reader**: one slice is
 `sweep.primal('p').partition_by(sweep.key_name, as_dict=True)`.
 
@@ -122,15 +120,17 @@ replaces what an earlier save left in the directory, as a result's `save` does.
 | **`sweep.metrics` says what each slice took** | One [`Metrics`](api.md#specsolve.types.Metrics) per slice, keyed like `sweep.records`. |
 | **on disk, the slice is two text columns** | `slice_axis` holds the key name and `slice` the key as text. Two keys of one text are refused. |
 | **a slice that fails says which slice** | The engine's error carries a note: `in slice 'bad' (3 of 3)`. |
-| **memory grows with the answer, unless it is spilled** | Each slice's model is released; the tables accumulate unless [spilled](#spilling-a-sweep-to-disk). |
+| **memory grows with the answer, unless it is archived** | Each slice's model is released; the tables accumulate unless the sweep is [archived to a directory](#archiving-a-sweep). |
 
-## Spilling a sweep to disk
+## Archiving a sweep
 
-**`spill_to=` writes each slice's tables to a directory**, so memory stays at
-one slice:
+**`archive=` writes the model, the sources, the axis and the answer**, so the
+sweep runs again from the file alone ([archiving](../howto/archiving.md)). A
+directory archive takes each slice's tables as the fold goes, so memory stays
+at one slice:
 
 ```python
-sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', horizon=24, lookahead=24), spill_to='runs/')
+sweep = sps.solve_over('window.yaml', sources, sps.EachWindow('snapshot', horizon=24, lookahead=24), archive='runs/')
 sweep.scan('soc')  # a LazyFrame: (snapshot, value), the answer
 sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, the same keywords
 ```
@@ -138,29 +138,12 @@ sweep.scan('balance', 'dual', per_window=True).collect()  # the same readers, th
 | Rule | |
 |---|---|
 | **`scan` reads lazily** | `sweep.scan(name, kind='primal')` returns a `LazyFrame` over the files. |
-| **one file per slice and name** | `<kind>/<name>/<position>.parquet`, plus `record/` and `metrics/`. |
-| **an interrupted sweep resumes** | Run the same call at the same directory. A finished slice is read back, and a slice interrupted part way is solved again. |
-| **a directory holds one sweep** | A different sweep is refused. Changed data or a changed spec is not detected, so delete the directory to solve again. |
+| **one file per slice and name** | `answer/<kind>/<name>/<position>.parquet`, plus `answer/record/` and `answer/metrics/`, with `specsolve_run` added to each table. |
+| **an interrupted sweep resumes** | Run the same call at the same directory. A finished slice is read back, and a slice interrupted part way is solved again. The spec, the axis and the sources the archive holds are not written again, and a resume from other ones is refused, since the slices there were solved from them. |
+| **a directory holds one sweep** | A different sweep is refused, and so is a directory that holds anything else. Changed data or a changed spec is not detected, so delete the directory to solve again. |
+| **a zip is packed at the end** | A `.zip` archive is written whole once the sweep ends, and the sweep it returns holds its answer in memory. An interrupted one leaves no file, so it is not resumed. |
+| **every reader answers off the archive** | `per_window=True` included, since every window is there. A directory a sweep left when it stopped reads back the slices it finished. |
 | **the parent writes** | Under `executor=`, workers send their answers back to the parent. |
-
-## Archiving a sweep
-
-**`archive=` writes the model, the sources, the axis and the answer**, so the
-sweep runs again from the file alone ([archiving](../howto/archiving.md)):
-
-```python
-sweep = sps.solve_over(
-    'window.yaml',
-    sources,
-    sps.EachWindow('snapshot', horizon=24, lookahead=24),
-    archive='roll.zip',
-)
-```
-
-| Rule | |
-|---|---|
-| **an archive holds a sweep as a spill does** | `answer/` is the layout `spill_to=` and `save` write: `answer/<kind>/<name>/<position>.parquet`, with `specsolve_run` added to each table. |
-| **every reader answers off the archive** | `per_window=True` included, since every window is there. |
 
 ## Carrying state between slices
 
@@ -213,10 +196,10 @@ model = sps.build_slice('window.yaml', sources | {'soc_initial': 40.0}, axis, 88
 
 **`sweep=` starts the slice from what that sweep handed it.** Each carried
 parameter is then what the slice before left in the sweep, so the model is the
-one the sweep solved. A sweep that stopped is read back off its spill:
+one the sweep solved. A sweep that stopped is read back off its archive:
 
 ```python
-stopped = sps.scan_sweep('runs/')
+stopped = sps.scan_archive('runs/')
 model = sps.build_slice('window.yaml', sources, axis, stopped.keys[-1], sweep=stopped)
 ```
 
@@ -254,7 +237,7 @@ a `submit` that returns a `Future`.
 | `None` *(default)* | always, until measurement says otherwise | Sequential. |
 | `ThreadPoolExecutor` | rarely | Slices contend with polars' own thread pool, and peak memory adds up. |
 | `ProcessPoolExecutor` | local parallelism | **Must not use `fork`.** Sources cross as parquet. |
-| anything remote | a cluster you already run | dask's `Client`, ray, loky. Paths travel as bytes; pass `shared_filesystem=True` if workers mount your filesystem. |
+| anything remote | a cluster you already run | dask's `Client`, ray, loky. A path crosses as the path, so the workers must read it; a table crosses as parquet. |
 
 **A forked worker hangs** rather than raising.
 [Running a sweep in parallel](../howto/parallel.md) is the recipe.

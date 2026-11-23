@@ -95,38 +95,40 @@ def test_rows_a_presence_removed_and_rows_with_no_terms_are_counted_together():
         'k': pl.DataFrame({'g': ['a', 'c'], 'value': [1.0, 1.0]}),
     }
     with sps.build(spec, data) as model:
-        assert model.diagnostics().rows == 1, 'only the row at c has a term'
+        assert model.metrics().rows == 1, 'only the row at c has a term'
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'cap', 'rows_not_built': 2}], (
             'the row the presence removed and the row with no term are both counted'
         )
 
 
+def _ran(metrics) -> set[str]:
+    return set(metrics.phases.filter(pl.col('seconds') > 0)['phase'])
+
+
 def test_diagnostics_say_where_the_time_went(tmp_path):
     """A run that is slower than it should be can say which phase the time went to.
 
-    `seconds` is advisory wall time, so nothing here asserts a magnitude.
+    The clocks are advisory wall time, so nothing here asserts a magnitude.
     """
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
-        built = model.diagnostics().seconds
-        assert set(built) == {'attach', 'build'}, (
-            'a model only built has spent time attaching sources and building tables, nowhere else'
+        built = model.metrics()
+        assert _ran(built) == {'load', 'tidy', 'attach', 'build'}, (
+            'a model only built has spent time loading the spec, reading and attaching sources and building '
+            'tables, nowhere else'
         )
-        assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
+        assert built.phases['seconds'].min() >= 0, 'a wall clock cannot run backwards'
 
         model.solve()
         model.write(tmp_path / 'model.lp')
-        ran = model.diagnostics().seconds
-        assert set(ran) == {'attach', 'build', 'handoff', 'solve', 'write'}, (
-            'a solve adds the handoff and the solver run, a write adds the file stream'
+        ran = model.metrics()
+        assert _ran(ran) == {'load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write'}, (
+            'a solve adds the handoff, the solver run and the readback, a write adds the file stream'
         )
-        assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
 
-        snapshot = dict(ran)
         model.solve()
-        assert model.diagnostics().seconds['solve'] >= ran['solve'], (
+        assert model.metrics().solve_seconds >= ran.solve_seconds, (
             'the clocks accumulate across solves, the way `solves` counts'
         )
-        assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
 
 
 #: Three constraints that differ only in scale. `badly_scaled` spans nine orders of
@@ -326,14 +328,14 @@ def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     refused.
     """
     with sps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
-        built = model.diagnostics()
+        built = model.metrics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
         with pytest.raises(sps.errors.DataError, match='used as a divisor'):
             model.update(HALF_A_DIVISOR)
-        after = model.diagnostics()
+        after, size = model.diagnostics(), model.metrics()
 
-    assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
+    assert (size.columns, size.rows, size.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
     )
     assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (

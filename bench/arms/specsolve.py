@@ -107,7 +107,7 @@ def _loaded(sink: str, model: Any) -> Any:
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
+TIMED_THROUGH = {'window': 'handoff', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
@@ -151,7 +151,7 @@ def window_setup(
 def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
+    ``update`` rebuilds, and ``handoff`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
@@ -166,20 +166,12 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
-    """``Engine._hand_off`` as the checkout under test spells it, and whether it loaded the solver from scratch.
-
-    A checkout that still takes ``keep`` closes the held solver itself for a
-    cold window, inside the timed handoff; a later one has no ``keep``, so a
-    cold window closes it here first.
-    """
+    """``Engine.handoff``, and whether it loaded the solver from scratch; a *cold* window closes the held solver first."""
     engine = model._engine
-    if 'keep' in inspect.signature(engine._hand_off).parameters:
-        _, kept = engine._hand_off(sink, None, 'nothing' if cold else 'solver')
-        return kept == 'nothing'
     if cold and engine._solver is not None:
         engine._solver.close()
         engine._solver = None
-    return engine._hand_off(sink, None)[1]
+    return engine.handoff(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
@@ -219,7 +211,7 @@ def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         'columns': metrics['columns'][0],
         'rows': metrics['rows'][0],
         'nonzeros': metrics['nonzeros'][0],
-        'loads': int(metrics['loads'].sum()),
+        'loads': int(metrics['solver_instances'].sum()),
         'phases': {
             column.removesuffix('_seconds'): float(metrics[column].sum())
             for column in metrics.columns
@@ -259,7 +251,8 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
 
     ``frames`` collects every variable's primal and every constraint's dual;
-    ``parquet`` is ``Result.save``. Both read the default answer, which holds
+    ``parquet`` writes the answer as an archive holds it, through
+    ``Result._save`` where a checkout has no ``Result.save``. Both read the default answer, which holds
     no optional output. The answer passes through
     ``Model._with_record_fields`` as a solve's does, so what `solve` attaches
     is timed too; a checkout older than it reads the engine's answer as it is.
@@ -277,8 +270,18 @@ def read(model: Any, answer: Any, into: str) -> Counts:
                 result.dual(name)
     else:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
-            result.save(Path(tmp) / 'answer')
+            _write_answer(result, Path(tmp) / 'answer')
     return _counts(_handoff(model), nonzeros=False)
+
+
+def _write_answer(result: Any, out: Path) -> None:
+    """*result*'s answer at *out*, as the checkout under test writes one."""
+    if (save := getattr(result, 'save', None)) is not None:
+        save(out)
+        return
+    from specsolve._answer_layout import write_whole
+
+    result._save(out, write_whole)
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
