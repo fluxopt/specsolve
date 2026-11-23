@@ -7,9 +7,11 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.12.0 (2026-11-23)
 
-**An answer lives on disk only as an archive, every solve says what each of its
-phases took, and the sweep API is renamed.** Code written for 0.11 needs these
-changes:
+**A smaller public API with fewer concepts, one word for each meaning, and a
+clock on every phase of a solve.** An answer is kept on disk in one form, the
+archive. A sweep is one call over one axis. Messages, docs and code use each
+word in the one sense the glossary gives it, and a result says what each phase
+took. Code written for 0.11 needs these changes:
 
 - `Result.save`, `Sweep.save`, `load_result`, `load_sweep`, `scan_result`,
   `scan_sweep` and `solve_over(spill_to=)` are gone. `solve(archive=)` and
