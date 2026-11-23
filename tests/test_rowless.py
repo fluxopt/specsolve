@@ -255,8 +255,8 @@ def _indexed_wheres(monkeypatch: pytest.MonkeyPatch, spec: dict) -> tuple[int, i
 
     monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(spec, TABLED_SOURCES) as model:
-        diagnostics = model.diagnostics()
-        return diagnostics.columns, diagnostics.rows, indexed
+        metrics = model.metrics()
+        return metrics.columns, metrics.rows, indexed
 
 
 @pytest.mark.parametrize(
@@ -414,7 +414,7 @@ def test_a_condition_that_holds_everywhere_is_dropped_from_its_where(monkeypatch
 
     monkeypatch.setattr(indices, 'table', spied_table)
     with sps.build(spec, sources) as model:
-        assert model.diagnostics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+        assert model.metrics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
     assert indexed == read, f'`probe` was indexed over {indexed}, where what is left of `{where}` reads {read}'
 
 
