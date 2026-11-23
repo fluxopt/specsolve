@@ -29,7 +29,7 @@ import yaml
 from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, _ask, checkouts, compare, same_model, verdict
+from bench.ab.compare import Row, Worker, _ask, checkouts, compare, phase_table, same_model, table, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -2429,7 +2429,7 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
         'def build(spec, sources):\n'
         "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
         "        log.write('built\\n')\n"
-        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(columns=1, rows=1))\n'
+        '    return SimpleNamespace(diagnostics=lambda: SimpleNamespace(columns=1, rows=1, seconds={}))\n'
     )
     log = tmp_path / 'builds'
     monkeypatch.setenv('AB_BUILDS', str(log))
@@ -2441,6 +2441,53 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
             worker.close()
     built = len(log.read_text().splitlines())
     assert built == builds, f'the worker built {built} times: a peak is of one build, a timing of the second of two'
+
+
+def _timed_run(seconds: float, **phases: float) -> dict[str, Any]:
+    """One worker answer: its total and the seconds it spent in each phase."""
+    return {'seconds': seconds, 'calls': None, 'fingerprint': None, 'columns': 1, 'rows': 1, 'phases': phases}
+
+
+def _phase_lines(row: Row) -> dict[str, list[str]]:
+    """*row*'s lines of the phase table, keyed by phase, each split into its cells."""
+    return {
+        cells[1]: cells
+        for cells in ([c.strip() for c in line.strip('|').split('|')] for line in phase_table([row])[5:])
+    }
+
+
+def test_a_slower_cell_names_the_phase_that_moved() -> None:
+    """The totals say a cell got slower; the phase table says it was the build, and the solve held."""
+    row = Row(
+        'c',
+        base=[_timed_run(2.0, build=1.0, solve=1.0)] * 6,
+        head=[_timed_run(3.0, build=2.0, solve=1.0)] * 6,
+    )
+    lines = _phase_lines(row)
+
+    assert row.verdict == 'slower', 'the total moved'
+    assert lines['build'][-1] == 'slower', f'the build moved: {lines["build"]}'
+    assert lines['solve'][-1] == 'no change', f'the solve held: {lines["solve"]}'
+
+
+def test_a_phase_only_head_clocked_reads_a_dash_and_takes_no_verdict() -> None:
+    """A base older than a phase has none of it, so there is nothing to compare it with."""
+    row = Row('c', base=[_timed_run(1.0, build=1.0)] * 6, head=[_timed_run(1.0, load=0.1, build=0.9)] * 6)
+    lines = _phase_lines(row)
+
+    assert list(lines) == ['load', 'build'], 'the phases in the order head ran them'
+    assert lines['load'][2] == '—', f'base has no load: {lines["load"]}'
+    assert lines['load'][-1] == '—', f'and no verdict on it: {lines["load"]}'
+
+
+def test_a_memory_comparison_reports_no_phases() -> None:
+    """The phases are clocks, and a memory run's verdict is on its peak, so their table would mislead."""
+    run = {**_timed_run(1.0, build=1.0), 'peak_mb': 100.0}
+
+    assert 'Where the time went' not in table(
+        [Row('c', base=[run] * 6, head=[run] * 6, metric='peak_mb')], [], 6, memory=True
+    )
+    assert 'Where the time went' in table([Row('c', base=[run] * 6, head=[run] * 6)], [], 6)
 
 
 def test_two_different_models_fail_however_fast() -> None:

@@ -79,6 +79,21 @@ class Row:
         return [h[m] / b[m] for b, h in zip(self.base, self.head, strict=True) if b[m] > 0]
 
     @property
+    def phases(self) -> list[str]:
+        """The phases either side clocked, in the order head ran them, then any only base has."""
+        seen = [*self.head[0].get('phases', {}), *self.base[0].get('phases', {})] if self.base and self.head else []
+        return list(dict.fromkeys(seen))
+
+    def phase_ratios(self, phase: str) -> list[float]:
+        """Head over base for *phase*, per paired round, where both sides clocked it above zero."""
+        pairs = zip(self.base, self.head, strict=True)
+        return [
+            h['phases'][phase] / b['phases'][phase]
+            for b, h in pairs
+            if b.get('phases', {}).get(phase, 0) > 0 and phase in h.get('phases', {})
+        ]
+
+    @property
     def verdict(self) -> str:
         if self.error:
             return 'error'
@@ -303,7 +318,50 @@ def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = Fal
         + f'. With nothing changed, a cell reads {"lower or higher" if memory else "faster or slower"} {rate:.1%} of the time at {rounds} rounds: '
         f'about {rate * len(rows):.1f} of these {len(rows)}. Re-run a lone verdict with `-k` and more rounds.',
     ]
+    if not memory:
+        lines += phase_table(rows)
     return '\n'.join(lines)
+
+
+def phase_table(rows: list[Row]) -> list[str]:
+    """Each cell's seconds per phase on both sides, so a slower cell says which phase moved.
+
+    A phase one side never clocked, as a base older than a phase has none of
+    it, reads ``—`` there and takes no verdict. The verdicts here are for
+    reading: the exit status is the totals'.
+    """
+    measured = [r for r in rows if not r.error and r.phases]
+    if not measured:
+        return []
+    lines = [
+        '',
+        "Where the time went: each phase's median ms, its median paired ratio and its verdict, as above.",
+        '',
+        '| cell | phase | base ms | head ms | change | head lower in | verdict |',
+        '|---|---|--:|--:|--:|--:|---|',
+    ]
+    for r in measured:
+        for phase in r.phases:
+            base, head = _phase_median(r.base, phase), _phase_median(r.head, phase)
+            ratios = r.phase_ratios(phase)
+            if base is None or head is None or not ratios:
+                lines.append(f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | | | — |')
+                continue
+            lines.append(
+                f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | {statistics.median(ratios) - 1:+.1%} '
+                f'| {sum(x < 1 for x in ratios)}/{len(ratios)} | {verdict(ratios)} |'
+            )
+    return lines
+
+
+def _phase_median(runs: list[dict[str, Any]], phase: str) -> float | None:
+    """The median seconds *runs* spent in *phase*, or None where none of them clocked it."""
+    spent = [run['phases'][phase] for run in runs if phase in run.get('phases', {})]
+    return statistics.median(spent) if spent else None
+
+
+def _ms(seconds: float | None) -> str:
+    return '—' if seconds is None else f'{seconds * 1e3:.3g}'
 
 
 def main() -> None:
