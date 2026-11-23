@@ -27,7 +27,7 @@ import polars as pl
 
 from specsolve import _parquet as parquet
 from specsolve._api import build, check
-from specsolve._archive_layout import ANSWER_DIR, check_the_target, sweep_archive
+from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
 from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._inputs import as_spec
@@ -103,7 +103,9 @@ def solve_over(
             already there, which is how an interrupted sweep resumes. A
             ``.zip`` is packed into one file once the sweep ends, and the
             sweep returned then holds its answer in memory; an interrupted one
-            leaves no file, and is not resumed.
+            leaves no file, and is not resumed. The sweep returned carries
+            the archived [`sources`][specsolve._sweep.Sweep.sources]: the
+            paths under ``sources/`` for a directory, the tables for a zip.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
             every slice. The sweep and its archive carry these and nothing
             else; an *archive* directory solved with others is refused rather
@@ -123,7 +125,7 @@ def solve_over(
             nothing.
 
     Returns:
-        The sweep, which reads its answer.
+        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.Sweep.axis] that cut it.
 
     Raises:
         SpecsolveError: Before a slice is taken: an *over* that is no axis,
@@ -188,7 +190,7 @@ def solve_over(
             answered = _serially(spec, slices, solving, plan, on_disk, starts)
         else:
             answered = _pooled(executor, spec, slices, solving, on_disk, starts)
-        return Sweep._folded(key_name, stitch, answered, on_disk, key_dtype, asked, spec)
+        return replace(Sweep._folded(key_name, stitch, answered, on_disk, key_dtype, asked, spec), axis=axis)
 
     if out is None:
         return folded(None)
@@ -197,7 +199,7 @@ def solve_over(
     tables = _archived_sources(program, axis, sources, slices[0].sources)
     with sweep_archive(out, spec, tables, axis.to_dict()) as (answer, write):
         on_disk = SliceFiles.opened(answer, key_name, keys, key_dtype, stitch, asked, spec, write)
-        sweep = folded(on_disk)
+        sweep = replace(folded(on_disk), sources=carried_sources(out, tables))
         if out.suffix == '.zip':
             sweep = replace(sweep, _slices=on_disk.tables(eager=True))
     return sweep

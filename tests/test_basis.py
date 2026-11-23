@@ -67,7 +67,7 @@ def test_a_basis_reads_back_as_an_enum_of_the_five_statuses() -> None:
 def test_an_archived_answer_reads_back_its_basis(tmp_path: Path) -> None:
     with sps.solve(SPEC, {}, outputs=BASIS, archive=tmp_path) as answer:
         live = answer.variable_basis('u'), answer.constraint_basis('cap')
-    loaded = sps.read_archive(tmp_path).result
+    loaded = sps.read_archive(tmp_path)
     assert loaded.variable_basis('u').equals(live[0])
     assert loaded.constraint_basis('cap').equals(live[1])
 
@@ -81,12 +81,12 @@ def test_a_constraint_named_as_a_variable_keeps_its_own_basis(tmp_path: Path) ->
     constraints = {('x' if name == 'loose' else name): row for name, row in SPEC['constraints'].items()}
     spec = {**SPEC, 'constraints': constraints}
     sps.solve(spec, {}, outputs=BASIS, archive=tmp_path / 'case')
-    loaded = sps.scan_archive(tmp_path / 'case').result
+    loaded = sps.scan_archive(tmp_path / 'case')
     archived = sps.read_archive(tmp_path / 'case')
-    assert isinstance(archived, sps.types.ResultArchive)
+    assert isinstance(archived, sps.types.Result)
     catalog = pl.read_parquet(tmp_path / 'case' / 'catalog.parquet').filter(pl.col('name') == 'x')
 
-    for answer in (loaded, archived.result):
+    for answer in (loaded, archived):
         assert answer.variable_basis('x')['value'].item() == 'basic', 'the variable x is inside its bounds'
         assert answer.constraint_basis('x')['value'].item() == 'basic', 'the constraint x is not binding'
     assert {'answer/variable_basis/x.parquet', 'answer/constraint_basis/x.parquet'} <= set(catalog['path']), (
@@ -160,8 +160,8 @@ def _swept(tmp_path: Path, how: str, outputs: frozenset[Output] = BASIS) -> Swee
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, archive=tmp_path / 'run.zip')
         archive = sps.read_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.types.SweepArchive)
-        return archive.sweep
+        assert isinstance(archive, sps.types.Sweep)
+        return archive
     if how == 'process-pool':
         with ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn')) as pool:
             return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=outputs, executor=pool)

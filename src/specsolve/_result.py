@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer_layout import TableWriter
+    from specsolve._inputs import Source
     from specsolve._status import SolveStatus
 
 
@@ -354,6 +355,8 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
+    #: The data this answered, where an archive holds it. ``None`` where none does.
+    _sources: Mapping[str, Source] | None = None
     #: What reaching this answer took. ``None`` for an answer no solve produced.
     _metrics: Metrics | None = None
 
@@ -394,6 +397,21 @@ class Result:
         perhaps over other data.
         """
         return self._spec
+
+    @property
+    def sources(self) -> Mapping[str, Source] | None:
+        """The data this answered, keyed as the file declares it, as its archive holds it; ``None`` where no archive holds this answer.
+
+        An answer solved with ``archive=`` into a directory holds the path to
+        each ``sources/<key>.parquet`` and no table in memory; into a ``.zip``,
+        which has no file to point at, the tables the archive was written
+        from. [`read_archive`][specsolve._archive.read_archive] gives each
+        source as the table [`tidy`][specsolve._api.tidy] returns, and
+        [`scan_archive`][specsolve._archive.scan_archive] the path to its
+        member. ``sps.solve(result.spec, result.sources)`` asks the question
+        again.
+        """
+        return self._sources
 
     @property
     def solved_at(self) -> datetime | None:

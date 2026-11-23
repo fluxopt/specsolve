@@ -648,7 +648,7 @@ def test_an_archived_solution_carries_the_activities_it_was_asked_for(dispatch_y
         out = tmp_path / 'case' / 'answer'
         constraints = set(sps.check(dispatch_yaml).constraints)
         assert {p.stem for p in (out / 'activity').iterdir()} == constraints, 'one activity file per constraint'
-        loaded = sps.read_archive(tmp_path / 'case').result
+        loaded = sps.read_archive(tmp_path / 'case')
         for name in constraints:
             written = pl.read_parquet(out / 'activity' / f'{name}.parquet').drop('specsolve_run')
             assert written.equals(result.activity(name))
@@ -683,7 +683,7 @@ def test_an_archived_solution_says_why_a_kind_is_absent(tmp_path):
 def test_an_archived_solution_reads_back_as_the_result_it_was(dispatch_archived, dispatch_yaml):
     """Every reader answers what it answered, off the directory rather than a session."""
     dispatch_result, archive = dispatch_archived
-    loaded = sps.read_archive(archive).result
+    loaded = sps.read_archive(archive)
 
     assert (loaded.status, loaded.termination_condition) == (
         dispatch_result.status,
@@ -710,7 +710,7 @@ def test_a_result_read_back_gives_the_reason_the_solve_gave(tmp_path):
     }
     sources = {'t': range(2), 'load': [1.5, 2.5], 'scale': pl.DataFrame({'t': [0], 'value': [2.0]})}
     with sps.solve(spec, sources, archive=tmp_path / 'case') as result:
-        loaded = sps.read_archive(tmp_path / 'case').result
+        loaded = sps.read_archive(tmp_path / 'case')
         with pytest.raises(sps.errors.SpecsolveError) as no_dual:
             result.dual('meet')
         with pytest.raises(sps.errors.SpecsolveError) as no_ratio:
@@ -730,7 +730,7 @@ def test_a_result_read_back_gives_the_reason_the_solve_gave(tmp_path):
 def test_a_solve_that_left_no_values_reads_back_and_still_has_none(tmp_path):
     """A run that did not solve is an answer, and reads back as that answer."""
     sps.solve(*CASES['INFEASIBLE'], archive=tmp_path / 'infeasible')
-    loaded = sps.read_archive(tmp_path / 'infeasible').result
+    loaded = sps.read_archive(tmp_path / 'infeasible')
     assert loaded.termination_condition == 'infeasible'
     assert not loaded.has_primal, 'the record says the solve produced none, so no reader is offered any'
     assert loaded.objective != loaded.objective, 'nan, as the solve reported it'
@@ -748,8 +748,8 @@ def test_an_archive_whose_answer_has_no_record_is_refused(dispatch_archived):
 def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(dispatch_archived):
     """`read_archive` holds the values when it returns; `scan_archive` reads each table when asked."""
     dispatch_result, saved = dispatch_archived
-    loaded = sps.read_archive(saved).result
-    scanned = sps.scan_archive(saved).result
+    loaded = sps.read_archive(saved)
+    scanned = sps.scan_archive(saved)
     expected = dispatch_result.primal('p')
     assert scanned.primal('p').equals(expected), 'both read the same answer while the directory is there'
     shutil.rmtree(saved)
@@ -762,8 +762,8 @@ def test_an_answer_read_whole_outlives_the_directory_and_a_scanned_one_does_not(
 def test_a_scanned_answer_reads_its_tables_at_the_call_that_asks(dispatch_archived):
     """A scan returns what the file holds at the read; a read, what it held at the read."""
     dispatch_result, saved = dispatch_archived
-    loaded = sps.read_archive(saved).result
-    scanned = sps.scan_archive(saved).result
+    loaded = sps.read_archive(saved)
+    scanned = sps.scan_archive(saved)
     was = dispatch_result.primal('p')
     was.with_columns(pl.col('value') * 2).write_parquet(saved / 'answer' / 'primal' / 'p.parquet')
 
@@ -839,7 +839,7 @@ def _left_absent(missing: str) -> dict:
 
 def _archived(spec, sources, tmp_path):
     sps.solve(spec, sources, archive=tmp_path / 'case')
-    with sps.read_archive(tmp_path / 'case').result as loaded:
+    with sps.read_archive(tmp_path / 'case') as loaded:
         return loaded.evaluate('twice')
 
 

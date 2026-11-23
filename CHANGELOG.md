@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): read_archive returns the result or the sweep, which carries its spec and sources ([#2193](https://github.com/fluxopt/specsolve/pull/2193))
 - refactor(api): an answer is kept on disk only as an archive, which a sweep writes slice by slice ([#2192](https://github.com/fluxopt/specsolve/pull/2192))
 - refactor(api): a sweep's workers read a path source themselves, so solve_over takes no shared_filesystem ([#2191](https://github.com/fluxopt/specsolve/pull/2191))
 - feat(api): each result carries the metrics of the solve that produced it ([#2188](https://github.com/fluxopt/specsolve/pull/2188))

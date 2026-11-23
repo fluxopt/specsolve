@@ -30,7 +30,7 @@ import polars as pl
 from mathspec import advice
 
 from specsolve import _parquet as parquet
-from specsolve._archive_layout import check_the_target, write_archive
+from specsolve._archive_layout import carried_sources, check_the_target, write_archive
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected
 from specsolve._engine.engine import Engine, expressions_of
@@ -305,6 +305,9 @@ class Model:
                 [`Metrics`][specsolve._records.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
+                The answer returned carries the archived
+                [`sources`][specsolve._result.Result.sources]: the paths
+                under ``sources/`` for a directory, the tables for a zip.
             outputs: Each [`Output`][specsolve.types.Output] the answer
                 carries beside the primal, the duals and the declared
                 expressions: ``activity`` for each constraint's left-hand side,
@@ -421,15 +424,10 @@ class Model:
             recorded = self._share()
             return pl.DataFrame([recorded._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        write_archive(
-            out,
-            self._spec,
-            with_positions(self._program, self._tidied),
-            answer=answered._save,
-            metrics=metrics,
-        )
+        tables = with_positions(self._program, self._tidied)
+        write_archive(out, self._spec, tables, answer=answered._save, metrics=metrics)
         self._engine.lap('archive')
-        return replace(answered, _metrics=recorded)
+        return replace(answered, _metrics=recorded, _sources=carried_sources(out, tables))
 
     def write(self, path: str | Path) -> None:
         """Stream the built model to *path*, in the format its suffix names.

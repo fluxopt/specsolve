@@ -210,6 +210,17 @@ def _write_inputs(
         (tree / AXIS_MEMBER).write_text(json.dumps(axis))
 
 
+def carried_sources(out: Path, tables: Mapping[str, pl.LazyFrame]) -> dict[str, Path] | dict[str, pl.LazyFrame]:
+    """The sources an answer archived at *out* carries: the path to each member of a directory, *tables* for a zip.
+
+    A zip has no member a path reaches, so its answer holds the tables it was
+    written from, which are in memory already; a directory's holds none of them.
+    """
+    if out.suffix == '.zip':
+        return dict(tables)
+    return {name: out / SOURCES_DIR / f'{name}.parquet' for name in tables}
+
+
 def _refuse_other_inputs(
     tree: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
 ) -> None:

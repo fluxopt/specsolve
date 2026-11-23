@@ -499,7 +499,7 @@ def archived(tmp_path):
 )
 def test_evaluate_off_an_archive_read_whole_reads_the_archived_solution(result, archived, expression):
     """A quantity the file never named reads off an archive read whole, at the values the solve left — no re-solve."""
-    read_back = sps.read_archive(archived).result.evaluate(expression)
+    read_back = sps.read_archive(archived).evaluate(expression)
     live = result.evaluate(expression)
     keys = live.columns[:-1]
     assert read_back.sort(keys).equals(live.sort(keys)), (
@@ -509,7 +509,7 @@ def test_evaluate_off_an_archive_read_whole_reads_the_archived_solution(result, 
 
 def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_path):
     """`scan_archive` leaves the tables on disk, and evaluate rebuilds against them just the same."""
-    read_back = sps.scan_archive(archived, into=tmp_path / 'unpacked').result.evaluate('sum(p * p_max, over=generator)')
+    read_back = sps.scan_archive(archived, into=tmp_path / 'unpacked').evaluate('sum(p * p_max, over=generator)')
     live = result.evaluate('sum(p * p_max, over=generator)')
     keys = live.columns[:-1]
     assert read_back.sort(keys).equals(live.sort(keys)), 'a scanned archive evaluates against the tables left on disk'
@@ -518,7 +518,7 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
 def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
     monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
-    table = sps.read_archive(archived).result.evaluate('total_gen')
+    table = sps.read_archive(archived).evaluate('total_gen')
     assert table.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
 
 

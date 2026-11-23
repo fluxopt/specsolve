@@ -311,13 +311,13 @@ def _rolling(tmp_path) -> pl.DataFrame:
 def _scanned(tmp_path) -> pl.DataFrame:
     axis = sps.EachLabel('scenario')
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'case', solver_options=_OPTIONS)
-    return sps.scan_archive(tmp_path / 'case').sweep.records
+    return sps.scan_archive(tmp_path / 'case').records
 
 
 def _read(tmp_path) -> pl.DataFrame:
     axis = sps.EachLabel('scenario')
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'case.zip', solver_options=_OPTIONS)
-    return sps.read_archive(tmp_path / 'case.zip').sweep.records
+    return sps.read_archive(tmp_path / 'case.zip').records
 
 
 def _archived(tmp_path) -> pl.DataFrame:
@@ -1680,7 +1680,7 @@ def test_an_archive_stamped_halfway_is_stamped_again_rather_than_resumed(monkeyp
             sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, archive=out)
 
     ran = sps.solve_over(WINDOW, span_sources(8), WINDOW_AXIS, archive=out)
-    assert sps.scan_archive(out).sweep.records.drop('specsolve_run').equals(ran.records.drop('specsolve_run'))
+    assert sps.scan_archive(out).records.drop('specsolve_run').equals(ran.records.drop('specsolve_run'))
 
 
 def _typed_apart(in_load: object, in_cost: object) -> dict[str, object]:
@@ -1808,7 +1808,7 @@ def test_a_sweep_that_solved_nothing_still_archives_its_records(tmp_path):
         'every slice terminated infeasible, and the record says so'
     )
     assert not (out / 'primal').exists(), 'and no tables are written, there being none'
-    assert sps.read_archive(tmp_path / 'sweep').sweep.records.height == records.height, 'the archived study reads back'
+    assert sps.read_archive(tmp_path / 'sweep').records.height == records.height, 'the archived study reads back'
 
 
 @pytest.mark.parametrize('lost', ['record', 'metrics'], ids=str)
@@ -1820,7 +1820,7 @@ def test_a_sweep_directory_missing_its_record_is_refused_by_name(lost: str, tmp_
     """
     out = tmp_path / 'sweep'
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
-    assert sps.read_archive(out).sweep.records.height == 3, 'the whole one reads back first'
+    assert sps.read_archive(out).records.height == 3, 'the whole one reads back first'
     shutil.rmtree(out / 'answer' / lost)
 
     with pytest.raises(sps.errors.LayoutError, match=f"holds no slice under '{lost}'"):
@@ -1835,8 +1835,8 @@ def test_a_sweep_read_whole_owes_its_archive_nothing_and_a_scanned_one_reads_it(
     """
     archived = sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'sweep')
     expected = archived.scan('p').collect()
-    loaded = sps.read_archive(tmp_path / 'sweep').sweep
-    scanned = sps.scan_archive(tmp_path / 'sweep').sweep
+    loaded = sps.read_archive(tmp_path / 'sweep')
+    scanned = sps.scan_archive(tmp_path / 'sweep')
 
     assert scanned.primal('p').equals(expected), 'both read the study the archive holds'
     shutil.rmtree(tmp_path / 'sweep')
@@ -2505,7 +2505,7 @@ def test_a_resumed_sweep_keeps_the_reasons_of_the_slices_it_reads_back(monkeypat
             sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), archive=out)
 
     resumed = sps.solve_over(PRICED_KNAPSACK, sources, sps.EachLabel('draw'), archive=out)
-    for read in (resumed, sps.scan_archive(out).sweep):
+    for read in (resumed, sps.scan_archive(out)):
         with pytest.raises(sps.errors.SpecsolveError, match='duals are undefined for a mixed-integer model'):
             read.evaluate('price')
 
@@ -2531,9 +2531,7 @@ def test_a_resumed_carry_reads_its_state_off_the_disk(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError, match='went away'):
         _archiving(tmp_path, start=None)
     monkeypatch.setattr(driver, '_answers', answered)
-    assert sps.scan_archive(tmp_path).sweep.keys == [0, 3], (
-        'the interrupted archive reads back keyed by the two it finished'
-    )
+    assert sps.scan_archive(tmp_path).keys == [0, 3], 'the interrupted archive reads back keyed by the two it finished'
 
     resumed = _archiving(tmp_path, start=None)
     cold = sps.solve_over(SPENDING, span_sources(12), replace(PRICED_AXIS, carry=PRICED_CARRY), start=None)
@@ -2583,7 +2581,7 @@ def test_an_interrupted_archive_reads_back_only_the_slices_it_finished(read, tmp
     record never landed was in the answer and missing from the records."""
     _scenarios()(tmp_path)
     (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
-    stopped = read(tmp_path).sweep
+    stopped = read(tmp_path)
     assert stopped.keys == ['high', 'mid'], 'the records hold the two slices that finished'
     assert sorted(stopped.scan('p').collect()['scenario'].unique()) == stopped.keys, 'and so do the tables'
 
@@ -2598,7 +2596,7 @@ def test_an_interrupted_archive_whose_finished_slices_left_no_primal_reads_back(
     )
     sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), archive=tmp_path)
     (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
-    stopped = read(tmp_path).sweep
+    stopped = read(tmp_path)
     assert stopped.keys == ['high', 'mid'], 'the records hold the two infeasible slices that finished'
     assert not stopped.records['has_primal'].any(), 'and neither left a primal'
 
@@ -2787,11 +2785,11 @@ def test_a_sweep_archive_evaluates_a_quantity_the_file_never_named_per_slice(tmp
     sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path / 'study.zip')
     sweep = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'out')
     expr = 'sum(p * cost, over=generator)'
-    swept = sweep.sweep.evaluate(expr)
-    for key in sweep.sweep.keys:
+    swept = sweep.evaluate(expr)
+    for key in sweep.keys:
         with sps.build_slice(DISPATCH, scenario_sources(), axis, key) as model:
             live = model.solve().evaluate(expr)
-        got = swept.filter(pl.col(sweep.sweep.key_name) == key).drop(sweep.sweep.key_name)
+        got = swept.filter(pl.col(sweep.key_name) == key).drop(sweep.key_name)
         columns = live.columns[:-1]
         assert got.sort(columns).equals(live.sort(columns)), f'slice {key!r} evaluates at its own primal, no re-solve'
 
@@ -2800,8 +2798,8 @@ def test_a_scanned_sweep_archive_evaluates_the_same(tmp_path):
     """A sweep left on disk (`scan_archive`) evaluates against those tables, the same values held reads."""
     sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
     expr = 'sum(p * cost, over=generator)'
-    whole = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'whole').sweep.evaluate(expr)
-    scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').sweep.evaluate(expr)
+    whole = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'whole').evaluate(expr)
+    scanned = sps.scan_archive(tmp_path / 'study.zip', tmp_path / 'scan').evaluate(expr)
     assert scanned.equals(whole), 'a scanned sweep evaluates against the tables on disk, the same answer'
 
 
@@ -2825,8 +2823,8 @@ def test_a_live_sweep_has_no_model_to_evaluate_against():
     'read',
     [
         pytest.param(lambda sweep, archived: sweep, id='the-sweep-as-it-came-back'),
-        pytest.param(lambda sweep, archived: sps.scan_archive(archived).sweep, id='its-archive-scanned'),
-        pytest.param(lambda sweep, archived: sps.read_archive(archived).sweep, id='its-archive-read'),
+        pytest.param(lambda sweep, archived: sps.scan_archive(archived), id='its-archive-scanned'),
+        pytest.param(lambda sweep, archived: sps.read_archive(archived), id='its-archive-read'),
     ],
 )
 def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_sweep(read, tmp_path):
@@ -2891,7 +2889,7 @@ def _stopped_at_the_second_window(archived) -> tuple[sps.EachWindow, dict[str, o
 def test_the_window_a_carried_sweep_stopped_at_builds_alone(tmp_path):
     """A carried sweep stops at a window that leaves nothing to hand on, and that window is the one to build alone."""
     axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
-    ran = sps.scan_archive(tmp_path / 'runs').sweep
+    ran = sps.scan_archive(tmp_path / 'runs')
     assert ran.keys == [0, 3], 'the window that solved, and the one the sweep stopped at'
     with sps.build_slice(WINDOW, stopped, axis, 3, sweep=ran) as model:
         assert model.solve().termination_condition == 'infeasible', 'built alone, it is the window that failed'
@@ -2921,7 +2919,7 @@ def test_a_slice_the_sweep_never_reached_is_refused(key, refusal, tmp_path):
     """
     axis, stopped = _stopped_at_the_second_window(tmp_path / 'runs')
     with pytest.raises(sps.errors.SpecsolveError, match=re.escape(refusal)):
-        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_archive(tmp_path / 'runs').sweep)
+        sps.build_slice(WINDOW, stopped, axis, key, sweep=sps.scan_archive(tmp_path / 'runs'))
 
 
 def test_a_slice_is_built_from_its_cut_and_what_the_one_before_handed_on():
@@ -2978,7 +2976,7 @@ def test_an_archived_sweep_rebuilds_each_slice_with_the_carry_it_was_solved_with
     live = sps.solve_over(SWITCHED_OFF, sources, axis, archive=tmp_path / 'study')
     assert live.primal('p')['draw'].unique().to_list() == [1], 'the second draw builds no p'
 
-    read = sps.read_archive(tmp_path / 'study').sweep.evaluate('state + q').sort('draw')
+    read = sps.read_archive(tmp_path / 'study').evaluate('state + q').sort('draw')
     assert read['value'].to_list() == [3.0, 4.0], 'each draw read against the model it was solved as'
 
 
@@ -2991,17 +2989,15 @@ def test_evaluate_across_a_sweep_refuses_an_expression_that_reads_a_carried_para
         archive=tmp_path / 'roll.zip',
     )
     sweep = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
-    assert sweep.sweep.evaluate('sum(p * cost)', per_window=True).height, (
-        'an expression over static data evaluates per slice'
-    )
+    assert sweep.evaluate('sum(p * cost)', per_window=True).height, 'an expression over static data evaluates per slice'
     with pytest.raises(sps.errors.SpecsolveError, match='carried'):
-        sweep.sweep.evaluate('soc_initial')
+        sweep.evaluate('soc_initial')
 
 
 def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_path):
     """`evaluate` stitches as `primal` does — the sliced dimension back, the slice key gone."""
     sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
-    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
+    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
     reindexed = answer.evaluate('sum(p, over=generator)')
     assert reindexed.columns == ['snapshot', 'value'], 'the sliced dimension is restored and the slice key dropped'
     by_hand = answer.primal('p').group_by('snapshot').agg(pl.col('value').sum()).sort('snapshot')
@@ -3014,7 +3010,7 @@ def test_evaluate_reads_an_undeclared_expression_as_an_answer_like_primal(tmp_pa
 def test_evaluate_refuses_a_quantity_reduced_over_the_sliced_dim_and_names_per_window(tmp_path):
     """A scalar-per-window quantity has no labels of the sliced dimension to restore, so its answer is refused — as `expression` is."""
     sps.solve_over(WINDOW, span_sources(), WINDOW_AXIS, archive=tmp_path / 'roll.zip')
-    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll').sweep
+    answer = sps.read_archive(tmp_path / 'roll.zip', tmp_path / 'roll')
     with pytest.raises(sps.errors.SpecsolveError, match=r"no answer over 'snapshot'.*per_window=True"):
         answer.evaluate('sum(p * cost)')
 

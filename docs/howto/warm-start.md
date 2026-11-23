@@ -58,7 +58,7 @@ before it, except under an executor. `start=None` turns it off. Pass an earlier
 sweep as `start=` to start each slice from the earlier slice of its key:
 
 ```python
-monday = sps.read_archive('runs/monday.zip').sweep
+monday = sps.read_archive('runs/monday.zip')
 tuesday = sps.solve_over('dispatch.yaml', tuesday_sources, axis, start=monday)
 ```
 
@@ -82,7 +82,7 @@ The solver takes the values as its first incumbent. Pass an earlier answer, or
 values per variable under `'primal'`:
 
 ```python
-yesterday = sps.read_archive('runs/monday').result
+yesterday = sps.read_archive('runs/monday')
 today = sps.solve('commitment.yaml', sources, start=yesterday)
 today = sps.solve('commitment.yaml', sources, start={'primal': {'on': 1.0}})
 ```

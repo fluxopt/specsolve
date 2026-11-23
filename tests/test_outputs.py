@@ -107,14 +107,14 @@ def _live(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 
 def _scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run')
-    return sps.scan_archive(tmp_path / 'run').result
+    return sps.scan_archive(tmp_path / 'run')
 
 
 def _archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve(DISPATCH, ONE, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.types.ResultArchive)
-    return archive.result
+    assert isinstance(archive, sps.types.Result)
+    return archive
 
 
 def _swept(outputs: frozenset[Output], tmp_path: Path) -> Answer:
@@ -137,19 +137,19 @@ def _archiving(outputs: frozenset[Output], tmp_path: Path) -> Answer:
 
 def _sweep_read(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     _archiving(outputs, tmp_path)
-    return sps.read_archive(tmp_path / 'run').sweep
+    return sps.read_archive(tmp_path / 'run')
 
 
 def _sweep_scanned(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     _archiving(outputs, tmp_path)
-    return sps.scan_archive(tmp_path / 'run').sweep
+    return sps.scan_archive(tmp_path / 'run')
 
 
 def _sweep_archived(outputs: frozenset[Output], tmp_path: Path) -> Answer:
     sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs=outputs, archive=tmp_path / 'run.zip')
     archive = sps.read_archive(tmp_path / 'run.zip')
-    assert isinstance(archive, sps.types.SweepArchive)
-    return archive.sweep
+    assert isinstance(archive, sps.types.Sweep)
+    return archive
 
 
 RESULTS = [
@@ -246,7 +246,7 @@ def test_an_output_a_later_specsolve_wrote_is_ignored_rather_than_refused(tmp_pa
     sps.solve(DISPATCH, ONE, outputs=ACTIVITY, archive=out)
     stamp = json.loads((out / 'answer' / 'format.json').read_text())
     (out / 'answer' / 'format.json').write_text(json.dumps({**stamp, 'outputs': ['activity', 'from_the_future']}))
-    assert sps.read_archive(out).result.activity('balance')['value'].to_list() == pytest.approx(LOAD), (
+    assert sps.read_archive(out).activity('balance')['value'].to_list() == pytest.approx(LOAD), (
         'the outputs this package knows still read back'
     )
 
@@ -286,6 +286,6 @@ def test_a_window_sweep_stitches_the_activity_as_it_stitches_the_duals(tmp_path:
         'an equality balance, so each snapshot carries its own load'
     )
     archive = sps.read_archive(tmp_path / 'run')
-    assert isinstance(archive, sps.types.SweepArchive)
-    assert archive.sweep.activity('balance').sort('snapshot').equals(stitched)
-    assert archive.sweep.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))
+    assert isinstance(archive, sps.types.Sweep)
+    assert archive.activity('balance').sort('snapshot').equals(stitched)
+    assert archive.activity('balance', per_window=True).equals(sweep.activity('balance', per_window=True))

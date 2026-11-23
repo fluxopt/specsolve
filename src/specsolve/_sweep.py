@@ -50,7 +50,8 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer_layout import TableWriter
-    from specsolve._inputs import Label
+    from specsolve._axes import Axis
+    from specsolve._inputs import Label, Source
     from specsolve._outputs import Output
 
 
@@ -344,6 +345,17 @@ class Sweep:
     #: The spec every slice answered, as written; ``None`` only for an archive
     #: whose answer holds none.
     spec: Spec | None
+    #: The data the sweep was cut from, uncut and keyed as the file declares
+    #: it, as its archive holds it; ``None`` where no archive holds this
+    #: sweep. A source an EachLabel axis cuts holds the axis column first.
+    #: Each is held as [`Result.sources`][specsolve._result.Result.sources]
+    #: holds one: a path into a directory archive, a table for a ``.zip`` and
+    #: for a read, a path for a scan.
+    sources: Mapping[str, Source] | None = None
+    #: What cut the sources, with the ``carry=`` it chained the slices with,
+    #: archived or not; ``None`` only for a sweep no ``solve_over`` made.
+    #: ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis)`` runs it again.
+    axis: Axis | None = None
     #: ``{kind: {name: table}}``, every slice's table of a name as one, keyed,
     #: in memory or scanned off disk; a kind no slice produced is absent.
     _slices: dict[str, dict[str, pl.LazyFrame]] = field(repr=False, default_factory=dict)
@@ -683,7 +695,7 @@ class Sweep:
         no_model = (
             'this sweep has no model behind it, so a quantity the file never named cannot be read from it: a '
             'sweep holds the values of each slice without the models that solved them. Solve it with '
-            "archive=, and sps.read_archive(path).sweep reads any expression at each slice's solution; a name "
+            "archive=, and sps.read_archive(path) reads any expression at each slice's solution; a name "
             'the spec declares is readable either way.'
         )
         if not isinstance(expression, str):

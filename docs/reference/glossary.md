@@ -46,7 +46,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **Archive**
 : A spec, its data and its answer, written as one zip or directory by
-  `archive=` ([archiving](../howto/archiving.md)).
+  `archive=` ([archiving](../howto/archiving.md)). `read_archive` returns the
+  answer, which carries the spec and the data.
 
 ## The language
 
