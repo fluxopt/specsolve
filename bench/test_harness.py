@@ -29,7 +29,7 @@ import yaml
 from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, _ask, checkouts, compare, phase_table, same_model, table, verdict
+from bench.ab.compare import Row, Worker, _ask, chance, checkouts, compare, phase_table, same_model, table, verdict
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -2476,7 +2476,9 @@ def _phase_lines(row: Row) -> dict[str, list[str]]:
     """*row*'s lines of the phase table, keyed by phase, each split into its cells."""
     return {
         cells[1]: cells
-        for cells in ([c.strip() for c in line.strip('|').split('|')] for line in phase_table([row])[5:])
+        for cells in (
+            [c.strip() for c in line.strip('|').split('|')] for line in phase_table([row])[5:] if line.startswith('|')
+        )
     }
 
 
@@ -2492,6 +2494,30 @@ def test_a_slower_cell_names_the_phase_that_moved() -> None:
     assert row.verdict == 'slower', 'the total moved'
     assert lines['build'][-1] == 'slower', f'the build moved: {lines["build"]}'
     assert lines['solve'][-1] == 'no change', f'the solve held: {lines["solve"]}'
+
+
+def test_the_phase_table_says_how_many_of_its_verdicts_chance_alone_gives() -> None:
+    """Hundreds of phase rows at six rounds read faster or slower by chance alone, so the table says how many."""
+    row = Row(
+        'c',
+        base=[_timed_run(2.0, build=1.0, solve=1.0)] * 6,
+        head=[_timed_run(3.0, build=2.0, solve=1.0)] * 6,
+    )
+    expected = f'{2 * chance(6):.1f}'
+    assert phase_table([row])[-1] == (
+        f'1 slower, 1 no change. With nothing changed, about {expected} of these 2 phases read faster or slower.'
+    ), 'the verdicts counted, and the chance count beside them'
+
+
+def test_a_solve_cell_reports_the_size_of_the_model_it_solved() -> None:
+    """A solve run left the table's columns and rows blank, though the result's metrics hold them."""
+    from bench.ab import worker
+    from bench.ab.grid import cell
+
+    solved = worker._solve(cell('grid-baseline-tiny'))
+    metrics = solved.result.metrics
+    assert solved.sizes == {'columns': metrics.columns, 'rows': metrics.rows}, 'the size the solve itself reports'
+    assert min(solved.sizes.values()) > 0, f'a model with columns and rows: {solved.sizes}'
 
 
 def test_a_phase_only_head_clocked_reads_a_dash_and_takes_no_verdict() -> None:
