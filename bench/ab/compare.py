@@ -340,6 +340,7 @@ def phase_table(rows: list[Row]) -> list[str]:
         '| cell | phase | base ms | head ms | change | head lower in | verdict |',
         '|---|---|--:|--:|--:|--:|---|',
     ]
+    said: list[tuple[str, int]] = []
     for r in measured:
         for phase in r.phases:
             base, head = _phase_median(r.base, phase), _phase_median(r.head, phase)
@@ -347,11 +348,25 @@ def phase_table(rows: list[Row]) -> list[str]:
             if base is None or head is None or not ratios:
                 lines.append(f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | | | — |')
                 continue
+            said.append((verdict(ratios), len(ratios)))
             lines.append(
                 f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | {statistics.median(ratios) - 1:+.1%} '
-                f'| {sum(x < 1 for x in ratios)}/{len(ratios)} | {verdict(ratios)} |'
+                f'| {sum(x < 1 for x in ratios)}/{len(ratios)} | {said[-1][0]} |'
             )
-    return lines
+    return lines + _chance_line(said)
+
+
+def _chance_line(said: list[tuple[str, int]]) -> list[str]:
+    """The phase verdicts counted, beside how many of them chance alone gives, so a lone verdict among hundreds is not read as a finding."""
+    if not said:
+        return []
+    counts = {v: sum(s == v for s, _ in said) for v in dict.fromkeys(s for s, _ in said)}
+    expected = sum(chance(n) for _, n in said)
+    return [
+        '',
+        ', '.join(f'{n} {v}' for v, n in counts.items())
+        + f'. With nothing changed, about {expected:.1f} of these {len(said)} phases read faster or slower.',
+    ]
 
 
 def _phase_median(runs: list[dict[str, Any]], phase: str) -> float | None:
