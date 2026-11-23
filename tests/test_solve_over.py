@@ -2588,6 +2588,21 @@ def test_an_interrupted_archive_reads_back_only_the_slices_it_finished(read, tmp
     assert sorted(stopped.scan('p').collect()['scenario'].unique()) == stopped.keys, 'and so do the tables'
 
 
+@pytest.mark.parametrize('read', [pytest.param(sps.read_archive, id='read'), pytest.param(sps.scan_archive, id='scan')])
+def test_an_interrupted_archive_whose_finished_slices_left_no_primal_reads_back(read, tmp_path):
+    """Only the unfinished slice solved, so no finished one wrote a primal and
+    the primal is absent rather than read off no file."""
+    sources = scenario_sources()
+    sources['load'] = sources['load'].with_columns(
+        pl.when(pl.col('scenario') == 'low').then(pl.col('value')).otherwise(1000.0).alias('value')
+    )
+    sps.solve_over(DISPATCH, sources, sps.EachLabel('scenario'), archive=tmp_path)
+    (tmp_path / 'answer' / 'record' / '000001.parquet').unlink()
+    stopped = read(tmp_path).sweep
+    assert stopped.keys == ['high', 'mid'], 'the records hold the two infeasible slices that finished'
+    assert not stopped.records['has_primal'].any(), 'and neither left a primal'
+
+
 def test_a_directory_holding_another_sweep_is_refused(tmp_path):
     """A directory answers for one sweep. Another one pointed at it would read
     the first one's slices back as its own, so the mismatch is refused."""
