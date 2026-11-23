@@ -20,7 +20,7 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, other_layout, row_of
+from specsolve._answer_layout import ANSWER_LAYOUT, other_layout
 from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -34,9 +34,8 @@ from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._records import Metrics
-from specsolve._result import read_result, scan_result
-from specsolve._sweep import Sweep, read_sweep, scan_sweep, with_key
+from specsolve._result import read_answer
+from specsolve._sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -49,54 +48,7 @@ if TYPE_CHECKING:
     from specsolve._inputs import Label, Source, SpecLike
     from specsolve._result import Result
 
-__all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'read_archive', 'read_inputs', 'scan_archive']
-
-
-@dataclass(frozen=True)
-class ResultArchive:
-    """A spec, the data it was solved with, and what one solve of it returned.
-
-    ``sps.solve(archive.spec, archive.sources)`` asks the question again.
-
-    Attributes:
-        spec: The spec as written, read back as one ``Spec`` whatever went in.
-        sources: What was attached, keyed as the file declares it, as
-            [`tidy`][specsolve._api.tidy] returns it: a table from
-            [`read_archive`][], the path to one from [`scan_archive`][],
-            which also holds the ``specsolve_run`` column.
-        result: What the solve returned.
-        metrics: What reaching the answer took, as one
-            [`Metrics`][specsolve._records.Metrics].
-    """
-
-    spec: Spec
-    sources: Mapping[str, Source]
-    result: Result
-    metrics: Metrics
-
-
-@dataclass(frozen=True)
-class SweepArchive:
-    """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
-
-    ``sps.solve_over(archive.spec, archive.sources, archive.axis)`` runs it
-    again.
-
-    Attributes:
-        spec: The spec as written.
-        sources: What the sweep was given, uncut, as [`ResultArchive`][]
-            holds them. A source an EachLabel axis cuts holds the axis
-            column first.
-        axis: What cut them, with the ``carry=`` it chained the slices with.
-        sweep: The archived answer, in memory from [`read_archive`][], on
-            disk from [`scan_archive`][], as [`read_sweep`][] and
-            [`scan_sweep`][] read a saved sweep.
-    """
-
-    spec: Spec
-    sources: Mapping[str, Source]
-    axis: Axis
-    sweep: Sweep
+__all__ = ['ArchivedInputs', 'read_archive', 'read_inputs', 'scan_archive']
 
 
 @dataclass(frozen=True)
@@ -111,7 +63,7 @@ class ArchivedInputs:
         spec: The spec as written.
         sources: What was attached, keyed as the file declares it, as the
             tables [`tidy`][specsolve._api.tidy] returns. A sweep's are uncut,
-            as [`SweepArchive`][] holds them.
+            as [`Sweep.sources`][specsolve._sweep.Sweep.sources] holds them.
         axis: What cut the sources, with the ``carry=`` it chained the slices
             with, or ``None`` for an archive of one solve.
     """
@@ -144,8 +96,12 @@ def read_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
     return _read_unpacked(path, into, partial(_inputs, eager=True))
 
 
-def read_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back whole: the sources as tables, the answer's tables in memory.
+def read_archive(path: str | Path, into: str | Path | None = None) -> Result | Sweep:
+    """Read an archive back whole: the answer, its tables in memory, carrying the spec and the sources as tables.
+
+    ``sps.solve(result.spec, result.sources)`` asks the question again, and
+    ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis)`` runs a sweep
+    again.
 
     Args:
         path: The archive, a ``.zip`` or the directory one was written to.
@@ -154,8 +110,12 @@ def read_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
             Refused for a directory archive, which is read where it lies.
 
     Returns:
-        A [`SweepArchive`][] where the archive carries an axis, a
-        [`ResultArchive`][] where it does not.
+        The [`Sweep`][] where the archive carries an axis, with its
+        [`sources`][specsolve._sweep.Sweep.sources] uncut and its
+        [`axis`][specsolve._sweep.Sweep.axis]; the
+        [`Result`][specsolve._result.Result] where it does not, with its
+        [`sources`][specsolve._result.Result.sources] and the
+        [`metrics`][specsolve._result.Result.metrics] reaching it took.
 
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
@@ -183,7 +143,7 @@ def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[
         return read(opened(held, scratch), held)
 
 
-def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
+def scan_archive(path: str | Path, into: str | Path | None = None) -> Result | Sweep:
     """Read an archive back off disk: the sources as paths, each table read at the call that asks for it.
 
     As [`read_archive`][], except that *into* is required for a zip, and kept,
@@ -207,17 +167,16 @@ def _inputs(under: Path, archive: Path, *, eager: bool) -> ArchivedInputs:
     return ArchivedInputs(spec, sources, axis_from(json.loads(axis_member.read_text())))
 
 
-def _read(under: Path, archive: Path, *, eager: bool) -> ResultArchive | SweepArchive:
+def _read(under: Path, archive: Path, *, eager: bool) -> Result | Sweep:
     inputs = _inputs(under, archive, eager=eager)
     _refuse_another_layout(under / ANSWER_DIR, archive)
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers((read_result if eager else scan_result)(saved), spec, sources)
-        metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers((read_sweep if eager else scan_sweep)(saved), spec, sources, inputs.axis)
-    return SweepArchive(spec, sources, inputs.axis, answer)
+        answer = _attach_readers(read_answer(saved, eager=eager), spec, sources)
+        return replace(answer, _spec=spec, _sources=sources)
+    answer = _attach_sweep_readers(read_sweep_answer(saved, eager=eager), spec, sources, inputs.axis)
+    return replace(answer, spec=spec, sources=sources, axis=inputs.axis)
 
 
 def _refuse_other_inputs(under: Path, archive: Path) -> None:
@@ -236,8 +195,7 @@ def _refuse_other_inputs(under: Path, archive: Path) -> None:
 def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
 
-    Checked before the answer is read, so this message wins over the generic
-    one [`read_result`][specsolve._result.read_result] gives, which names a scratch directory for a zip.
+    Checked before the answer is read, which assumes its layout.
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(

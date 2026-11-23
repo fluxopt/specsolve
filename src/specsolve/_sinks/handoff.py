@@ -101,7 +101,8 @@ class Handoff:
     ``(row, col_l, col_r, coeff)``. Its rows are a **contiguous tail** of the
     row indices, beginning at [`linear_row_count`][] — the engine builds
     quadratic coefficients last — so a sink holding linear and quadratic rows
-    in different objects reads its answer back as two runs, not a scatter.
+    in different objects reads its answer back as two runs, not a scatter. A
+    row of the tail may own no pair, where every one it had summed to zero.
 
     ``sos`` is ``(set, type, col, weight)`` in ``(set, weight)`` order, one row
     per member. It is the only table a sink may be unable to ingest — SOS is a
@@ -250,13 +251,19 @@ class Handoff:
             yield members.item(0, 'type'), members.get_column(COL), members.get_column('weight')
 
     def quadratic_rows(self) -> Iterator[tuple[int, pl.DataFrame]]:
-        """Each quadratic row, ascending, and the ``(col_l, col_r, coeff)`` coefficients it owns.
+        """Each row from [`linear_row_count`][] on, ascending, and the ``(col_l, col_r, coeff)`` coefficients it owns.
 
         One row at a time, since every API that takes a quadratic constraint
-        takes one per call.
+        takes one per call. A row of the tail whose every pair summed to zero
+        owns none, and is still a row: ``0 >= 4`` is infeasible.
         """
-        for (row,), coefficients in self.qmatrix.group_by(ROW, maintain_order=True):
-            yield int(row), coefficients.select(COL_L, COL_R, COEFF)
+        owned = {
+            int(row): coefficients.select(COL_L, COL_R, COEFF)
+            for (row,), coefficients in self.qmatrix.group_by(ROW, maintain_order=True)
+        }
+        none = self.qmatrix.clear().select(COL_L, COL_R, COEFF)
+        for row in range(self.linear_row_count, self.row_count):
+            yield row, owned.get(row, none)
 
     def row_chunks(self, budget: int | None) -> Iterator[MatrixChunk]:
         """Each chunk of rows with the coefficients it owns — every sink's reader.
