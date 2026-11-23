@@ -1,8 +1,8 @@
 """What a caller reads back — a solve's [`Result`][], a build's [`Diagnostics`][].
 
 A [`Result`][] holds one finished table per entry, its values already
-laid out over the build's coordinates. [`Result.save`][] writes one to disk;
-[`read_result`][] reads it back, and [`scan_result`][] leaves it there.
+laid out over the build's coordinates. ``archive=`` writes one to disk, and
+[`read_answer`][] reads it back out of an archive's ``answer/``.
 """
 
 from __future__ import annotations
@@ -10,22 +10,20 @@ from __future__ import annotations
 import importlib.util
 from dataclasses import dataclass, field
 from datetime import datetime  # noqa: TC003  — a Record annotation this module writes
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
+    METRICS_FILE,
     RECORD_FILE,
-    check_format,
-    clear_the_answer,
     read_outputs,
     read_reasons,
     read_spec,
+    row_of,
     saved_tables,
     write_format,
     write_reasons,
     write_spec,
-    write_whole,
 )
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
@@ -45,6 +43,7 @@ from specsolve.errors import LayoutError, NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from pathlib import Path
 
     import pandas as pd
     import polars as pl
@@ -52,6 +51,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer_layout import TableWriter
+    from specsolve._inputs import Source
     from specsolve._status import SolveStatus
 
 
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 _NEEDS_THE_EXTRA = (
     '{module} is not installed, and specsolve does not install it, so this build cannot bridge out to it: '
     'pip install {module}. A result needs nothing added to be read as it stands — primal() and dual() return '
-    'polars tables, and save() writes one file per entry.'
+    'polars tables, and archive= writes one file per entry.'
 )
 
 
@@ -232,15 +232,11 @@ _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 @dataclass(frozen=True)
 class Diagnostics:
-    """What a build and its solves did that the answer does not show.
+    """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
 
-    Advisory, all of it: no answer depends on any field.
+    Advisory, all of it: no answer depends on any field. What the build and
+    its solves cost is [`Model.metrics`][specsolve._api.Model.metrics].
     """
-
-    #: The shape the build produced: columns, rows, and coefficients.
-    columns: int
-    rows: int
-    nonzeros: int
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
     #: the solver: one emptied of all its terms, and one a propagated absence
@@ -277,42 +273,6 @@ class Diagnostics:
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
-
-    #: How many times this model has been solved, and how many of those solves
-    #: loaded the solver from scratch instead of pushing values onto one that
-    #: already held it. ``loads == solves`` on an iterating driver means the
-    #: model has a condition on a parameter that varies.
-    solves: int
-    loads: int
-
-    #: Cumulative wall-clock seconds per phase, keyed by the phase's name:
-    #: ``attach`` (the caller's sources onto the program), ``build`` (entries
-    #: into the model tables), ``handoff`` (the built model into a solver),
-    #: ``solve`` (the solver's own run), ``write`` (the built model to a
-    #: file). A phase that never ran has no key; one that ran again holds the
-    #: sum.
-    seconds: Mapping[str, float]
-
-    def metrics(self) -> Metrics:
-        """The sizes, counters and clocks as one value — the row ``archive=`` records beside the answer.
-
-        [`Metrics`][specsolve._records.Metrics] says what each
-        field means. A phase this build never entered reads zero, and
-        ``specsolve_run`` is null.
-        """
-        clocks = self.seconds
-        return Metrics(
-            columns=self.columns,
-            rows=self.rows,
-            nonzeros=self.nonzeros,
-            solves=self.solves,
-            loads=self.loads,
-            attach_seconds=clocks.get('attach', 0.0),
-            build_seconds=clocks.get('build', 0.0),
-            handoff_seconds=clocks.get('handoff', 0.0),
-            solve_seconds=clocks.get('solve', 0.0),
-            write_seconds=clocks.get('write', 0.0),
-        )
 
 
 def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:
@@ -395,9 +355,10 @@ class Result:
     _run: str | None = None
     #: What produced this answer. Empty for one built by hand.
     _provenance: Provenance = NO_PROVENANCE
-    #: The directory this answer's tables are scanned off, which a save must
-    #: not clear. ``None`` for an answer held in memory.
-    _scanned_from: Path | None = None
+    #: The data this answered, where an archive holds it. ``None`` where none does.
+    _sources: Mapping[str, Source] | None = None
+    #: What reaching this answer took. ``None`` for an answer no solve produced.
+    _metrics: Metrics | None = None
 
     @property
     def status(self) -> str:
@@ -438,9 +399,36 @@ class Result:
         return self._spec
 
     @property
+    def sources(self) -> Mapping[str, Source] | None:
+        """The data this answered, keyed as the file declares it, as its archive holds it; ``None`` where no archive holds this answer.
+
+        An answer solved with ``archive=`` into a directory holds the path to
+        each ``sources/<key>.parquet`` and no table in memory; into a ``.zip``,
+        which has no file to point at, the tables the archive was written
+        from. [`read_archive`][specsolve._archive.read_archive] gives each
+        source as the table [`tidy`][specsolve._api.tidy] returns, and
+        [`scan_archive`][specsolve._archive.scan_archive] the path to its
+        member. ``sps.solve(result.spec, result.sources)`` asks the question
+        again.
+        """
+        return self._sources
+
+    @property
     def solved_at(self) -> datetime | None:
         """When the solver returned, in UTC — ``None`` where the solve carried no clock."""
         return self._solved_at
+
+    @property
+    def metrics(self) -> Metrics | None:
+        """What reaching this answer took — its solve's share of the model's clocks — or ``None`` for one built by hand.
+
+        The share runs from where the model's previous answer was handed back,
+        so the first answer of a model carries its load and its build, and a
+        later one the update, handoff and solve that led to it.
+        ``solves`` is ``1``. An answer solved with ``archive=`` also carries
+        the archive, as the archive records it. Read back as it was written.
+        """
+        return self._metrics
 
     @property
     def provenance(self) -> Provenance:
@@ -453,7 +441,7 @@ class Result:
 
     @property
     def record(self) -> Record:
-        """How this solve terminated, as the one row [`save`][] writes for it.
+        """How this solve terminated, as the one row an archive writes for it, which adds the run.
 
         A sweep keeps the same row per slice in [`records`][specsolve._sweep.Sweep.records].
         ``objective`` is ``None`` rather than ``nan`` where there are no
@@ -570,8 +558,8 @@ class Result:
 
         ``highs`` always produces a certificate; ``gurobi`` needs
         ``{'InfUnbdInfo': 1}`` and ``xpress`` needs ``{'presolve': 0}`` in
-        *solver_options*, set before the solve. A ray is live only: [`save`][]
-        writes none, and no sweep spills one.
+        *solver_options*, set before the solve. A ray is live only: an
+        archive holds none.
 
         Raises:
             SpecsolveError: This result was closed; the solve was not
@@ -698,14 +686,14 @@ class Result:
         expression's own dimensions, in the order it declares them.
 
         Anything but a declared name compiles the spec as written, which costs
-        what ``check`` costs. [`save`][] writes, and a sweep spills, only the
-        expressions declared under ``expressions:``.
+        what ``check`` costs. An archive holds only the expressions declared
+        under ``expressions:``.
 
         Raises:
             NoSolutionError: The solve left no values to read.
             SpecsolveError: This result was closed; an undeclared expression
-                on a model built from a compiled ``Program`` or read back off
-                disk, which has nothing to compile it against; an archive whose
+                on a model built from a compiled ``Program``, which has
+                nothing to compile it against; an archive whose
                 sources build another model than the one this answered; or a
                 divisor with no value.
             LanguageError: A construct outside the language, or a name the
@@ -773,51 +761,15 @@ class Result:
         """
         return tidy_to_dataset(names or self._names(kind), lambda name: self.to_dataarray(name, kind))
 
-    def save(self, directory: str | Path) -> Path:
-        """Every kind this solve answered with, one file per name, into *directory*.
-
-        ``record.parquet`` holds the
-        [`Record`][specsolve._records.Record], with a null
-        rather than ``nan`` objective where none was reached, and
-        ``spec.yaml`` the [`spec`][] it answered. Beside them are
-        ``primal/<name>.parquet`` per variable, ``dual/<name>.parquet`` per
-        constraint where the duals are defined, ``expression/<name>.parquet``
-        per named expression this data can evaluate, and
-        ``<output>/<name>.parquet`` for each [`Output`][specsolve.types.Output]
-        the solve was asked for, such as ``activity/`` per constraint.
-        ``reasons.parquet`` holds ``(kind, name, reason)`` for whatever is
-        deliberately left out — one row per failed expression, one with an
-        empty *name* for the duals — and is absent when nothing is. A solve that left no values writes the
-        record and the spec alone. The same model and data write the same bytes.
-
-        ``format.json`` stamps the layout, the specsolve that wrote it and the
-        outputs the answer carries:
-        ``{"layout": 5, "specsolve": "…", "outputs": ["activity"]}``. Every reader refuses another
-        layout with a [`LayoutError`][specsolve.errors.LayoutError] that says
-        to solve the model again and save it.
-
-        Whatever a previous save left in *directory* is removed first; files
-        outside the layout are left alone. A result scanned off *directory*
-        is already there, and is left as it is.
-
-        Returns:
-            The directory.
-
-        Raises:
-            SpecsolveError: This result was closed, or this polars has no
-                parquet.
-        """
-        parquet.require('Result.save')
-        return self._save(Path(directory), write_whole)
-
     def _save(self, out: Path, write: TableWriter) -> Path:
-        """[`save`][], each table written with *write*: an archive passes the writer that adds its run."""
+        """Every kind this solve answered with, one file per name, into an archive's *out*, each table written with *write*.
+
+        The layout is [`specsolve._answer_layout`][]'s; a solve that left no
+        values writes the record and the spec alone.
+        """
         import polars as pl
 
         carried = self._unclosed('the solution')
-        if self._scanned_from is not None and self._scanned_from.resolve() == out.resolve():
-            return out
-        clear_the_answer(out)
         write_format(out, outputs_of(kind for kind in carried if kind in OUTPUT_KINDS))
         write_spec(out, self._spec)
         record = self.record._replace(specsolve_run=None)
@@ -834,7 +786,7 @@ class Result:
     def _all_tables(self) -> tuple[dict[str, Mapping[str, pl.LazyFrame | pl.DataFrame]], dict[str, str]]:
         """``{kind: {name: table}}`` for every kind this answer carries, and why each expression left out is.
 
-        What [`save`][] writes and a sweep keeps of a slice. The declared
+        What [`_save`][] writes and a sweep keeps of a slice. The declared
         expressions are evaluated now, under ``expression``, and one this data
         cannot evaluate has no table and a reason instead.
 
@@ -876,66 +828,22 @@ def _absent(reason: str) -> Callable[[], pl.DataFrame]:
     return read
 
 
-def read_result(directory: str | Path) -> Result:
-    """Read back an answer [`Result.save`][] wrote — a solve, off disk.
+def read_answer(out: Path, *, eager: bool) -> Result:
+    """The answer an archive holds under *out*, its tables read into memory now where *eager*, else scanned.
 
-    Every reader answers what it answered in the session that solved: the
-    values, the duals, each named expression, the outputs the solve was asked
-    for, and the reason behind anything the solve could not produce. No build
-    or solver is needed.
-
-    The solver's verbatim wording behind a refusal is not recorded — the
-    termination condition is. A solve that reached no objective reads back as
-    ``nan``.
-
-    Args:
-        directory: Where [`save`][specsolve._result.Result.save] wrote
-            it. One inside an archive is
-            [`read_archive`][specsolve._archive.read_archive]'s to find.
-
-    Returns:
-        The result, read into memory, so it owes *directory* nothing.
-        [`scan_result`][] is the same answer left on disk.
-
-    Raises:
-        LayoutError: A directory holding no ``record.parquet``, or one whose
-            layout has changed since it was written.
+    Scanned, *out* has to outlive the result.
     """
-    return _answer_under(Path(directory), eager=True)
-
-
-def scan_result(directory: str | Path) -> Result:
-    """The answer under *directory*, read as its readers are called rather than now.
-
-    The same answer as [`read_result`][], but each table is a
-    `polars.scan_parquet` of its file, so an answer larger than memory is
-    readable a name at a time, and unread names cost nothing.
-
-    **The files have to outlive the result**: a name read after the
-    directory is gone raises where the scan is collected, and a file
-    rewritten underneath it comes back changed. *directory* is as
-    [`read_result`][] takes it.
-
-    Raises:
-        LayoutError: As [`read_result`][] raises it.
-    """
-    return _answer_under(Path(directory), eager=False)
-
-
-def _answer_under(out: Path, *, eager: bool) -> Result:
-    """The saved answer under *out*, its tables read into memory now where *eager*, else scanned."""
-    parquet.require('reading a saved answer')
     record_file = out / RECORD_FILE
     if not record_file.is_file():
         raise LayoutError(
-            f'{str(out)!r} holds no {RECORD_FILE!r}, so it is not an answer save() wrote. Every one '
+            f'{str(out)!r} holds no {RECORD_FILE!r}, so it is not an answer this package wrote. Every one '
             f'carries that record whether or not the solve produced values.'
         )
-    check_format(out)
     record = Record(**parquet.read(record_file).row(0, named=True))
     status = record.solve_status
     objective = float('nan') if record.objective is None else record.objective
     no_duals, absent = read_reasons(out)
+    metrics_file = out / METRICS_FILE
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
         name: (lambda table=table: table.pipe(collected))
         for name, table in saved_tables(out / 'expression', eager=eager).items()
@@ -951,5 +859,5 @@ def _answer_under(out: Path, *, eager: bool) -> Result:
         _solved_at=record.solved_at,
         _run=record.specsolve_run,
         _provenance=record.provenance,
-        _scanned_from=None if eager else out,
+        _metrics=row_of(Metrics, parquet.read(metrics_file).row(0, named=True), metrics_file),
     )

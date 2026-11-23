@@ -102,7 +102,7 @@ back without solving again:
 
 ```python exec="true" source="material-block" result="text" session="data" workdir="examples"
 archived = sps.read_archive(run)
-print(archived.result.objective)
+print(archived.objective)
 ```
 
 To zip an archive, see [Archiving a solve](howto/archiving.md). To query many

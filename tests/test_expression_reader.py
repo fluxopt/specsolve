@@ -480,16 +480,6 @@ def test_the_splice_steps_over_an_entry_of_its_own_name():
     ), "the splice lands beside the declared one, so the expression still reads the model's own entry"
 
 
-def test_an_answer_read_back_off_disk_says_why_it_cannot_evaluate(result, tmp_path):
-    """An answer carries the values and not the model, and a name the file never wrote needs the model."""
-    read_back = sps.read_result(result.save(tmp_path))
-    with pytest.raises(SpecsolveError, match='no model behind it'):
-        read_back.evaluate('sum(p, over=generator)')
-    assert read_back.evaluate('total_gen').equals(result.evaluate('total_gen')), (
-        'a declared name is readable either way — it was written, so nothing needs compiling'
-    )
-
-
 @pytest.fixture
 def archived(tmp_path):
     """A solve written to an archive, which carries the spec and sources back."""
@@ -509,7 +499,7 @@ def archived(tmp_path):
 )
 def test_evaluate_off_an_archive_read_whole_reads_the_archived_solution(result, archived, expression):
     """A quantity the file never named reads off an archive read whole, at the values the solve left — no re-solve."""
-    read_back = sps.read_archive(archived).result.evaluate(expression)
+    read_back = sps.read_archive(archived).evaluate(expression)
     live = result.evaluate(expression)
     keys = live.columns[:-1]
     assert read_back.sort(keys).equals(live.sort(keys)), (
@@ -519,7 +509,7 @@ def test_evaluate_off_an_archive_read_whole_reads_the_archived_solution(result, 
 
 def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_path):
     """`scan_archive` leaves the tables on disk, and evaluate rebuilds against them just the same."""
-    read_back = sps.scan_archive(archived, into=tmp_path / 'unpacked').result.evaluate('sum(p * p_max, over=generator)')
+    read_back = sps.scan_archive(archived, into=tmp_path / 'unpacked').evaluate('sum(p * p_max, over=generator)')
     live = result.evaluate('sum(p * p_max, over=generator)')
     keys = live.columns[:-1]
     assert read_back.sort(keys).equals(live.sort(keys)), 'a scanned archive evaluates against the tables left on disk'
@@ -528,7 +518,7 @@ def test_evaluate_off_a_scanned_archive_reads_the_same(result, archived, tmp_pat
 def test_a_declared_name_off_an_archive_is_served_from_disk_not_compiled(archived, monkeypatch):
     """A declared name was written, so it reads back without a rebuild — only a name outside them reaches the reader."""
     monkeypatch.setattr(api, 'expression_node', lambda *a, **k: pytest.fail('a declared name must not lower'))
-    table = sps.read_archive(archived).result.evaluate('total_gen')
+    table = sps.read_archive(archived).evaluate('total_gen')
     assert table.columns == ['snapshot', 'value'], 'a declared name off an archive reads its written table'
 
 
@@ -539,7 +529,9 @@ def test_a_closed_result_refuses_to_evaluate():
         result.evaluate('sum(p, over=generator)')
 
 
-def test_an_evaluated_expression_names_nothing_and_so_is_not_a_kind(result, tmp_path):
-    """It is not written, spilled or enumerated: a quantity worth keeping across runs is worth declaring."""
-    written = {p.stem for p in (result.save(tmp_path) / 'expression').glob('*.parquet')}
-    assert written == set(SPEC['expressions']), 'save writes the declared names, and evaluate adds none'
+def test_an_evaluated_expression_names_nothing_and_so_is_not_a_kind(tmp_path):
+    """It is not archived or enumerated: a quantity worth keeping across runs is worth declaring."""
+    with sps.solve(SPEC, sources(), archive=tmp_path / 'case') as archived:
+        archived.evaluate('sum(p, over=generator)')
+    written = {p.stem for p in (tmp_path / 'case' / 'answer' / 'expression').glob('*.parquet')}
+    assert written == set(SPEC['expressions']), 'an archive holds the declared names, and evaluate adds none'

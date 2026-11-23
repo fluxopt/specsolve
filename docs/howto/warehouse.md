@@ -25,8 +25,8 @@ sweep, solve the base as a sweep of one slice.
 ## The three tables
 
 A single solve writes one file per table. A sweep writes one file per slice,
-in a directory of the same name, as `spill_to=` and `Sweep.save` do. So a
-table of the answer is two globs. polars refuses a glob that matches no file,
+in a directory of the same name, as it solves them, so a glob also reads the
+slices a running sweep has finished. So a table of the answer is two globs. polars refuses a glob that matches no file,
 so expand them first, and a folder of only solves or only sweeps reads too:
 
 ```python
@@ -47,7 +47,7 @@ catalog = pl.read_parquet('runs/*/catalog.parquet')
 | glob | one row per | says |
 |---|---|---|
 | `answer/record.parquet`, `answer/record/*.parquet` | solve, or sweep slice | how it ended, and on which solver |
-| `answer/metrics.parquet`, `answer/metrics/*.parquet` | the same | what the build and its solves spent |
+| `answer/metrics.parquet`, `answer/metrics/*.parquet` | the same | how long each phase took |
 | `catalog.parquet` | column of labels of each file | [what a file holds](#what-a-file-holds) |
 
 **Every row names its archive in `specsolve_run`.** A sweep writes one row per

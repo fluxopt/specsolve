@@ -717,7 +717,7 @@ name one; the other cases skip it. A `start=` changes only what the solver
 begins from, which moves the solve and not anything timed here;
 `bench/warm_payoff.py` is where a carried basis is weighed.
 
-The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
+The clock stops at `Engine.handoff`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the
@@ -746,7 +746,7 @@ runs `pytest bench -k test_sweep`.
 out against the build as a `Result`, with what `solve` attaches to it
 (`Model._with_record_fields`), then every value read back — `frames`
 collects each variable's primal and each constraint's dual and activity,
-`parquet` is `Result.save`. The answer is built before the clock rather than
+`parquet` writes the answer as an archive holds it. The answer is built before the clock rather than
 solved for (`read_setup`): every column and row zero, reported optimal, and no
 duals for a model with an integer variable, which is what a real solve leaves.
 The cost is set by how many values are laid out, not what they are, so no
