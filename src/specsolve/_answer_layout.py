@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 #: The layout of what an archive holds under its ``answer/``, a result's or a
 #: sweep's. A change to any of them raises it. Compared, never branched on.
-ANSWER_LAYOUT = 8
+ANSWER_LAYOUT = 5
 FORMAT_FILE = 'format.json'
 
 
