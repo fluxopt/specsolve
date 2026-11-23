@@ -25,8 +25,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-#: What one slowed step sleeps. A step no phase clocks loses all of it.
-DELAY = 0.1
+#: What one slowed step adds to the clock: far above what any phase takes on a
+#: busy runner, and no real time at all. A step no phase clocks loses all of it.
+DELAY = 10.0
+
+#: How long a caller waits between two calls, for real.
+WAIT = 0.1
 
 #: Wall time no phase holds. The laps tile each call, so what is left is the
 #: return from one call and the entry into the next: 50 to 110 µs (#2180).
@@ -59,15 +63,37 @@ class Timed(NamedTuple):
         )
 
 
-def _timed(call: Callable[[], sps.types.Model], out: Path) -> Timed:
-    """*call* timed from outside, and the seconds per phase the model kept and the archive at *out* recorded.
+class Clock:
+    """``perf_counter`` plus what the slowed steps added, read by the engine and the test alike.
+
+    A step slowed on this clock costs no real time, so a phase the runner
+    slows for its own reasons cannot reach a slowed step's delay.
+    """
+
+    def __init__(self) -> None:
+        self.added = 0.0
+
+    def __call__(self) -> float:
+        return time.perf_counter() + self.added
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    """The clock the engine laps on for this test."""
+    on = Clock()
+    monkeypatch.setattr(engine, 'perf_counter', on)
+    return on
+
+
+def _timed(call: Callable[[], sps.types.Model], out: Path, clock: Callable[[], float] = time.perf_counter) -> Timed:
+    """*call* timed from outside on *clock*, and the seconds per phase the model kept and the archive at *out* recorded.
 
     The model *call* returns is closed after the clock stops: releasing it
     comes after the archive is written, so no archive can record it.
     """
-    started = time.perf_counter()
+    started = clock()
     model = call()
-    wall = time.perf_counter() - started
+    wall = clock() - started
     kept = model.diagnostics().seconds
     model.close()
     taken = sps.read_archive(out).metrics
@@ -138,11 +164,11 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_
     timed.check()
 
 
-def _slowed(real: Callable[..., object]) -> Callable[..., object]:
-    """*real*, [`DELAY`][] slower."""
+def _slowed(real: Callable[..., object], clock: Clock) -> Callable[..., object]:
+    """*real*, [`DELAY`][] slower on *clock*."""
 
     def slow(*args: object, **kwargs: object) -> object:
-        time.sleep(DELAY)
+        clock.added += DELAY
         return real(*args, **kwargs)
 
     return slow
@@ -174,7 +200,9 @@ STEPS = [
 
 
 @pytest.mark.parametrize(('steps', 'phase'), STEPS)
-def test_a_slow_step_shows_in_its_own_phase(dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, steps, phase):
+def test_a_slow_step_shows_in_its_own_phase(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock, steps, phase
+):
     """A step that takes longer is found in the phase that names it, and the phases still add up.
 
     Started from an earlier answer's values, so the start is read, matched
@@ -183,9 +211,9 @@ def test_a_slow_step_shows_in_its_own_phase(dispatch_yaml, dispatch_table_inputs
     earlier = sps.solve(dispatch_yaml, dispatch_table_inputs)
     start: sps.types.Start = {'primal': {'p': earlier.primal('p')}}
     for owner, name in steps:
-        monkeypatch.setattr(owner, name, _slowed(getattr(owner, name)))
+        monkeypatch.setattr(owner, name, _slowed(getattr(owner, name), clock))
     out = tmp_path / 'case.zip'
-    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out, start=start), out)
+    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out, start=start), out, clock)
 
     assert timed.recorded[phase] >= DELAY, f'the slowed step is recorded in {phase!r}: {timed.recorded}'
     others = {other: spent for other, spent in timed.kept.items() if other != phase}
@@ -209,7 +237,7 @@ def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispa
 
 
 def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
-    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock
 ):
     """An update makes the held solver read its model's digest before the build lets the tables go.
 
@@ -217,7 +245,7 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
     """
     load = dispatch_table_inputs['load']
     out = tmp_path / 'case.zip'
-    monkeypatch.setattr(Solver, 'structure', _slowed(Solver.structure))
+    monkeypatch.setattr(Solver, 'structure', _slowed(Solver.structure, clock))
 
     def call() -> sps.types.Model:
         model = sps.build(dispatch_yaml, dispatch_table_inputs)
@@ -226,7 +254,7 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
         model.solve(archive=out)
         return model
 
-    timed = _timed(call, out)
+    timed = _timed(call, out, clock)
 
     assert timed.recorded['handoff'] >= DELAY, f'the slowed digest is clocked in the handoff: {timed.recorded}'
     others = {other: spent for other, spent in timed.kept.items() if other != 'handoff'}
@@ -246,7 +274,7 @@ def test_time_between_calls_is_in_no_phase(dispatch_yaml, dispatch_table_inputs,
     """Each call starts the clock, so a caller who waits between two calls is not billed for the wait."""
     with sps.build(dispatch_yaml, dispatch_table_inputs) as model:
         before = model.diagnostics().seconds
-        time.sleep(DELAY)
+        time.sleep(WAIT)
         started = time.perf_counter()
         call(model, tmp_path, dispatch_table_inputs['load'])
         wall = time.perf_counter() - started
