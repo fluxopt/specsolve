@@ -238,6 +238,7 @@ class SliceFiles:
     def write(self, position: int, key: Label, answer: SliceAnswer) -> SliceAnswer:
         """*answer*'s tables and record on disk, and the answer with the tables released."""
         answer = answer.sliced(self.key_name, key)
+        self._clear(position)
         self._keep_reasons(answer)
         for kind, produced in answer.tables.items():
             for name, table in produced.items():
@@ -245,6 +246,18 @@ class SliceFiles:
         self._write(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
         self._write(pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
         return replace(answer, tables={})
+
+    def _clear(self, position: int) -> None:
+        """Remove every table an earlier attempt at the slice at *position* wrote.
+
+        A slice whose record did not land is solved again, and the retry
+        writes only the tables it produced, so one the first attempt wrote and
+        the retry does not would be read as part of the answer.
+        """
+        for kind in KINDS:
+            under = self.directory / kind
+            for named in under.iterdir() if under.is_dir() else []:
+                self._file(kind, position, named.name).unlink(missing_ok=True)
 
     def _keep_reasons(self, answer: SliceAnswer) -> None:
         """*answer*'s reasons for what it lacks, added to the sweep's on disk before its record lands.
@@ -276,7 +289,8 @@ class SliceFiles:
     def tables(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
         """``{kind: {name: table}}``, every slice's table of a name as one, keyed and in slice order.
 
-        A kind or a name no slice wrote is absent. *eager* reads the files into
+        Only a done slice's files are read, so the tables hold the slices the
+        records do. A kind or a name no done slice wrote is absent. *eager* reads the files into
         memory now, rather than as a `polars.scan_parquet` collected at the
         first read.
         """
@@ -284,7 +298,9 @@ class SliceFiles:
         for kind in KINDS:
             under = self.directory / kind
             for named in sorted(under.iterdir()) if under.is_dir() else []:
-                files = sorted(named.glob('*.parquet'))
+                files = [file for file in sorted(named.glob('*.parquet')) if self.done(int(file.stem))]
+                if not files:
+                    continue
                 table = parquet.read(files).lazy() if eager else parquet.scan(files)
                 out.setdefault(kind, {})[named.name] = table.drop(RUN, strict=False)
         return out

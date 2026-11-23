@@ -87,6 +87,8 @@ stopped resumes. A `.zip` is packed once the sweep ends, and is not resumed.
 
 - **A directory that already holds something**, unless it is the sweep
   archive that sweep resumes. A `.zip` target is replaced.
+- **A resume from another spec, axis or sources** than the directory holds.
+  Its slices were solved from those, so archive to a new directory.
 
 A directory of archives reads as one set of tables:
 [reading a directory of runs](warehouse.md).

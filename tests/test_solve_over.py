@@ -2436,28 +2436,35 @@ def test_scan_reads_an_in_memory_sweep_too(sweep):
         sweep.scan('p', 'objective')
 
 
-def test_an_archived_sweep_resumes_after_the_slice_that_failed(builds, tmp_path):
+def test_an_archived_sweep_resumes_after_the_slice_that_failed(builds, monkeypatch, tmp_path):
     """The slices that solved before the failure are not solved again.
 
-    Three scenarios, the third of which cannot build; the second run with the
-    same directory builds one model, and comes back identical to a sweep that
+    Three scenarios, the third of which fails; the second run with the same
+    directory builds one model, and comes back identical to a sweep that
     never failed.
     """
-    good, bad = _with_a_short_last_scenario()
     axis = sps.EachLabel('scenario')
-    with pytest.raises(sps.errors.DataError):
-        sps.solve_over(DISPATCH, bad, axis, archive=tmp_path)
+    answered = driver._answers
+    seen: list[int] = []
+
+    def two_then_fail(result):
+        if len(seen) == 2:
+            raise RuntimeError('the box went away')
+        seen.append(1)
+        return answered(result)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(driver, '_answers', two_then_fail)
+        with pytest.raises(RuntimeError, match='went away'):
+            sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path)
 
     built = builds(driver)
-    resumed = sps.solve_over(DISPATCH, good, axis, archive=tmp_path)
+    resumed = sps.solve_over(DISPATCH, scenario_sources(), axis, archive=tmp_path)
     assert len(built) == 1, 'only the slice that failed is built again'
 
-    fresh = sps.solve_over(DISPATCH, good, axis)
+    fresh = sps.solve_over(DISPATCH, scenario_sources(), axis)
     assert answer_of(resumed).equals(answer_of(fresh))
     assert resumed.scan('p').collect().equals(fresh.primal('p'))
-    assert sps.read_archive(tmp_path).sources['load'].height == good['load'].height, (
-        'the archive holds the data of the run that finished it, every scenario whole'
-    )
 
 
 #: A knapsack of whole items with a price on its budget, which a mixed-integer solve cannot give.
@@ -2551,7 +2558,6 @@ def test_a_slice_written_part_way_is_solved_again(builds, tmp_path):
     assert resumed.keys == [0, 3, 6, 9], 'the sweep comes back whole'
 
 
-@pytest.mark.xfail(strict=True, reason='a slice solved again leaves the tables its first attempt wrote')
 def test_a_slice_solved_again_leaves_none_of_its_first_attempt(monkeypatch, tmp_path):
     """A slice whose record did not land is solved again, and the retry wrote
     only the tables it produced, so a primal its first attempt left beside it
@@ -2571,7 +2577,6 @@ def test_a_slice_solved_again_leaves_none_of_its_first_attempt(monkeypatch, tmp_
     )
 
 
-@pytest.mark.xfail(strict=True, reason='an archive read back holds the tables of a slice with no record')
 @pytest.mark.parametrize('read', [pytest.param(sps.read_archive, id='read'), pytest.param(sps.scan_archive, id='scan')])
 def test_an_interrupted_archive_reads_back_only_the_slices_it_finished(read, tmp_path):
     """The tables were read off every file under a name, so a slice whose
@@ -2599,7 +2604,6 @@ def _the_files_under(directory) -> dict[str, bytes]:
     }
 
 
-@pytest.mark.xfail(strict=True, reason='a resume rewrites the inputs it holds')
 def test_a_resume_with_the_same_inputs_writes_none_of_them_again(tmp_path):
     """A resume rewrote the spec, the sources, the axis and their stamp, so a
     stop part way through that write left a stamp no reader could parse."""
@@ -2642,7 +2646,6 @@ def _a_generator_added() -> dict[str, object]:
 CARRIED = replace(PRICED_AXIS, carry=PRICED_CARRY)
 
 
-@pytest.mark.xfail(strict=True, reason='a resume rewrites sources/ and axis.json with what the second call passed')
 @pytest.mark.parametrize(
     ('first', 'second', 'named'),
     [

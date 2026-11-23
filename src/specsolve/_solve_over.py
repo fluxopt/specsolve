@@ -131,7 +131,8 @@ def solve_over(
             has no seed, collapses a dimension the axis does not advance
             along, or is asked together with an executor; a key that collides
             with a column the tables carry; an axis the program does not
-            allow; an *archive* directory holding another sweep; *outputs* that [`solve`][specsolve._api.Model.solve]
+            allow; an *archive* directory holding another sweep, or this one
+            solved from another spec, axis or sources; *outputs* that [`solve`][specsolve._api.Model.solve]
             refuses; a *start* word other than ``'previous'`` — each answerable from the entries alone; keys of more than one
             type, or two keys of one text; or a *start*
             [`solve`][specsolve._api.Model.solve] refuses.
