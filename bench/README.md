@@ -825,8 +825,9 @@ pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_
 ```
 
 That is what `.github/workflows/bench.yml` runs on a pull request labelled
-`trigger:bench` — the base's `src/` and then the head's, under one harness —
-and the memray peak at 20% is what it gates on. Wall time and `rss` are
+`trigger:bench` — the base's `src/` and the head's, under one harness, as four
+parallel jobs, one per side and size — and the memray peak at 20% is what it
+gates on. Wall time and `rss` are
 reported beside it and never gated. It runs the ladder alone, not the harness's
 own tests. The sweep is left out, because it solves, and `test_fresh`, because
 its work is in a child process that memray does not follow.

@@ -5,9 +5,7 @@ on:
     types: [labeled]
 
 env:
-  SELECT: >-
-    --sizes s m
-    --cases dispatch nodal transport profiled
+  CASES: --cases dispatch nodal transport profiled
   # The sweep solves, so its peak is the solver's as much as ours; `test_fresh` works in a
   # child process memray does not follow. CodSpeed leaves both out too.
   UNGATED: not test_sweep and not test_fresh
@@ -22,11 +20,17 @@ permissions:
   pull-requests: write
 
 jobs:
-  bench:
+  # One job per side and size, so the wall time is the slowest pass rather than four in a row.
+  measure:
     if: github.event.label.name == 'trigger:bench'
     runs-on: ubuntu-24.04
-    # Two passes of SELECT; at 20 minutes run 34720933380 died inside the baseline pass.
+    # Two passes of both sizes in one job ran past 60 minutes (run 45210815076).
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [base, head]
+        size: [s, m]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,38 +51,69 @@ jobs:
           from bench.cases import CASES
 
           for case in ('dispatch', 'nodal', 'transport', 'profiled'):
-              for size in ('s', 'm'):
-                  CASES[case].data(CASES[case].shape(size))
+              CASES[case].data(CASES[case].shape('${{ matrix.size }}'))
           PY
 
       # Only src/ from the base, so a harness change cannot read as a performance change.
-      - name: baseline — the engine as it is on the base branch
-        run: |
-          git checkout ${{ github.event.pull_request.base.sha }} -- src/
-          pixi run -e bench pytest bench/test_ladder.py $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
-          git checkout ${{ github.event.pull_request.head.sha }} -- src/
+      - name: the engine as it is on the base branch
+        if: matrix.side == 'base'
+        run: git checkout ${{ github.event.pull_request.base.sha }} -- src/
 
-      - name: this PR's engine
-        run: pixi run -e bench pytest bench/test_ladder.py $SELECT -k "$UNGATED" --benchmark-memory --benchmark-autosave -q
+      - name: measure
+        run: >-
+          pixi run -e bench pytest bench/test_ladder.py --sizes ${{ matrix.size }} $CASES -k "$UNGATED"
+          --benchmark-memory --benchmark-json=${{ matrix.side }}-${{ matrix.size }}.json -q
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: peaks-${{ matrix.side }}-${{ matrix.size }}
+          path: ${{ matrix.side }}-${{ matrix.size }}.json
+
+  gate:
+    needs: measure
+    if: always() && github.event.label.name == 'trigger:bench'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          run-install: false
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rattler/cache
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pixi-bench-${{ runner.os }}-
+      - run: pixi install -e bench
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: peaks-*
+          merge-multiple: true
 
       - name: report
         if: always()
         run: |
           {
             echo '## Benchmarks: base → this PR'
+            for size in s m; do
+              echo
+              pixi run -e bench benchmem compare base-$size.json head-$size.json \
+                --columns peak,rss,time --diff --format md
+            done
             echo
-            pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
-              --columns peak,rss,time --diff --format md
-            echo
-            echo '`peak` is memray'"'"'s allocator high-water mark and is deterministic — it is what the gate reads.'
+            echo '`peak` is memray'"'"'s allocator high-water mark — it is what the gate reads.'
             echo '`rss` and `time` are reported but never gated: a shared runner'"'"'s wall clock and page cache are noise.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Peak only, at 20%: identical code spreads up to 16%, real changes moved peak 40-60%.
       - name: gate
         run: |
-          pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
-            --columns peak --fail-on peak:20%
+          failed=0
+          for size in s m; do
+            pixi run -e bench benchmem compare base-$size.json head-$size.json \
+              --columns peak --fail-on peak:20% || failed=1
+          done
+          exit $failed
 
       # Best-effort: a fork PR's token is read-only, and housekeeping must not fail the run.
       - name: hand the label back
