@@ -460,9 +460,9 @@ class TestWhatBindRefusesAndWhatItTakes:
         sources = {'load': str(odd / 'load.parquet'), 'snapshot': str(odd / 'labels.parquet')}
 
         sps.write(spec, sources, odd / 'model.lp')
-        result = sps.solve(spec, sources)
+        result = sps.solve(spec, sources, archive=odd / 'solution')
         assert result.objective == pytest.approx(3.0)
-        assert (result.save(odd / 'solution') / 'primal' / 'p.parquet').exists()
+        assert (odd / 'solution' / 'answer' / 'primal' / 'p.parquet').exists()
 
     def test_a_dictionary_encoded_source_column_binds_like_a_plain_one(self):
         """A `Categorical` dimension column is a source encoding, not a different model.
@@ -1147,6 +1147,29 @@ class TestWhatReachesTheSolverAsACoefficient:
             assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
             assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no coefficients'
             assert model.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
+
+    def test_a_quadratic_row_of_only_zeros_stays_the_infeasibility_it_is(self):
+        """`0·x·y >= 10` is as infeasible as `0·x >= 10`, so it is built as one.
+
+        The quadratic share read which rows had a term after its zeros were
+        pruned, so a row of only zero pairs looked like a row with no terms and
+        was not built: the model lost its infeasibility.
+        """
+        spec = {
+            'dimensions': {'i': {'dtype': 'int'}},
+            'parameters': {'a': {'dims': ['i']}},
+            'variables': {
+                'x': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
+                'y': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
+            },
+            'constraints': {'c': {'dims': ['i'], 'expression': 'a * x * y >= 10'}},
+            'objective': {'sense': 'minimize', 'expression': 'x + y'},
+        }
+        a = pl.DataFrame({'i': [0, 1], 'value': [1.0, 0.0]})
+        with sps.build(spec, {'i': [0, 1], 'a': a}) as model:
+            tables = model._engine._model.handoff
+            assert tables.row_count == 2, 'the all-zero quadratic row was dropped instead of kept'
+            assert tables.qmatrix.height == 1, 'the zero pair reached the quadratic matrix'
 
     def test_a_zero_objective_coefficient_is_not_handed_to_the_solver(self):
         """A cost of zero and no cost at all are the same instruction."""

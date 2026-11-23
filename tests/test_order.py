@@ -163,7 +163,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
         model.solve()
         for seed in range(3):
             model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
-        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
+        assert model.metrics().solver_instances == 1, 'the same numbers, shuffled, loaded the solver again'
 
 
 def test_a_coefficient_changed_by_one_part_in_a_billion_reaches_the_loaded_solver() -> None:
@@ -182,4 +182,4 @@ def test_a_coefficient_changed_by_one_part_in_a_billion_reaches_the_loaded_solve
         model.update({'cost': changed}).solve()
         held = sorted(model._engine._solver.handle.getLp().a_matrix_.value_)
         assert held == changed['value'].to_list(), 'a coefficient changed by 1e-9 relative did not reach the solver'
-        assert model.diagnostics().loads == 1, 'the coefficient was taken in place, not loaded again'
+        assert model.metrics().solver_instances == 1, 'the coefficient was taken in place, not loaded again'

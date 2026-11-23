@@ -152,7 +152,7 @@ def _refuse_unknown_statuses_of(tables: Mapping[str, Mapping[str, Source]], prog
     """Refuse a basis table of a start that holds a status outside [`BASIS_STATUSES`][], before a slice is cut.
 
     Each slice checks its own cut when it is solved, which is after the
-    slices before it have solved and spilled.
+    slices before it have solved and been archived.
     """
     for reader, named in tables.items():
         if reader == 'primal':

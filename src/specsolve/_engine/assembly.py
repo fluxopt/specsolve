@@ -329,9 +329,9 @@ class Assembly:
             if tables
             else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
         )
-        qmatrix = self._quadratic_share(table, quadratic, name, c)
+        qmatrix, quadratic_rows = self._quadratic_share(table, quadratic, name, c)
         if qmatrix is not None:
-            term_rows = pl.concat([term_rows, qmatrix.get_column(ROW).unique()]).unique()
+            term_rows = pl.concat([term_rows, quadratic_rows]).unique()
         rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
         spread = _magnitude_range(matrix, COEFF)
         if spread is not None:
@@ -365,14 +365,19 @@ class Assembly:
 
     def _quadratic_share(
         self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
-    ) -> pl.DataFrame | None:
+    ) -> tuple[pl.DataFrame | None, pl.Series]:
         """One constraint's quadratic coefficients as ``(row, col_l, col_r, coeff)``, in that order.
 
         Pairs are ordered by column index for [`_objective_quadratic`][]'s
         reason.
+
+        Returns:
+            The share, ``None`` without a quadratic term, and the rows that had
+            any quadratic term, read before the prune as
+            [`_matrix_share`][] reads its own.
         """
         if not quadratic:
-            return None
+            return None, pl.Series(ROW, [], dtype=_DTYPES[ROW])
         tables = [
             join_on(table, p.table, p.dims, 'inner').select(
                 ROW,
@@ -383,8 +388,8 @@ class Assembly:
         ]
         stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
-        share, _ = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
-        return share
+        share, dropped = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
+        return share, (stacked if dropped else share).get_column(ROW).unique()
 
     def _drop_termless_rows(
         self,

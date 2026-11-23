@@ -130,6 +130,8 @@ class Gurobi(Solver):
         import numpy as np
 
         gurobipy = _gurobipy()
+        if self._m.NumQConstrs:
+            return None
         try:
             values = np.asarray(self._m.getAttr('FarkasDual'), dtype=np.float64)
         except (AttributeError, gurobipy.GurobiError):
