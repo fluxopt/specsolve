@@ -163,12 +163,12 @@ class _Built:
 
 
 class _Solved:
-    """A solve's status and objective as its fingerprint, and the seconds its model spent in each phase."""
+    """A solve's status and objective as its fingerprint, and its model's size and seconds in each phase."""
 
-    def __init__(self, result: sps.Result, phases: dict[str, float]) -> None:
+    def __init__(self, result: sps.Result, metrics: Any) -> None:
         self.result = result
-        self.sizes = {'columns': None, 'rows': None}
-        self.phases = phases
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
+        self.phases = _clocked(metrics)
 
     def numbers(self) -> dict[str, np.ndarray]:
         return {'status': np.array([self.result.status]), 'objective': np.array([self.result.objective])}
@@ -191,7 +191,7 @@ def _build(target: Cell) -> _Built:
 def _solve(target: Cell) -> _Solved:
     result = sps.solve(target.spec, target.sources, solver_name='highs')
     assert result.metrics is not None, 'a solve hands back what it took'
-    return _Solved(result, _clocked(result.metrics))
+    return _Solved(result, result.metrics)
 
 
 def _clocked(metrics: Any) -> dict[str, float]:
