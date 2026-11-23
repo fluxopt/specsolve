@@ -702,25 +702,36 @@ def _refuse_unknown_or_repeated_coordinates(
     for d, labels in known.items():
         _refuse_another_clock(f"{kind} '{name}'", d, d, table.schema[d], labels.dtype)
     positions = _row_major_positions(p.dims, table, known)
-
-    for d, labels in known.items():
-        if (positions is None or positions.null_count()) and not table.select(_is_label(d, labels).all()).item():
-            strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
-            shown = ', '.join(repr(s) for s in strangers[:5])
-            more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
-            raise DataError(
-                f"{kind} '{name}' has label(s) in dimension '{d}' that are not labels "
-                f'of it: {shown}{more}.\n'
-                f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-                f'A missing row means no value there, but a label the dimension does not have is a '
-                f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-                f'as absent. Fix the label, or add it to the labels of {d}.'
-            )
-
     if positions is None:
-        repeated = table.select(pl.struct(p.dims).is_duplicated().any()).item()
+        answers = table.select(
+            pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
+            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
+        ).row(0, named=True)
+        repeated = answers['#duplicated']
+        strays = [d for d in known if not answers[f'#known {d}']]
     else:
         repeated = positions.n_unique() < table.height
+        strays = [
+            d
+            for d, labels in known.items()
+            if positions.null_count() and not table.select(_is_label(d, labels).all()).item()
+        ]
+
+    if strays:
+        d = strays[0]
+        labels = known[d]
+        strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
+        shown = ', '.join(repr(s) for s in strangers[:5])
+        more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
+        raise DataError(
+            f"{kind} '{name}' has label(s) in dimension '{d}' that are not labels "
+            f'of it: {shown}{more}.\n'
+            f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
+            f'A missing row means no value there, but a label the dimension does not have is a '
+            f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
+            f'as absent. Fix the label, or add it to the labels of {d}.'
+        )
+
     if not repeated:
         return
     duplicated = table.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
