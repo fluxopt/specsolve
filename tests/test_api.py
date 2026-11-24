@@ -92,7 +92,7 @@ def test_a_points_parameter_supplied_as_a_parquet_path_keeps_its_own_curve_lengt
 
 def test_a_string_is_a_parquet_path_at_every_door(tmp_path):
     """Every reader of a source goes through `as_table`, so a path attaches the same everywhere."""
-    from specsolve._tables import as_table
+    from specsolve._inputs import as_table
 
     table = pl.DataFrame({'snapshot': [0, 1], 'value': [1.0, 2.0]})
     table.write_parquet(tmp_path / 'load.parquet')
