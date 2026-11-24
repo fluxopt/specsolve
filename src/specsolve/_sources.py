@@ -24,6 +24,8 @@ from specsolve._names import POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mathspec.program import Dimension, Program, Relation
 
     from specsolve._inputs import Label, Source
@@ -67,7 +69,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
-    sources = tidied(program, data)
+    sources = tidied(program, data, _untimed)
     validate_assumptions(program, sources)
     return sources
 
@@ -75,21 +77,23 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
 def tidied(
     program: Program,
     data: Mapping[str, Source],
+    lap: Callable[[str, str | None, str | None], None],
     previous: Mapping[str, pl.LazyFrame] | None = None,
     changed: Collection[str] = (),
 ) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, which a build checks where it clocks the attach they share.
 
+    *lap* ends a lap of ``tidy`` at each step, as [`_read`][] names them.
     *previous* is what this returned before *data* replaced the sources named
     *changed*: a parameter that replacement leaves alone is taken from it,
-    neither read nor checked again ([`_kept`][]). Dimensions and relations are
-    read and checked every time.
+    neither read nor checked again ([`_kept`][]), and has no lap. Dimensions
+    and relations are read and checked every time.
 
     Raises:
         DataError: As [`tidy_sources`][] raises, but for an assumption.
     """
     refuse_unknown_sources(program, data)
-    return _read(program, data, _kept(program, previous or {}, changed))
+    return _read(program, data, lap, _kept(program, previous or {}, changed))
 
 
 def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Collection[str]) -> dict[str, pl.LazyFrame]:
@@ -106,23 +110,42 @@ def _kept(program: Program, previous: Mapping[str, pl.LazyFrame], changed: Colle
     }
 
 
+def _untimed(phase: str, step: str | None, entry: str | None) -> None:
+    """A lap no engine clocks: [`tidy_sources`][] read outside a model."""
+
+
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+def _read(
+    program: Program,
+    data: Mapping[str, Source],
+    lap: Callable[[str, str | None, str | None], None],
+    kept: Mapping[str, pl.LazyFrame],
+) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
     [`validate_assumptions`][] runs
     after it. It attaches in memory too, and checks each assumption over the
     dimensions on the default engine.
+
+    *lap* ends a lap of ``tidy`` after each step: ``read``, every path read at
+    once; ``dimension`` and ``relation``, one per entry with labels of its
+    own; ``parameter``, one per parameter, checked and collected; and
+    ``check``, the refusal that needs every source read. The checks of the
+    relations' labels and the parameters' lazy shaping run before the first
+    parameter's check, and are in its row.
     """
     _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, {name: source for name, source in data.items() if name not in kept})
+    lap('tidy', 'read', None)
     sources: dict[str, pl.LazyFrame] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
-    relations = {
-        name: _read_relation(data[name], name, relation, sources) for name, relation in program.relations.items()
-    }
+            lap('tidy', 'dimension', dname)
+    relations: dict[str, pl.LazyFrame] = {}
+    for name, relation in program.relations.items():
+        relations[name] = _read_relation(data[name], name, relation, sources)
+        lap('tidy', 'relation', name)
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
@@ -136,11 +159,13 @@ def _read(program: Program, data: Mapping[str, Source], kept: Mapping[str, pl.La
         sources[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in read.items():
         sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        lap('tidy', 'parameter', pname)
     sources |= kept
 
     for dname in program.dimensions:
         if dname not in sources:
             raise DataError(_no_labels_source_message(dname))
+    lap('tidy', 'check', None)
 
     return sources
 

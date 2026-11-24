@@ -12,6 +12,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(sinks): a loaded solver takes a linear constraint's new coefficients in place rather than loading the model again ([#2072](https://github.com/fluxopt/specsolve/pull/2072))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
+- feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
 
 ## 0.12.0 (2026-11-23)
 
