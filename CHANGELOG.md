@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
+- fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - perf(data): a build reads each dimension's labels once and shares one empty table per set of dimensions rather than one per parameter or entry ([#2155](https://github.com/fluxopt/specsolve/pull/2155))
 - perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2154](https://github.com/fluxopt/specsolve/pull/2154))
 

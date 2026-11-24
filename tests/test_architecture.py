@@ -490,7 +490,7 @@ def test_each_sink_is_its_module_and_its_registry_key():
     from specsolve._sinks import SOLVERS, WRITERS, Solver
 
     families = _families()
-    shared = {'__init__', 'handoff', 'capabilities', *FAMILY_SHARED.values()}
+    shared = {'__init__', 'tables', 'capabilities', *FAMILY_SHARED.values()}
     held = families['solvers'] | families['writers']
     on_disk = {path.stem for path in SINKS.glob('*.py')} - shared
     assert held == on_disk, f'sink modules and registry keys disagree: {sorted(held ^ on_disk)}'
@@ -560,12 +560,12 @@ def test_the_door_accepts_the_declared_parameter_dtype_vocabulary():
 def test_no_sink_reaches_a_sibling():
     """The fence that keeps an optional dependency optional.
 
-    A sink reads ``handoff.py``, ``capabilities.py``, its family's shared
+    A sink reads ``tables.py``, ``capabilities.py``, its family's shared
     module (``FAMILY_SHARED``), and its own dependency — no other sink.
     """
     offenders = {}
     for family, members in _families().items():
-        shareable = {f'specsolve._sinks.{name}' for name in ('handoff', 'capabilities', FAMILY_SHARED[family])}
+        shareable = {f'specsolve._sinks.{name}' for name in ('tables', 'capabilities', FAMILY_SHARED[family])}
         for member in sorted(members | {FAMILY_SHARED[family]}):
             reached = {
                 name
@@ -575,7 +575,7 @@ def test_no_sink_reaches_a_sibling():
             if reached:
                 offenders[member] = sorted(reached)
     assert not offenders, (
-        f"sink modules reaching a sibling: {offenders} — a sink reads handoff.py, its family's shared "
+        f"sink modules reaching a sibling: {offenders} — a sink reads tables.py, its family's shared "
         f'module and its own dependency; anything else shared belongs on one of those two'
     )
 
