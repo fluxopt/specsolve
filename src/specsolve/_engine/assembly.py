@@ -43,8 +43,6 @@ _Args = ParamSpec('_Args')
 
 #: One constraint's ``rows``, its share of the matrix, and its quadratic share.
 _ConstraintShare = tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]
-#: Each row's first coefficient in the matrix, CSR's own index.
-_RowStarts = np.ndarray[tuple[int, ...], np.dtype[np.int64]]
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -157,27 +155,13 @@ class Assembly:
             o = self.program.objective
             objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
-        matrix, matrix_starts = self._timed('matrix', None, self._matrix, built)
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
+        matrix_starts = _row_starts(stacked, self.n_rows)
+        matrix = stacked.select(COL, COEFF).rechunk()
+        self.lap('matrix', None)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        return self._timed('tables', None, self._model, cols, sets, built, objective, matrix, matrix_starts)
-
-    def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
-        """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
-        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
-        return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
-
-    def _model(
-        self,
-        cols: list[pl.DataFrame],
-        sets: list[pl.DataFrame],
-        built: list[_ConstraintShare],
-        objective: pl.DataFrame | None,
-        matrix: pl.DataFrame,
-        matrix_starts: _RowStarts,
-    ) -> BuiltModel:
-        """Every entry's share stacked into the tables a sink drains, *matrix* among them, in the [`BuiltModel`][] that holds them."""
         handoff = sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
@@ -192,7 +176,9 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+        model = BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+        self.lap('tables', None)
+        return model
 
     def _timed(
         self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
@@ -200,8 +186,7 @@ class Assembly:
         """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
-        its own and do not move with the order entries build in. Stacking the
-        shares into the model is timed the same way, as ``matrix`` and ``tables``.
+        its own and do not move with the order entries build in.
         """
         try:
             return build(*args, **kwargs)
