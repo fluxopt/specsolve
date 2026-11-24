@@ -83,11 +83,13 @@ Where `build` is most of the time, the diagnostics say which entry took it:
 
 ```python
 with sps.build('dispatch.yaml', sources) as model:
-    print(model.diagnostics().build_seconds)  # kind, entry, seconds: one row per variable, constraint and the objective
+    print(model.diagnostics().build_seconds)  # kind, entry, seconds
 ```
 
-An entry's seconds are its own. The rest of `build` is stacking every entry
-into the model, which no entry owns
+There is one row per variable, constraint and the objective, then two rows of
+kind `model`: `matrix`, stacking every constraint into one matrix, and
+`tables`, the rest of what the solver is handed. An entry's seconds are its
+own, and the rows add up to `build`
 ([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## Report a slow phase

@@ -42,6 +42,11 @@ IN_MEMORY_REACH = 250_000
 _Built = TypeVar('_Built')
 _Args = ParamSpec('_Args')
 
+#: One constraint's ``rows``, its share of the matrix, and its quadratic share.
+_ConstraintShare = tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]
+#: Each row's first coefficient in the matrix, CSR's own index.
+_RowStarts = np.ndarray[tuple[int, ...], np.dtype[np.int64]]
+
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
 _OBJ = (COL, COEFF)
@@ -147,14 +152,29 @@ class Assembly:
             o = self.program.objective
             objective = None if o is None else self._timed('objective', 'objective', self._build_objective, o)
 
-        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
-        matrix_starts = _row_starts(stacked, self.n_rows)
-        matrix = stacked.select(COL, COEFF).rechunk()
-
+        matrix, matrix_starts = self._timed('model', 'matrix', self._matrix, built)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = sinks.Handoff(
+        handoff = self._timed('model', 'tables', self._handoff, cols, sets, built, objective, matrix, matrix_starts)
+        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+
+    def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
+        """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
+        return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
+
+    def _handoff(
+        self,
+        cols: list[pl.DataFrame],
+        sets: list[pl.DataFrame],
+        built: list[_ConstraintShare],
+        objective: pl.DataFrame | None,
+        matrix: pl.DataFrame,
+        matrix_starts: _RowStarts,
+    ) -> sinks.Handoff:
+        """Every entry's share stacked into the tables a sink drains, *matrix* among them."""
+        return sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -168,7 +188,6 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _timed(
         self, kind: str, name: str, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
@@ -176,8 +195,8 @@ class Assembly:
         """*build* on *args*, its seconds recorded under ``(kind, name)`` in [`Measured.seconds`][], even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
-        its own and do not move with the order entries build in; the stacking
-        after the last entry is in no entry's.
+        its own and do not move with the order entries build in. Stacking the
+        shares into the model is timed the same way, as the ``model`` rows.
         """
         started = perf_counter()
         try:
@@ -289,9 +308,7 @@ class Assembly:
             self.n_sets = built.item(-1, 'set') + 1
         return built
 
-    def _build_constraint(
-        self, name: str, c: program.Constraint
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+    def _build_constraint(self, name: str, c: program.Constraint) -> _ConstraintShare:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
         The [`coverage`][] checks run in its table's order, before an aggregate

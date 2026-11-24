@@ -275,11 +275,13 @@ class Diagnostics:
     objective_range: tuple[float, float] | None
 
     #: ``(kind, entry, seconds)`` — what each variable, set, constraint and the
-    #: objective took to build, one row per entry, in build order. An entry's
-    #: seconds are its own: they hold when the entries build in another order.
-    #: The rows add up to less than ``build_seconds`` in
-    #: [`Model.metrics`][specsolve._api.Model.metrics]; the rest is the stacking
-    #: of every entry's share into the model, which is no entry's.
+    #: objective took to build, one row per entry, in build order, then two
+    #: rows of kind ``model``: ``matrix``, every constraint's share stacked into
+    #: one matrix in row order, and ``tables``, the rest of what a solver is
+    #: handed. An entry's seconds are its own: they hold when the entries build
+    #: in another order. The rows add up to ``build_seconds`` in
+    #: [`Model.metrics`][specsolve._api.Model.metrics], short of setting the
+    #: build up, under a millisecond (#2206).
     build_seconds: pl.DataFrame
 
 
