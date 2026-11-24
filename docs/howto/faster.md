@@ -89,8 +89,9 @@ with sps.build('dispatch.yaml', sources) as model:
 The rows follow the build: `setup`, one row per variable, constraint and the
 objective, then `matrix`, stacking every constraint into one matrix, and
 `tables`, the rest of what the solver is handed. An entry's seconds are its
-own, and the rows add up to `build`
-([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).
+own. The rows are the last build's, and add up to that build's time: the
+`build` of the result it led to, not of `model.metrics()`, which holds every
+build ([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## Report a slow phase
 
