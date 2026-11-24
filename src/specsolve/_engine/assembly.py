@@ -585,8 +585,10 @@ def spliced_model(
     holds: the indices, the matrix, the quadratic rows and the sets are
     *built*'s, and each recomputed share is spliced over the run of indices its
     entry owns. An entry that owns no index has no share to read, so it is not
-    queried. *measured* is *built*'s, updated for what was read, and *lap* is
-    the build's clock, as [`Assembly`][] takes it.
+    queried. *measured* is *built*'s, updated for what was read. *lap* logs
+    the steps a full build logs, for the entries read again: ``setup``, one
+    ``variable`` or ``constraint`` row per entry, the ``objective``, then
+    ``tables``. No ``matrix`` row, since the matrix is *built*'s.
 
     Raises:
         DataError: A bound, constant side or objective the new data leaves
@@ -600,39 +602,51 @@ def spliced_model(
     cols, rows = tables.cols, tables.rows
     obj, quad, constant = tables.obj, tables.quad, tables.objective_constant
 
+    def variable(name: str) -> None:
+        nonlocal cols
+        held = built.variables[name]
+        share = assembly._columns(name, plan.variables[name], held.table)
+        cols = _spliced(cols, held.start, held.start + held.height, share)
+
+    def constraint(name: str) -> None:
+        nonlocal rows
+        held, c = built.constraints[name], plan.constraints[name]
+        share = indices.in_position_order(
+            assembly._constant_side(name, c, held.table, assembly._terms(name, c)[2]), ROW
+        )
+        measured.rhs.pop(name, None)
+        if (sides := _magnitude_range(share, 'rhs')) is not None:
+            measured.rhs[name] = sides
+        at = rows.get_column(ROW)
+        lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
+        rows = _spliced(rows, lo, hi, share)
+
+    def objective(o: program.Objective) -> None:
+        nonlocal obj, quad, constant
+        measured.objective_range = None
+        terms = assembly._build_objective(o)
+        obj = _stack([terms] if terms is not None else [], _OBJ)
+        quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
+        constant = assembly.obj_const
+
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
+        lap('setup', None)
         for name in _entries_reading(plan.variables, changed, _bound_parameters):
-            held = built.variables[name]
-            if not held.height:
-                continue
-            share = assembly._columns(name, plan.variables[name], held.table)
-            cols = _spliced(cols, held.start, held.start + held.height, share)
+            if built.variables[name].height:
+                assembly._timed('variable', name, variable, name)
         for name in _entries_reading(plan.constraints, changed, _constraint_parameters):
-            held = built.constraints[name]
-            if not held.height:
-                continue
-            c = plan.constraints[name]
-            share = indices.in_position_order(
-                assembly._constant_side(name, c, held.table, assembly._terms(name, c)[2]), ROW
-            )
-            measured.rhs.pop(name, None)
-            if (sides := _magnitude_range(share, 'rhs')) is not None:
-                measured.rhs[name] = sides
-            at = rows.get_column(ROW)
-            lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
-            rows = _spliced(rows, lo, hi, share)
+            if built.constraints[name].height:
+                assembly._timed('constraint', name, constraint, name)
         o = plan.objective
         if o is not None and program.parameters_of(o.expression) & set(changed):
-            measured.objective_range = None
-            terms = assembly._build_objective(o)
-            obj = _stack([terms] if terms is not None else [], _OBJ)
-            quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
-            constant = assembly.obj_const
+            assembly._timed('objective', None, objective, o)
 
     measured.bounds = _in_build_order(measured.bounds, built.variables)
     measured.rhs = _in_build_order(measured.rhs, built.constraints)
     refreshed = replace(tables, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
-    return BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+    model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+    lap('tables', None)
+    return model
 
 
 def _structural_parameters(plan: program.Program) -> frozenset[str]:

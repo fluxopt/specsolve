@@ -99,6 +99,9 @@ row per entry, the `objective`, then `matrix`, which stacks every constraint
 into one matrix, and `tables`, the rest of what the solver is handed. An
 entry's seconds are its own: they hold when the entries build in another
 order.
+An update that gives only new numbers at the old coordinates reads again
+just the entries those numbers feed. Its build logs `setup`, those entries
+and `tables`, with no `matrix` row, since the matrix stays as it was.
 
 ## Each solve of a loop
 
