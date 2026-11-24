@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     import numpy as np
     import polars as pl
 
-    from specsolve._sinks.handoff import Handoff, Ints
+    from specsolve._sinks.tables import Ints, SinkTables
 
 
 #: Xpress solution status -> termination condition, copied from linopy's
@@ -96,8 +96,8 @@ class Xpress(Solver):
     lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'refused'})
     capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
-    def _load(self, handoff: Handoff) -> None:
-        self._p = _built(handoff, self._options)
+    def _load(self, tables: SinkTables) -> None:
+        self._p = _built(tables, self._options)
 
     @property
     def handle(self) -> Any:
@@ -109,20 +109,20 @@ class Xpress(Solver):
         """``chgMCoef``, every coefficient in one call."""
         self._p.chgMCoef(rows, cols, values)
 
-    def _push(self, handoff: Handoff) -> None:
+    def _push(self, tables: SinkTables) -> None:
         """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per element."""
         import numpy as np
 
         xpress = _xpress()
-        cols = handoff.dense_columns(xpress.infinity)
-        every = np.arange(handoff.column_count, dtype=np.int64)
+        cols = tables.dense_columns(xpress.infinity)
+        every = np.arange(tables.column_count, dtype=np.int64)
         self._p.chgBounds(
             np.concatenate([every, every]),
-            ['L'] * handoff.column_count + ['U'] * handoff.column_count,
+            ['L'] * tables.column_count + ['U'] * tables.column_count,
             np.concatenate([cols.lb, cols.ub]),
         )
-        self._p.chgObj(np.append(every, -1), np.append(cols.cost, -handoff.objective_constant))
-        self._p.chgRHS(np.arange(handoff.row_count, dtype=np.int64), handoff.dense_rows(xpress.infinity).rhs)
+        self._p.chgObj(np.append(every, -1), np.append(cols.cost, -tables.objective_constant))
+        self._p.chgRHS(np.arange(tables.row_count, dtype=np.int64), tables.dense_rows(xpress.infinity).rhs)
 
     def _basis(self) -> tuple[Any, Any] | None:
         """``getBasis``, which returns rows first; each status is ``0`` at lower, ``1`` basic, ``2`` at upper, ``3`` superbasic.
@@ -161,7 +161,7 @@ class Xpress(Solver):
         given = np.flatnonzero(~np.isnan(values))
         self._p.addMipSol(values[given], given)
 
-    def _run(self, handoff: Handoff) -> SolveAnswer:
+    def _run(self, tables: SinkTables) -> SolveAnswer:
         """Solve what is loaded and read it back; the objective constant is already in the model."""
         self._p.optimize()
         status = _status_of(self._p)
@@ -218,7 +218,7 @@ class Xpress(Solver):
             self._p = None
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
+def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> Any:
     """The loaded problem: columns with no coefficients, then every linear row in one ``addRows`` call.
 
     ``outputlog`` leads the controls so a caller's options can put the log back.
@@ -229,10 +229,10 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
     p = xpress.problem()
     p.setControl({'outputlog': 0, **dict(solver_options or {})})
 
-    cols = handoff.dense_columns(xpress.infinity)
+    cols = tables.dense_columns(xpress.infinity)
     p.addCols(
         objcoef=cols.cost,
-        start=np.zeros(handoff.column_count + 1, dtype=np.int64),
+        start=np.zeros(tables.column_count + 1, dtype=np.int64),
         rowind=np.empty(0, dtype=np.int64),
         rowcoef=np.empty(0, dtype=np.float64),
         lb=cols.lb,
@@ -242,9 +242,9 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         integral = np.flatnonzero(cols.integral)
         p.chgColType(integral, ['I'] * integral.size)
 
-    rows = handoff.dense_rows(xpress.infinity)
+    rows = tables.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
-    (linear,) = handoff.row_chunks(None)
+    (linear,) = tables.row_chunks(None)
     coefficients = linear.coefficients
     p.addRows(
         rowtype=spelling[rows.sense[: linear.height]].tolist(),
@@ -254,19 +254,19 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         rowcoef=coefficients[COEFF].to_numpy(),
     )
 
-    _add_sets(p, handoff, xpress)
-    if handoff.objective_sense == 'maximize':
+    _add_sets(p, tables, xpress)
+    if tables.objective_sense == 'maximize':
         p.chgObjSense(xpress.ObjSense.MAXIMIZE)
-    if handoff.objective_constant:
-        p.chgObj([-1], [-handoff.objective_constant])
+    if tables.objective_constant:
+        p.chgObj([-1], [-tables.objective_constant])
     return p
 
 
-def _add_sets(p: Any, handoff: Handoff, xpress: Any) -> None:
+def _add_sets(p: Any, tables: SinkTables, xpress: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each: there is no bulk form."""
-    if not handoff.sos.height:
+    if not tables.sos.height:
         return
-    for set_type, cols, weights in handoff.sets():
+    for set_type, cols, weights in tables.sets():
         p.addSOS(cols.to_list(), weights.cast(float).to_list(), type=set_type)
 
 

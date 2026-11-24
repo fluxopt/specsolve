@@ -44,7 +44,7 @@ flowchart TB
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
-        ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
+        ENG --> TABLES["_sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
         TABLES --> DIRECT["_sinks/, a solver<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["_result.py<br/>joined by label, never dense"]
@@ -92,7 +92,7 @@ flowchart TB
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
-phase covers, and [the diagram](../howto/faster.md#find-where-the-time-goes)
+phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
 draws what each hands to the next. The clock
 is one mark: each public call starts it with `Engine.start()`, and
 `Engine.lap(phase)` adds the time since the mark to that phase and moves the
@@ -270,7 +270,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
-| `_sinks/handoff.py` | what every sink reads |
+| `_sinks/tables.py` | what every sink reads |
 | `_sinks/capabilities.py` | what a sink can ingest |
 | `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
 
@@ -331,9 +331,9 @@ The names the code uses for its own parts. The names a caller meets are in
   variable at a coordinate, a row index for a constraint at one
   (`indices.py`). A label is a dimension's member, never a solver index.
 
-**Handoff**
+**Sink tables**
 : Everything a sink reads of a built model, and nothing more: the tables, the
-  column and row vectors, the matrix a chunk at a time (`handoff.py`).
+  column and row vectors, the matrix a chunk at a time (`tables.py`).
 
 **Collect engine**
 : Which polars engine materialises a table. A build within `IN_MEMORY_REACH`
@@ -347,7 +347,7 @@ The names the code uses for its own parts. The names a caller meets are in
 : A digest of everything a re-solve may not change. A loaded solver keeps its
   model while the digest holds and a quadratic constraint's linear part is
   within 1e-12 relative of the one it holds, and takes a linear row's changed
-  coefficients in place (`handoff.py`, `solver.py`).
+  coefficients in place (`tables.py`, `solver.py`).
 
 **Kind**
 : One table family of an answer: `primal`, `dual`, `expression`, and each

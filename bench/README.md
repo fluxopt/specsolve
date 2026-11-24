@@ -521,7 +521,7 @@ written against this table:
 | **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
 | `import` | `import specsolve` |
 | `build` | `sps.build(...)` — the engine scans the parquet itself |
-| `emit` | `model.write(path)` / `Highs(_handoff(model))` |
+| `emit` | `model.write(path)` / `Highs(_tables(model))` |
 | `teardown` | `model.close()` — releases the built model |
 | **after the clock** | row, column and nonzero counts off the built frames |
 
@@ -715,8 +715,7 @@ the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix's coefficients change, and the loaded solver
 takes them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
 name one; the other cases skip it. A `start=` changes only what the solver
-begins from, which moves the solve and not anything timed here;
-`bench/warm_payoff.py` is where a carried basis is weighed.
+begins from, which moves the solve and not anything timed here.
 
 The clock stops at `Engine.handoff`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
@@ -736,9 +735,7 @@ the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
 CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
 the solver's own allocations, and `commitment` swept at `s` ran that job's 20
-minutes out on its own. `bench.yml` leaves it out for the same reason
-(`UNGATED`): its gate is a memray peak, which would hold a pull request to the
-solver's allocations. So a sweep keeps no history: it is measured where someone
+minutes out on its own. So a sweep keeps no history: it is measured where someone
 runs `pytest bench -k test_sweep`.
 
 ## Reading an answer back
@@ -773,62 +770,25 @@ child process. Its phase is `fresh`. `bench.report` prints it as the `fresh`
 table, and the page carries no fence for it, so the page publishes only the
 warm charts.
 
-## The warm-start payoff
-
-*Does carrying a basis across a genuine rebuild pay?* is the question #382 has
-to answer before the engine work is worth writing, and until this module there
-was nothing in the tree to answer it on: `examples/benders/run.py` is the only
-driver that rebuilds a model every iteration, and its master is 3 columns and
-25 rows, where a cold solve costs one simplex iteration.
-
-`bench/warm_payoff.py` is that missing case — a capacity-expansion Benders
-whose master is sized from data (`bench/expansion/*.yaml`), with the master
-solved three ways at every rebuild: cold, from the previous iteration's basis
-spliced per declaration, and from that basis merely truncated to the new
-height. The subproblem is a real dispatch LP and is deliberately *not* what is
-measured: `cap_hat * avail` reaches the rows as a right-hand side, so a new
-capacity pushes values onto the loaded solver and never rebuilds.
-
-```bash
-pixi run -e bench python -m bench.warm_payoff s m l --steps 400
-pixi run -e bench python -m bench.warm_payoff m --wall   # only on an idle box
-```
-
-**Simplex iterations are the measurement.** They are deterministic, so this
-ladder needs no idle machine, and they are the quantity a basis actually moves.
-`--wall` prints seconds and the load averages beside them, and carries none of
-the argument.
-
-It is **not an arm** — like `floor.py` it hardcodes one model, prints its own
-table and never touches the ladder's results files — and it is **not a
-feature**: no `src/` code carries a basis across a rebuild, and the splice
-lives here so that the evidence could be taken before the engine work was
-written. Its models sit under `bench/expansion/` rather than `bench/models/`,
-which `tests/test_bench_models.py` reserves for files backing a ladder case.
-
-The splice exists because **rows do not append**: a master with two cut
-families numbers rows per declaration, so a row gained by `optimality_cut`
-shifts every row of `feasibility_cut`. A wrong carry cannot produce a wrong
-answer — a basis moves the route, not the optimum — so the third arm is how the
-splice is shown to be worth its complication at all.
-
 ## The other question: regressions
 
-*Did this change make it worse?* is a different question from *how do we
-compare to another library*, and it wants a different metric — but it does not
-want a different harness. It is the same suite, run twice:
+*Did this change make it worse?* is answered by the same A/B that proves a
+speed-up ([`ab/`](#proving-a-speed-up-ab)): it exits 1 on any cell that is
+slower or builds another model, and `--memory` asks the same of peak memory.
+Run it at the sizes the change reaches. No pull request runs it in CI, because
+a shared runner's clock is noise.
+
+To chase a memory regression to a call stack, the memray peak is the
+instrument. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
-pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
-    --columns peak --fail-on peak:20%
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json --columns peak
 ```
 
-That is what `.github/workflows/bench.yml` runs on a pull request labelled
-`trigger:bench` — the base's `src/` and then the head's, under one harness —
-and the memray peak at 20% is what it gates on. Wall time and `rss` are
-reported beside it and never gated. The sweep is left out, because it solves.
+The sweep is left out because it solves, and `test_fresh` because its work is
+in a child process that memray does not follow.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
@@ -846,8 +806,7 @@ and cancels, leaving a metric that is deterministic and attributable to a call
 stack — which RSS, sensitive to machine load, is not.
 
 So: `rss` for the comparison we publish, the memray peak for the regressions we
-chase. Both come out of the same run — the choice is which column a table reads,
-and `--benchmark-memory-compare-fail` is what turns the second into a gate.
+chase. Both come out of the same run — the choice is which column a table reads.
 
 ## Proving a speed-up: `ab/`
 
@@ -906,7 +865,14 @@ the report prints how many such cells to expect. Re-run a lone verdict with
 that `pytest bench` takes, and refuses a busy machine.
 
 Paste the table into the PR's `<details>` with its header: the header names
-both commits, what the clock counts, and the machine.
+both commits, what the clock counts, and the machine. `--raw ab.parquet` keeps
+every round's numbers as one long table, one row per number, which the medians
+are taken from:
+
+```python
+pl.read_parquet('ab.parquet').filter(phase='build', metric='seconds')  # each round's build, both sides
+pl.concat([pl.read_parquet(p) for p in ('ab.parquet', 'more.parquet')])  # a re-run pooled with the first
+```
 
 ## The same suite, a third instrument: CodSpeed
 
@@ -927,14 +893,14 @@ cannot drift between them, because there is one of them.
 [CodSpeed](https://codspeed.io) (`.github/workflows/codspeed.yml`) is where
 the history is kept: it stores a number per benchmark for every commit on
 `main`, which is what a regression found months later is bisected against.
-What it adds over `bench.yml` is not the metric but **the baseline** —
-`bench.yml` can only compare against a base it checks out and measures itself,
-which costs two passes and is why it waits for a label. Two jobs:
+What it adds over an A/B is not the metric but **the baseline**: an A/B
+measures a base it checks out itself, while CodSpeed holds a number for every
+commit. It runs on `main` only. Two jobs:
 
 | job | instrument | runner | rungs | runs on |
 |---|---|---|---|---|
-| Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
-| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
+| Memory (heap) | `memory` | free, one polars thread | `s` | every push to `main` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main` |
 
 `walltime` runs only on the metered runner because a shared runner's clock says
 nothing, and `simulation` — CodSpeed's default — runs the workload under an
@@ -948,7 +914,7 @@ names: `test_rebuild`, which pedantic rounds make meaningless there,
 `test_sweep`, which solves, and `test_fresh`, whose work is in a child process.
 
 **It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
-them; `bench.yml` remains the check that fails a pull request.
+them.
 
 ## Two ladders
 
@@ -1033,8 +999,6 @@ every consumer whichever of the two the case has.
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
-| `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
 | `ab/` | the A/B of two refs over a grid of models: does this change make the code faster, and does it build the same model |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
-| `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one attachment, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

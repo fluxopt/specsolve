@@ -54,19 +54,19 @@ def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
     no order contract.
     """
     with sps.build(expanded(port['spec']), given) as model:
-        handoff = model._engine._model.handoff
+        tables = model._engine._model.tables
         numbers = (
-            handoff.matrix[COEFF],
-            handoff.cols['lb'],
-            handoff.cols['ub'],
-            handoff.quad[COEFF],
-            handoff.rows[ROW],
-            handoff.rows['rhs'],
+            tables.matrix[COEFF],
+            tables.cols['lb'],
+            tables.cols['ub'],
+            tables.quad[COEFF],
+            tables.rows[ROW],
+            tables.rows['rhs'],
         )
         return (
-            handoff.structure,
-            f'{handoff.objective_constant}'.encode(),
-            handoff._dense_cost().tobytes(),
+            tables.structure,
+            f'{tables.objective_constant}'.encode(),
+            tables._dense_cost().tobytes(),
             *(column.to_numpy().tobytes() for column in numbers),
         )
 
