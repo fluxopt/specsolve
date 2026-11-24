@@ -570,7 +570,9 @@ class Model:
         ``objective``, which has no name; ``matrix``, every constraint's share
         stacked into one matrix in row order; and ``tables``, the rest of what
         a solver is handed. An entry's seconds are its own: they hold when the
-        entries build in another order. Elsewhere both are null.
+        entries build in another order. An update that gives only new numbers
+        logs ``setup``, the entries it reads again and ``tables``. Elsewhere
+        both are null.
         """
         return self._engine.timings()
 

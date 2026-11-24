@@ -602,8 +602,10 @@ def spliced_model(
     constraint's coefficients are read again only where *changed* scales a
     variable in it; it built every row it indexed, so one with no ``where``
     spans the whole product of its dimensions. *measured* is *built*'s,
-    updated for what was read, and *lap* is the build's clock, as
-    [`Assembly`][] takes it.
+    updated for what was read. *lap* logs the steps a full build logs, for
+    the entries read again: ``setup``, one ``variable`` or ``constraint`` row
+    per entry, the ``objective``, then ``tables``. No ``matrix`` row: a
+    constraint's coefficients are spliced in within its own row.
 
     Raises:
         DataError: A bound, constant side, coefficient or objective the new
@@ -617,39 +619,49 @@ def spliced_model(
     cols, rows, matrix, starts = tables.cols, tables.rows, tables.matrix, tables.row_starts
     obj, quad, constant = tables.obj, tables.quad, tables.objective_constant
 
+    def variable(name: str) -> None:
+        nonlocal cols
+        held = built.variables[name]
+        share = assembly._columns(name, plan.variables[name], held.table)
+        cols = _spliced(cols, held.start, held.start + held.height, share)
+
+    def constraint(name: str) -> None:
+        nonlocal rows, matrix, starts
+        held, c = built.constraints[name], plan.constraints[name]
+        terms, _, consts = assembly._terms(name, c)
+        share = indices.in_position_order(assembly._constant_side(name, c, held.table, consts), ROW)
+        measured.rhs.pop(name, None)
+        if (sides := _magnitude_range(share, 'rhs')) is not None:
+            measured.rhs[name] = sides
+        at = rows.get_column(ROW)
+        lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
+        rows = _spliced(rows, lo, hi, share)
+        if _coefficient_parameters(c) & set(changed):
+            linear, _ = assembly._linear_share(name, c, held.table, held.start, terms, dense=c.where is None)
+            matrix, starts = _respliced(matrix, starts, held.start, held.start + held.height, linear)
+            measured.coefficients.pop(name, None)
+            if (spread := _magnitude_range(linear, COEFF)) is not None:
+                measured.coefficients[name] = spread
+
+    def objective(o: program.Objective) -> None:
+        nonlocal obj, quad, constant
+        measured.objective_range = None
+        terms = assembly._build_objective(o)
+        obj = _stack([terms] if terms is not None else [], _OBJ)
+        quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
+        constant = assembly.obj_const
+
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
+        lap('setup', None)
         for name in _entries_reading(plan.variables, changed, _bound_parameters):
-            held = built.variables[name]
-            if not held.height:
-                continue
-            share = assembly._columns(name, plan.variables[name], held.table)
-            cols = _spliced(cols, held.start, held.start + held.height, share)
+            if built.variables[name].height:
+                assembly._timed('variable', name, variable, name)
         for name in _entries_reading(plan.constraints, changed, _constraint_parameters):
-            held = built.constraints[name]
-            if not held.height:
-                continue
-            c = plan.constraints[name]
-            terms, _, consts = assembly._terms(name, c)
-            share = indices.in_position_order(assembly._constant_side(name, c, held.table, consts), ROW)
-            measured.rhs.pop(name, None)
-            if (sides := _magnitude_range(share, 'rhs')) is not None:
-                measured.rhs[name] = sides
-            at = rows.get_column(ROW)
-            lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
-            rows = _spliced(rows, lo, hi, share)
-            if _coefficient_parameters(c) & set(changed):
-                linear, _ = assembly._linear_share(name, c, held.table, held.start, terms, dense=c.where is None)
-                matrix, starts = _respliced(matrix, starts, held.start, held.start + held.height, linear)
-                measured.coefficients.pop(name, None)
-                if (spread := _magnitude_range(linear, COEFF)) is not None:
-                    measured.coefficients[name] = spread
+            if built.constraints[name].height:
+                assembly._timed('constraint', name, constraint, name)
         o = plan.objective
         if o is not None and program.parameters_of(o.expression) & set(changed):
-            measured.objective_range = None
-            terms = assembly._build_objective(o)
-            obj = _stack([terms] if terms is not None else [], _OBJ)
-            quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
-            constant = assembly.obj_const
+            assembly._timed('objective', None, objective, o)
 
     measured.nonzeros = matrix.height
     measured.bounds = _in_build_order(measured.bounds, built.variables)
@@ -665,7 +677,9 @@ def spliced_model(
         quad=quad,
         objective_constant=constant,
     )
-    return BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+    model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+    lap('tables', None)
+    return model
 
 
 def _structural_parameters(plan: program.Program) -> frozenset[str]:
