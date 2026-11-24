@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 import yaml
 
-from bench import comment, floor, plot, profile_build, profile_phases, report, results, tidy
+from bench import comment, floor, plot, profile_build, report, results, tidy
 from bench import conftest as harness
 from bench import results as bench_results
 from bench.ab.compare import Row, Worker, _ask, chance, checkouts, compare, phase_table, same_model, table, verdict
@@ -1017,20 +1017,16 @@ def test_the_long_table_renders_from_the_committed_results() -> None:
     assert len(lines) > 1, 'the committed provenance produces rows, not just a header'
 
 
-def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
-    """Both profilers monkeypatch private engine names, so a refactor in `src/`
-    can retire them without touching `bench/` (#1245)."""
+def test_the_profiler_wraps_the_class_that_actually_builds() -> None:
+    """The profiler monkeypatches private engine names, so a refactor in `src/`
+    can retire it without touching `bench/` (#1245)."""
     import importlib
-
-    from specsolve._engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
         owner = module if class_name is None else getattr(module, class_name, None)
         assert owner is not None, f'profile_build patches {class_name} in {module_path}, which moved'
         assert hasattr(owner, method), f'profile_build patches {class_name or module_path}.{method}, which moved'
-    for method in profile_phases.PHASES:
-        assert hasattr(Assembly, method), f'profile_phases patches Assembly.{method}, which moved'
 
 
 # ---------------------------------------------------------------------------
