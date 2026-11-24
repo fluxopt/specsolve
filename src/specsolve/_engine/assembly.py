@@ -577,7 +577,7 @@ def spliced_model(
     attached: AttachedSources,
     changed: Collection[str],
     measured: Measured,
-    lap: Callable[[str, str | None], None],
+    lap: Callable[[str, str | None, str | None], None],
 ) -> BuiltModel:
     """*built* with every bound, constant side and objective that reads a name in *changed* read again off *attached*.
 
@@ -630,7 +630,7 @@ def spliced_model(
         constant = assembly.obj_const
 
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
-        lap('setup', None)
+        lap('build', 'setup', None)
         for name in _entries_reading(plan.variables, changed, _bound_parameters):
             if built.variables[name].height:
                 assembly._timed('variable', name, variable, name)
@@ -645,7 +645,7 @@ def spliced_model(
     measured.rhs = _in_build_order(measured.rhs, built.constraints)
     refreshed = replace(tables, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
     model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
-    lap('tables', None)
+    lap('build', 'tables', None)
     return model
 
 

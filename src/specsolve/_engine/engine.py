@@ -194,7 +194,7 @@ class Engine:
             self.lap('attach')
         if held is not None and changed and numbers_only(program, held, previous, attached, changed):
             self._measured = copy.deepcopy(previous)
-            self._built = spliced_model(held, attached, changed, self._measured, partial(self.lap, 'build'))
+            self._built = spliced_model(held, attached, changed, self._measured, self.lap)
             return
         self._measured.sparse = short_parameters(program, attached)
         self._built = Assembly(specialized(program, attached), attached, self._measured, self.lap).run()
