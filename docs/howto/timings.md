@@ -80,11 +80,25 @@ print(model.timings())
 - **`run` counts the results handed back before the lap.** Run 0 ends with
   the first result.
 - **`step` says what a lap did inside its phase, and `entry` names the entry
-  it built.** The build and the handoff have steps. Elsewhere both are
+  it built.** The tidy, the build and the handoff have steps. Elsewhere both are
   null.
 - **The rows add up to the metrics.** A phase's rows sum to its clock in
   `model.metrics()`, and a run's rows to the `metrics` of the result that
   ends it.
+
+## The source a tidy spends
+
+Filter the log to the tidy to find the source that took the time:
+
+```python exec="true" source="material-block" result="text" session="timings"
+print(model.timings().filter(phase='tidy').select('step', 'entry', 'seconds'))
+```
+
+`read` is every path read at once, so one row for all the files. Then each
+`dimension` and `relation` has a row for its labels or its table, and each
+`parameter` a row for its check: no coordinate given twice, and every label one
+of its dimension's. `check` is the refusal that needs every source read: a
+dimension that got no labels.
 
 ## The entry a build spends
 

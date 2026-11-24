@@ -212,12 +212,12 @@ class Model:
         What the build read is kept for an archive: a one-shot iterator is
         spent by then, and a path may have been rewritten. A parameter that the
         sources named *changed* leave alone is taken as the last build read it,
-        and a change of numbers alone is not built again. A failure forgets what was read, so the next update reads every source
-        again, the refused one included.
+        and a change of numbers alone is not built again. A failure forgets
+        what was read, so the next update reads every source again, the
+        refused one included.
         """
         try:
-            self._tidied = tidied(self._program, self._sources, self._tidied, changed)
-            self._engine.lap('tidy')
+            self._tidied = tidied(self._program, self._sources, self._engine.lap, self._tidied, changed)
             attached = validate_assumptions(self._program, self._tidied)
             self._engine.lap('attach')
             self._engine.build(self._program, self._tidied, attached, changed)
@@ -571,9 +571,14 @@ class Model:
         stacked into one matrix in row order; and ``tables``, the rest of what
         a solver is handed. An entry's seconds are its own: they hold when the
         entries build in another order. An update that gives only new numbers
-        logs ``setup``, the entries it reads again and ``tables``. The
-        handoff's steps are ``digest``,
-        the held solver's fingerprint of its model, read before a rebuild;
+        logs ``setup``, the entries it reads again and ``tables``. The tidy's
+        steps are ``read``, every path read at once; ``dimension`` and
+        ``relation``, one row per entry; ``parameter``, one row per parameter,
+        checked and collected, the first also holding the relations' label
+        checks and every parameter's shaping; and ``check``, the refusal that
+        needs every source read. An update logs a ``parameter`` row only for a
+        parameter it reads again. The handoff's steps are ``digest``, the held
+        solver's fingerprint of its model, read before a rebuild;
         ``start``, the ``start=`` matched to this build; ``check``, the solver
         checked to take the model; ``push``, the held solver kept and the new
         numbers pushed onto it, or ``instance``, a new solver instance given
