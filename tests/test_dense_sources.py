@@ -85,3 +85,15 @@ def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatc
     }
     sps.build(spec, sources).close()
     assert sorted(reads) == ['g', 't'], f'the labels were read as {sorted(reads)}, where each dimension once is enough'
+
+
+def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
+    """One key column hashes once either way, so a lookup of each row's label into a position only adds to it.
+
+    #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
+    """
+    from specsolve._sources import _row_major_positions
+
+    labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
+    table = pl.DataFrame({'g': labels, 'value': 1.0})
+    assert _row_major_positions(('g',), table, {'g': labels}) is None, 'one column is hashed, not turned into positions'
