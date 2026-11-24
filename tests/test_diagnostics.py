@@ -7,6 +7,8 @@ rather than judged.
 
 from __future__ import annotations
 
+import time
+
 import polars as pl
 import pytest
 
@@ -366,3 +368,64 @@ def test_the_largest_magnitude_agrees_with_the_oracle():
     for name, largest in ours.items():
         expected = max(abs(theirs.loc[name, 'min']), abs(theirs.loc[name, 'max']))
         assert largest == pytest.approx(expected), f"the lanes disagree on the widest coefficient in '{name}'"
+
+
+# ---------------------------------------------------------------------------
+# what each entry took to build
+# ---------------------------------------------------------------------------
+
+TIMED_SPEC = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}}, 'q': {'dims': ['t'], 'bounds': {'lower': 0}}},
+    'constraints': {
+        'balance': {'dims': ['t'], 'expression': 'p + q == load'},
+        'cap': {'dims': ['t'], 'expression': 'p <= 3'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p + 2 * q, over=t)'},
+}
+TIMED_DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
+
+
+def test_each_entry_reports_what_it_took_to_build_in_build_order():
+    """A row per variable, constraint and the objective; together less than the build, whose stacking is no entry's."""
+    with sps.build(TIMED_SPEC, TIMED_DATA) as model:
+        took = model.diagnostics().build_seconds
+        build = model.metrics().build_seconds
+    assert took.select('kind', 'entry').rows() == [
+        ('variable', 'p'),
+        ('variable', 'q'),
+        ('constraint', 'balance'),
+        ('constraint', 'cap'),
+        ('objective', 'objective'),
+    ], 'every entry once, in the order the build takes them'
+    assert took.get_column('seconds').min() > 0, 'every entry took some time'
+    assert took.get_column('seconds').sum() <= build, 'the entries are a share of the build, not more than it'
+
+
+def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
+    """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
+    from specsolve._engine import assembly
+
+    added = [0.0]
+    monkeypatch.setattr(assembly, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = assembly.Assembly._build_constraint
+
+    def slow(self, name, c):
+        if name == 'cap':
+            added[0] += 10.0
+        return real(self, name, c)
+
+    monkeypatch.setattr(assembly.Assembly, '_build_constraint', slow)
+    with sps.build(TIMED_SPEC, TIMED_DATA) as model:
+        took = dict(model.diagnostics().build_seconds.select('entry', 'seconds').iter_rows())
+    assert took['cap'] >= 10.0, 'the slowed constraint carries its delay'
+    assert max(s for entry, s in took.items() if entry != 'cap') < 10.0, 'and no other entry does'
+
+
+def test_a_model_with_no_objective_has_no_objective_row():
+    """Nothing was built for an objective the spec does not declare."""
+    spec = {k: v for k, v in TIMED_SPEC.items() if k != 'objective'}
+    with sps.build(spec, TIMED_DATA) as model:
+        kinds = model.diagnostics().build_seconds.get_column('kind').to_list()
+    assert 'objective' not in kinds, 'no row for an objective that was never built'

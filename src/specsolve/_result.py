@@ -232,10 +232,10 @@ _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 @dataclass(frozen=True)
 class Diagnostics:
-    """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
+    """What the build looks like that the answer does not show: per entry, what it left out, how its numbers spread, and what it took.
 
     Advisory, all of it: no answer depends on any field. What the build and
-    its solves cost is [`Model.metrics`][specsolve._api.Model.metrics].
+    its solves cost as a whole is [`Model.metrics`][specsolve._api.Model.metrics].
     """
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
@@ -273,6 +273,14 @@ class Diagnostics:
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
+
+    #: ``(kind, entry, seconds)`` — what each variable, set, constraint and the
+    #: objective took to build, one row per entry, in build order. An entry's
+    #: seconds are its own: they hold when the entries build in another order.
+    #: The rows add up to less than ``build_seconds`` in
+    #: [`Model.metrics`][specsolve._api.Model.metrics]; the rest is the stacking
+    #: of every entry's share into the model, which is no entry's.
+    build_seconds: pl.DataFrame
 
 
 def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:

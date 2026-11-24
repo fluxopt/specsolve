@@ -79,6 +79,17 @@ can time.
 | `build` on many small models | [build many small models faster](#build-many-small-models-faster) |
 | `build` on a large model | [make the model smaller](#make-the-model-smaller) |
 
+Where `build` is most of the time, the diagnostics say which entry took it:
+
+```python
+with sps.build('dispatch.yaml', sources) as model:
+    print(model.diagnostics().build_seconds)  # kind, entry, seconds: one row per variable, constraint and the objective
+```
+
+An entry's seconds are its own. The rest of `build` is stacking every entry
+into the model, which no entry owns
+([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).
+
 ## Report a slow phase
 
 Open an issue at

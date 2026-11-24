@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, get_args
+from time import perf_counter
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, get_args
 
 import numpy as np
 import polars as pl
@@ -27,6 +28,8 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -35,6 +38,9 @@ if TYPE_CHECKING:
 
 #: The most columns or rows a model may reach for its build to collect in memory.
 IN_MEMORY_REACH = 250_000
+
+_Built = TypeVar('_Built')
+_Args = ParamSpec('_Args')
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -79,6 +85,8 @@ class Measured:
     #: constraint, over the rows that survived.
     rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
+    #: ``(kind, name) -> seconds`` each entry took to build, in build order.
+    seconds: dict[tuple[str, str], float] = field(default_factory=dict)
     columns: int = 0
     rows: int = 0
     nonzeros: int = 0
@@ -126,11 +134,18 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
-            sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
+            cols = [
+                self._timed('variable', name, self._build_variable, name, v)
+                for name, v in self.program.variables.items()
+            ]
+            sets = [
+                self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
+                for name, s in self.program.sos.items()
+            ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-            built = [self._build_constraint(name, c) for name, c in ordered]
-            objective = self._build_objective(self.program.objective)
+            built = [self._timed('constraint', name, self._build_constraint, name, c) for name, c in ordered]
+            o = self.program.objective
+            objective = None if o is None else self._timed('objective', 'objective', self._build_objective, o)
 
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         matrix_starts = _row_starts(stacked, self.n_rows)
@@ -154,6 +169,21 @@ class Assembly:
             objective_constant=self.obj_const,
         )
         return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+
+    def _timed(
+        self, kind: str, name: str, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
+    ) -> _Built:
+        """*build* on *args*, its seconds recorded under ``(kind, name)`` in [`Measured.seconds`][], even if it raises.
+
+        Each entry collects its own share before it returns, so the seconds are
+        its own and do not move with the order entries build in; the stacking
+        after the last entry is in no entry's.
+        """
+        started = perf_counter()
+        try:
+            return build(*args, **kwargs)
+        finally:
+            self.measured.seconds[kind, name] = perf_counter() - started
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.

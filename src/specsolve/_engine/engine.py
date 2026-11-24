@@ -435,6 +435,14 @@ class Engine:
                 missing=pl.UInt64,
             ),
             objective_range=measured.objective_range,
+            build_seconds=pl.DataFrame(
+                {
+                    'kind': [kind for kind, _ in measured.seconds],
+                    'entry': [name for _, name in measured.seconds],
+                    'seconds': list(measured.seconds.values()),
+                },
+                schema={'kind': pl.String, 'entry': pl.String, 'seconds': pl.Float64},
+            ),
         )
 
     def _read_back(
