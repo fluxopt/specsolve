@@ -172,7 +172,7 @@ class Engine:
         """
         if self._solver is not None:
             self._solver.structure()
-            self.lap('handoff', 'structure')
+            self.lap('handoff', 'digest')
         self._built = None
         self._solved = None
         self._measured = Measured()
@@ -244,21 +244,21 @@ class Engine:
                 from, or a sink that cannot take the built model.
         """
         matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
-        self.lap('handoff', 'match')
+        self.lap('handoff', 'start')
         self.check_sink(solver_name)
         self._solved = None
         self.lap('handoff', 'check')
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, self._model.tables, solver_options)
         reloaded = self._solver is not held
-        self.lap('handoff', 'load' if reloaded else 'push')
+        self.lap('handoff', 'instance' if reloaded else 'push')
         if not reloaded and start != 'previous':
             self._solver.forget()
         if isinstance(matched, Basis):
             self._solver.start_from_basis(matched)
         elif matched is not None:
             self._solver.start_from_values(matched)
-        self.lap('handoff', 'start')
+        self.lap('handoff', 'warm')
         return self._solver, reloaded
 
     def solve(

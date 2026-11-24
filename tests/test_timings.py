@@ -210,13 +210,13 @@ def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
 @pytest.mark.parametrize(
     ('update', 'expected'),
     [
-        pytest.param(None, ['match', 'check', 'load', 'start'], id='a-first-load'),
-        pytest.param(NUMBERS, ['structure', 'match', 'check', 'push', 'start'], id='new-numbers-pushed'),
-        pytest.param(GROWN, ['structure', 'match', 'check', 'load', 'start'], id='a-reload'),
+        pytest.param(None, ['start', 'check', 'instance', 'warm'], id='a-first-load'),
+        pytest.param(NUMBERS, ['digest', 'start', 'check', 'push', 'warm'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['digest', 'start', 'check', 'instance', 'warm'], id='a-reload'),
     ],
 )
 def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expected):
-    """A handoff that loads logs one ``load``; one that keeps the solver pushes. Every solver alike."""
+    """A handoff that loads logs one new ``instance``; one that keeps the solver pushes. Every solver alike."""
     with sps.build(SPEC, DATA) as model:
         model.solve(solver_name=solver_name)
         run = 0
@@ -234,9 +234,9 @@ def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expe
 @pytest.mark.parametrize(
     ('owner', 'slowed', 'step'),
     [
-        pytest.param('engine', 'Engine._matched_start', 'match', id='matching-a-start'),
+        pytest.param('engine', 'Engine._matched_start', 'start', id='matching-a-start'),
         pytest.param('engine', 'Engine.check_sink', 'check', id='checking-the-solver'),
-        pytest.param('sinks', 'Highs._load', 'load', id='loading-a-new-solver'),
+        pytest.param('sinks', 'Highs._load', 'instance', id='loading-a-new-solver'),
     ],
 )
 def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowed, step):
@@ -255,7 +255,7 @@ def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowe
 
     monkeypatch.setattr(cls, name, slow)
     with sps.build(SPEC, DATA) as model:
-        model.solve(start=model.solve() if step == 'match' else 'previous')
+        model.solve(start=model.solve() if step == 'start' else 'previous')
         took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
     took = dict(took.iter_rows())
     assert took[step] >= 10.0, f'the slowed step lands in {step}'

@@ -109,11 +109,13 @@ The handoff's rows name its steps, the same for every solver:
 print(model.timings().filter(phase='handoff').select('step', 'seconds'))
 ```
 
-A first solve runs `match`, `check`, `load` and `start`. `load` is a new
-solver taking the model, which includes importing the solver's package the
-first time in a process. A later solve first reads the held solver's
-`structure`. Where only numbers moved, it keeps that solver and `push`es them
-onto it; otherwise it closes it and runs a new `load`.
+A first solve runs `start`, `check`, `instance` and `warm`. `start` matches
+your `start=` to this build, `check` checks the solver can take the model,
+`instance` is a new solver instance taking it, and `warm` gives the solver the
+start. The first `instance` in a process also imports the solver's package. A
+later solve first reads the held solver's `digest` of its model. Where only
+numbers moved, it keeps that solver and `push`es them onto it; otherwise it
+closes it and takes a new `instance`.
 
 ## Each solve of a loop
 
@@ -145,7 +147,7 @@ run holds the landing and the result does not.
 |---|---|
 | `solve` | [start from an earlier answer](faster.md#start-from-an-earlier-answer), [accept a gap](faster.md#accept-a-gap), and the ways after it |
 | `build` and `handoff`, again on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded) |
-| `handoff`, in `load` on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded): only numbers may move |
+| `handoff`, in `instance` on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded): only numbers may move |
 | `build` on many small models | [build many small models faster](faster.md#build-many-small-models-faster) |
 | `build` on a large model | the entry that holds the time, then [make the model smaller](faster.md#make-the-model-smaller) |
 
