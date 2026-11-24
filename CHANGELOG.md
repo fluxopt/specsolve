@@ -14,6 +14,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
 - perf(engine): a constraint with a where reads it once when a parameter of its expression is absent at some rows ([#2161](https://github.com/fluxopt/specsolve/pull/2161))
 - perf(engine): a constraint, a where or a bound over data with a value at every coordinate reads it by position rather than by a join ([#2162](https://github.com/fluxopt/specsolve/pull/2162))
+- feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 
 ## 0.12.0 (2026-11-23)
 
