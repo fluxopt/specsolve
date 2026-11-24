@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, get_args
 
 import numpy as np
 import polars as pl
@@ -27,6 +27,8 @@ from specsolve._sinks.handoff import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin
 
@@ -35,6 +37,14 @@ if TYPE_CHECKING:
 
 #: The most columns or rows a model may reach for its build to collect in memory.
 IN_MEMORY_REACH = 250_000
+
+_Built = TypeVar('_Built')
+_Args = ParamSpec('_Args')
+
+#: One constraint's ``rows``, its share of the matrix, and its quadratic share.
+_ConstraintShare = tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]
+#: Each row's first coefficient in the matrix, CSR's own index.
+_RowStarts = np.ndarray[tuple[int, ...], np.dtype[np.int64]]
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -100,8 +110,15 @@ class BuiltModel:
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
-    def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
+    def __init__(
+        self,
+        program: program.Program,
+        attached: AttachedSources,
+        measured: Measured,
+        lap: Callable[[str, str | None], None],
+    ) -> None:
         self.program = program
+        self.lap = lap
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, indices.Indexed] = {}
@@ -126,20 +143,43 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            cols = [self._build_variable(name, v) for name, v in self.program.variables.items()]
-            sets = [self._build_sos(s, self.program.variables[s.variable]) for s in self.program.sos.values()]
+            self.lap('setup', None)
+            cols = [
+                self._timed('variable', name, self._build_variable, name, v)
+                for name, v in self.program.variables.items()
+            ]
+            sets = [
+                self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
+                for name, s in self.program.sos.items()
+            ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-            built = [self._build_constraint(name, c) for name, c in ordered]
-            objective = self._build_objective(self.program.objective)
+            built = [self._timed('constraint', name, self._build_constraint, name, c) for name, c in ordered]
+            o = self.program.objective
+            objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
-        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
-        matrix_starts = _row_starts(stacked, self.n_rows)
-        matrix = stacked.select(COL, COEFF).rechunk()
-
+        matrix, matrix_starts = self._timed('matrix', None, self._matrix, built)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = sinks.Handoff(
+        handoff = self._timed('tables', None, self._handoff, cols, sets, built, objective, matrix, matrix_starts)
+        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+
+    def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
+        """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
+        return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
+
+    def _handoff(
+        self,
+        cols: list[pl.DataFrame],
+        sets: list[pl.DataFrame],
+        built: list[_ConstraintShare],
+        objective: pl.DataFrame | None,
+        matrix: pl.DataFrame,
+        matrix_starts: _RowStarts,
+    ) -> sinks.Handoff:
+        """Every entry's share stacked into the tables a sink drains, *matrix* among them."""
+        return sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -153,7 +193,20 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+
+    def _timed(
+        self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
+    ) -> _Built:
+        """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
+
+        Each entry collects its own share before it returns, so the seconds are
+        its own and do not move with the order entries build in. Stacking the
+        shares into the model is timed the same way, as ``matrix`` and ``tables``.
+        """
+        try:
+            return build(*args, **kwargs)
+        finally:
+            self.lap(step, entry)
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
@@ -259,9 +312,7 @@ class Assembly:
             self.n_sets = built.item(-1, 'set') + 1
         return built
 
-    def _build_constraint(
-        self, name: str, c: program.Constraint
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+    def _build_constraint(self, name: str, c: program.Constraint) -> _ConstraintShare:
         """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
 
         The [`coverage`][] checks run in its table's order, before an aggregate

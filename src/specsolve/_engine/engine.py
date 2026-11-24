@@ -11,10 +11,13 @@ The lane is described in docs/development/architecture.md.
 from __future__ import annotations
 
 import warnings
+from array import array
+from functools import partial
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import polars as pl
 
 from specsolve import _sinks as sinks
@@ -31,7 +34,7 @@ from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
-from specsolve._records import PHASES, Metrics
+from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -39,7 +42,6 @@ from specsolve.errors import SpecsolveError, SpecsolveWarning
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    import numpy as np
     from mathspec import program
     from polars._typing import PolarsDataType
 
@@ -70,8 +72,6 @@ def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.nd
     Raises:
         SpecsolveError: *sink* cannot take values that leave a column out.
     """
-    import numpy as np
-
     partial = bool(np.isnan(values).any())
     match sink.lp_values['partial' if partial else 'complete']:
         case 'refused':
@@ -114,11 +114,10 @@ class Engine:
         #: What the last solve concluded, or ``None`` once a load, a build or
         #: [`close`][] has changed what the solver holds.
         self._solved: SolveStatus | None = None
-        #: How many solves this model has been through, and how many solver instances they took.
-        self._solves = 0
-        self._solver_instances = 0
-        #: Wall seconds each phase has spent, cumulative across rebuilds.
-        self._seconds: dict[str, float] = {}
+        #: Every lap of this model's life, in order: ``(run, phase, step, entry, seconds)``.
+        self._log = _Laps()
+        #: Per run, how many solves it took and how many solver instances they took.
+        self._counts: list[list[int]] = [[0, 0]]
         #: When the last lap ended, or the call began: where the next lap measures from.
         self._mark = perf_counter()
 
@@ -133,19 +132,28 @@ class Engine:
         """Begin a call: the next [`lap`][] measures from now."""
         self._mark = perf_counter()
 
-    def lap(self, phase: str) -> None:
-        """Add the wall time since the last lap, or since [`start`][], to *phase*, one of ``PHASES``.
+    def lap(self, phase: str, step: str | None = None, entry: str | None = None) -> None:
+        """Log the wall time since the last lap, or since [`start`][], under *phase*, one of ``PHASES``.
 
         Each lap begins where the one before it ended, so the laps of a call
         add up to the whole call, and a step between two named steps is in the
-        phase of the one after it. The steps outside the engine lap here too,
-        so [`diagnostics`][] holds every phase of the model's life. A call
-        that raises keeps the laps it finished.
+        lap after it. *step* names what the lap did inside *phase*, as the
+        build names each entry. The steps outside the engine lap here too, so
+        the log holds every phase of the model's life. A call that raises
+        keeps the laps it finished.
         """
         assert phase in PHASES, f'{phase!r} is not a phase, so no Metrics column would carry its clock'
         now = perf_counter()
-        self._seconds[phase] = self._seconds.get(phase, 0.0) + now - self._mark
+        self._log.append(len(self._counts) - 1, phase, step, entry, now - self._mark)
         self._mark = now
+
+    def next_run(self) -> None:
+        """End the run: a result has been handed back, so the laps from here on are the next one's."""
+        self._counts.append([0, 0])
+
+    def timings(self) -> pl.DataFrame:
+        """Every lap of this model's life, one row each: ``(run, phase, step, entry, seconds)``."""
+        return self._log.table()
 
     # ------------------------------------------------------------------
     # build
@@ -173,8 +181,7 @@ class Engine:
             attached = attach(program, sources)
             self.lap('attach')
         self._measured.sparse = short_parameters(program, attached)
-        self._built = Assembly(program, attached, self._measured).run()
-        self.lap('build')
+        self._built = Assembly(program, attached, self._measured, partial(self.lap, 'build')).run()
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables
@@ -296,9 +303,10 @@ class Engine:
                 from, refused before the solver loads.
         """
         solver, reloaded = self.handoff(solver_name, solver_options, start=start)
-        self._solves += 1
+        counts = self._counts[-1]
+        counts[0] += 1
         if reloaded:
-            self._solver_instances += 1
+            counts[1] += 1
         answer = solver.run(self._model.handoff, basis='basis' in outputs)
         self.lap('solve')
         self._solved = answer.status
@@ -394,29 +402,40 @@ class Engine:
             raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
 
-    def metrics(self) -> Metrics:
-        """This model's sizes, counters and clocks over its whole life; answerable after [`close`][].
+    @property
+    def run(self) -> int:
+        """Which run the laps belong to now: how many results the model has handed back."""
+        return len(self._counts) - 1
+
+    def metrics(self, run: int | None = None) -> Metrics:
+        """This model's sizes, counters and clocks over its whole life, or over *run* alone; answerable after [`close`][].
 
         The one place a [`Metrics`][] is built from the model: a result's, an
-        archive's and a sweep slice's rows are differences of two of these.
-        No table is built, so it costs what reading the counters costs.
+        archive's and a sweep slice's row is its run's. The clocks are the
+        log's laps summed by phase, so the runs add up to the whole life. A
+        run is read from the end of the log, so the current one costs its own
+        laps; an earlier one costs every lap after it.
         """
-        measured, clocks = self._measured, self._seconds
+        clocks = self._log.clocks(run)
+        solves, instances = (
+            (sum(c[0] for c in self._counts), sum(c[1] for c in self._counts)) if run is None else self._counts[run]
+        )
+        measured = self._measured
         return Metrics(
             columns=measured.columns,
             rows=measured.rows,
             nonzeros=measured.nonzeros,
-            solves=self._solves,
-            solver_instances=self._solver_instances,
-            load_seconds=clocks.get('load', 0.0),
-            tidy_seconds=clocks.get('tidy', 0.0),
-            attach_seconds=clocks.get('attach', 0.0),
-            build_seconds=clocks.get('build', 0.0),
-            handoff_seconds=clocks.get('handoff', 0.0),
-            solve_seconds=clocks.get('solve', 0.0),
-            readback_seconds=clocks.get('readback', 0.0),
-            write_seconds=clocks.get('write', 0.0),
-            archive_seconds=clocks.get('archive', 0.0),
+            solves=solves,
+            solver_instances=instances,
+            load_seconds=clocks['load'],
+            tidy_seconds=clocks['tidy'],
+            attach_seconds=clocks['attach'],
+            build_seconds=clocks['build'],
+            handoff_seconds=clocks['handoff'],
+            solve_seconds=clocks['solve'],
+            readback_seconds=clocks['readback'],
+            write_seconds=clocks['write'],
+            archive_seconds=clocks['archive'],
         )
 
     def diagnostics(self) -> Diagnostics:
@@ -566,6 +585,59 @@ class Engine:
     def __exit__(self, *exc: object) -> Literal[False]:
         self.close()
         return False
+
+
+class _Laps:
+    """The engine's log of laps, held as columns so a long-lived model's log stays small.
+
+    Each step, ``(phase, step, entry)``, is stored once and a lap holds its
+    number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
+    Runs only grow along the log, so a run's laps are read back from its end.
+    """
+
+    def __init__(self) -> None:
+        self._steps: dict[tuple[str, str | None, str | None], int] = {}
+        self._runs = array('I')
+        self._codes = array('I')
+        self._seconds = array('d')
+
+    def append(self, run: int, phase: str, step: str | None, entry: str | None, seconds: float) -> None:
+        self._runs.append(run)
+        self._codes.append(self._steps.setdefault((phase, step, entry), len(self._steps)))
+        self._seconds.append(seconds)
+
+    def clocks(self, run: int | None = None) -> dict[str, float]:
+        """Seconds per phase over every lap, or over *run*'s, every phase present."""
+        phase_of = [phase for phase, _, _ in self._steps]
+        clocks = dict.fromkeys(PHASES, 0.0)
+        runs, codes, seconds = self._runs, self._codes, self._seconds
+        if run is None:
+            for code, took in zip(codes, seconds, strict=True):
+                clocks[phase_of[code]] += took
+            return clocks
+        i = len(runs) - 1
+        while i >= 0 and runs[i] >= run:
+            if runs[i] == run:
+                clocks[phase_of[codes[i]]] += seconds[i]
+            i -= 1
+        return clocks
+
+    def table(self) -> pl.DataFrame:
+        """Every lap as a row of [`TIMINGS_SCHEMA`][specsolve._records.TIMINGS_SCHEMA], in the order they ran."""
+        steps = list(self._steps)
+        codes = pl.Series(np.frombuffer(self._codes, dtype=np.uint32).copy())
+        named = {
+            column: pl.Series([step[i] for step in steps], dtype=pl.String).gather(codes)
+            for i, column in enumerate(('phase', 'step', 'entry'))
+        }
+        return pl.DataFrame(
+            {
+                'run': np.frombuffer(self._runs, dtype=np.uint32).copy(),
+                **named,
+                'seconds': np.frombuffer(self._seconds, dtype=np.float64).copy(),
+            },
+            schema=TIMINGS_SCHEMA,
+        )
 
 
 def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:

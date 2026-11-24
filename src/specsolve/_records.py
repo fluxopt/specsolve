@@ -243,8 +243,9 @@ class Metrics(NamedTuple):
     write_seconds: float
     #: The spec, the sources and the answer written to disk. Every member is
     #: timed but this row itself, which is written last: writing it and
-    #: landing the archive are in
-    #: [`Model.metrics`][specsolve._api.Model.metrics] alone.
+    #: landing the archive are in its run in
+    #: [`Model.timings`][specsolve._api.Model.timings] and in
+    #: [`Model.metrics`][specsolve._api.Model.metrics], not in this row.
     archive_seconds: float
     #: What the archive holding this row was called, as
     #: [`Record.specsolve_run`][]: its file name without a ``.zip``. Null
@@ -264,18 +265,19 @@ class Metrics(NamedTuple):
         """
         return pl.DataFrame({'phase': PHASES, 'seconds': [getattr(self, f'{phase}_seconds') for phase in PHASES]})
 
-    def since(self, earlier: Metrics) -> Metrics:
-        """This row less *earlier*'s counts and clocks: the share of the solves between the two."""
-        return self._replace(**{name: getattr(self, name) - getattr(earlier, name) for name in _CUMULATIVE})
-
 
 #: The phases a model is clocked in, in the order they run, each named as its
 #: [`Metrics`][] column is less ``_seconds``.
 PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
 
-#: The [`Metrics`][] columns a model sums over its solves.
-_CUMULATIVE = ('solves', 'solver_instances', *(f'{phase}_seconds' for phase in PHASES))
-
-
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)
+
+#: The columns of [`Model.timings`][specsolve._api.Model.timings]: one row per lap.
+TIMINGS_SCHEMA = {
+    'run': pl.UInt32,
+    'phase': pl.String,
+    'step': pl.String,
+    'entry': pl.String,
+    'seconds': pl.Float64,
+}
