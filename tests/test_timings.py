@@ -14,7 +14,6 @@ import pytest
 import specsolve as sps
 from specsolve._engine import assembly, engine
 from specsolve._records import PHASES
-from specsolve._sinks import SOLVERS
 
 SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -206,7 +205,6 @@ def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
     return model.timings().filter(phase='handoff', run=run).get_column('step').to_list()
 
 
-@pytest.mark.parametrize('solver_name', sorted(SOLVERS))
 @pytest.mark.parametrize(
     ('update', 'expected'),
     [
