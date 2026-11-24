@@ -161,7 +161,7 @@ def _solved_then_broken(model: Any) -> None:
     """A second solve from nothing whose run raises: the solver no longer holds what the first solved."""
     from specsolve._sinks.highs import Highs
 
-    def broken(self: Highs, handoff: object) -> None:
+    def broken(self: Highs, tables: object) -> None:
         raise RuntimeError('the run broke')
 
     model.solve()

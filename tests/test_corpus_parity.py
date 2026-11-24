@@ -51,7 +51,7 @@ def _same_matrix(name: str, run: Any) -> None:
     approximately, since the lanes reach a coefficient by a different order of
     operations.
     """
-    tables = run.engine._model.handoff
+    tables = run.engine._model.tables
     for constraint, indexed in run.engine._model.constraints.items():
         if not indexed.height:
             continue
