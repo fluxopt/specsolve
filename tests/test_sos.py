@@ -274,7 +274,7 @@ def test_an_absent_member_leaves_the_set_and_its_neighbours_adjacent():
         'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'size != 1'}
     }
     with sps.build(raw, DATA) as model:
-        sets = model._engine._model.handoff.sos
+        sets = model._engine._model.tables.sos
     assert sets['weight'].to_list() == [1, 3, 4] * 2, 'the absent member is still in the list, or the order moved'
 
 
@@ -345,9 +345,9 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         }
 
     with sps.build(raw, live(together)) as model:
-        one_set = model._engine._model.handoff
+        one_set = model._engine._model.tables
         model.update(live(apart))
-        two_sets = model._engine._model.handoff
+        two_sets = model._engine._model.tables
         assert (one_set.cols.equals(two_sets.cols), one_set.column_count, one_set.row_count) == (True, 2, 0), (
             'the two builds differ in something other than their sets, so this proves nothing'
         )
@@ -365,7 +365,7 @@ def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     raw = spec(1)
     raw['variables'] = {'take': {'dims': ['size', 'site'], 'bounds': {'lower': 0, 'upper': 'cap'}}}
     with sps.build(raw, DATA) as model:
-        sets = model._engine._model.handoff.sos
+        sets = model._engine._model.tables.sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
         assert sets[COL].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
@@ -395,7 +395,7 @@ def test_a_condition_that_drops_nothing_places_the_sets_where_the_arithmetic_doe
         pl.col('value').cast(pl.Boolean)
     )
     with sps.build(raw, DATA) as placed, sps.build(masked, DATA | {'live': live}) as counted:
-        assert placed._engine._model.handoff.sos.equals(counted._engine._model.handoff.sos), (
+        assert placed._engine._model.tables.sos.equals(counted._engine._model.tables.sos), (
             'the two placements disagree about which coordinate is in which set, or at which weight'
         )
 
@@ -419,7 +419,7 @@ def test_a_condition_that_empties_a_set_leaves_the_numbering_dense():
         pl.col('value').cast(pl.Boolean)
     )
     with sps.build(raw, DATA | {'live': live}) as model:
-        assert model._engine._model.handoff.sos['set'].to_list() == [0, 0, 0, 0], (
+        assert model._engine._model.tables.sos['set'].to_list() == [0, 0, 0, 0], (
             'the emptied set left a hole, so a set number is a position rather than an index'
         )
 

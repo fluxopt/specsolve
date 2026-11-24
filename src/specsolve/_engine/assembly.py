@@ -23,7 +23,7 @@ from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import null_bounds_message
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
-from specsolve._sinks.handoff import SENSE
+from specsolve._sinks.tables import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -94,7 +94,7 @@ class Measured:
 
 @dataclass(frozen=True)
 class BuiltModel:
-    """One build's product: the handoff a sink drains, and what reads it back."""
+    """One build's product: the tables a sink drains, and what reads it back."""
 
     program: program.Program
     attached: AttachedSources
@@ -102,7 +102,7 @@ class BuiltModel:
     #: entry, one map per index space: a variable and a constraint may share a name.
     variables: dict[str, indices.Indexed]
     constraints: dict[str, indices.Indexed]
-    handoff: sinks.Handoff
+    tables: sinks.SinkTables
 
 
 class Assembly:
@@ -137,7 +137,7 @@ class Assembly:
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
+        ``SinkTables`` promises its sinks. A build whose [`_reach`][] is at most
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
@@ -162,7 +162,7 @@ class Assembly:
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = sinks.Handoff(
+        tables = sinks.SinkTables(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -176,7 +176,7 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
-        model = BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+        model = BuiltModel(self.program, self.attached, self.variables, self.constraints, tables)
         self.lap('tables', None)
         return model
 
@@ -464,7 +464,7 @@ class Assembly:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
-        ``0``. Rows landing on one column are summed here, because the handoff
+        ``0``. Rows landing on one column are summed here, because the sink tables'
         scatter keeps only the last write.
         """
         if o is None:
@@ -495,7 +495,7 @@ class Assembly:
 
         One row per unordered pair, at the coefficient the file wrote, not
         halved; each sink converts. It leaves sorted, because
-        [`structure`][specsolve._sinks.handoff.Handoff.structure] hashes it.
+        [`structure`][specsolve._sinks.tables.SinkTables.structure] hashes it.
         """
         if not quadratic:
             return None

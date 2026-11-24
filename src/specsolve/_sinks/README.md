@@ -4,12 +4,12 @@ How a built model leaves the engine — the boxes downstream of the engine in
 [docs/development/architecture.md](../../../docs/development/architecture.md)'s pipeline, which
 carries the argument for the split. This page is the membership list.
 
-**Two families.** A **solver** takes the handoff and runs it; a **writer**
-takes the handoff and renders it to a file. Everything else follows.
+**Two families.** A **solver** takes the sink tables and runs them; a **writer**
+takes them and renders them to a file. Everything else follows.
 
 | | solver | writer |
 |---|---|---|
-| answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
+| answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `solver.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
@@ -24,18 +24,18 @@ below, and sharing through it is what stops one leaf importing the other.
 
 The split is by who can answer. `loaded(held, name, …)` is the whole of
 **reuse or load again**: it keeps a held solver exactly when it is the named
-class whose recorded digest and options match the new handoff — and then pushes
+class whose recorded digest and options match the new tables — and then pushes
 the new numbers onto it — closing and replacing it otherwise. The base records
 that evidence at the load; a subclass owns **the handoff**:
 
 | | |
 |---|---|
 | `loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
+| `Solver.run(tables, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
 | `Solver.start_from_basis(basis)` / `start_from_values(values)` | `_start_from_basis` / `_start_from_values`, plus the refusal of either that does not span the model |
-| `_load(handoff)` | hand the model over and hold what reads it back |
-| `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
-| `_run(handoff)` | solve what is loaded, and read it back |
+| `_load(tables)` | hand the model over and hold what reads it back |
+| `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
+| `_run(tables)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
 | `_start_from_basis(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
 | `_start_from_values(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
@@ -45,7 +45,7 @@ that evidence at the load; a subclass owns **the handoff**:
 
 The first three are the family's and identical for everyone; the last nine are a
 member's, and are its own library's shape. Nothing above the family decides
-which solver to keep or checks what one returned — an engine hands over a `Handoff`
+which solver to keep or checks what one returned — an engine hands over a `SinkTables`
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
@@ -66,32 +66,32 @@ coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
 way: an incumbent to a mixed-integer solve, and a primal to an LP where the
 member's `lp_values` says it takes one.
 
-The guard is `Handoff.structure` — a digest of everything a re-solve may
-not change, recorded by the solver at its load and cached on the handoff. **Values are re-pushed, not diffed**: linopy's persistent layer
+The guard is `SinkTables.structure` — a digest of everything a re-solve may
+not change, recorded by the solver at its load and cached on the tables. **Values are re-pushed, not diffed**: linopy's persistent layer
 (`persistent/diff.py`) computes a delta against a snapshot of the previous
 model, where here the previous model is released before the new one exists, that
 release being what keeps an updated build at one model's peak. What a diff would
 need is exactly what is not kept.
 
-`handoff.py` is what both read. Neither family imports the other and no member
+`tables.py` is what both read. Neither family imports the other and no member
 imports a sibling — `tests/test_architecture.py` reads all of that off the
 path, which is what keeps `gurobipy` off the import path of a caller who
 solves with HiGHS.
 
 ## The contract
 
-A sink takes a `Handoff` and nothing else: the tables `cols`
+A sink takes a `SinkTables` and nothing else: the tables `cols`
 (col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs), `matrix`
 (row, col, coeff) and `sos` (set, type, col, weight), plus the counts it
 chunks by and the objective's sense and constant — those last two live outside
 the tables because a constant has no column to attach to.
 
-A sink never learns how the handoff was filled, and the engine never learns
+A sink never learns how the tables were filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
 `lp_file.py`, not another method on `Engine`.
 
 The one thing sinks may share is a *projection* of those tables, never a step
-of the work — `Handoff.dense_columns`, which every solver reads — or a
+of the work — `SinkTables.dense_columns`, which every solver reads — or a
 family's one shared module, which holds no member's own answer: `solver.py` is the
 lifecycle without a solver in it, `text.py` the renderings without a
 format in them.
@@ -119,7 +119,7 @@ supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound t
 # highs: left out, and the refusal names the way past it
 ```
 
-— and `sinks.refusal(handoff, name)` answers before the load, off the model
+— and `sinks.refusal(tables, name)` answers before the load, off the model
 that was built, which is what `Model.check_sink(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is

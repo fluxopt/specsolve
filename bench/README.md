@@ -521,7 +521,7 @@ written against this table:
 | **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
 | `import` | `import specsolve` |
 | `build` | `sps.build(...)` — the engine scans the parquet itself |
-| `emit` | `model.write(path)` / `Highs(_handoff(model))` |
+| `emit` | `model.write(path)` / `Highs(_tables(model))` |
 | `teardown` | `model.close()` — releases the built model |
 | **after the clock** | row, column and nonzero counts off the built frames |
 

@@ -44,10 +44,10 @@ WITH_A_QUADRATIC_ROW = PLAIN | {
 INTEGRAL = PLAIN | {'variables': {'p': {'dims': ['g'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 10}}}}
 
 
-def _handoff(spec, sources=SOURCES):
+def _tables(spec, sources=SOURCES):
     """The built model a capability question is asked of, as a stub sink is asked it."""
     with sps.build(spec, dict(sources)) as model:
-        return model._engine._model.handoff
+        return model._engine._model.tables
 
 
 def _refusal(spec, sink: str, sources=SOURCES) -> str | None:
@@ -182,7 +182,7 @@ def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(mon
         capabilities = Capabilities(supports=frozenset({}))
 
     monkeypatch.setitem(SOLVERS, 'stub', Stub)
-    message = sinks.refusal(_handoff(WITH_A_SET), 'stub')
+    message = sinks.refusal(_tables(WITH_A_SET), 'stub')
     assert message is not None
     assert "'stub'" in message, 'the refusal names the sink'
     assert 'special-ordered sets' in message, "the refusal names the construct, in the modeller's own words"
@@ -199,7 +199,7 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
         )
 
     monkeypatch.setitem(SOLVERS, 'stub', Stub)
-    message = sinks.refusal(_handoff(INTEGRAL | {'sos': WITH_A_SET['sos']}), 'stub')
+    message = sinks.refusal(_tables(INTEGRAL | {'sos': WITH_A_SET['sos']}), 'stub')
     assert message is not None
     assert 'separately and refuses them together' in message
     assert 'binary or integer variables' in message and 'special-ordered sets' in message
