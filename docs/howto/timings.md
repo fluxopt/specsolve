@@ -112,10 +112,13 @@ print(model.timings().filter(phase='handoff').select('step', 'seconds'))
 A first solve runs `start`, `check`, `instance` and `warm`. `start` matches
 your `start=` to this build, `check` checks the solver can take the model,
 `instance` is a new solver instance taking it, and `warm` gives the solver the
-start. The first `instance` in a process also imports the solver's package. A
-later solve first reads the held solver's `digest` of its model. Where only
-numbers moved, it keeps that solver and `push`es them onto it; otherwise it
-closes it and takes a new `instance`.
+start. The first `instance` in a process also imports the solver's package.
+
+A later solve keeps the solver it holds where only numbers moved, and `push`es
+them onto it; otherwise it closes it and takes a new `instance`. A `digest`
+row comes only from an `update` that rebuilds the model while a solver is held:
+the held solver reads its fingerprint of its model before the rebuild. Two
+solves with no `update` between them log no `digest`.
 
 ## Each solve of a loop
 
