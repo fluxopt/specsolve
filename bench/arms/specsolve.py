@@ -52,7 +52,7 @@ def prepare(
     return case.spec_path(case.shape(size)), checked_sources(case, size, paths)
 
 
-def _handoff(handle: Any) -> Any:
+def _tables(handle: Any) -> Any:
     """The built model's tables, wherever the checkout under test keeps them.
 
     The ladder runs across checkouts, so this reaches the handle, the engine and
@@ -62,8 +62,8 @@ def _handoff(handle: Any) -> Any:
     built = getattr(engine, '_model', None)
     if built is None:
         return engine._tables()
-    handoff = getattr(built, 'handoff', None) or built.tables
-    return handoff() if callable(handoff) else handoff
+    tables = getattr(built, 'tables', None) or built.handoff
+    return tables() if callable(tables) else tables
 
 
 def _counts(tables: Any, *, nonzeros: bool) -> Counts:
@@ -79,8 +79,8 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
 def _clocks(model: Any) -> dict[str, float]:
     """The engine's own seconds per phase that ran, summed over the model's life; empty on a checkout that kept none.
 
-    A checkout with `Model.metrics` reads it; an older one kept the phases in
-    the engine's `_seconds`, which `bench.ab` and a base checkout still meet.
+    A checkout with `Model.metrics` reads it; one from before it (#2188) kept
+    the phases in the engine's `_seconds`, which `bench.ab` meets on an older base.
     """
     if callable(getattr(model, 'metrics', None)):
         metrics = model.metrics()
@@ -107,14 +107,14 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         else:
             _loaded(sink, model).close()
 
-        return _counts(_handoff(model), nonzeros=True) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=True) | {'phases': _clocks(model)}
 
 
 def _loaded(sink: str, model: Any) -> Any:
     """A solver holding *model*, for a sink that has one: its class, or the ``build_<sink>`` an older checkout loads through."""
     module = importlib.import_module(f'specsolve._sinks.{sink}')
     load = getattr(module, f'build_{sink}', None) or getattr(module, sink.capitalize())
-    return load(_handoff(model))
+    return load(_tables(model))
 
 
 #: The private engine method each verb is timed through, which a checkout older than the verb lacks.
@@ -173,7 +173,7 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
     model.update(sources)
     reloaded = _handed_off(model, sink, cold=cold)
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
-    return _counts(_handoff(model), nonzeros=True) | {'reloaded': reloaded, 'phases': phases}
+    return _counts(_tables(model), nonzeros=True) | {'reloaded': reloaded, 'phases': phases}
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
@@ -246,12 +246,12 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
 
     spec, sources = prepared
     model = sps.build(spec, sources)
-    handoff = _handoff(model)
-    rows = pl.zeros(handoff.row_count, dtype=pl.Float64, eager=True)
+    tables = _tables(model)
+    rows = pl.zeros(tables.row_count, dtype=pl.Float64, eager=True)
     answer = SolveAnswer(
         SolveStatus('optimal'),
         0.0,
-        primal=pl.zeros(handoff.column_count, dtype=pl.Float64, eager=True),
+        primal=pl.zeros(tables.column_count, dtype=pl.Float64, eager=True),
         dual=None if model._engine._discrete() else rows,
         activity=rows,
     )
@@ -282,7 +282,7 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     else:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
             _write_answer(result, Path(tmp) / 'answer')
-    return _counts(_handoff(model), nonzeros=False)
+    return _counts(_tables(model), nonzeros=False)
 
 
 def _write_answer(result: Any, out: Path) -> None:
@@ -301,7 +301,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with sps.build(spec, sources) as model:
-        return _counts(_handoff(model), nonzeros=False) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=False) | {'phases': _clocks(model)}
 
 
 def written(prepared: tuple[Path, dict[str, str]], path: Path) -> None:

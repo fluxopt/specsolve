@@ -33,7 +33,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     }
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
     with sps.build(spec, data) as model:
-        tables = model._engine._model.handoff
+        tables = model._engine._model.tables
         occupied = sorted(set(tables.matrix_chunk(0, tables.row_count)[ROW].to_list()))
         assert occupied == [0, 1], "the constraint's rows close up around the gap"
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]

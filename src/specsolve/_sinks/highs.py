@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
-from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import (
     AT_LOWER,
     AT_UPPER,
@@ -27,6 +26,7 @@ from specsolve._sinks.solver import (
     basis_codes,
     solver_vector,
 )
+from specsolve._sinks.tables import SENSE_CODES
 from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     import numpy as np
     import polars as pl
 
-    from specsolve._sinks.handoff import ColumnVectors, Handoff, RowVectors
+    from specsolve._sinks.tables import ColumnVectors, RowVectors, SinkTables
 
 
 #: HiGHS model status -> termination condition, copied from linopy's
@@ -69,7 +69,7 @@ _IIS_IRREDUCIBLE = 3
 
 
 def _built(
-    handoff: Handoff, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]
+    tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]
 ) -> tuple[Any, ColumnVectors, RowVectors]:
     """The populated `highspy.Highs`, and the column and row vectors it was loaded with.
 
@@ -85,10 +85,10 @@ def _built(
     import highspy
     import numpy as np
 
-    if handoff.qmatrix.height:
+    if tables.qmatrix.height:
         raise SpecsolveError(
             'HiGHS has no quadratic-constraint concept at all — no method of its API takes one — and '
-            f'this model has {handoff.row_count - handoff.linear_row_count} such rows. Solving through '
+            f'this model has {tables.row_count - tables.linear_row_count} such rows. Solving through '
             'sps.solve() '
             'refuses this earlier and names the sinks that do take it; constructing Highs '
             'directly skips that, and loading the rows without their quadratic part would be a '
@@ -104,23 +104,23 @@ def _built(
         h.setOptionValue(option, value)
     lap('load')
 
-    cols = handoff.dense_columns(inf)
-    rows = handoff.dense_rows(inf)
+    cols = tables.dense_columns(inf)
+    rows = tables.dense_rows(inf)
     rlb, rub = _row_bounds(rows, inf)
-    sense = highspy.ObjSense.kMaximize if handoff.objective_sense == 'maximize' else highspy.ObjSense.kMinimize
+    sense = highspy.ObjSense.kMaximize if tables.objective_sense == 'maximize' else highspy.ObjSense.kMinimize
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
-    starts = handoff.row_starts.astype(np.int32)
-    columns = handoff.matrix[COL].to_numpy()
-    coefficients = handoff.matrix[COEFF].to_numpy()
+    starts = tables.row_starts.astype(np.int32)
+    columns = tables.matrix[COL].to_numpy()
+    coefficients = tables.matrix[COEFF].to_numpy()
     integrality = _integrality(cols)
     lap('convert')
     _loaded(
         h,
         h.passModel(
-            handoff.column_count,
-            handoff.row_count,
-            handoff.matrix.height,
+            tables.column_count,
+            tables.row_count,
+            tables.matrix.height,
             0,
             int(highspy.MatrixFormat.kRowwise),
             int(highspy.HessianFormat.kTriangular),
@@ -141,7 +141,7 @@ def _built(
         ),
         'the model',
     )
-    _pass_hessian(h, handoff)
+    _pass_hessian(h, tables)
     lap('load')
     return h, cols, rows
 
@@ -153,7 +153,7 @@ def _integrality(cols: Any) -> Any:
     return cols.integral.astype(np.int32)
 
 
-def _pass_hessian(h: Any, handoff: Handoff) -> None:
+def _pass_hessian(h: Any, tables: SinkTables) -> None:
     r"""The objective's quadratic part, as the Hessian HiGHS reads.
 
     ``passHessian`` takes :math:`Q` in :math:`\frac12 x^\top Q x`, lower
@@ -165,20 +165,20 @@ def _pass_hessian(h: Any, handoff: Handoff) -> None:
     import highspy
     import numpy as np
 
-    if not handoff.quad.height:
+    if not tables.quad.height:
         return
-    lower = handoff.quad[COL_R].to_numpy().astype(np.int32, copy=False)
-    upper = handoff.quad[COL_L].to_numpy().astype(np.int32, copy=False)
+    lower = tables.quad[COL_R].to_numpy().astype(np.int32, copy=False)
+    upper = tables.quad[COL_L].to_numpy().astype(np.int32, copy=False)
     diagonal = lower == upper
-    values = np.where(diagonal, handoff.quad[COEFF].to_numpy() * 2.0, handoff.quad[COEFF].to_numpy())
+    values = np.where(diagonal, tables.quad[COEFF].to_numpy() * 2.0, tables.quad[COEFF].to_numpy())
 
     order = np.lexsort((lower, upper))
-    starts = np.zeros(handoff.column_count + 1, dtype=np.int32)
+    starts = np.zeros(tables.column_count + 1, dtype=np.int32)
     np.add.at(starts, upper + 1, 1)
     _loaded(
         h,
         h.passHessian(
-            handoff.column_count,
+            tables.column_count,
             len(order),
             int(highspy.HessianFormat.kTriangular),
             np.cumsum(starts, out=starts),
@@ -228,22 +228,22 @@ class Highs(Solver):
         excludes=(frozenset({'quadratic_objective', 'integrality'}),),
     )
 
-    def _load(self, handoff: Handoff) -> None:
-        self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options, self._lap)
+    def _load(self, tables: SinkTables) -> None:
+        self._handle, self._column_vectors, self._row_vectors = _built(tables, self._options, self._lap)
 
     @property
     def handle(self) -> Any:
         return self._handle
 
-    def push(self, handoff: Handoff) -> None:
+    def push(self, tables: SinkTables) -> None:
         """Send only the elements that differ from what the model holds: HiGHS spends its time per element sent, moved or not."""
         import highspy
         import numpy as np
 
         inf = highspy.kHighsInf
         h = self._handle
-        cols, was = handoff.dense_columns(inf), self._column_vectors
-        rows, had = handoff.dense_rows(inf), self._row_vectors
+        cols, was = tables.dense_columns(inf), self._column_vectors
+        rows, had = tables.dense_rows(inf), self._row_vectors
 
         cost = np.flatnonzero(cols.cost != was.cost).astype(np.int32)
         _loaded(h, h.changeColsCost(len(cost), cost, cols.cost[cost]), 'new costs')
@@ -253,7 +253,7 @@ class Highs(Solver):
         lower, upper = _row_bounds(rows, inf)
         _loaded(h, h.changeRowsBounds(len(moved), moved, lower[moved], upper[moved]), 'new right-hand sides')
         self._column_vectors, self._row_vectors = cols, rows
-        _pass_hessian(h, handoff)
+        _pass_hessian(h, tables)
 
     def _basis(self) -> tuple[Any, Any] | None:
         """``getBasis``, where it is valid; its statuses are ``kLower``, ``kBasic``, ``kUpper``, ``kZero``, ``kNonbasic``."""
@@ -293,11 +293,11 @@ class Highs(Solver):
         given = np.flatnonzero(~np.isnan(values)).astype(np.int32)
         _took(self._handle.setSolution(len(given), given, values[given]), 'the starting values')
 
-    def _run(self, handoff: Handoff) -> SolveAnswer:
+    def _run(self, tables: SinkTables) -> SolveAnswer:
         """A ``kError`` from ``run()`` leaves the status unset, so on a quadratic model it is refused explicitly."""
         import highspy
 
-        if self._handle.run() == highspy.HighsStatus.kError and handoff.quad.height:
+        if self._handle.run() == highspy.HighsStatus.kError and tables.quad.height:
             raise SpecsolveError(
                 'the highs sink refused to run this quadratic objective, and a Hessian that is not '
                 'positive semidefinite is why it refuses one: it solves convex QPs only. Convexity is a '
@@ -314,7 +314,7 @@ class Highs(Solver):
         if not status.is_readable:
             return self._unreadable(status)
 
-        objective = self._handle.getInfo().objective_function_value + handoff.objective_constant
+        objective = self._handle.getInfo().objective_function_value + tables.objective_constant
         solution = self._handle.getSolution()
         primal = solver_vector(solution.col_value)
         dual = solver_vector(solution.row_dual) if solution.dual_valid else None

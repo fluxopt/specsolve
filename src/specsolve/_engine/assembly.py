@@ -23,7 +23,7 @@ from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import null_bounds_message
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
-from specsolve._sinks.handoff import SENSE
+from specsolve._sinks.tables import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -43,8 +43,6 @@ _Args = ParamSpec('_Args')
 
 #: One constraint's ``rows``, its share of the matrix, and its quadratic share.
 _ConstraintShare = tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]
-#: Each row's first coefficient in the matrix, CSR's own index.
-_RowStarts = np.ndarray[tuple[int, ...], np.dtype[np.int64]]
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -96,7 +94,7 @@ class Measured:
 
 @dataclass(frozen=True)
 class BuiltModel:
-    """One build's product: the handoff a sink drains, and what reads it back."""
+    """One build's product: the tables a sink drains, and what reads it back."""
 
     program: program.Program
     attached: AttachedSources
@@ -104,7 +102,7 @@ class BuiltModel:
     #: entry, one map per index space: a variable and a constraint may share a name.
     variables: dict[str, indices.Indexed]
     constraints: dict[str, indices.Indexed]
-    handoff: sinks.Handoff
+    tables: sinks.SinkTables
 
 
 class Assembly:
@@ -139,7 +137,7 @@ class Assembly:
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
-        ``Handoff`` promises its sinks. A build whose [`_reach`][] is at most
+        ``SinkTables`` promises its sinks. A build whose [`_reach`][] is at most
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
@@ -157,29 +155,14 @@ class Assembly:
             o = self.program.objective
             objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
-        matrix, matrix_starts = self._timed('matrix', None, self._matrix, built)
+        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
+        matrix_starts = _row_starts(stacked, self.n_rows)
+        matrix = stacked.select(COL, COEFF).rechunk()
+        self.lap('matrix', None)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = self._timed('tables', None, self._handoff, cols, sets, built, objective, matrix, matrix_starts)
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
-
-    def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
-        """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
-        stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
-        return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
-
-    def _handoff(
-        self,
-        cols: list[pl.DataFrame],
-        sets: list[pl.DataFrame],
-        built: list[_ConstraintShare],
-        objective: pl.DataFrame | None,
-        matrix: pl.DataFrame,
-        matrix_starts: _RowStarts,
-    ) -> sinks.Handoff:
-        """Every entry's share stacked into the tables a sink drains, *matrix* among them."""
-        return sinks.Handoff(
+        tables = sinks.SinkTables(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -193,6 +176,9 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
+        model = BuiltModel(self.program, self.attached, self.variables, self.constraints, tables)
+        self.lap('tables', None)
+        return model
 
     def _timed(
         self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
@@ -200,8 +186,7 @@ class Assembly:
         """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
-        its own and do not move with the order entries build in. Stacking the
-        shares into the model is timed the same way, as ``matrix`` and ``tables``.
+        its own and do not move with the order entries build in.
         """
         try:
             return build(*args, **kwargs)
@@ -479,7 +464,7 @@ class Assembly:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
 
         With no objective declared the sense stays ``min`` and the constant
-        ``0``. Rows landing on one column are summed here, because the handoff
+        ``0``. Rows landing on one column are summed here, because the sink tables'
         scatter keeps only the last write.
         """
         if o is None:
@@ -510,7 +495,7 @@ class Assembly:
 
         One row per unordered pair, at the coefficient the file wrote, not
         halved; each sink converts. It leaves sorted, because
-        [`structure`][specsolve._sinks.handoff.Handoff.structure] hashes it.
+        [`structure`][specsolve._sinks.tables.SinkTables.structure] hashes it.
         """
         if not quadratic:
             return None
