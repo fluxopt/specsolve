@@ -2194,8 +2194,8 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     model = args[0]
     window = module.window(*args, **kwargs)['phases']
     assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
-    whole = model._engine._seconds
-    assert all(0 <= window[phase] < whole[phase] for phase in ('attach', 'build')), (
+    whole = model.metrics()
+    assert all(0 <= window[phase] < getattr(whole, f'{phase}_seconds') for phase in ('attach', 'build')), (
         "a window's phases are its own, not the setup's build summed in"
     )
 

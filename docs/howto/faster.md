@@ -79,18 +79,20 @@ can time.
 | `build` on many small models | [build many small models faster](#build-many-small-models-faster) |
 | `build` on a large model | [make the model smaller](#make-the-model-smaller) |
 
-Where `build` is most of the time, the diagnostics say which entry took it:
+Every lap the model took is logged, one row each. Where `build` is most of
+the time, its rows say which entry took it:
 
 ```python
 with sps.build('dispatch.yaml', sources) as model:
-    print(model.diagnostics().build_seconds)  # kind, entry, seconds
+    print(model.timings().filter(phase='build'))  # run, phase, kind, entry, seconds
 ```
 
-The rows follow the build: `setup`, one row per variable, constraint and the
+The build's rows follow it: `setup`, one row per variable, constraint and the
 objective, then `matrix`, stacking every constraint into one matrix, and
 `tables`, the rest of what the solver is handed. An entry's seconds are its
-own, and the rows add up to `build`
-([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).
+own. The rows of a phase add up to its clock in `model.metrics()`, and the
+rows of a `run` to the result handed back at its end
+([`Model.timings`](../reference/api.md#specsolve.types.Model.timings)).
 
 ## Report a slow phase
 

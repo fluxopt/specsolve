@@ -232,10 +232,11 @@ _BOUND_SENSE = {'lower': '>=', 'upper': '<='}
 
 @dataclass(frozen=True)
 class Diagnostics:
-    """What the build looks like that the answer does not show: per entry, what it left out, how its numbers spread, and what it took.
+    """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
 
     Advisory, all of it: no answer depends on any field. What the build and
-    its solves cost as a whole is [`Model.metrics`][specsolve._api.Model.metrics].
+    its solves took is [`Model.metrics`][specsolve._api.Model.metrics], lap
+    by lap [`Model.timings`][specsolve._api.Model.timings].
     """
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach
@@ -273,17 +274,6 @@ class Diagnostics:
     #: The same pair for the objective's coefficients, or ``None`` where the
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
-
-    #: ``(kind, entry, seconds)`` — where the build's time went, in build
-    #: order: ``model``/``setup``, which reads [`sparse_parameters`][]; a row per
-    #: variable, set, constraint and the objective; then ``model``/``matrix``,
-    #: every constraint's share stacked into one matrix in row order, and
-    #: ``model``/``tables``, the rest of what a solver is handed. The rows are
-    #: the last build's and add up to its ``build`` lap: the
-    #: ``build_seconds`` of the result it led to, where one build did. A build
-    #: that raised keeps the rows it reached. An entry's seconds are its own:
-    #: they hold when the entries build in another order.
-    build_seconds: pl.DataFrame
 
 
 def _named(tables: Mapping[str, pl.LazyFrame], name: str, kind: str) -> pl.LazyFrame:

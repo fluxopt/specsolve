@@ -89,9 +89,6 @@ class Measured:
     #: constraint, over the rows that survived.
     rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
-    #: ``(kind, name) -> seconds`` of each step of the build, in build order:
-    #: the setup, each entry, then the stacking. They tile the build phase.
-    seconds: dict[tuple[str, str], float] = field(default_factory=dict)
     columns: int = 0
     rows: int = 0
     nonzeros: int = 0
@@ -118,10 +115,10 @@ class Assembly:
         program: program.Program,
         attached: AttachedSources,
         measured: Measured,
-        split: Callable[[str, str], None],
+        lap: Callable[[str, str], None],
     ) -> None:
         self.program = program
-        self.split = split
+        self.lap = lap
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, indices.Indexed] = {}
@@ -146,7 +143,7 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            self.split('model', 'setup')
+            self.lap('model', 'setup')
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
@@ -200,7 +197,7 @@ class Assembly:
     def _timed(
         self, kind: str, name: str, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
     ) -> _Built:
-        """*build* on *args*, then a split, so its row ``(kind, name)`` holds its seconds, even if it raises.
+        """*build* on *args*, then a lap of the build named ``(kind, name)``, even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
         its own and do not move with the order entries build in. Stacking the
@@ -209,7 +206,7 @@ class Assembly:
         try:
             return build(*args, **kwargs)
         finally:
-            self.split(kind, name)
+            self.lap(kind, name)
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
