@@ -62,3 +62,15 @@ def test_a_dense_table_with_one_row_per_coordinate_builds():
 def test_a_dense_table_is_refused_as_a_small_one_is(cap, refusal):
     with pytest.raises(sps.errors.DataError, match=refusal):
         sps.build(SPEC, _sources(cap))
+
+
+def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
+    """One key column hashes once either way, so a lookup of each row's label into a position only adds to it.
+
+    #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
+    """
+    from specsolve._sources import _row_major_positions
+
+    labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
+    table = pl.DataFrame({'g': labels, 'value': 1.0})
+    assert _row_major_positions(('g',), table, {'g': labels}) is None, 'one column is hashed, not turned into positions'

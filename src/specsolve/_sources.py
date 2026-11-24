@@ -766,12 +766,14 @@ def _row_major_positions(
 
     Two rows for one coordinate share a position, so counting distinct
     positions replaces hashing every key column, which is the check's cost on a
-    dense table. ``None`` where forming them costs more than hashing (under
-    50,000 rows) or cannot be done: a dimension whose labels are not read yet, a
-    column of another dtype than its labels, a product past 63 bits. A label
-    that is none of its dimension's has no position, and reads as null.
+    dense table. ``None`` where hashing costs less: one key column, which
+    hashes once either way and would first be looked up label by label, or a
+    table under 50,000 rows. ``None`` too where positions cannot be formed: a
+    dimension whose labels are not read yet, a column of another dtype than its
+    labels, a product past 63 bits. A label that is none of its dimension's has
+    no position, and reads as null.
     """
-    if table.height < 50_000 or any(d not in known or table.schema[d] != known[d].dtype for d in dims):
+    if len(dims) < 2 or table.height < 50_000 or any(d not in known or table.schema[d] != known[d].dtype for d in dims):
         return None
     if math.prod(known[d].len() for d in dims) >= 2**63:
         return None
