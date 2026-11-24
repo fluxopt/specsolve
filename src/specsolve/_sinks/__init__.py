@@ -89,7 +89,6 @@ def loaded(
     name: str,
     tables: SinkTables,
     solver_options: Mapping[str, Any] | None = None,
-    lap: Callable[[str], None] | None = None,
 ) -> Solver:
     """The solver to run *tables* on — *held* where it may keep what it holds.
 
@@ -97,23 +96,15 @@ def loaded(
     differs from this one in nothing but numbers — same
     [`structure`][specsolve._sinks.tables.SinkTables.structure], same options — and
     then the new numbers are pushed onto it. Otherwise it is closed, after
-    *name* is resolved. *lap* ends a lap at each step: ``compare``, then
-    ``push``, or ``close`` and ``load``.
+    *name* is resolved.
     """
     wanted = solver(name)
-    step = lap or (lambda _: None)
     if held is not None:
-        kept = type(held) is wanted and held.keeps(tables, solver_options)
-        step('compare')
-        if kept:
+        if type(held) is wanted and held.keeps(tables, solver_options):
             held.push(tables)
-            step('push')
             return held
         held.close()
-        step('close')
-    fresh = wanted(tables, solver_options)
-    step('load')
-    return fresh
+    return wanted(tables, solver_options)
 
 
 def writer(suffix: str) -> Writer:

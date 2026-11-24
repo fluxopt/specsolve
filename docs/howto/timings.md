@@ -109,11 +109,11 @@ The handoff's rows name its steps, the same for every solver:
 print(model.timings().filter(phase='handoff').select('step', 'seconds'))
 ```
 
-A first solve runs `match`, `check`, `load` and `start`. `load` is the new
+A first solve runs `match`, `check`, `load` and `start`. `load` is a new
 solver taking the model, which includes importing the solver's package the
 first time in a process. A later solve first reads the held solver's
-`structure` and runs `compare`: where only numbers moved, it `push`es them onto
-the solver it holds; otherwise it runs `close` and a new `load`.
+`structure`. Where only numbers moved, it keeps that solver and `push`es them
+onto it; otherwise it closes it and runs a new `load`.
 
 ## Each solve of a loop
 

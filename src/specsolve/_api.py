@@ -569,10 +569,10 @@ class Model:
         entries build in another order. The handoff's steps are ``structure``,
         the held solver's digest read before a rebuild; ``match``, a
         ``start=`` matched to this build; ``check``, the solver checked to take
-        the model; ``compare``, the held solver's model against this one; then
-        ``push``, the new numbers onto it, or ``close``; ``load``, a new
-        solver loaded with the model; and ``start``, the start given. The same
-        steps for every solver. Elsewhere both are null.
+        the model; ``push``, the held solver kept and the new numbers pushed
+        onto it, or ``load``, a new solver loaded with the model, the held one
+        closed; and ``start``, the start given. The same steps for every
+        solver. Elsewhere both are null.
         """
         return self._engine.timings()
 

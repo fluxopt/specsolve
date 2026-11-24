@@ -211,8 +211,8 @@ def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
     ('update', 'expected'),
     [
         pytest.param(None, ['match', 'check', 'load', 'start'], id='a-first-load'),
-        pytest.param(NUMBERS, ['structure', 'match', 'check', 'compare', 'push', 'start'], id='new-numbers-pushed'),
-        pytest.param(GROWN, ['structure', 'match', 'check', 'compare', 'close', 'load', 'start'], id='a-reload'),
+        pytest.param(NUMBERS, ['structure', 'match', 'check', 'push', 'start'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['structure', 'match', 'check', 'load', 'start'], id='a-reload'),
     ],
 )
 def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expected):
