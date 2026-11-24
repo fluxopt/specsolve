@@ -15,13 +15,13 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 import polars as pl
 
 from specsolve._collect import collected
+from specsolve._inputs import as_table
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
 from specsolve._result import Result
 from specsolve._sinks.solver import BASIS_STATUSES
 from specsolve._sources import read_values
 from specsolve._sweep import Sweep
-from specsolve._tables import as_table
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:

@@ -21,9 +21,9 @@ import polars.selectors as cs
 from mathspec.errors import did_you_mean
 
 from specsolve._collect import collected
+from specsolve._inputs import as_table
 from specsolve._names import VALUE
 from specsolve._sources import declared_dtype_of, dimension_labels, in_microseconds, least_value, parameter_table
-from specsolve._tables import as_table
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:

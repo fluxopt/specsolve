@@ -30,14 +30,13 @@ from specsolve._api import build, check
 from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
 from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
-from specsolve._inputs import as_spec
+from specsolve._inputs import as_spec, as_table
 from specsolve._names import VALUE, refuse_reserved
 from specsolve._outputs import checked_outputs
 from specsolve._records import Metrics, Record
 from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
 from specsolve._sweep import SliceAnswer, SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
-from specsolve._tables import as_table
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:

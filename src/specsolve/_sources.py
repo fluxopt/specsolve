@@ -19,9 +19,9 @@ from mathspec.program import Parameter
 
 from specsolve._assumptions import validate_assumptions
 from specsolve._collect import collected, collected_all, in_memory
+from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
-from specsolve._tables import as_table, is_dense_array, is_multi_indexed
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:

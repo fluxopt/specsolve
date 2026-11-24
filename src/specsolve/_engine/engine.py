@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import warnings
 from array import array
-from functools import partial
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
@@ -173,7 +172,7 @@ class Engine:
         """
         if self._solver is not None:
             self._solver.structure()
-            self.lap('handoff')
+            self.lap('handoff', 'digest')
         self._built = None
         self._solved = None
         self._measured = Measured()
@@ -181,7 +180,7 @@ class Engine:
             attached = attach(program, sources)
             self.lap('attach')
         self._measured.sparse = short_parameters(program, attached)
-        self._built = Assembly(program, attached, self._measured, partial(self.lap, 'build')).run()
+        self._built = Assembly(program, attached, self._measured, self.lap).run()
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables
@@ -245,18 +244,21 @@ class Engine:
                 from, or a sink that cannot take the built model.
         """
         matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
+        self.lap('handoff', 'start')
         self.check_sink(solver_name)
         self._solved = None
+        self.lap('handoff', 'check')
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, self._model.tables, solver_options)
         reloaded = self._solver is not held
+        self.lap('handoff', 'instance' if reloaded else 'push')
         if not reloaded and start != 'previous':
             self._solver.forget()
         if isinstance(matched, Basis):
             self._solver.start_from_basis(matched)
         elif matched is not None:
             self._solver.start_from_values(matched)
-        self.lap('handoff')
+        self.lap('handoff', 'warm')
         return self._solver, reloaded
 
     def solve(
