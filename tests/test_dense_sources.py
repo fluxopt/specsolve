@@ -105,3 +105,15 @@ def test_a_dimension_is_cast_into_its_enum_by_one_expression_however_many_tables
     sps.build(spec, sources).close()
     casts = sum(1 for categories in built if categories == tuple(GENERATORS))
     assert casts == 2, f'`g` was cast by {casts} expressions: one for its labels and one shared by its three tables'
+
+
+def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
+    """One key column hashes once either way, so a lookup of each row's label into a position only adds to it.
+
+    #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
+    """
+    from specsolve._sources import _row_major_positions
+
+    labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
+    table = pl.DataFrame({'g': labels, 'value': 1.0})
+    assert _row_major_positions(('g',), table, {'g': labels}) is None, 'one column is hashed, not turned into positions'
