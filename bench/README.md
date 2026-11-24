@@ -733,9 +733,7 @@ the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
 CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
 the solver's own allocations, and `commitment` swept at `s` ran that job's 20
-minutes out on its own. `bench.yml` leaves it out for the same reason
-(`UNGATED`): its gate is a memray peak, which would hold a pull request to the
-solver's allocations. So a sweep keeps no history: it is measured where someone
+minutes out on its own. So a sweep keeps no history: it is measured where someone
 runs `pytest bench -k test_sweep`.
 
 ## Reading an answer back
@@ -772,21 +770,23 @@ warm charts.
 
 ## The other question: regressions
 
-*Did this change make it worse?* is a different question from *how do we
-compare to another library*, and it wants a different metric — but it does not
-want a different harness. It is the same suite, run twice:
+*Did this change make it worse?* is answered by the same A/B that proves a
+speed-up ([`ab/`](#proving-a-speed-up-ab)): it exits 1 on any cell that is
+slower or builds another model, and `--memory` asks the same of peak memory.
+Run it at the sizes the change reaches. No pull request runs it in CI, because
+a shared runner's clock is noise.
+
+To chase a memory regression to a call stack, the memray peak is the
+instrument. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
-pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
-    --columns peak --fail-on peak:20%
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json --columns peak
 ```
 
-That is what `.github/workflows/bench.yml` runs on a pull request labelled
-`trigger:bench` — the base's `src/` and then the head's, under one harness —
-and the memray peak at 20% is what it gates on. Wall time and `rss` are
-reported beside it and never gated. The sweep is left out, because it solves.
+The sweep is left out because it solves, and `test_fresh` because its work is
+in a child process that memray does not follow.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
@@ -804,8 +804,7 @@ and cancels, leaving a metric that is deterministic and attributable to a call
 stack — which RSS, sensitive to machine load, is not.
 
 So: `rss` for the comparison we publish, the memray peak for the regressions we
-chase. Both come out of the same run — the choice is which column a table reads,
-and `--benchmark-memory-compare-fail` is what turns the second into a gate.
+chase. Both come out of the same run — the choice is which column a table reads.
 
 ## Proving a speed-up: `ab/`
 
@@ -885,14 +884,14 @@ cannot drift between them, because there is one of them.
 [CodSpeed](https://codspeed.io) (`.github/workflows/codspeed.yml`) is where
 the history is kept: it stores a number per benchmark for every commit on
 `main`, which is what a regression found months later is bisected against.
-What it adds over `bench.yml` is not the metric but **the baseline** —
-`bench.yml` can only compare against a base it checks out and measures itself,
-which costs two passes and is why it waits for a label. Two jobs:
+What it adds over an A/B is not the metric but **the baseline**: an A/B
+measures a base it checks out itself, while CodSpeed holds a number for every
+commit. It runs on `main` only. Two jobs:
 
 | job | instrument | runner | rungs | runs on |
 |---|---|---|---|---|
-| Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
-| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
+| Memory (heap) | `memory` | free, one polars thread | `s` | every push to `main` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main` |
 
 `walltime` runs only on the metered runner because a shared runner's clock says
 nothing, and `simulation` — CodSpeed's default — runs the workload under an
@@ -906,7 +905,7 @@ names: `test_rebuild`, which pedantic rounds make meaningless there,
 `test_sweep`, which solves, and `test_fresh`, whose work is in a child process.
 
 **It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
-them; `bench.yml` remains the check that fails a pull request.
+them.
 
 ## Two ladders
 

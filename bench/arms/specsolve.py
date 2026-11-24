@@ -113,9 +113,9 @@ TIMED_THROUGH = {'window': 'handoff', 'read': '_answered'}
 def unsupported(verb: str) -> str | None:
     """Why the checkout under test cannot take *verb*, or None when it can.
 
-    `bench.yml` measures the base branch's `src/` under this harness, and a base
-    older than the method a verb is timed through has none of it. Its cells are
-    skipped there, and the gate compares only what both runs measured.
+    A run of this harness against an older checkout's `src/` meets a base
+    without the method a verb is timed through. Its cells are skipped there, so
+    a comparison holds only what both runs measured.
     """
     from specsolve._engine.engine import Engine
 
