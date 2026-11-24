@@ -161,15 +161,14 @@ class Assembly:
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = self._timed('tables', None, self._handoff, cols, sets, built, objective, matrix, matrix_starts)
-        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
+        return self._timed('tables', None, self._frozen, cols, sets, built, objective, matrix, matrix_starts)
 
     def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
         """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
 
-    def _handoff(
+    def _frozen(
         self,
         cols: list[pl.DataFrame],
         sets: list[pl.DataFrame],
@@ -177,9 +176,9 @@ class Assembly:
         objective: pl.DataFrame | None,
         matrix: pl.DataFrame,
         matrix_starts: _RowStarts,
-    ) -> sinks.Handoff:
-        """Every entry's share stacked into the tables a sink drains, *matrix* among them."""
-        return sinks.Handoff(
+    ) -> BuiltModel:
+        """Every entry's share stacked into the tables a sink drains, *matrix* among them, and the build frozen on them."""
+        handoff = sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
             quad=_stack([] if self.quad is None else [self.quad], _QUAD),
@@ -193,6 +192,7 @@ class Assembly:
             objective_sense=self.obj_sense,
             objective_constant=self.obj_const,
         )
+        return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _timed(
         self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs

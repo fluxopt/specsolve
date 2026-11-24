@@ -79,8 +79,8 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
 def _clocks(model: Any) -> dict[str, float]:
     """The engine's own seconds per phase that ran, summed over the model's life; empty on a checkout that kept none.
 
-    A checkout with `Model.metrics` reads it; an older one kept the phases in
-    the engine's `_seconds`, which `bench.ab` and a base checkout still meet.
+    A checkout with `Model.metrics` reads it; one from before it (#2188) kept
+    the phases in the engine's `_seconds`, which `bench.ab` meets on an older base.
     """
     if callable(getattr(model, 'metrics', None)):
         metrics = model.metrics()

@@ -190,8 +190,6 @@ class Model:
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._engine = Engine()
-        #: The model's metrics when its last answer was handed back, which the
-        #: next answer's share runs from; ``None`` before the first.
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
         self._engine.lap('load')
@@ -411,8 +409,8 @@ class Model:
         """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
 
         The metrics row is the last member written, so its ``archive_seconds``
-        covers every other one; writing and landing it are in [`metrics`][]
-        alone.
+        covers every other one; writing and landing it are in its run of
+        [`timings`][] and in [`metrics`][], not in the row.
         """
         recorded = answered.metrics
 

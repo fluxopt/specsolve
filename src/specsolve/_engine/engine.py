@@ -412,9 +412,10 @@ class Engine:
 
         The one place a [`Metrics`][] is built from the model: a result's, an
         archive's and a sweep slice's row is its run's. The clocks are the
-        log's laps summed by phase, so the runs add up to the whole life. A
-        run is read from the end of the log, so the current one costs its own
-        laps; an earlier one costs every lap after it.
+        log's laps summed by phase, so the runs add up to the whole life. The
+        whole life's are kept as the laps arrive, and a run is read from the
+        end of the log, so the current one costs its own laps and an earlier
+        one costs every lap after it.
         """
         clocks = self._log.clocks(run)
         solves, instances = (
@@ -593,6 +594,8 @@ class _Laps:
     Each step, ``(phase, step, entry)``, is stored once and a lap holds its
     number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
     Runs only grow along the log, so a run's laps are read back from its end.
+    The whole life's clocks are summed as the laps arrive, so reading them
+    does not grow with the log.
     """
 
     def __init__(self) -> None:
@@ -600,21 +603,21 @@ class _Laps:
         self._runs = array('I')
         self._codes = array('I')
         self._seconds = array('d')
+        self._totals = dict.fromkeys(PHASES, 0.0)
 
     def append(self, run: int, phase: str, step: str | None, entry: str | None, seconds: float) -> None:
         self._runs.append(run)
         self._codes.append(self._steps.setdefault((phase, step, entry), len(self._steps)))
         self._seconds.append(seconds)
+        self._totals[phase] += seconds
 
     def clocks(self, run: int | None = None) -> dict[str, float]:
         """Seconds per phase over every lap, or over *run*'s, every phase present."""
+        if run is None:
+            return dict(self._totals)
         phase_of = [phase for phase, _, _ in self._steps]
         clocks = dict.fromkeys(PHASES, 0.0)
         runs, codes, seconds = self._runs, self._codes, self._seconds
-        if run is None:
-            for code, took in zip(codes, seconds, strict=True):
-                clocks[phase_of[code]] += took
-            return clocks
         i = len(runs) - 1
         while i >= 0 and runs[i] >= run:
             if runs[i] == run:
