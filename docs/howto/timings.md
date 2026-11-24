@@ -115,6 +115,10 @@ print(per_run.pivot('phase', index='run', values='seconds'))
 model.close()
 ```
 
+```python exec="true" session="timings"
+pl.Config.set_tbl_rows(None)
+```
+
 Run 0 holds the load and the first build. Each later run holds its update,
 its build and its solve. An archive written by a solve lands in that solve's
 run. The result's own row is written into the archive before it lands, so the

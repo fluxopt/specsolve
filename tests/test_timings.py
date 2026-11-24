@@ -138,6 +138,7 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
         pytest.param('engine', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
         pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
+        pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
     ],
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
