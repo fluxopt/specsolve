@@ -16,6 +16,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): an update that gives a bound, a right-hand side or a cost new numbers at the coordinates it had skips most of the build ([#2070](https://github.com/fluxopt/specsolve/pull/2070))
 - perf(engine): an update that gives a linear constraint's coefficients new numbers at the coordinates they had skips most of the build ([#2071](https://github.com/fluxopt/specsolve/pull/2071))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
+- feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
 
 ## 0.12.0 (2026-11-23)
 
