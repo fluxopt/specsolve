@@ -432,7 +432,7 @@ def recomputed_row_values(engine, result) -> Any:
     purely quadratic row owns no linear coefficients, and ``reduceat`` repeats the
     previous row on an empty span.
     """
-    tables = engine._model.handoff
+    tables = engine._model.tables
     x = np.zeros(tables.column_count)
     for name, indexed in engine._model.variables.items():
         x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()

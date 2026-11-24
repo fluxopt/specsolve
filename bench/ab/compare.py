@@ -2,6 +2,7 @@
 
     pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above]
         [--rounds 6] [--op build|solve] [--focus module:Class.method] [--memory] [-k <substring>] [--out ab.md]
+        [--raw ab.parquet]
 
 Each ref is checked out with ``git worktree add --detach``; nothing is
 installed. Each round starts one worker process per side, with that checkout's
@@ -20,8 +21,9 @@ rounds, and *no change* otherwise. The change printed is the median of the
 paired ratios. The exit status is 1 where any cell is slower (or higher, with ``--memory``), differs or fails.
 
 The table goes to stdout and ``--out`` in markdown, ready for a PR's
-``<details>``. Measure on an idle machine: the load averages before and after
-are printed in its header.
+``<details>``. ``--raw`` writes every round's numbers as one long parquet
+table (`raw`), from which the medians are taken. Measure on an idle machine:
+the load averages before and after are printed in its header.
 """
 
 from __future__ import annotations
@@ -58,6 +60,22 @@ ALPHA = 0.05
 
 #: The relative difference within which two floats are one number summed in another order.
 LAST_BITS = 1e-12
+
+#: The numbers about a whole cell that [`raw`][] keeps from each measurement, beside each phase's seconds.
+RAW_METRICS = ('seconds', 'total_seconds', 'peak_mb', 'calls', 'columns', 'rows')
+
+#: The raw table's columns, so a run that measured nothing still writes a table that pools.
+RAW_SCHEMA = {
+    'base': pl.String,
+    'head': pl.String,
+    'op': pl.String,
+    'cell': pl.String,
+    'side': pl.String,
+    'round': pl.Int64,
+    'phase': pl.String,
+    'metric': pl.String,
+    'value': pl.Float64,
+}
 
 
 @dataclass
@@ -292,6 +310,24 @@ def _ask(
     return workers[side].ask(cell_id, fingerprint=fingerprint)
 
 
+def raw(rows: list[Row], *, base: str, head: str, op: str) -> pl.DataFrame:
+    """Every number each round measured, one row per number, long as `bench.tidy`'s table is.
+
+    The medians [`table`][] prints are taken from these, so pooling two runs of
+    one pair of commits is a concat. ``round`` pairs a base number with the head
+    number measured beside it. ``phase`` is empty for a number about the whole
+    cell. A number a measurement did not produce is an absent row, never a null.
+    """
+    out = []
+    for r in rows:
+        for side in ('base', 'head'):
+            for i, x in enumerate(getattr(r, side)):
+                key = {'base': base, 'head': head, 'op': op, 'cell': r.cell, 'side': side, 'round': i}
+                out += [{**key, 'phase': '', 'metric': m, 'value': x[m]} for m in RAW_METRICS if x.get(m) is not None]
+                out += [{**key, 'phase': p, 'metric': 'seconds', 'value': s} for p, s in x.get('phases', {}).items()]
+    return pl.DataFrame(out, schema=RAW_SCHEMA)
+
+
 def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = False) -> str:
     """The rows as markdown, with *header* lines above, and below them a count of verdicts and how many chance alone gives."""
     unit, scale = ('MB', 1.0) if memory else ('ms', 1e3)
@@ -391,7 +427,8 @@ def main() -> None:
         '--memory', action='store_true', help='the verdict on peak memory, a fresh process and one run per measurement'
     )
     parser.add_argument('-k', dest='select', help='only the cells whose id contains this')
-    parser.add_argument('--out', type=Path)
+    parser.add_argument('--out', type=Path, help='the report as markdown, for the PR')
+    parser.add_argument('--raw', type=Path, help="every round's numbers as one long parquet table")
     parser.add_argument('--i-know-another-is-running', dest='shared', action='store_true')
     args = parser.parse_args()
     if not chance(args.rounds):
@@ -439,6 +476,8 @@ def _run(args: argparse.Namespace) -> None:
     print(report)
     if args.out:
         args.out.write_text(report + '\n')
+    if args.raw:
+        raw(rows, base=base_sha, head=head_sha, op=args.op).write_parquet(args.raw)
     sys.exit(any(r.verdict in ('slower', 'higher', 'differs', 'error') for r in rows))
 
 
