@@ -38,6 +38,7 @@ import numpy as np
 
 import specsolve as sps
 from bench.ab.grid import Cell, cell
+from bench.arms.specsolve import _tables
 
 
 def main() -> None:
@@ -145,7 +146,7 @@ class _Built:
 
     def numbers(self) -> dict[str, np.ndarray]:
         """The fields ``tests/test_order.py`` holds two builds of one model to."""
-        handoff = self.model._engine._model.handoff
+        tables = _tables(self.model)
         fields = (
             ('matrix', 'coeff'),
             ('cols', 'lb'),
@@ -155,10 +156,10 @@ class _Built:
             ('rows', 'rhs'),
         )
         return {
-            'structure': np.frombuffer(handoff.structure, dtype=np.uint8),
-            'objective_constant': np.array([handoff.objective_constant], dtype=np.float64),
-            'cost': handoff._dense_cost(),
-            **{f'{table}.{column}': _column(getattr(handoff, table), column).to_numpy() for table, column in fields},
+            'structure': np.frombuffer(tables.structure, dtype=np.uint8),
+            'objective_constant': np.array([tables.objective_constant], dtype=np.float64),
+            'cost': tables._dense_cost(),
+            **{f'{table}.{column}': _column(getattr(tables, table), column).to_numpy() for table, column in fields},
         }
 
 

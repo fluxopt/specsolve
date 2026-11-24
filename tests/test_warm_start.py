@@ -87,7 +87,7 @@ def capped_sources() -> dict[str, pl.DataFrame]:
 def _tables(spec: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
     with sps.build(spec, given) as built:
-        return built._engine._model.handoff
+        return built._engine._model.tables
 
 
 #: Each member's own iteration counter — the noise-free observable of warmth.
