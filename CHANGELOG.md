@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): the diagnostics say what each entry took to build ([#2206](https://github.com/fluxopt/specsolve/pull/2206))
+- feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
 
 ## 0.12.0 (2026-11-23)
 
