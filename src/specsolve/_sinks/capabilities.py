@@ -6,7 +6,7 @@ take is a refusal naming both rather than a ``kError`` from inside a library.
 - A sink takes a construct or it does not; nothing is rewritten at the
   handoff.
 - An exclusion is a pair a sink takes separately and refuses together.
-- What a model needs is read off the handoff by [`required`][], which never
+- What a model needs is read off the sink tables by [`required`][], which never
   asks for ``nonconvex_quadratic_objective``: the coefficients' signs decide
   it. A descriptor still records it, the capability probes check it, and the
   sink that meets one at solve time sends the caller to the sinks that list it.
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
-    from specsolve._sinks.handoff import Handoff
+    from specsolve._sinks.tables import SinkTables
 
 #: What a model may need a sink to have.
 Capability = Literal[
@@ -59,21 +59,21 @@ class Capabilities:
         return None
 
 
-def required(handoff: Handoff, /) -> frozenset[Capability]:
-    """What the built model in *handoff* needs a sink to have.
+def required(tables: SinkTables, /) -> frozenset[Capability]:
+    """What the built model in *tables* needs a sink to have.
 
     Read off what was built rather than what the file declares: a square the
     data prices at zero, an integer variable no column is built for, or a set
     with no members asks for nothing. Convexity never appears.
     """
     needed: set[Capability] = set()
-    if (handoff.cols['vtype'] != 'continuous').any():
+    if (tables.cols['vtype'] != 'continuous').any():
         needed.add('integrality')
-    if handoff.quad.height:
+    if tables.quad.height:
         needed.add('quadratic_objective')
-    if handoff.qmatrix.height:
+    if tables.qmatrix.height:
         needed.add('quadratic_constraint')
-    if handoff.sos.height:
+    if tables.sos.height:
         needed.add('sos')
     return frozenset(needed)
 

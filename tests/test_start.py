@@ -19,8 +19,8 @@ import pytest
 
 import specsolve as sps
 from specsolve._engine.readback import _counted
-from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC, seated
+from specsolve._sinks.tables import SENSE_CODES
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 from tests.conftest import ITEMS, KNAPSACK, knapsack_sources
 from tests.test_warm_start import DISPATCH, DISPATCH_CAPPED, GENERATORS, SIMPLEX_ITERATIONS, dispatch_sources
@@ -341,7 +341,7 @@ def test_an_answer_of_another_model_places_nothing_and_is_refused() -> None:
 INF = np.inf
 
 
-def _handoff(lb: list[float], ub: list[float], senses: list[str]) -> Any:
+def _tables(lb: list[float], ub: list[float], senses: list[str]) -> Any:
     """The two projections [`seated`][] reads, and nothing else."""
     return SimpleNamespace(
         dense_columns=lambda _: SimpleNamespace(lb=np.asarray(lb), ub=np.asarray(ub)),
@@ -363,13 +363,13 @@ def _handoff(lb: list[float], ub: list[float], senses: list[str]) -> Any:
     ],
 )
 def test_a_nonbasic_column_is_put_at_a_bound_the_model_has(status: int, lb: float, ub: float, expected: str) -> None:
-    columns = seated(_handoff([lb], [ub], []), np.asarray([status]), np.asarray([], dtype=np.int8)).columns
+    columns = seated(_tables([lb], [ub], []), np.asarray([status]), np.asarray([], dtype=np.int8)).columns
     assert BASIS_STATUSES[columns[0]] == expected
 
 
 def test_a_nonbasic_row_is_at_the_bound_its_sense_gives() -> None:
     nonbasic = np.asarray([AT_LOWER, AT_LOWER, AT_UPPER, BASIC])
-    rows = seated(_handoff([], [], ['<=', '>=', '==', '<=']), np.asarray([], dtype=np.int8), nonbasic).rows
+    rows = seated(_tables([], [], ['<=', '>=', '==', '<=']), np.asarray([], dtype=np.int8), nonbasic).rows
     assert [BASIS_STATUSES[code] for code in rows] == ['at_upper', 'at_lower', 'fixed', 'basic'], (
         'a <= row binds at its upper side, a >= row at its lower, an == row at both, and a basic row stays'
     )

@@ -359,7 +359,7 @@ def _same_matrix(engine: Engine, m: Any) -> list[Finding]:
     to the other side, which negates the row and flips its sense: the objective
     check sees a sense that is wrong, this one the coefficients.
     """
-    tables = engine._model.handoff
+    tables = engine._model.tables
     findings = []
     for constraint, indexed in engine._model.constraints.items():
         got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height), indexed.height)
