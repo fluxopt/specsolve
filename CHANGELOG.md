@@ -5,6 +5,10 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
+## Upcoming version
+
+- feat(api): the diagnostics say what each entry took to build ([#2206](https://github.com/fluxopt/specsolve/pull/2206)).
+
 ## 0.12.0 (2026-11-23)
 
 **This release will not read archives written by 0.11, and code that saves, reads or sweeps answers needs changes.**
