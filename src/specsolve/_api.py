@@ -568,7 +568,14 @@ class Model:
         ``objective``, which has no name; ``matrix``, every constraint's share
         stacked into one matrix in row order; and ``tables``, the rest of what
         a solver is handed. An entry's seconds are its own: they hold when the
-        entries build in another order. Elsewhere both are null.
+        entries build in another order. The handoff's steps are ``structure``,
+        the held solver's digest read before a rebuild; ``match``, a
+        ``start=`` matched to this build; ``check``, the solver checked to take
+        the model; ``compare``, the held solver's model against this one; then
+        ``push``, the new numbers onto it, or ``close`` and a load, which laps
+        ``convert`` where this package lays the tables out and ``load`` where
+        the solver's library takes them, several times over as the two
+        alternate; and ``start``, the start given. Elsewhere both are null.
         """
         return self._engine.timings()
 

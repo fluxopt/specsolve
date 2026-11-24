@@ -14,6 +14,7 @@ import pytest
 import specsolve as sps
 from specsolve._engine import assembly, engine
 from specsolve._records import PHASES
+from specsolve._sinks import SOLVERS
 
 SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -191,3 +192,76 @@ def test_a_lap_outside_a_step_names_none():
         solve = model.timings().filter(phase='solve')
     assert solve.height == 1, 'one solve, one lap'
     assert solve.select(pl.col('step', 'entry').is_null().all()).row(0) == (True, True), 'no step inside the solve'
+
+
+# ---------------------------------------------------------------------------
+# the handoff's steps
+# ---------------------------------------------------------------------------
+
+LOADED = ['load', 'convert', 'load', 'convert']
+NUMBERS = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+
+
+def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
+    return model.timings().filter(phase='handoff', run=run).get_column('step').to_list()
+
+
+@pytest.mark.parametrize(
+    ('update', 'expected'),
+    [
+        pytest.param(None, ['match', 'check', *LOADED, 'start'], id='a-first-load'),
+        pytest.param(NUMBERS, ['structure', 'match', 'check', 'compare', 'push', 'start'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['structure', 'match', 'check', 'compare', 'close', *LOADED, 'start'], id='a-reload'),
+    ],
+)
+def test_a_handoff_logs_each_step_it_took(update, expected):
+    """A handoff that loads splits into HiGHS's own steps and this package's; one that keeps the solver pushes."""
+    with sps.build(SPEC, DATA) as model:
+        model.solve()
+        run = 0
+        if update is not None:
+            model.update(update)
+            model.solve()
+            run = 1
+        steps = _handoff_steps(model, run)
+    assert steps == expected, 'every step of the handoff, in the order it took them'
+
+
+@pytest.mark.parametrize(
+    ('slowed', 'step'),
+    [
+        pytest.param('_integrality', 'convert', id='laying-out-a-vector-is-this-package'),
+        pytest.param('_pass_hessian', 'load', id='handing-it-over-is-the-solver'),
+    ],
+)
+def test_a_slow_step_of_a_load_lands_in_its_own_row(monkeypatch, slowed, step):
+    """Ten seconds added to laying out a vector land in ``convert``; added to handing one over, in ``load``."""
+    from specsolve._sinks import highs
+
+    added = [0.0]
+    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(highs, slowed)
+
+    def slow(*args, **kwargs):
+        added[0] += 10.0
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(highs, slowed, slow)
+    with sps.build(SPEC, DATA) as model:
+        model.solve()
+        took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
+    took = dict(took.iter_rows())
+    assert took[step] >= 10.0, f'the slowed step lands in {step}'
+    assert max(s for name, s in took.items() if name != step) < 10.0, 'and in no other step'
+
+
+@pytest.mark.parametrize('solver_name', sorted(SOLVERS))
+def test_every_solver_splits_its_load_into_this_package_and_its_own(solver_name):
+    """Each sink laps ``convert`` where this package lays the tables out and ``load`` where its library takes them."""
+    with sps.build(SPEC, DATA) as model:
+        model.solve(solver_name=solver_name)
+        steps = set(_handoff_steps(model, 0))
+        handoff = model.timings().filter(phase='handoff').get_column('seconds').sum()
+        whole = model.metrics().handoff_seconds
+    assert {'convert', 'load'} <= steps, 'both halves of the load are timed'
+    assert handoff == pytest.approx(whole, rel=1e-12), 'and the handoff still adds up'

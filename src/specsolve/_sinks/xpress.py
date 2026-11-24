@@ -30,7 +30,7 @@ from specsolve._sinks.solver import (
 from specsolve._status import SolveStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     import polars as pl
 
@@ -96,7 +96,7 @@ class Xpress(Solver):
     capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
     def _load(self, handoff: Handoff) -> None:
-        self._p = _built(handoff, self._options)
+        self._p = _built(handoff, self._options, self._lap)
 
     @property
     def handle(self) -> Any:
@@ -211,18 +211,23 @@ class Xpress(Solver):
             self._p = None
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]) -> Any:
     """The loaded problem: columns with no coefficients, then every linear row in one ``addRows`` call.
 
     ``outputlog`` leads the controls so a caller's options can put the log back.
+    *lap* ends a lap after each step, as the columns and then the rows are
+    laid out (``convert``) and handed over (``load``).
     """
     import numpy as np
 
     xpress = _xpress()
     p = xpress.problem()
     p.setControl({'outputlog': 0, **dict(solver_options or {})})
+    lap('load')
 
     cols = handoff.dense_columns(xpress.infinity)
+    integral = np.flatnonzero(cols.integral)
+    lap('convert')
     p.addCols(
         objcoef=cols.cost,
         start=np.zeros(handoff.column_count + 1, dtype=np.int64),
@@ -231,27 +236,27 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> Any:
         lb=cols.lb,
         ub=cols.ub,
     )
-    if cols.integral.any():
-        integral = np.flatnonzero(cols.integral)
+    if integral.size:
         p.chgColType(integral, ['I'] * integral.size)
+    lap('load')
 
     rows = handoff.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
     (linear,) = handoff.row_chunks(None)
     coefficients = linear.coefficients
-    p.addRows(
-        rowtype=spelling[rows.sense[: linear.height]].tolist(),
-        rhs=rows.rhs[: linear.height],
-        start=np.append(linear.starts, coefficients.height),
-        colind=coefficients[COL].to_numpy(),
-        rowcoef=coefficients[COEFF].to_numpy(),
-    )
+    rowtype = spelling[rows.sense[: linear.height]].tolist()
+    starts = np.append(linear.starts, coefficients.height)
+    colind = coefficients[COL].to_numpy()
+    rowcoef = coefficients[COEFF].to_numpy()
+    lap('convert')
+    p.addRows(rowtype=rowtype, rhs=rows.rhs[: linear.height], start=starts, colind=colind, rowcoef=rowcoef)
 
     _add_sets(p, handoff, xpress)
     if handoff.objective_sense == 'maximize':
         p.chgObjSense(xpress.ObjSense.MAXIMIZE)
     if handoff.objective_constant:
         p.chgObj([-1], [-handoff.objective_constant])
+    lap('load')
     return p
 
 

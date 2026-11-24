@@ -31,7 +31,7 @@ from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     import polars as pl
 
@@ -117,7 +117,7 @@ class Gurobi(Solver):
     )
 
     def _load(self, handoff: Handoff) -> None:
-        self._m, self._env = _built(handoff, self._options)
+        self._m, self._env = _built(handoff, self._options, self._lap)
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
     def dual_ray(self) -> pl.Series | None:
@@ -247,19 +247,24 @@ def _released(m: Any, environment: Any) -> None:
     environment.dispose()
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any]:
+def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]) -> tuple[Any, Any]:
     """The model and the environment to release.
 
     Options go on the environment, since a licence parameter such as
     ``WLSAccessID`` can only be set before an environment starts. ``OutputFlag``
-    leads so a caller can put the log back.
+    leads so a caller can put the log back. *lap* ends a lap after each step:
+    ``load`` for the environment, ``convert`` and ``load`` around
+    ``loadModel``, and ``load`` for the sets and quadratic rows, whose calls
+    each lay out their own few vectors.
     """
     gurobipy = _gurobipy()
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
+    lap('load')
     m = None
     try:
-        m = _loaded(handoff, environment, gurobipy)
+        m = _loaded(handoff, environment, gurobipy, lap)
         _completed(m, handoff, gurobipy)
+        lap('load')
         return m, environment
     except BaseException:
         if m is not None:
@@ -268,7 +273,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
         raise
 
 
-def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
+def _loaded(handoff: Handoff, environment: Any, gurobipy: Any, lap: Callable[[str], None]) -> Any:
     """Columns, linear rows and the objective in one ``loadModel`` call.
 
     ``loadModel`` reads the matrix by column, so the linear rows' CSR is
@@ -289,6 +294,10 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         shape=(linear.height, handoff.column_count),
     ).tocsc()
     quad = handoff.quad
+    vtype = np.where(cols.integral, 'I', 'C') if cols.integral.any() else None
+    sense = _spelled(gurobipy).astype('S1')[rows.sense[: linear.height]]
+    qobj = (quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy()))
+    lap('convert')
     m = gurobipy.loadModel(
         env=environment,
         numvars=handoff.column_count,
@@ -298,13 +307,14 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         obj=cols.cost,
         lb=cols.lb,
         ub=cols.ub,
-        vtype=np.where(cols.integral, 'I', 'C') if cols.integral.any() else None,
+        vtype=vtype,
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
-        sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
+        sense=sense,
         rhs=rows.rhs[: linear.height],
-        qobj_coo=(quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy())),
+        qobj_coo=qobj,
     )
     m.update()
+    lap('load')
     return m
 
 

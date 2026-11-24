@@ -80,7 +80,8 @@ print(model.timings())
 - **`run` counts the results handed back before the lap.** Run 0 ends with
   the first result.
 - **`step` says what a lap did inside its phase, and `entry` names the entry
-  it built.** Only the build has steps. Elsewhere both are null.
+  it built.** The build and the handoff have steps. Elsewhere both are
+  null.
 - **The rows add up to the metrics.** A phase's rows sum to its clock in
   `model.metrics()`, and a run's rows to the `metrics` of the result that
   ends it.
@@ -99,6 +100,22 @@ row per entry, the `objective`, then `matrix`, which stacks every constraint
 into one matrix, and `tables`, the rest of what the solver is handed. An
 entry's seconds are its own: they hold when the entries build in another
 order.
+
+## The solver's share of a handoff
+
+The handoff's steps split what this package does from what the solver's
+library does. `convert` lays the tables out as the solver's arrays, and `load`
+is the library taking them:
+
+```python exec="true" source="material-block" result="text" session="timings"
+handoff = model.timings().filter(phase='handoff')
+print(handoff.group_by('step', maintain_order=True).agg(pl.col('seconds').sum()))
+```
+
+A load laps `convert` and `load` several times, as the two alternate, so sum
+them by step. The first `load` of a process also holds importing the solver's
+package. A solver kept from the solve before takes the new numbers in `push`
+instead, after `compare` has checked that only numbers moved.
 
 ## Each solve of a loop
 
@@ -126,6 +143,8 @@ run holds the landing and the result does not.
 |---|---|
 | `solve` | [start from an earlier answer](faster.md#start-from-an-earlier-answer), [accept a gap](faster.md#accept-a-gap), and the ways after it |
 | `build` and `handoff`, again on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded) |
+| `handoff`, in `convert` | this package's side: [report it](#report-a-slow-phase) |
+| `handoff`, in `load` | the solver's side: the same model loads as slowly from any tool |
 | `build` on many small models | [build many small models faster](faster.md#build-many-small-models-faster) |
 | `build` on a large model | the entry that holds the time, then [make the model smaller](faster.md#make-the-model-smaller) |
 

@@ -31,7 +31,7 @@ from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     import numpy as np
     import polars as pl
@@ -68,7 +68,9 @@ _CONDITION_OF_HIGHS_STATUS = {
 _IIS_IRREDUCIBLE = 3
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, ColumnVectors, RowVectors]:
+def _built(
+    handoff: Handoff, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]
+) -> tuple[Any, ColumnVectors, RowVectors]:
     """The populated `highspy.Highs`, and the column and row vectors it was loaded with.
 
     ``iis_strategy`` leads the caller's options: the default checks bounds
@@ -76,7 +78,9 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
     no error.
 
     The integrality vector spans every column even where none is integer: HiGHS
-    reads an empty one as whatever the memory held (1.15.1).
+    reads an empty one as whatever the memory held (1.15.1). *lap* ends a lap
+    after each step: ``load`` for the instance and its options, ``convert``
+    for every vector, ``load`` for ``passModel`` and the Hessian.
     """
     import highspy
     import numpy as np
@@ -98,6 +102,7 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
     h.setOptionValue('iis_strategy', int(strategy.kIisStrategyFromLp) | int(strategy.kIisStrategyIrreducible))
     for option, value in (solver_options or {}).items():
         h.setOptionValue(option, value)
+    lap('load')
 
     cols = handoff.dense_columns(inf)
     rows = handoff.dense_rows(inf)
@@ -105,6 +110,11 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
     sense = highspy.ObjSense.kMaximize if handoff.objective_sense == 'maximize' else highspy.ObjSense.kMinimize
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
+    starts = handoff.row_starts.astype(np.int32)
+    columns = handoff.matrix[COL].to_numpy()
+    coefficients = handoff.matrix[COEFF].to_numpy()
+    integrality = _integrality(cols)
+    lap('convert')
     _loaded(
         h,
         h.passModel(
@@ -121,17 +131,18 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
             cols.ub,
             rlb,
             rub,
-            handoff.row_starts.astype(np.int32),
-            handoff.matrix[COL].to_numpy(),
-            handoff.matrix[COEFF].to_numpy(),
+            starts,
+            columns,
+            coefficients,
             empty_i,
             empty_i,
             empty_f,
-            _integrality(cols),
+            integrality,
         ),
         'the model',
     )
     _pass_hessian(h, handoff)
+    lap('load')
     return h, cols, rows
 
 
@@ -218,7 +229,7 @@ class Highs(Solver):
     )
 
     def _load(self, handoff: Handoff) -> None:
-        self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options)
+        self._handle, self._column_vectors, self._row_vectors = _built(handoff, self._options, self._lap)
 
     @property
     def handle(self) -> Any:

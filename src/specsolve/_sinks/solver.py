@@ -17,7 +17,7 @@ from specsolve._sinks.handoff import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence, Sized
+    from collections.abc import Callable, Mapping, Sequence, Sized
 
     import numpy as np
 
@@ -102,9 +102,14 @@ class Solver(ABC):
         self,
         handoff: Handoff,
         solver_options: Mapping[str, Any] | None = None,
+        lap: Callable[[str], None] | None = None,
     ) -> None:
         #: The options the model was loaded with.
         self._options = dict(solver_options or {})
+        #: Ends a lap of the handoff at a step of [`_load`][]: ``convert`` where
+        #: this package laid the tables out, ``load`` where the solver's library
+        #: took them. A no-op where no engine clocks the load.
+        self._lap = lap or _unclocked
         self._load(handoff)
         #: The loaded tables, until [`structure`][] replaces them with their digest.
         self._handoff: Handoff | None = handoff
@@ -115,6 +120,7 @@ class Solver(ABC):
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = handoff.column_count
         self._rows = handoff.row_count
+        self._lap('convert')
 
     #: What a caller names this member by, and its key in ``SOLVERS``.
     name: ClassVar[str]
@@ -414,3 +420,7 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)
+
+
+def _unclocked(step: str) -> None:
+    """A lap no engine clocks: a solver built outside one, by a benchmark or a test."""

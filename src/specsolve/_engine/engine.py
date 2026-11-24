@@ -173,7 +173,7 @@ class Engine:
         """
         if self._solver is not None:
             self._solver.structure()
-            self.lap('handoff')
+            self.lap('handoff', 'structure')
         self._built = None
         self._solved = None
         self._measured = Measured()
@@ -244,11 +244,14 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, or a sink that cannot take the built model.
         """
+        lap = partial(self.lap, 'handoff')
         matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
+        lap('match')
         self.check_sink(solver_name)
         self._solved = None
+        lap('check')
         held = self._solver
-        self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
+        self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options, lap=lap)
         reloaded = self._solver is not held
         if not reloaded and start != 'previous':
             self._solver.forget()
@@ -256,7 +259,7 @@ class Engine:
             self._solver.start_from_basis(matched)
         elif matched is not None:
             self._solver.start_from_values(matched)
-        self.lap('handoff')
+        lap('start')
         return self._solver, reloaded
 
     def solve(

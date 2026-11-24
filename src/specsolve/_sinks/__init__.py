@@ -89,6 +89,7 @@ def loaded(
     name: str,
     handoff: Handoff,
     solver_options: Mapping[str, Any] | None = None,
+    lap: Callable[[str], None] | None = None,
 ) -> Solver:
     """The solver to run *handoff* on — *held* where it may keep what it holds.
 
@@ -96,15 +97,21 @@ def loaded(
     differs from this one in nothing but numbers — same
     [`structure`][specsolve._sinks.handoff.Handoff.structure], same options — and
     then the new numbers are pushed onto it. Otherwise it is closed, after
-    *name* is resolved.
+    *name* is resolved. *lap* ends a lap at each step: ``compare``, then
+    ``push``, or ``close`` and the new solver's own steps.
     """
     wanted = solver(name)
+    step = lap or (lambda _: None)
     if held is not None:
-        if type(held) is wanted and held.keeps(handoff, solver_options):
+        kept = type(held) is wanted and held.keeps(handoff, solver_options)
+        step('compare')
+        if kept:
             held.push(handoff)
+            step('push')
             return held
         held.close()
-    return wanted(handoff, solver_options)
+        step('close')
+    return wanted(handoff, solver_options, lap=lap)
 
 
 def writer(suffix: str) -> Writer:
