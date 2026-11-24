@@ -113,7 +113,7 @@ class Assembly:
         program: program.Program,
         attached: AttachedSources,
         measured: Measured,
-        lap: Callable[[str, str | None], None],
+        lap: Callable[[str, str | None, str | None], None],
     ) -> None:
         """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
@@ -142,7 +142,7 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            self.lap('setup', None)
+            self.lap('build', 'setup', None)
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
@@ -159,7 +159,7 @@ class Assembly:
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         matrix_starts = _row_starts(stacked, self.n_rows)
         matrix = stacked.select(COL, COEFF).rechunk()
-        self.lap('matrix', None)
+        self.lap('build', 'matrix', None)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
@@ -178,7 +178,7 @@ class Assembly:
             objective_constant=self.obj_const,
         )
         model = BuiltModel(self.program, self.attached, self.variables, self.constraints, tables)
-        self.lap('tables', None)
+        self.lap('build', 'tables', None)
         return model
 
     def _timed(
@@ -192,7 +192,7 @@ class Assembly:
         try:
             return build(*args, **kwargs)
         finally:
-            self.lap(step, entry)
+            self.lap('build', step, entry)
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
@@ -591,7 +591,7 @@ def spliced_model(
     attached: AttachedSources,
     changed: Collection[str],
     measured: Measured,
-    lap: Callable[[str, str | None], None],
+    lap: Callable[[str, str | None, str | None], None],
 ) -> BuiltModel:
     """*built* with every bound, constant side, linear coefficient and objective that reads *changed* read again.
 
@@ -652,7 +652,7 @@ def spliced_model(
         constant = assembly.obj_const
 
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
-        lap('setup', None)
+        lap('build', 'setup', None)
         for name in _entries_reading(plan.variables, changed, _bound_parameters):
             if built.variables[name].height:
                 assembly._timed('variable', name, variable, name)
@@ -678,7 +678,7 @@ def spliced_model(
         objective_constant=constant,
     )
     model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
-    lap('tables', None)
+    lap('build', 'tables', None)
     return model
 
 
