@@ -45,8 +45,8 @@ from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
-from specsolve._sinks.handoff import ranges
 from specsolve._sinks.highs import Highs
+from specsolve._sinks.tables import ranges
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, override, primal_by_coordinate, solve_written_file
@@ -644,7 +644,7 @@ class TestTheIndexSpace:
         cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
 
         with sps.build(spec, {'node': ['a', 'b'], 'cap': cap}) as model:
-            assert model._engine._model.handoff.rows.height == 0, (
+            assert model._engine._model.tables.rows.height == 0, (
                 'the condition holds nowhere, so no constraint row is built'
             )
             assert model.solve().objective == pytest.approx(0.0)
@@ -733,7 +733,7 @@ class TestTheIndexSpace:
         listed = {'i': [0, 1, 2], 'j': ['a', 'b']}
         with sps.build(spec, listed | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
             engine = model._engine
-            tables = engine._model.handoff
+            tables = engine._model.tables
             for names, total, held, index in (
                 (['x', 'y', 'z'], tables.column_count, engine._model.variables, COL),
                 (['c1', 'c2'], tables.row_count, engine._model.constraints, ROW),
@@ -866,10 +866,10 @@ class TestTheIndexSpace:
         }
         empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
         with sps.build(spec, {'c': empty} | {'cut': []}) as model:
-            assert model._engine._model.handoff.column_count == 0
+            assert model._engine._model.tables.column_count == 0
 
         with sps.build(spec, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})} | {'cut': grown}) as model:
-            assert model._engine._model.handoff.column_count == 2
+            assert model._engine._model.tables.column_count == 2
 
     def test_two_solutions_over_different_members_concatenate(self):
         """An `Enum` column will not concatenate against different categories.
@@ -890,7 +890,7 @@ def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
     with Engine() as engine:
         engine.build(program, tidy_sources(program, sources))
-        obj = engine._model.handoff.obj
+        obj = engine._model.tables.obj
         return dict(zip(obj[COL].to_list(), obj[COEFF].to_list(), strict=True)), obj.height
 
 
@@ -986,7 +986,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         spec = override(RHS_SPEC, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
         with sps.build(spec, sources) as model:
-            matrix = model._engine._model.handoff.matrix
+            matrix = model._engine._model.tables.matrix
             assert matrix.height == 2, 'one coefficient per row, not one per term'
             assert sorted(matrix[COEFF].to_list()) == [3.0, 3.0]
             result = model.solve()
@@ -1002,8 +1002,8 @@ class TestWhatReachesTheSolverAsACoefficient:
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(4 * x)'},
         }
         with sps.build(spec, {'i': [0], 'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as model:
-            assert model._engine._model.handoff.obj.height == 1
-            assert model._engine._model.handoff.obj[COEFF].to_list() == [5.0]
+            assert model._engine._model.tables.obj.height == 1
+            assert model._engine._model.tables.obj[COEFF].to_list() == [5.0]
             assert model.solve().objective == pytest.approx(10.0)
 
     @pytest.mark.parametrize(
@@ -1032,7 +1032,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
 
         with sps.build(spec, sources) as model:
-            matrix = model._engine._model.handoff.matrix
+            matrix = model._engine._model.tables.matrix
             assert matrix.height == height, 'one coefficient per (row, col) cell the expression reaches'
             assert set(matrix[COEFF].to_list()) == {coeff}
 
@@ -1065,7 +1065,7 @@ class TestWhatReachesTheSolverAsACoefficient:
             terms = builder.expression(next(iter(program.constraints.values())).lhs, 'test').linear
             assert len(terms) == 2
 
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             cells = tables.matrix_chunk(0, tables.row_count).select(ROW, COL)
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
@@ -1129,7 +1129,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         """
         a = _spelled_zeros([[1.0, 0.0, 0.0, 2.0], [0.0, 3.0, 0.0, 0.0]])
         with sps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_LABELS | {'a': a}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
             assert list(tables.matrix[COEFF]) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
 
@@ -1143,7 +1143,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         """
         a = _spelled_zeros([[1.0, 1.0], [0.0, 0.0]])
         with sps.build(SPELLED_ZEROS_SPEC, {'i': [0, 1], 'j': [0, 1], 'a': a}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
             assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no coefficients'
             assert model.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
@@ -1167,7 +1167,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         }
         a = pl.DataFrame({'i': [0, 1], 'value': [1.0, 0.0]})
         with sps.build(spec, {'i': [0, 1], 'a': a}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             assert tables.row_count == 2, 'the all-zero quadratic row was dropped instead of kept'
             assert tables.qmatrix.height == 1, 'the zero pair reached the quadratic matrix'
 
@@ -1178,7 +1178,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 'neutral'}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             assert tables.obj.height == 1, 'the zero-cost column reached the objective table'
             assert list(tables.obj[COEFF]) == [5.0]
 
@@ -1189,7 +1189,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=None)})
         with Engine() as engine:
             engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
-            assert engine._model.handoff.cols['ub'].is_infinite().all()
+            assert engine._model.tables.cols['ub'].is_infinite().all()
             assert engine.solve().is_ok
 
     def test_equal_bounds_pin_a_variable_so_one_equation_covers_both_regimes(self):
@@ -1315,8 +1315,8 @@ class TestThePositionalHandoff:
             'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 0.0, 2.0, 3.0]}),
         }
         with sps.build(spec, sources) as model:
-            primal = pl.Series('value', np.arange(model._engine._model.handoff.column_count, dtype=np.float64))
-            dual = pl.Series('value', np.arange(model._engine._model.handoff.row_count, dtype=np.float64))
+            primal = pl.Series('value', np.arange(model._engine._model.tables.column_count, dtype=np.float64))
+            dual = pl.Series('value', np.arange(model._engine._model.tables.row_count, dtype=np.float64))
             primals, duals, _ = model._engine._read_back(primal, dual, None)
             assert 'SORT' not in primals['p'].explain(optimized=False), (
                 'assigning the solver indices already ordered this'
@@ -1363,14 +1363,14 @@ class TestThePositionalHandoff:
         the read-back never reads, 8 bytes a column for as long as the result is
         held.
 
-        Read off the handoff rather than off the `Result`, which lays these
+        Read off the sink tables rather than off the `Result`, which lays these
         vectors into its tables and keeps no second copy of them.
         """
         with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
             assert model.solve(solver_name=solver_name).is_ok
             engine = model._engine
             assert engine._solver is not None, 'a solve leaves the solver holding the model'
-            tables = engine._model.handoff
+            tables = engine._model.tables
             answer = engine._solver.run(tables)
             for values, count in ((answer.primal, tables.column_count), (answer.dual, tables.row_count)):
                 assert isinstance(values, pl.Series), 'a table here is an index column nothing reads'
@@ -1401,7 +1401,7 @@ class TestThePositionalHandoff:
 
         with Engine() as engine:
             engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
-            tables = engine._model.handoff
+            tables = engine._model.tables
             assert tables.matrix.height == n_g * n_s
 
             def widest(ranges):
@@ -1447,7 +1447,7 @@ class TestThePositionalHandoff:
         ask would read bounds the first had already edited.
         """
         with sps.build(RHS_SPEC, {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             first = tables.dense_columns(1e30).lb
             ub_after_first = tables.cols['ub'].to_list()
 
@@ -1482,7 +1482,7 @@ class TestThePositionalHandoff:
         spec = override(POSITIONAL_COLS_SPEC, **{'variables.x.where': where}) if where else POSITIONAL_COLS_SPEC
 
         with sps.build(spec, {'i': list(range(4)), 'j': ['a', 'b', 'c'], 'cap': pl.DataFrame(caps)}) as model:
-            tables = model._engine._model.handoff
+            tables = model._engine._model.tables
             assert COL not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 

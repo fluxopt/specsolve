@@ -1,8 +1,8 @@
 """Sinks: how a built model leaves the engine. See README.md.
 
-A *solver* runs the handoff and is chosen by name (``SOLVERS``); a *writer*
+A *solver* runs the sink tables and is chosen by name (``SOLVERS``); a *writer*
 renders it to a file and is chosen by suffix (``WRITERS``). One module per
-sink, named for it. Each reads ``handoff.py`` and declares what it takes in
+sink, named for it. Each reads ``tables.py`` and declares what it takes in
 ``capabilities.py``; a solver shares ``solver.py`` and a writer ``text.py``,
 and neither family imports the other.
 """
@@ -16,11 +16,11 @@ from specsolve._messages import unknown_name_message
 from specsolve._sinks import capabilities as caps
 from specsolve._sinks.capabilities import spelled
 from specsolve._sinks.gurobi import Gurobi
-from specsolve._sinks.handoff import Handoff
 from specsolve._sinks.highs import Highs
 from specsolve._sinks.lp_file import LP_FILE_CAPABILITIES, write_lp_file
 from specsolve._sinks.mps_file import MPS_FILE_CAPABILITIES, write_mps_file
 from specsolve._sinks.solver import Solver
+from specsolve._sinks.tables import SinkTables
 from specsolve._sinks.xpress import Xpress
 from specsolve.errors import SpecsolveError
 
@@ -29,12 +29,12 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
-    Write = Callable[[Handoff, Path], None]
+    Write = Callable[[SinkTables, Path], None]
 
 __all__ = [
     'SOLVERS',
     'WRITERS',
-    'Handoff',
+    'SinkTables',
     'Solver',
     'Writer',
     'loaded',
@@ -87,24 +87,24 @@ def solver(name: str) -> type[Solver]:
 def loaded(
     held: Solver | None,
     name: str,
-    handoff: Handoff,
+    tables: SinkTables,
     solver_options: Mapping[str, Any] | None = None,
 ) -> Solver:
-    """The solver to run *handoff* on — *held* where it may keep what it holds.
+    """The solver to run *tables* on — *held* where it may keep what it holds.
 
     *held* is kept exactly when it is the named class holding a model that
     differs from this one in nothing but numbers — same
-    [`structure`][specsolve._sinks.handoff.Handoff.structure], same options — and
+    [`structure`][specsolve._sinks.tables.SinkTables.structure], same options — and
     then the new numbers are pushed onto it. Otherwise it is closed, after
     *name* is resolved.
     """
     wanted = solver(name)
     if held is not None:
-        if type(held) is wanted and held.keeps(handoff, solver_options):
-            held.push(handoff)
+        if type(held) is wanted and held.keeps(tables, solver_options):
+            held.push(tables)
             return held
         held.close()
-    return wanted(handoff, solver_options)
+    return wanted(tables, solver_options)
 
 
 def writer(suffix: str) -> Writer:
@@ -147,13 +147,13 @@ def _blocker(name: str, needed: Collection[caps.Capability]) -> Callable[[Sequen
     return None
 
 
-def refusal(handoff: Handoff, name: str) -> str | None:
-    """The sink called *name*'s refusal of the built model in *handoff*, or ``None`` where it takes it.
+def refusal(tables: SinkTables, name: str) -> str | None:
+    """The sink called *name*'s refusal of the built model in *tables*, or ``None`` where it takes it.
 
     The refusal names the construct, the sink, and the sinks that do take it.
     Answered without importing the sink.
     """
-    needed = caps.required(handoff)
+    needed = caps.required(tables)
     if (refuses := _blocker(name, needed)) is None:
         return None
     return refuses([other for other in (*SOLVERS, *WRITERS) if other != name and _blocker(other, needed) is None])

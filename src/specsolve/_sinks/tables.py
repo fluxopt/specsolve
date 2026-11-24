@@ -81,7 +81,7 @@ SENSE = pl.Enum(list(SENSE_CODES))
 
 
 @dataclass(frozen=True)
-class Handoff:
+class SinkTables:
     r"""The built model, as a sink sees it.
 
     ``cols`` (lb, ub, vtype), ``obj`` (col, coeff), ``rows`` (row, sense, rhs)
