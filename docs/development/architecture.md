@@ -223,7 +223,7 @@ coefficients in place.
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
 a formulation out.
 
-**A table is the boundary in both directions.** `_tables.py` reads a caller's
+**A table is the boundary in both directions.** `_inputs.py` reads a caller's
 table through the Arrow PyCapsule protocol, and a `Result` hands back polars.
 
 **Sinks take four streams**: `cols`, `rows`, `A` in CSR, and `sos`. A sink
@@ -238,13 +238,12 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
-| `_inputs.py` | `SpecLike` and `Source`, what every function takes |
+| `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | `tidy_sources`: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
-| `_tables.py` | caller tables in, via the Arrow PyCapsule protocol |
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
