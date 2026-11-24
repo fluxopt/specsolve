@@ -24,12 +24,24 @@ from typing import Any
 
 import numpy as np
 import pytest
-import yaml
 
-from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import comment, floor, plot, profile_build, report, results, tidy
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, _ask, chance, checkouts, compare, phase_table, same_model, table, verdict
+from bench.ab.compare import (
+    RAW_SCHEMA,
+    Row,
+    Worker,
+    _ask,
+    chance,
+    checkouts,
+    compare,
+    phase_table,
+    raw,
+    same_model,
+    table,
+    verdict,
+)
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -279,8 +291,8 @@ def test_narrower_sinks_still_write_the_provenance() -> None:
 
 def test_no_workflow_retypes_the_published_selection() -> None:
     """A run that retypes the published selection is a number whose fingerprint
-    no longer describes it. `bench.yml` and `codspeed.yml` take narrower
-    selections of their own; the published one lives in the `ladder` task.
+    no longer describes it. `codspeed.yml` takes a narrower
+    selection of its own; the published one lives in the `ladder` task.
     """
 
     root = Path(__file__).resolve().parents[1]
@@ -290,18 +302,6 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
-
-
-def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
-    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
-    solves would hold it to the solver's own allocations. Both passes leave the
-    sweep out, or the gate would compare two different selections.
-    """
-    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
-    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
-    assert len(passes) == 2, 'a base pass and a head pass'
-    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
-    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 @pytest.mark.parametrize(
@@ -1017,20 +1017,16 @@ def test_the_long_table_renders_from_the_committed_results() -> None:
     assert len(lines) > 1, 'the committed provenance produces rows, not just a header'
 
 
-def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
-    """Both profilers monkeypatch private engine names, so a refactor in `src/`
-    can retire them without touching `bench/` (#1245)."""
+def test_the_profiler_wraps_the_class_that_actually_builds() -> None:
+    """The profiler monkeypatches private engine names, so a refactor in `src/`
+    can retire it without touching `bench/` (#1245)."""
     import importlib
-
-    from specsolve._engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
         owner = module if class_name is None else getattr(module, class_name, None)
         assert owner is not None, f'profile_build patches {class_name} in {module_path}, which moved'
         assert hasattr(owner, method), f'profile_build patches {class_name or module_path}.{method}, which moved'
-    for method in profile_phases.PHASES:
-        assert hasattr(Assembly, method), f'profile_phases patches Assembly.{method}, which moved'
 
 
 # ---------------------------------------------------------------------------
@@ -1855,26 +1851,6 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
 
 
-def test_a_started_master_reproduces_the_cold_answer() -> None:
-    """A start may move the route and never the optimum."""
-    run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
-    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the start would go unexercised'
-    for i, step in enumerate(run.steps):
-        assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
-            f'step {i}: a start moved the answer'
-        )
-
-
-def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
-    """A method moves the route and what the answer carries, never the optimum."""
-    rows = crossover.measured('dispatch', '2xs')
-    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
-    simplex = rows[0][2]
-    for method, _, objective, duals in rows:
-        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
-        assert duals, f'{method} left no duals, which an LP solved to optimality has'
-
-
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
     """`check()` runs, and the two models solve to one objective; the counts match a permuted floor too."""
     ours, specsolve = floor.check()
@@ -2142,10 +2118,10 @@ def test_a_fresh_process_reports_its_window_and_its_peak() -> None:
 def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
     verb: str, method: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`bench.yml` runs this harness against the base branch's `src/`.
+    """This harness can run against an older checkout's `src/`.
 
     A base with no `Engine.handoff` raised in every window cell, which failed
-    the base pass, so the gate never compared anything.
+    the base pass, so nothing was compared.
     """
     assert unsupported(verb) is None, f'this checkout has Engine.{method}'
     monkeypatch.delattr(Engine, method)
@@ -2470,6 +2446,27 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
 def _timed_run(seconds: float, **phases: float) -> dict[str, Any]:
     """One worker answer: its total and the seconds it spent in each phase."""
     return {'seconds': seconds, 'calls': None, 'fingerprint': None, 'columns': 1, 'rows': 1, 'phases': phases}
+
+
+def test_the_raw_table_holds_every_number_the_report_takes_its_medians_from() -> None:
+    """A PR's table prints medians; the raw table keeps each round, paired, so two runs pool by a concat."""
+    base = [{'seconds': s, 'calls': None, 'peak_mb': 300.0, 'phases': {'build': s / 2}} for s in (0.10, 0.12, 0.11)]
+    head = [{'seconds': s, 'calls': None, 'peak_mb': 290.0, 'phases': {'build': s / 2}} for s in (0.08, 0.09, 0.07)]
+    numbers = raw([Row('grid-baseline-s', base=base, head=head)], base='b0', head='h0', op='build')
+
+    whole = numbers.filter(phase='', metric='seconds').sort('side', 'round')
+    assert whole['value'].to_list() == [0.10, 0.12, 0.11, 0.08, 0.09, 0.07], 'every round on each side, in order'
+    assert whole.filter(side='head', round=1)['value'].item() == head[1]['seconds'], (
+        'round pairs a head number with the base number measured beside it'
+    )
+    assert numbers.filter(phase='build').height == 6, 'each phase clock, every round, both sides'
+    assert numbers.filter(metric='calls').is_empty(), 'a number the worker did not produce is an absent row'
+    assert set(numbers['base']) == {'b0'} and set(numbers['op']) == {'build'}, 'each row names what it measured'
+
+
+def test_a_raw_table_of_nothing_still_has_its_columns() -> None:
+    """A run whose every cell errored writes a table another run still concatenates onto."""
+    assert dict(raw([], base='b0', head='h0', op='build').schema) == RAW_SCHEMA, 'the schema, not an empty frame'
 
 
 def _phase_lines(row: Row) -> dict[str, list[str]]:
