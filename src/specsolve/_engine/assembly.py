@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from time import perf_counter
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, get_args
 
 import numpy as np
@@ -90,7 +89,8 @@ class Measured:
     #: constraint, over the rows that survived.
     rhs: dict[str, tuple[float, float]] = field(default_factory=dict)
     objective_range: tuple[float, float] | None = None
-    #: ``(kind, name) -> seconds`` each entry took to build, in build order.
+    #: ``(kind, name) -> seconds`` of each step of the build, in build order:
+    #: the setup, each entry, then the stacking. They tile the build phase.
     seconds: dict[tuple[str, str], float] = field(default_factory=dict)
     columns: int = 0
     rows: int = 0
@@ -113,8 +113,15 @@ class BuiltModel:
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
-    def __init__(self, program: program.Program, attached: AttachedSources, measured: Measured) -> None:
+    def __init__(
+        self,
+        program: program.Program,
+        attached: AttachedSources,
+        measured: Measured,
+        split: Callable[[str, str], None],
+    ) -> None:
         self.program = program
+        self.split = split
         self.attached = attached
         self.measured = measured
         self.variables: dict[str, indices.Indexed] = {}
@@ -139,6 +146,7 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
+            self.split('model', 'setup')
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
@@ -192,17 +200,16 @@ class Assembly:
     def _timed(
         self, kind: str, name: str, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
     ) -> _Built:
-        """*build* on *args*, its seconds recorded under ``(kind, name)`` in [`Measured.seconds`][], even if it raises.
+        """*build* on *args*, then a split, so its row ``(kind, name)`` holds its seconds, even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
         its own and do not move with the order entries build in. Stacking the
         shares into the model is timed the same way, as the ``model`` rows.
         """
-        started = perf_counter()
         try:
             return build(*args, **kwargs)
         finally:
-            self.measured.seconds[kind, name] = perf_counter() - started
+            self.split(kind, name)
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.

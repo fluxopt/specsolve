@@ -274,14 +274,14 @@ class Diagnostics:
     #: spec declares no objective and where every term of one cancelled.
     objective_range: tuple[float, float] | None
 
-    #: ``(kind, entry, seconds)`` — what each variable, set, constraint and the
-    #: objective took to build, one row per entry, in build order, then two
-    #: rows of kind ``model``: ``matrix``, every constraint's share stacked into
-    #: one matrix in row order, and ``tables``, the rest of what a solver is
-    #: handed. An entry's seconds are its own: they hold when the entries build
-    #: in another order. The rows add up to ``build_seconds`` in
-    #: [`Model.metrics`][specsolve._api.Model.metrics], short of setting the
-    #: build up, under a millisecond (#2206).
+    #: ``(kind, entry, seconds)`` — where the build's time went, in build
+    #: order: ``model``/``setup``, which reads [`sparse_parameters`][]; a row per
+    #: variable, set, constraint and the objective; then ``model``/``matrix``,
+    #: every constraint's share stacked into one matrix in row order, and
+    #: ``model``/``tables``, the rest of what a solver is handed. The rows add
+    #: up to ``build_seconds`` in [`Model.metrics`][specsolve._api.Model.metrics].
+    #: An entry's seconds are its own: they hold when the entries build in
+    #: another order.
     build_seconds: pl.DataFrame
 
 

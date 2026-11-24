@@ -86,8 +86,8 @@ with sps.build('dispatch.yaml', sources) as model:
     print(model.diagnostics().build_seconds)  # kind, entry, seconds
 ```
 
-There is one row per variable, constraint and the objective, then two rows of
-kind `model`: `matrix`, stacking every constraint into one matrix, and
+The rows follow the build: `setup`, one row per variable, constraint and the
+objective, then `matrix`, stacking every constraint into one matrix, and
 `tables`, the rest of what the solver is handed. An entry's seconds are its
 own, and the rows add up to `build`
 ([`Diagnostics`](../reference/api.md#specsolve.types.Diagnostics)).

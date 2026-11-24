@@ -121,6 +121,8 @@ class Engine:
         self._seconds: dict[str, float] = {}
         #: When the last lap ended, or the call began: where the next lap measures from.
         self._mark = perf_counter()
+        #: When the build's last row in ``Measured.seconds`` ended: where the next row measures from.
+        self._split_mark = self._mark
 
     @property
     def _model(self) -> BuiltModel:
@@ -133,19 +135,32 @@ class Engine:
         """Begin a call: the next [`lap`][] measures from now."""
         self._mark = perf_counter()
 
-    def lap(self, phase: str) -> None:
+    def lap(self, phase: str, until: float | None = None) -> None:
         """Add the wall time since the last lap, or since [`start`][], to *phase*, one of ``PHASES``.
 
         Each lap begins where the one before it ended, so the laps of a call
         add up to the whole call, and a step between two named steps is in the
         phase of the one after it. The steps outside the engine lap here too,
         so [`diagnostics`][] holds every phase of the model's life. A call
-        that raises keeps the laps it finished.
+        that raises keeps the laps it finished. *until* ends the lap at that
+        mark rather than now, so the next lap takes what came after it.
         """
         assert phase in PHASES, f'{phase!r} is not a phase, so no Metrics column would carry its clock'
-        now = perf_counter()
+        now = perf_counter() if until is None else until
         self._seconds[phase] = self._seconds.get(phase, 0.0) + now - self._mark
         self._mark = now
+
+    def split(self, kind: str, name: str) -> None:
+        """Add the wall time since the build's last split to the row ``(kind, name)`` of ``Measured.seconds``.
+
+        The splits tile the build the way the laps tile a call: the first
+        begins where the lap before the build ended, and the ``build`` lap ends
+        where the last one did, so the rows add up to ``build_seconds``.
+        """
+        now = perf_counter()
+        seconds = self._measured.seconds
+        seconds[kind, name] = seconds.get((kind, name), 0.0) + now - self._split_mark
+        self._split_mark = now
 
     # ------------------------------------------------------------------
     # build
@@ -172,9 +187,10 @@ class Engine:
         if attached is None:
             attached = attach(program, sources)
             self.lap('attach')
+        self._split_mark = self._mark
         self._measured.sparse = short_parameters(program, attached)
-        self._built = Assembly(program, attached, self._measured).run()
-        self.lap('build')
+        self._built = Assembly(program, attached, self._measured, self.split).run()
+        self.lap('build', until=self._split_mark)
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables

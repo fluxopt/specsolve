@@ -388,11 +388,12 @@ TIMED_DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.
 
 
 def test_each_entry_reports_what_it_took_to_build_in_build_order():
-    """A row per variable, constraint and the objective, then the stacking: together, the whole build."""
+    """The setup, a row per variable, constraint and the objective, then the stacking: together, the whole build."""
     with sps.build(TIMED_SPEC, TIMED_DATA) as model:
         took = model.diagnostics().build_seconds
         build = model.metrics().build_seconds
     assert took.select('kind', 'entry').rows() == [
+        ('model', 'setup'),
         ('variable', 'p'),
         ('variable', 'q'),
         ('constraint', 'balance'),
@@ -400,19 +401,19 @@ def test_each_entry_reports_what_it_took_to_build_in_build_order():
         ('objective', 'objective'),
         ('model', 'matrix'),
         ('model', 'tables'),
-    ], 'every entry once, in the order the build takes them, then the two stacking steps'
+    ], 'the setup, every entry once in the order the build takes them, then the two stacking steps'
     assert took.get_column('seconds').min() > 0, 'every row took some time'
-    assert took.get_column('seconds').sum() == pytest.approx(build, abs=0.05), (
-        'the rows are the whole build, short of setting it up'
+    assert took.get_column('seconds').sum() == pytest.approx(build, rel=1e-12), (
+        'the rows tile the build: they add up to it, to the last bits'
     )
 
 
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
-    from specsolve._engine import assembly
+    from specsolve._engine import assembly, engine
 
     added = [0.0]
-    monkeypatch.setattr(assembly, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = assembly.Assembly._build_constraint
 
     def slow(self, name, c):
@@ -428,26 +429,28 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ('slowed', 'row'),
+    ('module', 'slowed', 'row'),
     [
-        pytest.param('_row_starts', 'matrix', id='matrix'),
-        pytest.param('_stack', 'tables', id='tables-stacking-the-columns'),
+        pytest.param('engine', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
+        pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
     ],
 )
-def test_slow_stacking_shows_in_its_model_row(monkeypatch, slowed, row):
-    """The stacking after the last entry is timed too: ten seconds added to a step of it land in its row."""
-    from specsolve._engine import assembly
+def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
+    """What the build does around its entries is timed too: ten seconds added to a step land in its row."""
+    from specsolve._engine import assembly, engine
 
+    owner = {'engine': engine, 'assembly': assembly}[module]
     added = [0.0]
-    monkeypatch.setattr(assembly, 'perf_counter', lambda: time.perf_counter() + added[0])
-    real = getattr(assembly, slowed)
+    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(owner, slowed)
 
     def slow(*args, **kwargs):
-        if slowed == '_row_starts' or args[1] is assembly._COLS:
+        if slowed != '_stack' or args[1] is assembly._COLS:
             added[0] += 10.0
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(assembly, slowed, slow)
+    monkeypatch.setattr(owner, slowed, slow)
     with sps.build(TIMED_SPEC, TIMED_DATA) as model:
         took = dict(model.diagnostics().build_seconds.select('entry', 'seconds').iter_rows())
     assert took[row] >= 10.0, f'the slowed step lands in the {row} row'
