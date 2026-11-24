@@ -92,7 +92,7 @@ flowchart TB
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
-phase covers, and [the diagram](../howto/faster.md#find-where-the-time-goes)
+phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
 draws what each hands to the next. The clock
 is one mark: each public call starts it with `Engine.start()`, and
 `Engine.lap(phase)` adds the time since the mark to that phase and moves the
