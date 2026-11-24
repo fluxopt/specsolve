@@ -258,3 +258,93 @@ def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowe
     took = dict(took.iter_rows())
     assert took[step] >= 10.0, f'the slowed step lands in {step}'
     assert max(s for name, s in took.items() if name != step) < 10.0, 'and in no other step'
+
+
+# ---------------------------------------------------------------------------
+# the tidy's steps
+# ---------------------------------------------------------------------------
+
+GROUPED = {
+    'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
+    'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
+    'parameters': {'p_max': {'dims': ['generator']}, 'load': {'dims': ['bus']}},
+    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
+    'constraints': {'balance': {'dims': ['bus'], 'expression': 'sum(p, over=generator, by=gen_bus[bus]) >= load'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
+}
+GROUPED_DATA = {
+    'bus': ['north', 'south'],
+    'generator': ['g1', 'g2'],
+    'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
+    'p_max': pl.DataFrame({'generator': ['g1', 'g2'], 'value': [10.0, 10.0]}),
+    'load': pl.DataFrame({'bus': ['north', 'south'], 'value': [4.0, 6.0]}),
+}
+
+
+def _tidy_steps(model: sps.types.Model) -> list[tuple[str, str | None]]:
+    return model.timings().filter(phase='tidy').select('step', 'entry').rows()
+
+
+def test_a_tidy_logs_the_read_each_source_and_its_check_in_order():
+    """The paths read at once, each dimension and relation, each parameter checked, then the check over them all."""
+    with sps.build(GROUPED, GROUPED_DATA) as model:
+        steps = _tidy_steps(model)
+        tidy = model.timings().filter(phase='tidy').get_column('seconds').sum()
+        whole = model.metrics().tidy_seconds
+    assert steps == [
+        ('read', None),
+        ('dimension', 'generator'),
+        ('dimension', 'bus'),
+        ('relation', 'gen_bus'),
+        ('parameter', 'p_max'),
+        ('parameter', 'load'),
+        ('check', None),
+    ], 'every step once, in the order the tidy takes them'
+    assert tidy == pytest.approx(whole, rel=1e-12), 'and the tidy still adds up'
+
+
+@pytest.mark.parametrize(
+    ('slowed', 'step', 'entry'),
+    [
+        pytest.param('_read_paths_at_once', 'read', None, id='reading-the-paths'),
+        pytest.param('_labels_table', 'dimension', 'generator', id='a-dimension-s-labels'),
+        pytest.param('_read_relation', 'relation', 'gen_bus', id='a-relation'),
+        pytest.param('_checked_parameter', 'parameter', 'p_max', id='checking-a-parameter'),
+    ],
+)
+def test_a_slow_step_of_a_tidy_lands_in_its_own_row(monkeypatch, slowed, step, entry):
+    """Ten seconds added to one step of a tidy land in that step's row and in no other."""
+    from specsolve import _sources
+
+    added = [0.0]
+    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(_sources, slowed)
+    seen = []
+
+    def slow(*args, **kwargs):
+        seen.append(slowed)
+        if len(seen) == 1:
+            added[0] += 10.0
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(_sources, slowed, slow)
+    with sps.build(GROUPED, GROUPED_DATA) as model:
+        took = model.timings().filter(phase='tidy').select('step', 'entry', 'seconds').rows()
+    slowest = [(s, e) for s, e, seconds in took if seconds >= 10.0]
+    assert slowest == [(step, entry)], 'the slowed step, the first of its kind, holds the ten seconds alone'
+
+
+def test_a_refused_source_keeps_the_tidy_laps_it_reached():
+    """A parameter with a label its dimension lacks is refused at its check; the steps before it keep their rows."""
+    with sps.build(GROUPED, GROUPED_DATA) as model:
+        stray = pl.DataFrame({'bus': ['north', 'west'], 'value': [4.0, 6.0]})
+        with pytest.raises(sps.errors.DataError):
+            model.update({'load': stray})
+        second = model.timings().filter(phase='tidy').select('step', 'entry').rows()[7:]
+    assert second == [
+        ('read', None),
+        ('dimension', 'generator'),
+        ('dimension', 'bus'),
+        ('relation', 'gen_bus'),
+        ('parameter', 'p_max'),
+    ], 'the rows up to the refused parameter, and none for it or after it'
