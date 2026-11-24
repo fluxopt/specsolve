@@ -213,8 +213,7 @@ class Model:
         spent by then, and a path may have been rewritten.
         """
         try:
-            self._tidied = tidied(self._program, self._sources)
-            self._engine.lap('tidy')
+            self._tidied = tidied(self._program, self._sources, self._engine.lap)
             attached = validate_assumptions(self._program, self._tidied)
             self._engine.lap('attach')
             self._engine.build(self._program, self._tidied, attached)
