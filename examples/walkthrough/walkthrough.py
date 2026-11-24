@@ -147,12 +147,12 @@ def model_tables(engine: Engine, schema: Spec, program: Any) -> None:
     """
     banner(4, 'plan + data -> the model tables', '_engine/engine.py')
     engine.build(program, tidy_sources(program, SOURCES))
-    handoff = engine._model.handoff
+    tables = engine._model.tables
     for name, table in (
-        ('cols', handoff.cols),
-        ('obj', handoff.obj),
-        ('rows', handoff.rows),
-        ('A', handoff.matrix),
+        ('cols', tables.cols),
+        ('obj', tables.obj),
+        ('rows', tables.rows),
+        ('A', tables.matrix),
     ):
         print(f'    {name:<20} {table.height:>4} rows')
     print('\n    cols/rows/A/obj = the LP itself, in COO form:')

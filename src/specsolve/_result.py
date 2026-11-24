@@ -235,7 +235,8 @@ class Diagnostics:
     """What the build looks like that the answer does not show: per entry, what it left out and how its numbers spread.
 
     Advisory, all of it: no answer depends on any field. What the build and
-    its solves cost is [`Model.metrics`][specsolve._api.Model.metrics].
+    its solves took is [`Model.metrics`][specsolve._api.Model.metrics], lap
+    by lap [`Model.timings`][specsolve._api.Model.timings].
     """
 
     #: ``(constraint, rows_not_built)`` — every declared row that did not reach

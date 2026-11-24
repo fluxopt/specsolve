@@ -29,7 +29,7 @@ from specsolve._engine.scope import join_on
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
 from specsolve._names import COEFF, CONSTANT, ROW
-from specsolve._sinks.handoff import SENSE
+from specsolve._sinks.tables import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
