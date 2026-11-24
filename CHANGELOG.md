@@ -9,7 +9,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 - feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
 - fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
-- feat(api): a handoff's laps split this package's work from the solver's ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
+- feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 
 ## 0.12.0 (2026-11-23)
 

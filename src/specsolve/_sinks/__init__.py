@@ -98,7 +98,7 @@ def loaded(
     [`structure`][specsolve._sinks.tables.SinkTables.structure], same options — and
     then the new numbers are pushed onto it. Otherwise it is closed, after
     *name* is resolved. *lap* ends a lap at each step: ``compare``, then
-    ``push``, or ``close`` and the new solver's own steps.
+    ``push``, or ``close`` and ``load``.
     """
     wanted = solver(name)
     step = lap or (lambda _: None)
@@ -111,7 +111,9 @@ def loaded(
             return held
         held.close()
         step('close')
-    return wanted(tables, solver_options, lap=lap)
+    fresh = wanted(tables, solver_options)
+    step('load')
+    return fresh
 
 
 def writer(suffix: str) -> Writer:

@@ -30,7 +30,7 @@ from specsolve._sinks.solver import (
 from specsolve._status import SolveStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     import polars as pl
 
@@ -96,7 +96,7 @@ class Xpress(Solver):
     capabilities = Capabilities(supports=frozenset({'integrality', 'sos'}))
 
     def _load(self, tables: SinkTables) -> None:
-        self._p = _built(tables, self._options, self._lap)
+        self._p = _built(tables, self._options)
 
     @property
     def handle(self) -> Any:
@@ -211,23 +211,18 @@ class Xpress(Solver):
             self._p = None
 
 
-def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]) -> Any:
+def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> Any:
     """The loaded problem: columns with no coefficients, then every linear row in one ``addRows`` call.
 
     ``outputlog`` leads the controls so a caller's options can put the log back.
-    *lap* ends a lap after each step, as the columns and then the rows are
-    laid out (``convert``) and handed over (``load``).
     """
     import numpy as np
 
     xpress = _xpress()
     p = xpress.problem()
     p.setControl({'outputlog': 0, **dict(solver_options or {})})
-    lap('load')
 
     cols = tables.dense_columns(xpress.infinity)
-    integral = np.flatnonzero(cols.integral)
-    lap('convert')
     p.addCols(
         objcoef=cols.cost,
         start=np.zeros(tables.column_count + 1, dtype=np.int64),
@@ -236,27 +231,27 @@ def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Ca
         lb=cols.lb,
         ub=cols.ub,
     )
-    if integral.size:
+    if cols.integral.any():
+        integral = np.flatnonzero(cols.integral)
         p.chgColType(integral, ['I'] * integral.size)
-    lap('load')
 
     rows = tables.dense_rows(xpress.infinity)
     spelling = spelled_senses(_XPRESS_SENSE)
     (linear,) = tables.row_chunks(None)
     coefficients = linear.coefficients
-    rowtype = spelling[rows.sense[: linear.height]].tolist()
-    starts = np.append(linear.starts, coefficients.height)
-    colind = coefficients[COL].to_numpy()
-    rowcoef = coefficients[COEFF].to_numpy()
-    lap('convert')
-    p.addRows(rowtype=rowtype, rhs=rows.rhs[: linear.height], start=starts, colind=colind, rowcoef=rowcoef)
+    p.addRows(
+        rowtype=spelling[rows.sense[: linear.height]].tolist(),
+        rhs=rows.rhs[: linear.height],
+        start=np.append(linear.starts, coefficients.height),
+        colind=coefficients[COL].to_numpy(),
+        rowcoef=coefficients[COEFF].to_numpy(),
+    )
 
     _add_sets(p, tables, xpress)
     if tables.objective_sense == 'maximize':
         p.chgObjSense(xpress.ObjSense.MAXIMIZE)
     if tables.objective_constant:
         p.chgObj([-1], [-tables.objective_constant])
-    lap('load')
     return p
 
 

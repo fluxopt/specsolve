@@ -31,7 +31,7 @@ from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     import polars as pl
 
@@ -117,7 +117,7 @@ class Gurobi(Solver):
     )
 
     def _load(self, tables: SinkTables) -> None:
-        self._m, self._env = _built(tables, self._options, self._lap)
+        self._m, self._env = _built(tables, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
     def dual_ray(self) -> pl.Series | None:
@@ -247,24 +247,19 @@ def _released(m: Any, environment: Any) -> None:
     environment.dispose()
 
 
-def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]) -> tuple[Any, Any]:
+def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any]:
     """The model and the environment to release.
 
     Options go on the environment, since a licence parameter such as
     ``WLSAccessID`` can only be set before an environment starts. ``OutputFlag``
-    leads so a caller can put the log back. *lap* ends a lap after each step:
-    ``load`` for the environment, ``convert`` and ``load`` around
-    ``loadModel``, and ``load`` for the sets and quadratic rows, whose calls
-    each lay out their own few vectors.
+    leads so a caller can put the log back.
     """
     gurobipy = _gurobipy()
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
-    lap('load')
     m = None
     try:
-        m = _loaded(tables, environment, gurobipy, lap)
+        m = _loaded(tables, environment, gurobipy)
         _completed(m, tables, gurobipy)
-        lap('load')
         return m, environment
     except BaseException:
         if m is not None:
@@ -273,7 +268,7 @@ def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Ca
         raise
 
 
-def _loaded(tables: SinkTables, environment: Any, gurobipy: Any, lap: Callable[[str], None]) -> Any:
+def _loaded(tables: SinkTables, environment: Any, gurobipy: Any) -> Any:
     """Columns, linear rows and the objective in one ``loadModel`` call.
 
     ``loadModel`` reads the matrix by column, so the linear rows' CSR is
@@ -294,10 +289,6 @@ def _loaded(tables: SinkTables, environment: Any, gurobipy: Any, lap: Callable[[
         shape=(linear.height, tables.column_count),
     ).tocsc()
     quad = tables.quad
-    vtype = np.where(cols.integral, 'I', 'C') if cols.integral.any() else None
-    sense = _spelled(gurobipy).astype('S1')[rows.sense[: linear.height]]
-    qobj = (quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy()))
-    lap('convert')
     m = gurobipy.loadModel(
         env=environment,
         numvars=tables.column_count,
@@ -307,14 +298,13 @@ def _loaded(tables: SinkTables, environment: Any, gurobipy: Any, lap: Callable[[
         obj=cols.cost,
         lb=cols.lb,
         ub=cols.ub,
-        vtype=vtype,
+        vtype=np.where(cols.integral, 'I', 'C') if cols.integral.any() else None,
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
-        sense=sense,
+        sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
         rhs=rows.rhs[: linear.height],
-        qobj_coo=qobj,
+        qobj_coo=(quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy())),
     )
     m.update()
-    lap('load')
     return m
 
 

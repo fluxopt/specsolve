@@ -31,7 +31,7 @@ from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     import numpy as np
     import polars as pl
@@ -68,9 +68,7 @@ _CONDITION_OF_HIGHS_STATUS = {
 _IIS_IRREDUCIBLE = 3
 
 
-def _built(
-    tables: SinkTables, solver_options: Mapping[str, Any] | None, lap: Callable[[str], None]
-) -> tuple[Any, ColumnVectors, RowVectors]:
+def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> tuple[Any, ColumnVectors, RowVectors]:
     """The populated `highspy.Highs`, and the column and row vectors it was loaded with.
 
     ``iis_strategy`` leads the caller's options: the default checks bounds
@@ -78,9 +76,7 @@ def _built(
     no error.
 
     The integrality vector spans every column even where none is integer: HiGHS
-    reads an empty one as whatever the memory held (1.15.1). *lap* ends a lap
-    after each step: ``load`` for the instance and its options, ``convert``
-    for every vector, ``load`` for ``passModel`` and the Hessian.
+    reads an empty one as whatever the memory held (1.15.1).
     """
     import highspy
     import numpy as np
@@ -102,7 +98,6 @@ def _built(
     h.setOptionValue('iis_strategy', int(strategy.kIisStrategyFromLp) | int(strategy.kIisStrategyIrreducible))
     for option, value in (solver_options or {}).items():
         h.setOptionValue(option, value)
-    lap('load')
 
     cols = tables.dense_columns(inf)
     rows = tables.dense_rows(inf)
@@ -110,11 +105,6 @@ def _built(
     sense = highspy.ObjSense.kMaximize if tables.objective_sense == 'maximize' else highspy.ObjSense.kMinimize
     empty_i = np.empty(0, dtype=np.int32)
     empty_f = np.empty(0, dtype=np.float64)
-    starts = tables.row_starts.astype(np.int32)
-    columns = tables.matrix[COL].to_numpy()
-    coefficients = tables.matrix[COEFF].to_numpy()
-    integrality = _integrality(cols)
-    lap('convert')
     _loaded(
         h,
         h.passModel(
@@ -131,18 +121,17 @@ def _built(
             cols.ub,
             rlb,
             rub,
-            starts,
-            columns,
-            coefficients,
+            tables.row_starts.astype(np.int32),
+            tables.matrix[COL].to_numpy(),
+            tables.matrix[COEFF].to_numpy(),
             empty_i,
             empty_i,
             empty_f,
-            integrality,
+            _integrality(cols),
         ),
         'the model',
     )
     _pass_hessian(h, tables)
-    lap('load')
     return h, cols, rows
 
 
@@ -229,7 +218,7 @@ class Highs(Solver):
     )
 
     def _load(self, tables: SinkTables) -> None:
-        self._handle, self._column_vectors, self._row_vectors = _built(tables, self._options, self._lap)
+        self._handle, self._column_vectors, self._row_vectors = _built(tables, self._options)
 
     @property
     def handle(self) -> Any:
