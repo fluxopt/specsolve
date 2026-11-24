@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 import yaml
 
-from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import comment, floor, plot, profile_build, profile_phases, report, results, tidy
 from bench import conftest as harness
 from bench import results as bench_results
 from bench.ab.compare import Row, Worker, _ask, chance, checkouts, compare, phase_table, same_model, table, verdict
@@ -1853,26 +1853,6 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
         assert floor_model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert floor_model.row_count == tables.row_count, 'the floor holds a different number of constraints'
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
-
-
-def test_a_started_master_reproduces_the_cold_answer() -> None:
-    """A start may move the route and never the optimum."""
-    run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
-    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the start would go unexercised'
-    for i, step in enumerate(run.steps):
-        assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
-            f'step {i}: a start moved the answer'
-        )
-
-
-def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
-    """A method moves the route and what the answer carries, never the optimum."""
-    rows = crossover.measured('dispatch', '2xs')
-    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
-    simplex = rows[0][2]
-    for method, _, objective, duals in rows:
-        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
-        assert duals, f'{method} left no duals, which an LP solved to optimality has'
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:

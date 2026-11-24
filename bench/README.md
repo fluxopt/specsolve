@@ -713,9 +713,7 @@ it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix moves, so every such update loads the solver
 again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
-name one; the other cases skip it. A `start=` changes only what the solver
-begins from, which moves the solve and not anything timed here;
-`bench/warm_payoff.py` is where a carried basis is weighed.
+name one; the other cases skip it. A `start=` changes only what the solver begins from, which moves the solve and not anything timed here.
 
 The clock stops at `Engine.handoff`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
@@ -771,45 +769,6 @@ worth knowing, and never under CodSpeed, whose instruments do not follow a
 child process. Its phase is `fresh`. `bench.report` prints it as the `fresh`
 table, and the page carries no fence for it, so the page publishes only the
 warm charts.
-
-## The warm-start payoff
-
-*Does carrying a basis across a genuine rebuild pay?* is the question #382 has
-to answer before the engine work is worth writing, and until this module there
-was nothing in the tree to answer it on: `examples/benders/run.py` is the only
-driver that rebuilds a model every iteration, and its master is 3 columns and
-25 rows, where a cold solve costs one simplex iteration.
-
-`bench/warm_payoff.py` is that missing case — a capacity-expansion Benders
-whose master is sized from data (`bench/expansion/*.yaml`), with the master
-solved three ways at every rebuild: cold, from the previous iteration's basis
-spliced per declaration, and from that basis merely truncated to the new
-height. The subproblem is a real dispatch LP and is deliberately *not* what is
-measured: `cap_hat * avail` reaches the rows as a right-hand side, so a new
-capacity pushes values onto the loaded solver and never rebuilds.
-
-```bash
-pixi run -e bench python -m bench.warm_payoff s m l --steps 400
-pixi run -e bench python -m bench.warm_payoff m --wall   # only on an idle box
-```
-
-**Simplex iterations are the measurement.** They are deterministic, so this
-ladder needs no idle machine, and they are the quantity a basis actually moves.
-`--wall` prints seconds and the load averages beside them, and carries none of
-the argument.
-
-It is **not an arm** — like `floor.py` it hardcodes one model, prints its own
-table and never touches the ladder's results files — and it is **not a
-feature**: no `src/` code carries a basis across a rebuild, and the splice
-lives here so that the evidence could be taken before the engine work was
-written. Its models sit under `bench/expansion/` rather than `bench/models/`,
-which `tests/test_bench_models.py` reserves for files backing a ladder case.
-
-The splice exists because **rows do not append**: a master with two cut
-families numbers rows per declaration, so a row gained by `optimality_cut`
-shifts every row of `feasibility_cut`. A wrong carry cannot produce a wrong
-answer — a basis moves the route, not the optimum — so the third arm is how the
-splice is shown to be worth its complication at all.
 
 ## The other question: regressions
 
@@ -1032,7 +991,6 @@ every consumer whichever of the two the case has.
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
-| `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
 | `ab/` | the A/B of two refs over a grid of models: does this change make the code faster, and does it build the same model |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
