@@ -7,6 +7,8 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
+- fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 
 ## 0.12.0 (2026-11-23)
