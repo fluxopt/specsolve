@@ -204,13 +204,13 @@ class Engine:
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
         self.check_sink(suffix)
-        chosen.write(self._model.handoff, path)
+        chosen.write(self._model.tables, path)
         self.lap('write')
 
     def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
-        Read off the handoff, so a square the data prices at zero or an
+        Read off the sink tables, so a square the data prices at zero or an
         integer variable with no column built asks for nothing. What
         [`solve`][] and [`write`][] refuse, this refuses, with the same
         message.
@@ -219,7 +219,7 @@ class Engine:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; or a name belonging to no sink.
         """
-        if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
+        if (refused := sinks.refusal(self._model.tables, sink)) is not None:
             raise SpecsolveError(refused)
 
     def handoff(
@@ -248,7 +248,7 @@ class Engine:
         self.check_sink(solver_name)
         self._solved = None
         held = self._solver
-        self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
+        self._solver = sinks.loaded(held, solver_name, self._model.tables, solver_options)
         reloaded = self._solver is not held
         if not reloaded and start != 'previous':
             self._solver.forget()
@@ -307,7 +307,7 @@ class Engine:
         counts[0] += 1
         if reloaded:
             counts[1] += 1
-        answer = solver.run(self._model.handoff, basis='basis' in outputs)
+        answer = solver.run(self._model.tables, basis='basis' in outputs)
         self.lap('solve')
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
@@ -482,12 +482,12 @@ class Engine:
             case 'reduced_cost':
                 if answer.primal is None or answer.dual is None:
                     return {}
-                return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+                return self._per_variable(readback.reduced_costs(self._model.tables, answer.primal, answer.dual))
             case 'slack':
                 return (
                     {}
                     if answer.activity is None
-                    else self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
+                    else self._per_constraint(readback.slacks(self._model.tables, answer.activity))
                 )
             case 'variable_basis':
                 return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))

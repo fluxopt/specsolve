@@ -44,7 +44,7 @@ from bench.ab.compare import (
 )
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
+from bench.arms.specsolve import TIMED_THROUGH, _tables, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
     _holder_if_alive,
@@ -1845,7 +1845,7 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
 
     sources = checked_sources(case, case.ladder[0].label, paths)
     with sps.build(case.spec, sources) as model:
-        tables = _handoff(model)
+        tables = _tables(model)
         assert floor_model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert floor_model.row_count == tables.row_count, 'the floor holds a different number of constraints'
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
@@ -2198,7 +2198,7 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
     prepared = module.prepare(case_name, 'xs', case.data(case.shape('xs')), {})
     args, kwargs = module.read_setup(prepared, into)
     model, answer, _ = args
-    assert answer.primal.len() == _handoff(model).column_count, 'the answer spans every built column'
+    assert answer.primal.len() == _tables(model).column_count, 'the answer spans every built column'
     assert (answer.dual is None) == bool(model._engine._discrete()), (
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
