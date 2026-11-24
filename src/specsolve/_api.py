@@ -567,10 +567,11 @@ class Model:
         a solver is handed. An entry's seconds are its own: they hold when the
         entries build in another order. The tidy's steps are ``read``, every
         path read at once; ``dimension`` and ``relation``, one row per entry;
-        ``parameter``, one row per parameter, checked and collected; and
-        ``check``, the refusal that needs every source read. The handoff's
-        steps are ``digest``,
-        the held solver's fingerprint of its model, read before a rebuild;
+        ``parameter``, one row per parameter, checked and collected, the
+        first also holding the relations' label checks and every parameter's
+        shaping; and ``check``, the refusal that needs every source read. The
+        handoff's steps are ``digest``, the held solver's fingerprint of its
+        model, read before a rebuild;
         ``start``, the ``start=`` matched to this build; ``check``, the solver
         checked to take the model; ``push``, the held solver kept and the new
         numbers pushed onto it, or ``instance``, a new solver instance given
