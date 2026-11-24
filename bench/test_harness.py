@@ -28,7 +28,20 @@ import pytest
 from bench import comment, floor, plot, profile_build, report, results, tidy
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, _ask, chance, checkouts, compare, phase_table, same_model, table, verdict
+from bench.ab.compare import (
+    RAW_SCHEMA,
+    Row,
+    Worker,
+    _ask,
+    chance,
+    checkouts,
+    compare,
+    phase_table,
+    raw,
+    same_model,
+    table,
+    verdict,
+)
 from bench.ab.grid import SHAPES, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
@@ -2433,6 +2446,27 @@ def test_a_memory_peak_is_of_a_process_that_built_once(
 def _timed_run(seconds: float, **phases: float) -> dict[str, Any]:
     """One worker answer: its total and the seconds it spent in each phase."""
     return {'seconds': seconds, 'calls': None, 'fingerprint': None, 'columns': 1, 'rows': 1, 'phases': phases}
+
+
+def test_the_raw_table_holds_every_number_the_report_takes_its_medians_from() -> None:
+    """A PR's table prints medians; the raw table keeps each round, paired, so two runs pool by a concat."""
+    base = [{'seconds': s, 'calls': None, 'peak_mb': 300.0, 'phases': {'build': s / 2}} for s in (0.10, 0.12, 0.11)]
+    head = [{'seconds': s, 'calls': None, 'peak_mb': 290.0, 'phases': {'build': s / 2}} for s in (0.08, 0.09, 0.07)]
+    numbers = raw([Row('grid-baseline-s', base=base, head=head)], base='b0', head='h0', op='build')
+
+    whole = numbers.filter(phase='', metric='seconds').sort('side', 'round')
+    assert whole['value'].to_list() == [0.10, 0.12, 0.11, 0.08, 0.09, 0.07], 'every round on each side, in order'
+    assert whole.filter(side='head', round=1)['value'].item() == head[1]['seconds'], (
+        'round pairs a head number with the base number measured beside it'
+    )
+    assert numbers.filter(phase='build').height == 6, 'each phase clock, every round, both sides'
+    assert numbers.filter(metric='calls').is_empty(), 'a number the worker did not produce is an absent row'
+    assert set(numbers['base']) == {'b0'} and set(numbers['op']) == {'build'}, 'each row names what it measured'
+
+
+def test_a_raw_table_of_nothing_still_has_its_columns() -> None:
+    """A run whose every cell errored writes a table another run still concatenates onto."""
+    assert dict(raw([], base='b0', head='h0', op='build').schema) == RAW_SCHEMA, 'the schema, not an empty frame'
 
 
 def _phase_lines(row: Row) -> dict[str, list[str]]:
