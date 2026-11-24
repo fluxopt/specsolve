@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
+- feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
 
 ## 0.12.0 (2026-11-23)
 
