@@ -571,8 +571,15 @@ class Model:
         stacked into one matrix in row order; and ``tables``, the rest of what
         a solver is handed. An entry's seconds are its own: they hold when the
         entries build in another order. An update that gives only new numbers
-        logs ``setup``, the entries it reads again and ``tables``. Elsewhere
-        both are null.
+        logs ``setup``, the entries it reads again and ``tables``. The
+        handoff's steps are ``digest``,
+        the held solver's fingerprint of its model, read before a rebuild;
+        ``start``, the ``start=`` matched to this build; ``check``, the solver
+        checked to take the model; ``push``, the held solver kept and the new
+        numbers pushed onto it, or ``instance``, a new solver instance given
+        the model, the held one closed; and ``warm``, the start given to the
+        solver, or its last solve forgotten. The same steps for every
+        solver. Elsewhere both are null.
         """
         return self._engine.timings()
 

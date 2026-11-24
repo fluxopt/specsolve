@@ -80,7 +80,8 @@ print(model.timings())
 - **`run` counts the results handed back before the lap.** Run 0 ends with
   the first result.
 - **`step` says what a lap did inside its phase, and `entry` names the entry
-  it built.** Only the build has steps. Elsewhere both are null.
+  it built.** The build and the handoff have steps. Elsewhere both are
+  null.
 - **The rows add up to the metrics.** A phase's rows sum to its clock in
   `model.metrics()`, and a run's rows to the `metrics` of the result that
   ends it.
@@ -102,6 +103,25 @@ order.
 An update that gives only new numbers at the old coordinates reads again
 just the entries those numbers feed. Its build logs `setup`, those entries
 and `tables`, with no `matrix` row, since the matrix stays as it was.
+
+## The steps of a handoff
+
+The handoff's rows name its steps, the same for every solver:
+
+```python exec="true" source="material-block" result="text" session="timings"
+print(model.timings().filter(phase='handoff').select('step', 'seconds'))
+```
+
+A first solve runs `start`, `check`, `instance` and `warm`. `start` matches
+your `start=` to this build, `check` checks the solver can take the model,
+`instance` is a new solver instance taking it, and `warm` gives the solver the
+start. The first `instance` in a process also imports the solver's package.
+
+A later solve keeps the solver it holds where only numbers moved, and `push`es
+them onto it; otherwise it closes it and takes a new `instance`. A `digest`
+row comes only from an `update` that rebuilds the model while a solver is held:
+the held solver reads its fingerprint of its model before the rebuild. Two
+solves with no `update` between them log no `digest`.
 
 ## Each solve of a loop
 
@@ -133,6 +153,7 @@ run holds the landing and the result does not.
 |---|---|
 | `solve` | [start from an earlier answer](faster.md#start-from-an-earlier-answer), [accept a gap](faster.md#accept-a-gap), and the ways after it |
 | `build` and `handoff`, again on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded) |
+| `handoff`, in `instance` on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded): only numbers may move |
 | `build` on many small models | [build many small models faster](faster.md#build-many-small-models-faster) |
 | `build` on a large model | the entry that holds the time, then [make the model smaller](faster.md#make-the-model-smaller) |
 

@@ -234,3 +234,69 @@ def test_a_lap_outside_a_step_names_none():
         solve = model.timings().filter(phase='solve')
     assert solve.height == 1, 'one solve, one lap'
     assert solve.select(pl.col('step', 'entry').is_null().all()).row(0) == (True, True), 'no step inside the solve'
+
+
+# ---------------------------------------------------------------------------
+# the handoff's steps
+# ---------------------------------------------------------------------------
+
+NUMBERS = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}
+
+
+def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
+    return model.timings().filter(phase='handoff', run=run).get_column('step').to_list()
+
+
+@pytest.mark.parametrize(
+    ('update', 'expected'),
+    [
+        pytest.param(None, ['start', 'check', 'instance', 'warm'], id='a-first-load'),
+        pytest.param(NUMBERS, ['digest', 'start', 'check', 'push', 'warm'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['digest', 'start', 'check', 'instance', 'warm'], id='a-reload'),
+    ],
+)
+def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expected):
+    """A handoff that loads logs one new ``instance``; one that keeps the solver pushes. Every solver alike."""
+    with sps.build(SPEC, DATA) as model:
+        model.solve(solver_name=solver_name)
+        run = 0
+        if update is not None:
+            model.update(update)
+            model.solve(solver_name=solver_name)
+            run = 1
+        steps = _handoff_steps(model, run)
+        handoff = model.timings().filter(phase='handoff').get_column('seconds').sum()
+        whole = model.metrics().handoff_seconds
+    assert steps == expected, 'every step of the handoff, in the order it took them'
+    assert handoff == pytest.approx(whole, rel=1e-12), 'and the handoff still adds up'
+
+
+@pytest.mark.parametrize(
+    ('owner', 'slowed', 'step'),
+    [
+        pytest.param('engine', 'Engine._matched_start', 'start', id='matching-a-start'),
+        pytest.param('engine', 'Engine.check_sink', 'check', id='checking-the-solver'),
+        pytest.param('sinks', 'Highs._load', 'instance', id='loading-a-new-solver'),
+    ],
+)
+def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowed, step):
+    """Ten seconds added to one step of a handoff land in that step's row and in no other."""
+    from specsolve._sinks.highs import Highs
+
+    added = [0.0]
+    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    cls = {'engine': engine.Engine, 'sinks': Highs}[owner]
+    name = slowed.split('.')[1]
+    real = getattr(cls, name)
+
+    def slow(*args, **kwargs):
+        added[0] += 10.0
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(cls, name, slow)
+    with sps.build(SPEC, DATA) as model:
+        model.solve(start=model.solve() if step == 'start' else 'previous')
+        took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
+    took = dict(took.iter_rows())
+    assert took[step] >= 10.0, f'the slowed step lands in {step}'
+    assert max(s for name, s in took.items() if name != step) < 10.0, 'and in no other step'
