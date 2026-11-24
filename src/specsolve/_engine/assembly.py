@@ -161,14 +161,14 @@ class Assembly:
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        return self._timed('tables', None, self._frozen, cols, sets, built, objective, matrix, matrix_starts)
+        return self._timed('tables', None, self._built, cols, sets, built, objective, matrix, matrix_starts)
 
     def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
         """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
 
-    def _frozen(
+    def _built(
         self,
         cols: list[pl.DataFrame],
         sets: list[pl.DataFrame],
@@ -177,7 +177,7 @@ class Assembly:
         matrix: pl.DataFrame,
         matrix_starts: _RowStarts,
     ) -> BuiltModel:
-        """Every entry's share stacked into the tables a sink drains, *matrix* among them, and the build frozen on them."""
+        """Every entry's share stacked into the tables a sink drains, *matrix* among them, in the [`BuiltModel`][] that holds them."""
         handoff = sinks.Handoff(
             cols=_stack(cols, _COLS),
             obj=_stack([objective] if objective is not None else [], _OBJ),
