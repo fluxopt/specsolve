@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): the diagnostics say what each entry took to build ([#2206](https://github.com/fluxopt/specsolve/pull/2206)).
+- feat(api): the diagnostics say what each entry took to build ([#2206](https://github.com/fluxopt/specsolve/pull/2206))
 
 ## 0.12.0 (2026-11-23)
 
