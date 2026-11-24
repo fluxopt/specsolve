@@ -161,14 +161,14 @@ class Assembly:
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        return self._timed('tables', None, self._built, cols, sets, built, objective, matrix, matrix_starts)
+        return self._timed('tables', None, self._model, cols, sets, built, objective, matrix, matrix_starts)
 
     def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
         """Every constraint's share stacked into one matrix in ``(row, col)`` order, and each row's first coefficient."""
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         return stacked.select(COL, COEFF).rechunk(), _row_starts(stacked, self.n_rows)
 
-    def _built(
+    def _model(
         self,
         cols: list[pl.DataFrame],
         sets: list[pl.DataFrame],
