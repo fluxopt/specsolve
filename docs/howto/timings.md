@@ -79,8 +79,8 @@ print(model.timings())
 
 - **`run` counts the results handed back before the lap.** Run 0 ends with
   the first result.
-- **`kind` and `entry` name a step inside a phase.** Only the build has steps.
-  Elsewhere both are null.
+- **`step` says what a lap did inside its phase, and `entry` names the entry
+  it built.** Only the build has steps. Elsewhere both are null.
 - **The rows add up to the metrics.** A phase's rows sum to its clock in
   `model.metrics()`, and a run's rows to the `metrics` of the result that
   ends it.
@@ -94,10 +94,11 @@ time:
 print(model.timings().filter(phase='build').sort('seconds', descending=True))
 ```
 
-The build's rows follow it: `setup`, one row per variable, set, constraint and
-the objective, then `matrix`, which stacks every constraint into one matrix,
-and `tables`, the rest of what the solver is handed. An entry's seconds are
-its own: they hold when the entries build in another order.
+The build's steps follow it: `setup`, one `variable`, `set` or `constraint`
+row per entry, the `objective`, then `matrix`, which stacks every constraint
+into one matrix, and `tables`, the rest of what the solver is handed. An
+entry's seconds are its own: they hold when the entries build in another
+order.
 
 ## Each solve of a loop
 

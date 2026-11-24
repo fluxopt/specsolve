@@ -115,7 +115,7 @@ class Assembly:
         program: program.Program,
         attached: AttachedSources,
         measured: Measured,
-        lap: Callable[[str, str], None],
+        lap: Callable[[str, str | None], None],
     ) -> None:
         self.program = program
         self.lap = lap
@@ -143,7 +143,7 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            self.lap('model', 'setup')
+            self.lap('setup', None)
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
@@ -155,13 +155,13 @@ class Assembly:
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
             built = [self._timed('constraint', name, self._build_constraint, name, c) for name, c in ordered]
             o = self.program.objective
-            objective = None if o is None else self._timed('objective', 'objective', self._build_objective, o)
+            objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
-        matrix, matrix_starts = self._timed('model', 'matrix', self._matrix, built)
+        matrix, matrix_starts = self._timed('matrix', None, self._matrix, built)
         self.measured.columns = self.n_cols
         self.measured.rows = self.n_rows
         self.measured.nonzeros = matrix.height
-        handoff = self._timed('model', 'tables', self._handoff, cols, sets, built, objective, matrix, matrix_starts)
+        handoff = self._timed('tables', None, self._handoff, cols, sets, built, objective, matrix, matrix_starts)
         return BuiltModel(self.program, self.attached, self.variables, self.constraints, handoff)
 
     def _matrix(self, built: list[_ConstraintShare]) -> tuple[pl.DataFrame, _RowStarts]:
@@ -195,18 +195,18 @@ class Assembly:
         )
 
     def _timed(
-        self, kind: str, name: str, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
+        self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
     ) -> _Built:
-        """*build* on *args*, then a lap of the build named ``(kind, name)``, even if it raises.
+        """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 
         Each entry collects its own share before it returns, so the seconds are
         its own and do not move with the order entries build in. Stacking the
-        shares into the model is timed the same way, as the ``model`` rows.
+        shares into the model is timed the same way, as ``matrix`` and ``tables``.
         """
         try:
             return build(*args, **kwargs)
         finally:
-            self.lap(kind, name)
+            self.lap(step, entry)
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.

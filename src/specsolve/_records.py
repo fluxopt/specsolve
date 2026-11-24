@@ -277,7 +277,7 @@ METRICS_SCHEMA = _column_types(Metrics)
 TIMINGS_SCHEMA = {
     'run': pl.UInt32,
     'phase': pl.String,
-    'kind': pl.String,
+    'step': pl.String,
     'entry': pl.String,
     'seconds': pl.Float64,
 }

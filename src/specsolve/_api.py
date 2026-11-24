@@ -556,18 +556,19 @@ class Model:
         return self._engine.metrics()
 
     def timings(self) -> pl.DataFrame:
-        """Every lap of this model's life, one row each: ``(run, phase, kind, entry, seconds)``.
+        """Every lap of this model's life, one row each: ``(run, phase, step, entry, seconds)``.
 
         Each lap begins where the one before it ended, so the rows of a phase
         add up to its ``*_seconds`` in [`metrics`][], and the rows of a run to
         what the model took between handing back two results. ``run`` counts
         the results handed back before the lap: ``0`` up to the first.
-        ``kind`` and ``entry`` name a step inside a phase where it has steps:
-        the build's ``model``/``setup``, one row per variable, set, constraint
-        and the objective, then ``model``/``matrix``, every constraint's share
-        stacked into one matrix in row order, and ``model``/``tables``, the
-        rest of what a solver is handed. An entry's seconds are its own: they
-        hold when the entries build in another order. Elsewhere both are null.
+        ``step`` says what a lap did inside a phase that has steps, and
+        ``entry`` names the entry it built. The build's steps are ``setup``;
+        ``variable``, ``set`` and ``constraint``, one row per entry; the
+        ``objective``, which has no name; ``matrix``, every constraint's share
+        stacked into one matrix in row order; and ``tables``, the rest of what
+        a solver is handed. An entry's seconds are its own: they hold when the
+        entries build in another order. Elsewhere both are null.
         """
         return self._engine.timings()
 

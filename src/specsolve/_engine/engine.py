@@ -114,7 +114,7 @@ class Engine:
         #: What the last solve concluded, or ``None`` once a load, a build or
         #: [`close`][] has changed what the solver holds.
         self._solved: SolveStatus | None = None
-        #: Every lap of this model's life, in order: ``(run, phase, kind, entry, seconds)``.
+        #: Every lap of this model's life, in order: ``(run, phase, step, entry, seconds)``.
         self._log = _Laps()
         #: Per run, how many solves it took and how many solver instances they took.
         self._counts: list[list[int]] = [[0, 0]]
@@ -132,19 +132,19 @@ class Engine:
         """Begin a call: the next [`lap`][] measures from now."""
         self._mark = perf_counter()
 
-    def lap(self, phase: str, kind: str | None = None, entry: str | None = None) -> None:
+    def lap(self, phase: str, step: str | None = None, entry: str | None = None) -> None:
         """Log the wall time since the last lap, or since [`start`][], under *phase*, one of ``PHASES``.
 
         Each lap begins where the one before it ended, so the laps of a call
         add up to the whole call, and a step between two named steps is in the
-        lap after it. *kind* and *entry* name the step inside *phase*, as the
+        lap after it. *step* names what the lap did inside *phase*, as the
         build names each entry. The steps outside the engine lap here too, so
         the log holds every phase of the model's life. A call that raises
         keeps the laps it finished.
         """
         assert phase in PHASES, f'{phase!r} is not a phase, so no Metrics column would carry its clock'
         now = perf_counter()
-        self._log.append(len(self._counts) - 1, phase, kind, entry, now - self._mark)
+        self._log.append(len(self._counts) - 1, phase, step, entry, now - self._mark)
         self._mark = now
 
     def next_run(self) -> None:
@@ -152,7 +152,7 @@ class Engine:
         self._counts.append([0, 0])
 
     def timings(self) -> pl.DataFrame:
-        """Every lap of this model's life, one row each: ``(run, phase, kind, entry, seconds)``."""
+        """Every lap of this model's life, one row each: ``(run, phase, step, entry, seconds)``."""
         return self._log.table()
 
     # ------------------------------------------------------------------
@@ -590,7 +590,7 @@ class Engine:
 class _Laps:
     """The engine's log of laps, held as columns so a long-lived model's log stays small.
 
-    Each step, ``(phase, kind, entry)``, is stored once and a lap holds its
+    Each step, ``(phase, step, entry)``, is stored once and a lap holds its
     number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
     Runs only grow along the log, so a run's laps are read back from its end.
     """
@@ -601,9 +601,9 @@ class _Laps:
         self._codes = array('I')
         self._seconds = array('d')
 
-    def append(self, run: int, phase: str, kind: str | None, entry: str | None, seconds: float) -> None:
+    def append(self, run: int, phase: str, step: str | None, entry: str | None, seconds: float) -> None:
         self._runs.append(run)
-        self._codes.append(self._steps.setdefault((phase, kind, entry), len(self._steps)))
+        self._codes.append(self._steps.setdefault((phase, step, entry), len(self._steps)))
         self._seconds.append(seconds)
 
     def clocks(self, run: int | None = None) -> dict[str, float]:
@@ -628,7 +628,7 @@ class _Laps:
         codes = pl.Series(np.frombuffer(self._codes, dtype=np.uint32).copy())
         named = {
             column: pl.Series([step[i] for step in steps], dtype=pl.String).gather(codes)
-            for i, column in enumerate(('phase', 'kind', 'entry'))
+            for i, column in enumerate(('phase', 'step', 'entry'))
         }
         return pl.DataFrame(
             {

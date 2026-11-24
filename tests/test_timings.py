@@ -29,14 +29,14 @@ DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0
 GROWN = {'t': [0, 1, 2, 3], 'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [5.0, 4.0, 6.0, 1.0]})}
 
 BUILD = [
-    ('model', 'setup'),
+    ('setup', None),
     ('variable', 'p'),
     ('variable', 'q'),
     ('constraint', 'balance'),
     ('constraint', 'cap'),
-    ('objective', 'objective'),
-    ('model', 'matrix'),
-    ('model', 'tables'),
+    ('objective', None),
+    ('matrix', None),
+    ('tables', None),
 ]
 
 
@@ -54,7 +54,7 @@ def test_a_build_logs_its_setup_each_entry_and_its_stacking_in_build_order():
     """The build phase's rows name the step: the setup, each entry, then the two stacking steps."""
     with sps.build(SPEC, DATA) as model:
         build = model.timings().filter(phase='build')
-    assert build.select('kind', 'entry').rows() == BUILD, 'every step once, in the order the build takes them'
+    assert build.select('step', 'entry').rows() == BUILD, 'every step once, in the order the build takes them'
     assert build.get_column('seconds').min() > 0, 'every step took some time'
 
 
@@ -84,7 +84,7 @@ def test_each_run_adds_up_to_the_result_it_handed_back():
         assert _by_phase(timings.filter(run=run)) == pytest.approx(_clocks(result.metrics), rel=1e-12), (
             f'run {run} is its result'
         )
-    assert timings.filter(run=2, phase='build', entry='setup').height == 2, (
+    assert timings.filter(run=2, phase='build', step='setup').height == 2, (
         'two builds before the third solve, both logged'
     )
 
@@ -127,7 +127,7 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 
     monkeypatch.setattr(assembly.Assembly, '_build_constraint', slow)
     with sps.build(SPEC, DATA) as model:
-        took = dict(model.timings().filter(phase='build').select('entry', 'seconds').iter_rows())
+        took = dict(model.timings().filter(phase='build').select(pl.coalesce('entry', 'step'), 'seconds').iter_rows())
     assert took['cap'] >= 10.0, 'the slowed constraint carries its delay'
     assert max(s for entry, s in took.items() if entry != 'cap') < 10.0, 'and no other entry does'
 
@@ -154,7 +154,7 @@ def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, modul
 
     monkeypatch.setattr(owner, slowed, slow)
     with sps.build(SPEC, DATA) as model:
-        took = dict(model.timings().filter(phase='build').select('entry', 'seconds').iter_rows())
+        took = dict(model.timings().filter(phase='build').select(pl.coalesce('entry', 'step'), 'seconds').iter_rows())
     assert took[row] >= 10.0, f'the slowed step lands in the {row} row'
     assert max(s for entry, s in took.items() if entry != row) < 10.0, 'and in no other row'
 
@@ -172,7 +172,7 @@ def test_a_build_that_raises_keeps_the_laps_it_reached(monkeypatch):
         monkeypatch.setattr(assembly.Assembly, '_build_constraint', fails)
         with pytest.raises(RuntimeError, match='the build fails here'):
             model.update(DATA)
-        rebuilt = model.timings().filter(phase='build', run=0).select('kind', 'entry').rows()[len(BUILD) :]
+        rebuilt = model.timings().filter(phase='build', run=0).select('step', 'entry').rows()[len(BUILD) :]
     assert rebuilt == BUILD[:5], 'the second build logs up to the entry that raised, it included, and nothing after'
 
 
@@ -180,14 +180,14 @@ def test_a_model_with_no_objective_logs_no_objective_row():
     """Nothing was built for an objective the spec does not declare."""
     spec = {k: v for k, v in SPEC.items() if k != 'objective'}
     with sps.build(spec, DATA) as model:
-        kinds = model.timings().filter(phase='build').get_column('kind').to_list()
-    assert 'objective' not in kinds, 'no row for an objective that was never built'
+        steps = model.timings().filter(phase='build').get_column('step').to_list()
+    assert 'objective' not in steps, 'no row for an objective that was never built'
 
 
 def test_a_lap_outside_a_step_names_none():
-    """A phase that has no steps logs its laps with ``kind`` and ``entry`` null."""
+    """A phase that has no steps logs its laps with ``step`` and ``entry`` null."""
     with sps.build(SPEC, DATA) as model:
         model.solve()
         solve = model.timings().filter(phase='solve')
     assert solve.height == 1, 'one solve, one lap'
-    assert solve.select(pl.col('kind', 'entry').is_null().all()).row(0) == (True, True), 'no step inside the solve'
+    assert solve.select(pl.col('step', 'entry').is_null().all()).row(0) == (True, True), 'no step inside the solve'
