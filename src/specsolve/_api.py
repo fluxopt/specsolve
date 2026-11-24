@@ -190,9 +190,6 @@ class Model:
 
     def __init__(self, spec: SpecLike, sources: Mapping[str, Source]) -> None:
         self._engine = Engine()
-        #: The model's metrics when its last answer was handed back, which the
-        #: next answer's share runs from; ``None`` before the first.
-        self._handed_back: Metrics | None = None
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
         self._engine.lap('load')
@@ -375,13 +372,12 @@ class Model:
         answered = replace(answered, _metrics=self._share())
         if out is not None:
             answered = self._archive(out, answered)
-        self._handed_back = self._engine.metrics()
+        self._engine.next_run()
         return answered
 
     def _share(self) -> Metrics:
         """What the model took since its last answer was handed back: the answer about to be handed back's row."""
-        now = self._engine.metrics()
-        return now if self._handed_back is None else now.since(self._handed_back)
+        return self._engine.metrics(run=self._engine.run)
 
     def _with_record_fields(
         self,
@@ -417,8 +413,8 @@ class Model:
         """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
 
         The metrics row is the last member written, so its ``archive_seconds``
-        covers every other one; writing and landing it are in [`metrics`][]
-        alone.
+        covers every other one; writing and landing it are in its run of
+        [`timings`][] and in [`metrics`][], not in the row.
         """
         recorded = answered.metrics
 
@@ -553,13 +549,30 @@ class Model:
         """This model's size, counters and clocks over its whole life, taken now.
 
         ``solves`` counts every solve, and each clock sums every lap of its
-        phase, so the [`metrics`][specsolve.types.Result.metrics] of every
-        result this model handed back add up to it, but for whatever came
-        after the last one and the landing of each archive. Answerable after
-        [`close`][], and after a build that raised, which leaves the sizes
-        at zero.
+        phase in [`timings`][]. A result's
+        [`metrics`][specsolve.types.Result.metrics] is its run's, frozen when
+        it was handed back, so an archive's landing, which comes after, is in
+        the run here and not in the result. Answerable after [`close`][], and
+        after a build that raised, which leaves the sizes at zero.
         """
         return self._engine.metrics()
+
+    def timings(self) -> pl.DataFrame:
+        """Every lap of this model's life, one row each: ``(run, phase, step, entry, seconds)``.
+
+        Each lap begins where the one before it ended, so the rows of a phase
+        add up to its ``*_seconds`` in [`metrics`][], and the rows of a run to
+        what the model took between handing back two results. ``run`` counts
+        the results handed back before the lap: ``0`` up to the first.
+        ``step`` says what a lap did inside a phase that has steps, and
+        ``entry`` names the entry it built. The build's steps are ``setup``;
+        ``variable``, ``set`` and ``constraint``, one row per entry; the
+        ``objective``, which has no name; ``matrix``, every constraint's share
+        stacked into one matrix in row order; and ``tables``, the rest of what
+        a solver is handed. An entry's seconds are its own: they hold when the
+        entries build in another order. Elsewhere both are null.
+        """
+        return self._engine.timings()
 
     def diagnostics(self) -> Diagnostics:
         """What the build looks like that the answer does not show: what it left out and how its numbers spread.

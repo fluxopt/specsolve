@@ -1,6 +1,6 @@
 """The ``gurobi`` sink, against the ``highs`` sink.
 
-Two sinks loading one :class:`Handoff` must produce the same model, so the
+Two sinks loading one :class:`SinkTables` must produce the same model, so the
 assertions here are agreements. Where a value is asserted it comes from
 ``examples/ports/references.json``, somebody else's published optimum.
 
@@ -160,7 +160,7 @@ def test_solver_options_land_on_the_environment() -> None:
     """
     with (
         sps.build(*CASES['MIP']) as model,
-        Gurobi(model._engine._model.handoff, solver_options={'TimeLimit': 5.0}) as solver,
+        Gurobi(model._engine._model.tables, solver_options={'TimeLimit': 5.0}) as solver,
     ):
         assert solver.handle.Params.TimeLimit == 5.0
 
@@ -169,7 +169,7 @@ def test_constructing_gurobi_loads_the_model_and_stops() -> None:
     """What `bench/` measures: the handoff with no search behind it, so what it
     reports is what was loaded rather than what was solved."""
     with sps.build(*CASES['MIP']) as model:
-        tables = model._engine._model.handoff
+        tables = model._engine._model.tables
         with Gurobi(tables) as solver:
             m = solver.handle
             assert (m.NumVars, m.NumConstrs) == (tables.column_count, tables.row_count)
@@ -186,7 +186,7 @@ def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
     a model the caller still holds, where a refcount could not release it.
     """
     with sps.build(*CASES['MIP']) as model:
-        solver = Gurobi(model._engine._model.handoff)
+        solver = Gurobi(model._engine._model.tables)
         m = solver.handle
         del solver
         gc.collect()
@@ -197,7 +197,7 @@ def test_a_dropped_solver_disposes_the_model_it_holds() -> None:
 def test_close_disposes_a_model_the_caller_still_holds() -> None:
     """``close()`` is the release, not a hint to the collector — and it is idempotent."""
     with sps.build(*CASES['MIP']) as model:
-        solver = Gurobi(model._engine._model.handoff)
+        solver = Gurobi(model._engine._model.tables)
         m = solver.handle
         solver.close()
         solver.close()
@@ -228,7 +228,7 @@ def test_a_load_that_fails_releases_its_environment(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(sink, step, lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
     with sps.build(*CASES['MIP']) as model:
         try:
-            Gurobi(model._engine._model.handoff)
+            Gurobi(model._engine._model.tables)
         except RuntimeError:
             events.append('error left')
     assert events[:2] == ['env disposed', 'error left'], (
@@ -250,7 +250,7 @@ def test_a_load_that_fails_after_the_model_exists_frees_the_model(monkeypatch: p
     monkeypatch.setattr(sink, '_loaded', keep)
     monkeypatch.setattr(sink, '_completed', lambda *args: (_ for _ in ()).throw(RuntimeError('mid-load')))
     with sps.build(*CASES['MIP']) as model, pytest.raises(RuntimeError):
-        Gurobi(model._engine._model.handoff)
+        Gurobi(model._engine._model.tables)
     with pytest.raises(gurobipy.GurobiError, match='freed'):
         loaded[0].getAttr('NumVars')
 
@@ -271,8 +271,8 @@ def test_a_model_with_no_set_and_no_quadratic_row_never_reads_the_variable_list(
 
     monkeypatch.setattr(sink, '_add_sets', refused)
     monkeypatch.setattr(sink, '_add_quadratic_rows', refused)
-    with sps.build(*CASES['MIP']) as model, Gurobi(model._engine._model.handoff) as loaded:
-        assert loaded.handle.NumVars == model._engine._model.handoff.column_count
+    with sps.build(*CASES['MIP']) as model, Gurobi(model._engine._model.tables) as loaded:
+        assert loaded.handle.NumVars == model._engine._model.tables.column_count
 
 
 def test_a_push_into_a_linear_model_leaves_the_objective_to_the_costs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -306,7 +306,7 @@ def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
         'objective': {'sense': 'minimize', 'expression': 'sum(p + q, over=g)'},
     }
     with sps.build(spec, {'g': ['a', 'b']}) as model:
-        tables = model._engine._model.handoff
+        tables = model._engine._model.tables
         with Gurobi(tables, solver_options={'InfUnbdInfo': 1}) as sink:
             assert sink.run(tables).status.termination_condition == 'infeasible'
             assert sink.dual_ray() is None
@@ -314,9 +314,9 @@ def test_an_infeasible_model_with_a_quadratic_row_has_no_dual_ray() -> None:
 
 def test_the_objective_constant_rides_on_the_model_not_the_answer() -> None:
     """Gurobi has ``ObjCon``, so the constant is part of the model it holds —
-    which makes the build a complete handoff rather than a model plus a
+    which makes the sink tables a complete model rather than a model plus a
     number to remember."""
-    with sps.build(*CASES['MAX']) as model, Gurobi(model._engine._model.handoff) as solver:
+    with sps.build(*CASES['MAX']) as model, Gurobi(model._engine._model.tables) as solver:
         assert solver.handle.ObjCon == pytest.approx(5.0)
 
 

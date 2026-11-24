@@ -330,8 +330,8 @@ def test_a_update_walk_answers_what_a_fresh_build_answers(port):
                 )
 
 
-def _same_handoff(got: Any, want: Any, where: str) -> None:
-    """Two handoffs hold the same model: every table alike, a sum in another order alike to its last bits."""
+def _same_tables(got: Any, want: Any, where: str) -> None:
+    """Two sets of sink tables hold the same model: every table alike, a sum in another order alike to its last bits."""
     for table in ('cols', 'rows', 'matrix', 'qmatrix', 'quad', 'sos'):
         assert_frame_equal(getattr(got, table), getattr(want, table), rel_tol=1e-12, abs_tol=0.0)
     assert_frame_equal(got.obj.sort(COL), want.obj.sort(COL), rel_tol=1e-12, abs_tol=0.0)
@@ -351,7 +351,7 @@ def _same_diagnostics(model: Any, reference: Any, where: str) -> None:
 
 
 def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monkeypatch):
-    """Each real-valued parameter of a port, its numbers changed alone, gives the handoff and diagnostics a fresh build gives.
+    """Each real-valued parameter of a port, its numbers changed alone, gives the tables and diagnostics a fresh build gives.
 
     Whichever way the update went: a parameter that feeds only bounds,
     constant sides, linear coefficients and the objective is read again on the old indices
@@ -368,9 +368,9 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
     real = engine_module.spliced_model
     took: list[str] = []
 
-    def spy(built: Any, attached: Any, changed: Any, measured: Any) -> Any:
+    def spy(built: Any, attached: Any, changed: Any, measured: Any, lap: Any) -> Any:
         took.extend(changed)
-        return real(built, attached, changed, measured)
+        return real(built, attached, changed, measured, lap)
 
     monkeypatch.setattr(engine_module, 'spliced_model', spy)
     with sps.build(spec, given) as model:
@@ -385,7 +385,7 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
             with reference:
                 model.update(change)
                 where = f'{port["name"]} {name}'
-                _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, where)
+                _same_tables(model._engine._model.tables, reference._engine._model.tables, where)
                 _same_diagnostics(model, reference, where)
             model.update({name: value})
 
@@ -464,7 +464,7 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
 
     A parameter a `where` reads changes which columns or rows exist; so do new
     coordinates or new labels. Each of those builds in full. Either way the
-    handoff is a fresh build's. A coefficient falling to zero leaves the
+    tables are a fresh build's. A coefficient falling to zero leaves the
     matrix, on the old indices, and the coefficients after it move up.
     """
     from specsolve._engine import engine as engine_module
@@ -482,7 +482,7 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | new) as reference:
         model.solve()
         model.update(new)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, str(change))
         assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
         assert bool(took) is spliced, f'the update {"skipped" if took else "ran"} the build'
         assert model.metrics().solver_instances == loads, (
@@ -501,7 +501,7 @@ def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
     monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
         model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'eff on a quadratic row')
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'eff on a quadratic row')
     assert not took, 'a quadratic row was read again on the old indices'
 
 
@@ -579,7 +579,7 @@ def test_a_parameter_that_picks_which_coefficients_exist_is_built_again(monkeypa
     monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
         model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, str(change))
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, str(change))
     assert not took, 'a parameter that decides which coefficients exist was read again on the old indices'
 
 
@@ -599,7 +599,7 @@ def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
     monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
         model.update(change)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'cap moved to b')
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'cap moved to b')
     assert not took, 'other coordinates were read again on the old indices'
 
 
@@ -659,7 +659,7 @@ def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch
 def _tables(spec: Any) -> Any:
     """*model*'s solver tables, read off it built on the reach data."""
     with sps.build(spec, reach_sources()) as built:
-        return built._engine._model.handoff
+        return built._engine._model.tables
 
 
 #: The three fields of the digest **no rung above can reach**: a variable's
@@ -703,12 +703,12 @@ def _hashes(monkeypatch) -> list[int]:
     A plain property in place of the `cached_property`, so one object asked
     twice counts twice. Each count below is one object asked once.
     """
-    from specsolve._sinks.handoff import Handoff
+    from specsolve._sinks.tables import SinkTables
 
     taken: list[int] = []
-    real = Handoff.structure.func
+    real = SinkTables.structure.func
     monkeypatch.setattr(
-        Handoff,
+        SinkTables,
         'structure',
         property(lambda self: (taken.append(1), real(self))[1]),
     )
@@ -764,7 +764,7 @@ def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     the new model's too, since only numbers changed.
     """
     model.solve()
-    released = weakref.ref(model._engine._model.handoff.rows)
+    released = weakref.ref(model._engine._model.tables.rows)
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [12.0, 22.0, 32.0, 42.0]})})
     gc.collect()
     assert released() is None, "the rebuilt-over model's rows are still reachable, so the solver kept a whole model"
@@ -1063,13 +1063,13 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     given = reach_sources()
     with sps.build(REACH, given) as model:
         model.solve()
-        before = model._engine._model.handoff.obj.height
+        before = model._engine._model.tables.obj.height
         assert model.metrics().solver_instances == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
         updated = model.update({'cost': zeroed}).solve()
 
-        assert model._engine._model.handoff.obj.height == before - 1, (
+        assert model._engine._model.tables.obj.height == before - 1, (
             'the zero cost should have left the objective table'
         )
         assert model.metrics().solver_instances == 1, 'a cost is pushed, so a cost falling to zero may not reload'
@@ -1123,7 +1123,7 @@ def test_a_splice_reads_nothing_for_an_entry_without_an_index(monkeypatch):
         monkeypatch.setattr(assembly_module.Assembly, '_terms', spied_terms)
         monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
         model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'floor and ceiling')
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'floor and ceiling')
     assert not {'idle', 'unmet'} & set(read), f'the splice read {sorted(set(read))}, which hold no index'
 
 
@@ -1156,4 +1156,4 @@ def test_a_flag_the_build_settled_builds_again_when_it_changes(overrides):
     off = {'on': ROLE_DATA['on'].with_columns(pl.Series('value', [0.0, 0.0]))}
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | off) as reference:
         model.update(off)
-        _same_handoff(model._engine._model.handoff, reference._engine._model.handoff, 'on switched off')
+        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'on switched off')
