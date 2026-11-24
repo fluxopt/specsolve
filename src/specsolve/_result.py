@@ -278,10 +278,11 @@ class Diagnostics:
     #: order: ``model``/``setup``, which reads [`sparse_parameters`][]; a row per
     #: variable, set, constraint and the objective; then ``model``/``matrix``,
     #: every constraint's share stacked into one matrix in row order, and
-    #: ``model``/``tables``, the rest of what a solver is handed. The rows add
-    #: up to ``build_seconds`` in [`Model.metrics`][specsolve._api.Model.metrics].
-    #: An entry's seconds are its own: they hold when the entries build in
-    #: another order.
+    #: ``model``/``tables``, the rest of what a solver is handed. The rows are
+    #: the last build's and add up to its ``build`` lap: the
+    #: ``build_seconds`` of the result it led to, where one build did. A build
+    #: that raised keeps the rows it reached. An entry's seconds are its own:
+    #: they hold when the entries build in another order.
     build_seconds: pl.DataFrame
 
 

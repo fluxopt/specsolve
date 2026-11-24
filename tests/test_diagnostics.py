@@ -457,6 +457,57 @@ def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, modul
     assert max(s for entry, s in took.items() if entry != row) < 10.0, 'and in no other row'
 
 
+GROWN = {'t': [0, 1, 2, 3], 'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [5.0, 4.0, 6.0, 1.0]})}
+
+
+def test_the_rows_are_the_last_build_and_add_up_to_the_result_it_led_to():
+    """After a rebuild the table is the new build's, and the result that build led to carries the same seconds."""
+    with sps.build(TIMED_SPEC, TIMED_DATA) as model:
+        model.solve()
+        model.update(GROWN)
+        result = model.solve()
+        rows = model.diagnostics().build_seconds.get_column('seconds').sum()
+        whole = model.metrics().build_seconds
+    assert rows == pytest.approx(result.metrics.build_seconds, rel=1e-12), 'the table is the build this result followed'
+    assert rows < whole, "and not the model's whole life, which holds both builds"
+
+
+def test_two_builds_before_one_solve_leave_the_table_the_last_one():
+    """A result holds every build since the previous one; the table holds only the last."""
+    with sps.build(TIMED_SPEC, TIMED_DATA) as model:
+        model.solve()
+        model.update(GROWN)
+        model.update(TIMED_DATA)
+        result = model.solve()
+        rows = model.diagnostics().build_seconds.get_column('seconds').sum()
+    assert rows < result.metrics.build_seconds, 'the result carries both builds, the table the second alone'
+
+
+def test_a_build_that_raises_keeps_the_rows_it_reached(monkeypatch):
+    """The entry that raised has its row; nothing after it does."""
+    from specsolve._engine import assembly
+
+    real = assembly.Assembly._build_constraint
+
+    def fails(self, name, c):
+        if name == 'cap':
+            raise RuntimeError('the build fails here')
+        return real(self, name, c)
+
+    with sps.build(TIMED_SPEC, TIMED_DATA) as model:
+        monkeypatch.setattr(assembly.Assembly, '_build_constraint', fails)
+        with pytest.raises(RuntimeError, match='the build fails here'):
+            model.update(TIMED_DATA)
+        reached = model.diagnostics().build_seconds.select('kind', 'entry').rows()
+    assert reached == [
+        ('model', 'setup'),
+        ('variable', 'p'),
+        ('variable', 'q'),
+        ('constraint', 'balance'),
+        ('constraint', 'cap'),
+    ], 'the rows up to the entry that raised, it included, and no stacking after it'
+
+
 def test_a_model_with_no_objective_has_no_objective_row():
     """Nothing was built for an objective the spec does not declare."""
     spec = {k: v for k, v in TIMED_SPEC.items() if k != 'objective'}
