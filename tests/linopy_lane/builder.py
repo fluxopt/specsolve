@@ -24,7 +24,7 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve._messages import negative_window_message, non_finite_message, null_bounds_message
+from specsolve._messages import negative_window_message, non_finite_message
 from specsolve._sinks.capabilities import Capabilities, Capability, spelled
 from specsolve.errors import DataError, SpecsolveError
 from tests.linopy_lane import absence
@@ -83,9 +83,6 @@ def _build_variables(ctx: EvaluationContext) -> None:
         with note(f"while building variable '{name}'"):
             coords = {d: ctx.master_coords[d] for d in vdef.dims}
             mask = evaluate_where(vdef.where, ctx)
-
-            _check_bounds_are_defined(name, vdef, ctx, mask)
-
             lower, upper = _bound(vdef.lower, ctx, -math.inf), _bound(vdef.upper, ctx, math.inf)
             if vdef.domain != 'continuous':
                 lower, upper = _whole(lower, np.ceil), _whole(upper, np.floor)
@@ -100,30 +97,10 @@ def _build_variables(ctx: EvaluationContext) -> None:
             )
 
 
-def _check_bounds_are_defined(name: str, vdef: program.Variable, ctx: EvaluationContext, mask: Any) -> None:
-    """Refuse a bound with no value at build, before the NaN reaches linopy's IO layer.
-
-    Checked against the variable's own mask: a coordinate the variable does not
-    occupy needs no bound, and each one counts once however many of its bounds
-    are missing, as the relational lane counts its columns. A ``missing:
-    absent`` bound is not asked: its gap is an open side (:func:`_bound`).
-    """
-    stated = [side for side in (vdef.lower, vdef.upper) if side is not None]
-    owed = [ctx.dataset[p].isnull() for p in sorted(program.parameters_of(*stated)) if not ctx.absent(p)]
-    if not owed:
-        return
-    table = xr.DataArray(True).expand_dims({d: ctx.master_coords[d] for d in vdef.dims})
-    missing = int((functools.reduce(operator.or_, owed) & table & mask).sum())
-    if missing:
-        raise DataError(null_bounds_message(name, missing))
-
-
 def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: float) -> Any:
     """A bound as linopy takes it: the literal, the named parameter's array, or *open_side* where it is open.
 
-    A gap is open under ``missing: absent``, and not filled otherwise:
-    absence's zero is a coefficient and never a bound, so a gap survives to
-    :func:`_check_bounds_are_defined`.
+    A gap is open under ``missing: absent``; under a value it reads as that value.
     """
     if bound is None:
         return open_side
@@ -511,9 +488,13 @@ def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any,
     return product
 
 
+def _zero(missing: object) -> bool:
+    return not isinstance(missing, str) and missing == 0
+
+
 def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
     return any(
-        isinstance(n, program.ParameterReference) and ctx.program.parameters[n.name].missing == 'neutral'
+        isinstance(n, program.ParameterReference) and _zero(ctx.program.parameters[n.name].missing)
         for n in program.walk(node)
     )
 

@@ -1,3 +1,3 @@
-scenario,process,value
-base,conv_ext,1.0
-base,conv_fix,0.6
+process,scenario,value
+conv_ext,base,1.0
+conv_fix,base,0.6

@@ -42,27 +42,33 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 | Symbol | Meaning |
 |---|---|
+| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 | $`\mathcal{S}`$ | index $`s`$ — `scenario` — the futures the fleet is built against, one of which will happen |
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the same in every future |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S} \times \mathcal{T}`$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
 
 #### Variable domains
+
+**`p`**
+
+```math
+p_{g,s,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
+```
 
 **`p_nom`**
 
@@ -70,30 +76,24 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
 ```
 
-**`p`**
-
-```math
-p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 #### Objective
 
 ```math
-\min \sum_{s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g}
+\min \sum_{g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}} p_{g,s,t} \cdot \mathrm{opex}_{g} \cdot \mathrm{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g}
 ```
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`power_balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,s,t} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+p_{g,s,t} \le p^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
 ```
 
 </details>
