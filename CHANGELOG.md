@@ -11,6 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 - feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
+- fix(data): a label column of another kind than its dimension's labels is refused at load by name ([#2221](https://github.com/fluxopt/specsolve/pull/2221))
 
 ## 0.12.0 (2026-11-23)
 
