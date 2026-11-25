@@ -124,7 +124,8 @@ def _tidy(dual: Any, dims: list[str], like: pl.DataFrame) -> pl.DataFrame:
         return pl.DataFrame({'value': [float(dual.values.reshape(-1)[0])]})
     series = dual.to_series().dropna()
     keys = list(series.index)
-    columns = {d: [k[i] if isinstance(k, tuple) else k for k in keys] for i, d in enumerate(dims)}
+    names = list(series.index.names)
+    columns = {d: [k[names.index(d)] if isinstance(k, tuple) else k for k in keys] for d in dims}
     table = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
     return table.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
 

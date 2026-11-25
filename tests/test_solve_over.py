@@ -197,6 +197,12 @@ def span_sources(periods: int = 12) -> dict[str, object]:
     }
 
 
+def charging_at_each_horizon_end() -> dict[str, object]:
+    """`span_sources` with a low load at rows 2, 5 and 8, so under a horizon of three the store is charging, not empty, where a window hands its state on."""
+    load = [5.0, 9.0, 8.0, 40.0, 6.0, 8.0, 35.0, 45.0, 7.0, 10.0, 25.0, 50.0]
+    return span_sources(12) | {'load': pl.DataFrame({'snapshot': range(12), 'value': load})}
+
+
 def coordinate_sources(coordinates: list, load: float = 5.0) -> dict[str, object]:
     """Six coordinates of flat load, whatever the coordinates are."""
     return {
@@ -681,21 +687,17 @@ def test_an_expression_the_sweep_does_not_hold_says_what_it_does_hold(priced):
 def test_an_expression_no_slice_could_evaluate_carries_its_reason():
     """A failing evaluation is carried per name, never raised mid-fold.
 
-    `ratio` divides by a parameter with one row, so every slice's evaluation
-    fails on the sparse divisor — and the sweep must still complete, hold every
-    other table, and hand the caller the divisor's own sentence on read.
+    `price` reads the duals of a model with an integer variable, so every
+    slice's evaluation fails — and the sweep must still complete, hold every
+    other table, and hand the caller the reason on read.
     """
-    spec = override(
-        SPENDING,
-        **{'parameters.scale': {'dims': ['snapshot'], 'missing': 'neutral'}, 'expressions.ratio': 'load / scale'},
-    )
-    sources = {**span_sources(12), 'scale': pl.DataFrame({'snapshot': [0], 'value': [2.0]})}
-    runs = sps.solve_over(spec, sources, sps.EachWindow('snapshot', horizon=6, lookahead=0))
+    spec = override(SPENDING, **{'variables.charge.domain': 'integer', 'expressions.price': 'dual(balance)'})
+    runs = sps.solve_over(spec, span_sources(12), sps.EachWindow('snapshot', horizon=6, lookahead=0))
 
     assert runs.primal('p').height > 0, 'the failing expression must not fail the sweep'
     assert runs.evaluate('spend').height > 0, 'nor take the healthy expression with it'
-    with pytest.raises(sps.errors.SpecsolveError, match='scale'):
-        runs.evaluate('ratio')
+    with pytest.raises(sps.errors.SpecsolveError, match='integer'):
+        runs.evaluate('price')
 
 
 #: Six coordinates, three windows of two, whatever the coordinates *are*:
@@ -709,6 +711,13 @@ COORDINATE_TYPES = [
 ]
 
 
+def windowed(coordinates) -> dict:
+    """``WINDOW`` with ``snapshot`` declared the dtype its *coordinates* are."""
+    first = coordinates[0]
+    dtype = 'datetime' if isinstance(first, datetime.datetime) else 'str' if isinstance(first, str) else 'int'
+    return {**WINDOW, 'dimensions': {**WINDOW['dimensions'], 'snapshot': {'dtype': dtype, 'ordered': True}}}
+
+
 @pytest.mark.parametrize('coordinates', COORDINATE_TYPES)
 def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     """The only requirement on a windowed dimension is that it is orderable.
@@ -716,7 +725,9 @@ def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     The initial condition's `where: "position(snapshot) == 0"` counts within the window, so
     it matches each window's first label whatever the labels are.
     """
-    runs = sps.solve_over(WINDOW, coordinate_sources(coordinates), sps.EachWindow('snapshot', horizon=2, lookahead=0))
+    runs = sps.solve_over(
+        windowed(coordinates), coordinate_sources(coordinates), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+    )
 
     assert len(runs) == 3
     assert runs.keys == coordinates[::2], 'a window is keyed by its first coordinate'
@@ -733,7 +744,9 @@ def test_stitch_recovers_coordinates_no_arithmetic_could(coordinates):
     only way back to it: nothing the caller holds could reconstruct these.
     """
     runs = sps.solve_over(
-        WINDOW, coordinate_sources(coordinates, load=10.0), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+        windowed(coordinates),
+        coordinate_sources(coordinates, load=10.0),
+        sps.EachWindow('snapshot', horizon=2, lookahead=0),
     )
     assert runs.primal('soc')['snapshot'].to_list() == coordinates
 
@@ -773,7 +786,9 @@ def test_a_sweep_over_a_datetime_axis_in_any_unit_solves(unit, kind):
     """
     keys = _in_unit(unit)
     if kind == 'window':
-        runs = sps.solve_over(WINDOW, coordinate_sources(keys), sps.EachWindow('snapshot', horizon=2, lookahead=0))
+        runs = sps.solve_over(
+            windowed(HOURS), coordinate_sources(keys), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+        )
         assert runs.primal('soc')['snapshot'].to_list() == HOURS, 'the stitch gives back every hour'
     else:
         runs = sps.solve_over(DISPATCH, _keyed_by_datetime(keys), sps.EachLabel('scenario'))
@@ -999,11 +1014,12 @@ def test_the_carried_row_is_the_horizon_end_and_not_the_last_one_solved():
     going to happen.
 
     The first assertion is what makes the rest discriminating: where the two
-    rows hold the same level, reading either passes.
+    rows hold the same level, reading either passes. The load at each window's
+    horizon end is low, so the store is charging there and not empty.
     """
     runs = sps.solve_over(
         WINDOW,
-        span_sources(12),
+        charging_at_each_horizon_end(),
         sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'}),
     )
 
@@ -1062,7 +1078,7 @@ BUILDING_STORES = override(
 UNSOUND_CARRIES = [
     pytest.param(
         WINDOW, span_sources, WINDOW_AXIS, {'soc_initial': 'p'},
-        r'would collapse .*at once', "['snapshot', 'generator']",
+        r'would collapse .*at once', "['generator', 'snapshot']",
         id='collapses-two-dimensions',
     ),
     pytest.param(
@@ -1548,20 +1564,24 @@ def test_the_readers_mirror_result_with_the_slice_key_as_one_more_dimension(swee
     runs = sweep
 
     pandas_table = runs.to_pandas('p')
-    assert list(pandas_table.columns) == ['scenario', 'snapshot', 'generator', 'value']
-    assert len(pandas_table) == 3 * 4 * 2
+    assert list(pandas_table.columns) == ['scenario', 'generator', 'snapshot', 'value'], (
+        'the slice key first, then the dimensions sorted by name'
+    )
+    assert len(pandas_table) == 3 * 2 * 4, 'three scenarios, two generators, four snapshots'
 
     array = runs.to_dataarray('p')
     assert array.name == 'p'
-    assert array.dims == ('scenario', 'snapshot', 'generator')
-    assert array.shape == (3, 4, 2)
+    assert array.dims == ('scenario', 'generator', 'snapshot'), (
+        'the slice key first, then the dimensions sorted by name'
+    )
+    assert array.shape == (3, 2, 4), 'three scenarios, two generators, four snapshots'
     assert array.sel(scenario='low', generator='wind').shape == (4,), (
         'the slice key is an ordinary coordinate, which is the whole point'
     )
 
     dataset = runs.to_dataset()
     assert set(dataset.data_vars) == {'p'}
-    assert dataset['p'].dims == ('scenario', 'snapshot', 'generator')
+    assert dataset['p'].dims == ('scenario', 'generator', 'snapshot'), 'the same order the array has'
 
 
 def test_every_bridge_takes_a_kind_on_a_sweep(priced):
@@ -2134,7 +2154,7 @@ def test_a_sweep_takes_every_source_shape_solve_takes(spec, sources, axis, plain
 
 
 def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
-    """`cost`, declared neutral, stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
+    """`cost`, declared `missing: 0`, stops at period 2 while `demand` runs to 3, so period 3 builds with no cost at all.
 
     The warning comes before a slice is taken, naming the source, the
     coordinate it lacks, and a source that has it.
@@ -2143,7 +2163,7 @@ def test_a_source_short_of_a_coordinate_of_the_axis_is_reported():
     sources['cost'] = pl.DataFrame({'period': [1, 1, 2, 2], 'generator': GENERATORS * 2, 'value': [1.0, 50.0] * 2})
     with pytest.warns(sps.errors.SpecsolveWarning, match=r"'cost' has no rows for period 3, which 'demand' has"):
         runs = sps.solve_over(
-            override(MYOPIC, **{'parameters.cost.missing': 'neutral'}),
+            override(MYOPIC, **{'parameters.cost.missing': 0}),
             sources,
             sps.EachLabel('period', carry={'existing': 'total'}),
         )
@@ -2834,7 +2854,7 @@ def test_a_slice_of_a_carried_sweep_is_built_as_the_sweep_built_it_given_the_swe
     sweep solved.
     """
     axis = sps.EachWindow('snapshot', horizon=3, lookahead=3, carry={'soc_initial': 'soc'})
-    sources = span_sources()
+    sources = charging_at_each_horizon_end()
     sweep = sps.solve_over(WINDOW, sources, axis, archive=tmp_path / 'runs')
     solved = sweep.records['objective'].to_list()
 

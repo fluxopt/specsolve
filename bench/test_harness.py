@@ -42,9 +42,9 @@ from bench.ab.compare import (
     table,
     verdict,
 )
-from bench.ab.grid import SHAPES, spec, tables
+from bench.ab.grid import SHAPES, SIZES, cell, ids, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import TIMED_THROUGH, _tables, checked_sources, unsupported
+from bench.arms.specsolve import TIMED_THROUGH, _laps, _tables, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
     _holder_if_alive,
@@ -2176,6 +2176,39 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     )
 
 
+@pytest.mark.parametrize('verb', ['emit', 'build', 'window'])
+def test_the_specsolve_arm_keeps_the_laps_its_phases_sum(verb: str) -> None:
+    """Every verb carries its laps, and they add up to its phases; a window's are only its own.
+
+    The engine's log holds every lap of the model's life, so a window that
+    copied it whole would carry the setup's build too.
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    if verb == 'emit':
+        counts = module.build_and_emit('lp', prepared)
+    elif verb == 'build':
+        counts = module.build_only(prepared)
+    else:
+        args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
+        counts = module.window(*args, **kwargs)
+        assert len(counts['laps']) < args[0].timings().height, "a window's laps leave out the setup's"
+
+    summed: dict[str, float] = {}
+    for lap in counts['laps']:
+        summed[lap['phase']] = summed.get(lap['phase'], 0.0) + lap['seconds']
+    clocked = {phase: seconds for phase, seconds in counts['phases'].items() if seconds > 0}
+    assert summed == pytest.approx(clocked, rel=1e-9), 'the laps of each phase add up to its clock, to rounding'
+    assert {lap['entry'] for lap in counts['laps'] if lap['step'] == 'variable'}, 'a build lap names its entry'
+    assert json.loads(json.dumps(counts['laps'])) == counts['laps'], 'the laps come back whole from a result file'
+
+
+def test_the_specsolve_arm_reads_no_laps_off_a_checkout_without_a_lap_log() -> None:
+    """A checkout from before #2207 keeps no lap log, which `bench.ab` meets on an older base."""
+    assert _laps(SimpleNamespace(_engine=SimpleNamespace())) == [], 'an engine without a lap log has no laps'
+
+
 def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
     record = _timing('specsolve', phase='emit', phase_seconds={'attach': 0.1, 'build': 0.4})
     rows = {row['metric']: row['value'] for row in tidy.measurements([record], 'run')}
@@ -2329,6 +2362,20 @@ AB_ROOT = Path(__file__).resolve().parent.parent
 )
 def test_an_ab_verdict_is_a_two_sided_sign_test(ratios: list[float], expected: str) -> None:
     assert verdict(ratios) == expected
+
+
+def test_a_pypsa_model_is_a_cell_only_where_a_run_asks_for_it() -> None:
+    """A run over the grid's sizes, the default among them, does not wait on PyPSA's models."""
+    assert 'pypsa-carbon_management' in ids(['pypsa']), '--sizes pypsa runs it'
+    assert not [c for c in ids(list(SIZES)) if c.startswith('pypsa-')], 'and no grid size does'
+
+
+def test_the_captured_carbon_management_reads_as_its_spec_declares() -> None:
+    """Every source of the capture tidies, so a change to what loading refuses fails here rather than in an A/B."""
+    import specsolve as sps
+
+    captured = cell('pypsa-carbon_management')
+    assert len(sps.tidy(captured.spec, captured.sources)) == 369, 'one table per source PyPSA hands over'
 
 
 @pytest.mark.parametrize('name', list(SHAPES))
@@ -2555,12 +2602,28 @@ def test_two_different_models_fail_however_fast() -> None:
         pytest.param(lambda n: {**n, 'rows.row': n['rows.row'] + 1}, False, id='an integer moved by one'),
         pytest.param(lambda n: {**n, 'cost': n['cost'][:-1]}, False, id='one cost fewer'),
         pytest.param(lambda n: {k: v for k, v in n.items() if k != 'cost'}, False, id='a field missing'),
+        pytest.param(
+            lambda n: {**n, 'rhs': np.array([1e9, 4.76837158203125e-07])},
+            True,
+            id='a sum that cancels to zero, off by the last bits of its terms',
+        ),
+        pytest.param(
+            lambda n: {**n, 'rhs': np.array([1e9, 1e-2])}, False, id='a number near zero moved past those last bits'
+        ),
+        pytest.param(
+            lambda n: {**n, 'cols.ub': np.array([np.inf, 2.0])}, False, id='a bound moved beside an infinite one'
+        ),
     ],
 )
 def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
     tmp_path: Path, change: Any, same: bool
 ) -> None:
-    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rows.row': np.arange(3)}
+    numbers = {
+        'cost': np.array([1.0, 2.5, 1e6]),
+        'rhs': np.array([1e9, 0.0]),
+        'cols.ub': np.array([np.inf, 1.0]),
+        'rows.row': np.arange(3),
+    }
     np.savez(tmp_path / 'base.npz', **numbers)
     np.savez(tmp_path / 'head.npz', **change(numbers))
     assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same

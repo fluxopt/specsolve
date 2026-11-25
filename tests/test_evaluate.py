@@ -72,10 +72,10 @@ def test_a_sum_over_one_of_two_dims_is_the_per_coordinate_total():
 
 def test_a_grouped_sum_relabels_through_a_relation():
     table = evaluate('by_node').sort('snapshot', 'node')
-    assert table.columns == ['snapshot', 'node', 'value'], (
-        'sum(over=generator, by=bus[node]) replaces generator with the node it maps to'
+    assert table.columns == ['node', 'snapshot', 'value'], (
+        'sum(over=generator, by=bus[node]) replaces generator with the node it maps to, and the dimensions sort by name'
     )
-    got = {(s, n): v for s, n, v in table.iter_rows()}
+    got = {(s, n): v for n, s, v in table.iter_rows()}
     assert got == pytest.approx(
         {(0, 'n1'): 10.0, (0, 'n2'): 2.0, (1, 'n1'): 20.0, (1, 'n2'): 3.0, (2, 'n1'): 5.0, (2, 'n2'): 7.0}
     ), 'each generator sits alone on its node, so the grouped value is its own dispatch'
