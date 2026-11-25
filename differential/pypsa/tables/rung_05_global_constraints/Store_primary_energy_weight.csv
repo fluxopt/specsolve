@@ -1,4 +1,4 @@
-scenario,global_constraint,store,value
-base,co2_cap,tank5,0.9
-base,co2_exact,tank5,0.9
-base,co2_floor,tank5,0.9
+global_constraint,scenario,store,value
+co2_cap,base,tank5,0.9
+co2_exact,base,tank5,0.9
+co2_floor,base,tank5,0.9

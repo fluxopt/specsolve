@@ -1,3 +1,3 @@
-global_constraint,generator,value
-tech_solar,solar,1.0
-tech_wind,wind,1.0
+generator,global_constraint,value
+solar,tech_solar,1.0
+wind,tech_wind,1.0

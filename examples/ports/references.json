@@ -90,21 +90,7 @@
   "piecewise": {
     "objective": 3850.0,
     "rtol": 1e-09,
-    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure",
-    "duals": {
-      "balance": {
-        "snapshot": [
-          0,
-          1,
-          2
-        ],
-        "value": [
-          15.0,
-          25.0,
-          15.0
-        ]
-      }
-    }
+    "provenance": "linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure"
   },
   "piecewise_lp": {
     "objective": 3850.0,

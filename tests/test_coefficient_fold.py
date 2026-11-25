@@ -26,8 +26,8 @@ SPEC = {
         'b': {'dims': ['i']},
         'c': {'dims': ['j']},
         'd': {'dims': ['i'], 'missing': 'absent'},
-        'e': {'dims': ['i'], 'missing': 'neutral'},
-        'flag': {'dims': ['i'], 'dtype': 'bool', 'missing': 'neutral'},
+        'e': {'dims': ['i'], 'missing': 0},
+        'flag': {'dims': ['i'], 'dtype': 'bool', 'missing': False},
         's': {'dims': []},
         'r': {'dims': []},
     },
@@ -69,6 +69,7 @@ def _written(constraint: dict, path: Path) -> str:
         pytest.param({'dims': ['i'], 'expression': 'x * (capped + b) <= 10'}, id='terms-from-regions-of-cases'),
         pytest.param({'dims': ['i'], 'expression': 'x * (s + r) <= 10'}, id='scalars'),
         pytest.param({'dims': ['i'], 'expression': '(a - b) * x <= 10'}, id='the-sum-on-the-left'),
+        pytest.param({'dims': ['i'], 'expression': 'x * (a + b / (1 + e)) <= 10'}, id='a-divisor-over-a-missing-row'),
     ],
 )
 def test_a_folded_coefficient_writes_the_model_the_distributed_product_writes(
@@ -96,11 +97,12 @@ def test_a_variable_times_a_difference_stacks_one_term_per_cell(monkeypatch) -> 
     assert stacked == [1], f'x * (a - b) stacked {stacked} tables, not one'
 
 
-def test_a_divisor_hole_under_a_folded_coefficient_is_still_refused() -> None:
-    """`b / e` has no value at 1, where `e` has no row; added up skipping nulls, `a` alone would stand there."""
-    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a + b / e) <= 10'}}}
-    with pytest.raises(DataError, match='used as a divisor'):
-        sps.build(spec, SOURCES).close()
+def test_a_divisor_over_a_missing_row_under_a_folded_coefficient_reads_the_declared_zero() -> None:
+    """`e` is `missing: 0` with no row at 1, so `b / (1 + e)` is 4 / 1 there and the row reads `x * (4 + 4) <= 10`."""
+    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x * (a + b / (1 + e)) <= 10'}}}
+    with sps.solve(spec, SOURCES) as solution:
+        x = dict(solution.primal('x').select('i', 'value').iter_rows())
+    assert x[1] == pytest.approx(10 / 8), 'the folded coefficient at 1 is a + b / 1, not a alone'
 
 
 def _outcome(spec: dict, path: Path) -> str:
@@ -130,12 +132,7 @@ def _outcome(spec: dict, path: Path) -> str:
 def test_a_factor_with_a_constant_beside_its_variable_builds_as_distributed(
     monkeypatch, tmp_path: Path, expressions: dict, constraint: dict
 ) -> None:
-    """`s * e` has no value at 1, and the coverage check reads each constant product on its own.
-
-    Folded, `s * (a + e)` read `a` there and built where the distributed
-    product is refused; and a folded region lost the claim that lets
-    `s * k` stand outside it, refusing a model that builds.
-    """
+    """Folding beside a constant keeps each constant product, and each region's claim, on its own."""
     spec = {**SPEC, 'expressions': {**SPEC['expressions'], **expressions}, 'constraints': {'row': constraint}}
     folded = _outcome(spec, tmp_path / 'folded.lp')
     monkeypatch.setattr(queries, '_one_coefficient', lambda terms: terms)
