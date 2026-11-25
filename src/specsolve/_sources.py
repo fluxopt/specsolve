@@ -55,9 +55,10 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     as tidy ``(dims…, value)``, a dimension's labels as one column
     under its own name in the order they arrived, a relation as one column
     per declared column. A dimension's labels are of its declared ``dtype``,
-    ``str`` unless declared; the one conversion is a date under ``datetime``,
-    held as the microsecond its day starts on. A datetime label is held in
-    microseconds.
+    ``str`` unless declared, and so is every column over it; the one conversion
+    is a date under ``datetime``, held as the microsecond its day starts on. A
+    datetime label is held in microseconds. A table with no rows reads each
+    column over a dimension in that dimension's label type.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -67,7 +68,8 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             parameter with two rows for one
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
-            row twice, or a label its column's dimension lacks; a datetime
+            row twice, or a label its column's dimension lacks; a column over a
+            dimension holding another kind of label than its labels; a datetime
             label finer than a microsecond, or in another time zone than its
             dimension's labels; or an
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
@@ -310,6 +312,11 @@ _HOLDS: dict[str, Callable[[pl.DataType], bool]] = {
 }
 
 
+def _dtype_holding(column: pl.DataType) -> str | None:
+    """The declared dimension dtype whose labels are of type *column*, if one is ([`_HOLDS`][])."""
+    return next((name for name, holds in _HOLDS.items() if holds(column)), None)
+
+
 def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFrame:
     """*labels* if their type is one *dtype* holds; an empty table, holding no label to misread, takes it.
 
@@ -321,9 +328,7 @@ def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFra
         return labels
     if labels.height == 0:
         return labels.with_columns(pl.col(dim).cast(_DECLARED[dtype]))
-    own = next(
-        (name for name, holds in _HOLDS.items() if holds(given) or (name == 'datetime' and given == pl.Date)), None
-    )
+    own = _dtype_holding(given) or ('datetime' if given == pl.Date else None)
     instead = f'Declare `dtype: {own}` for labels of that type, or convert' if own else 'Convert'
     raise DataError(
         f"the labels of dimension '{dim}' are {given}, and the spec declares `dtype: {dtype}`"
@@ -418,6 +423,39 @@ def _over_datetimes(columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.
     return [c for c, dim in columns if dim in labels and isinstance(labels[dim].collect_schema()[dim], pl.Datetime)]
 
 
+def _typed_as_labels(
+    owner: str, table: pl.DataFrame, columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]
+) -> pl.DataFrame:
+    """*table* with each label column, ``(column, dimension)`` in *columns*, of a type its dimension's labels compare with.
+
+    A column is held to the dtype its labels are declared ([`_HOLDS`][]), so
+    every later check and join meets one type on both sides. An empty column
+    holds no label to misread, and takes the labels' type. A dimension whose
+    labels are not read yet is checked when they are.
+
+    Raises:
+        DataError: A column of a type its dimension's dtype does not hold, or
+            datetimes in another time zone than the labels.
+    """
+    casts = []
+    for column, dim in columns:
+        if dim not in labels:
+            continue
+        given, listed = table.schema[column], labels[dim].collect_schema()[dim]
+        if table.height == 0 or given == pl.Null:
+            if given != listed:
+                casts.append(pl.col(column).cast(listed))
+            continue
+        if _dtype_holding(given) != _dtype_holding(listed):
+            raise DataError(
+                f"{owner} holds '{column}' as {given}, and the labels of dimension '{dim}' are {listed}. "
+                f'A label compares only with labels of its own type, so a row of another would match '
+                f'none of them. Convert the column to theirs before attaching it.'
+            )
+        _refuse_another_clock(owner, column, dim, given, listed)
+    return table.with_columns(casts) if casts else table
+
+
 def _refuse_another_clock(owner: str, column: str, dim: str, given: pl.DataType, listed: pl.DataType) -> None:
     """Refuse a datetime column in another time zone than its dimension's labels: the two compare on one clock only."""
     if isinstance(given, pl.Datetime) and isinstance(listed, pl.Datetime) and given.time_zone != listed.time_zone:
@@ -467,7 +505,6 @@ def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, d
     Offenders keep their own type — a python native off polars, never a numpy
     scalar — because the message reprs them.
     """
-    _refuse_another_clock(f"relation '{name}'", role, dim, rows.collect_schema()[role], labels.dtype)
     known = set(labels.to_list())
     strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
     if not strays:
@@ -515,9 +552,9 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
             f"relation '{name}' must carry a column per column it declares, {roles} (has "
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
-    rows = in_microseconds(
-        table.select(*roles).pipe(collected), f"relation '{name}'", _over_datetimes(relation.columns, labels)
-    )
+    owner = f"relation '{name}'"
+    rows = in_microseconds(table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, labels))
+    rows = _typed_as_labels(owner, rows, relation.columns, labels)
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -718,9 +755,11 @@ def _checked_parameter(
             f'(need dimensions {list(p.dims)} plus {VALUE!r}; has {available}). Rename them to '
             f'the declared dimensions, or drop the index names to attach positionally.'
         )
+    owner = f"{kind} '{name}'"
     checked = in_microseconds(
-        table.select(wanted).pipe(collected), f"{kind} '{name}'", _over_datetimes(((d, d) for d in p.dims), sources)
+        table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
     )
+    checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
     _refuse_unknown_or_repeated_coordinates(name, p, checked, sources, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
@@ -746,8 +785,6 @@ def _refuse_unknown_or_repeated_coordinates(
         return
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
-    for d, labels in known.items():
-        _refuse_another_clock(f"{kind} '{name}'", d, d, table.schema[d], labels.dtype)
     answers = table.select(
         pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
         *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
