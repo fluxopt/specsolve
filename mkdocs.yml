@@ -150,7 +150,7 @@ nav:
           - Rung 45: examples/pypsa_ladder/rung_45_ramp_per_snapshot.md
           - Rung 46: examples/pypsa_ladder/rung_46_initial_output.md
           - Rung 47: examples/pypsa_ladder/rung_47_linearized_ramps.md
-          - Rung 48: examples/pypsa_ladder/rung_48_unweighted_start_up.md
+          - Rung 48: examples/pypsa_ladder/rung_48_start_up_period_weight.md
           - Rung 49: examples/pypsa_ladder/rung_49_single_period_growth.md
           - Rung 50: examples/pypsa_ladder/rung_50_inactive_load.md
           - Rung 51: examples/pypsa_ladder/rung_51_growth_retired_asset.md
@@ -170,6 +170,20 @@ nav:
           - Rung 68: examples/pypsa_ladder/rung_68_outage_factors_per_period.md
           - Rung 69: examples/pypsa_ladder/rung_69_storage_retires_before_close.md
           - Rung 70: examples/pypsa_ladder/rung_70_risk_preference_zero.md
+          - Rung 71: examples/pypsa_ladder/rung_71_running_unless_committable.md
+          - Rung 72: examples/pypsa_ladder/rung_72_modular_down_time.md
+          - Rung 73: examples/pypsa_ladder/rung_73_fixed_modular_ramp.md
+          - Rung 74: examples/pypsa_ladder/rung_74_linearized_late_opening.md
+          - Rung 75: examples/pypsa_ladder/rung_75_period_primary_energy_storage.md
+          - Rung 76: examples/pypsa_ladder/rung_76_store_power.md
+          - Rung 77: examples/pypsa_ladder/rung_77_energy_limits.md
+          - Rung 78: examples/pypsa_ladder/rung_78_store_cycles.md
+          - Rung 79: examples/pypsa_ladder/rung_79_flow_based.md
+          - Rung 80: examples/pypsa_ladder/rung_80_fixed_modular_maintenance.md
+          - Rung 81: examples/pypsa_ladder/rung_81_piecewise_marginal_cost.md
+          - Rung 82: examples/pypsa_ladder/rung_82_piecewise_marginal_cost_committable.md
+          - Rung 85: examples/pypsa_ladder/rung_85_scenario_period_storage.md
+          - Rung 86: examples/pypsa_ladder/rung_86_piecewise_marginal_cost_periods.md
       - Contributing: https://github.com/fluxopt/specsolve/blob/main/CONTRIBUTING.md
 
 theme:

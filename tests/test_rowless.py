@@ -223,7 +223,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
 #: nothing; each is over `g` alone, a sixth of the product an entry over
 #: `g` and `t` spans. `e` has no label, so a count along it is 0.
 TABLED_SPEC = {
-    'dimensions': {'g': {}, 't': {}, 'e': {}},
+    'dimensions': {'g': {}, 't': {'dtype': 'int'}, 'e': {}},
     'parameters': {
         'flag': {'dims': ['g'], 'dtype': 'bool', 'missing': 'absent'},
         'cap': {'dims': ['g']},

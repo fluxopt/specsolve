@@ -43,7 +43,7 @@ relations:
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
     dims: [bus, tech]
-    missing: neutral
+    missing: 0
   p_max:                # installed capacity times availability
     dims: [snapshot, bus, tech]
     missing: absent
