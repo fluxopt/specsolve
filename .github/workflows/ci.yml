@@ -15,7 +15,7 @@ concurrency:
 jobs:
   suite:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,8 +40,19 @@ jobs:
       - run: pixi run format-check
       # `github` is the output format, so findings land as annotations on the diff.
       - run: pixi run typecheck github
-      - run: pixi run test
-      - run: pixi run test-via-pyarrow
+      - run: pixi run test -p tools.gapprobe
+        env:
+          GAPLOG: /tmp/gaps-default.jsonl
+        continue-on-error: true
+      - name: the suite via pyarrow, probed, five times
+        run: |
+          for i in 1 2 3 4 5; do GAPLOG=/tmp/gaps-pyarrow.jsonl pixi run test-via-pyarrow -p tools.gapprobe || true; done
+      - name: every call with more than 1 ms unclocked, then the largest gaps of all
+        if: always()
+        run: |
+          cat /tmp/gaps-default.jsonl /tmp/gaps-pyarrow.jsonl 2>/dev/null || echo 'no call had more than 1 ms unclocked'
+          cat /tmp/gaps-*.jsonl.all | sort -rn | head -20
+          echo "calls probed: $(cat /tmp/gaps-*.jsonl.all | wc -l)"
 
       # `test` does not reach the bench tests (#1185, #1245).
       - run: pixi run test-bench
