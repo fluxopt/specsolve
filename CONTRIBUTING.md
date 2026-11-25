@@ -102,6 +102,24 @@ beside the default one and leaves it there.
 Raise a floor when the code relies on that version's behaviour. Do not raise
 one to chase a newer interpreter.
 
+## Upgrading a dependency
+
+`pixi.lock` specifies the exact version of every package that CI, the
+benchmarks and `pixi run` install. CI sets `PIXI_LOCKED`, so a lock that no
+longer matches `pyproject.toml` fails the check. After a change to the
+dependencies in `pyproject.toml`, run `pixi lock` and commit both files.
+
+An upgrade is a pull request of its own, and the diff of `pixi.lock` lists
+what moved:
+
+```bash
+pixi update polars   # one package
+pixi update          # every package
+```
+
+`pyproject.toml` keeps lower bounds only, so a user can install any newer
+version. Raising a bound is a floor change, as above.
+
 ## The docs
 
 `docs/` is both the site and what you read on GitHub. Write for the repo —
