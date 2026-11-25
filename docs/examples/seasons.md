@@ -40,8 +40,8 @@ A store that cycles inside each season rather than across the modelled period, w
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
 | $`\mathcal{S}`$ | index $`s`$ — `season` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — the blocks the store cycles over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
 
 #### Parameters
 
@@ -54,8 +54,8 @@ A store that cycles inside each season rather than across the modelled period, w
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{soc}`$ | `soc` over $`\mathcal{T}`$ — energy held at the end of a snapshot |
 | $`\mathit{release}`$ | `release` over $`\mathcal{T}`$ — energy released in a snapshot |
+| $`\mathit{soc}`$ | `soc` over $`\mathcal{T}`$ — energy held at the end of a snapshot |
 
 #### Notation
 
@@ -66,16 +66,16 @@ A store that cycles inside each season rather than across the modelled period, w
 
 #### Variable domains
 
-**`soc`**
-
-```math
-0 \le \mathit{soc}_{t} \le 60 \qquad \forall\, t \in \mathcal{T}
-```
-
 **`release`**
 
 ```math
 \mathit{release}_{t} \ge 0 \qquad \forall\, t \in \mathcal{T}
+```
+
+**`soc`**
+
+```math
+0 \le \mathit{soc}_{t} \le 60 \qquad \forall\, t \in \mathcal{T}
 ```
 
 #### Objective

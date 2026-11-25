@@ -36,10 +36,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot, unit]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, '>=']
     method: lp
 
 constraints:

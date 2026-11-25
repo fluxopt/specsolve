@@ -21,10 +21,8 @@ from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless
 from specsolve._engine.terms import Term, presences_of
-from specsolve._messages import null_bounds_message
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
-from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,6 +31,7 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
     from specsolve._engine.attaching import AttachedSources
+    from specsolve._records import Lap, Step
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -113,7 +112,7 @@ class Assembly:
         program: program.Program,
         attached: AttachedSources,
         measured: Measured,
-        lap: Callable[[str, str | None, str | None], None],
+        lap: Lap,
     ) -> None:
         self.program = program
         self.lap = lap
@@ -181,7 +180,7 @@ class Assembly:
         return model
 
     def _timed(
-        self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
+        self, step: Step, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
     ) -> _Built:
         """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 
@@ -249,10 +248,6 @@ class Assembly:
             bounds = self.builder.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
             bounded = indices.in_position_order(bounds.pipe(collected), COL)
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
-
-        if bounded.get_column('lb').null_count() or bounded.get_column('ub').null_count():
-            bad = cols.filter(pl.col('lb').is_null() | pl.col('ub').is_null()).height
-            raise DataError(null_bounds_message(name, bad))
 
         if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
             self.measured.bounds[name] = spread
