@@ -1,2 +1,2 @@
-scenario,global_constraint,store,value
-base,op_coal,tank5,1.0
+global_constraint,scenario,store,value
+op_coal,base,tank5,1.0
