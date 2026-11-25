@@ -851,9 +851,10 @@ Six rounds is the least that can pass, and `compare` refuses fewer. Every
 timed build is warm, and the sides alternate ABBA.
 The first round also saves each side's built model, or a solve's objective. A
 difference beyond the last bits fails the cell as *differs*, so a speed-up that
-changes the model is caught. Floats that differ only within `LAST_BITS` are
-one number summed in another order: the cell keeps its verdict, marked *last
-bits*. With `--focus`, the clock counts only the time inside that function,
+changes the model is caught. Floats that differ only within `LAST_BITS` of
+themselves, or of the largest number of their array, are one number summed in
+another order: the cell keeps its verdict, marked *last bits*. The second bound
+holds a sum that cancels to near zero, which carries the last bits of its terms. With `--focus`, the clock counts only the time inside that function,
 and a cell that never calls it reads *not reached*. The run exits 1 on any
 cell that is *slower*, *differs* or fails.
 
