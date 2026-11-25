@@ -22,8 +22,8 @@ import polars as pl
 import xarray as xr
 from mathspec import program as _program
 
+from specsolve._inputs import to_pandas
 from specsolve._messages import coordinate_text, missing_row_message
-from specsolve._tables import to_pandas
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:

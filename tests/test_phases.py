@@ -9,7 +9,7 @@ step at a time and finds the delay in its own phase and nowhere else.
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, get_args
 
 import pytest
 import yaml
@@ -17,7 +17,7 @@ import yaml
 import specsolve as sps
 from specsolve import _api, _archive_layout, _assumptions
 from specsolve._engine import assembly, engine
-from specsolve._records import PHASES, Metrics
+from specsolve._records import PHASES, Metrics, Phase
 from specsolve._result import Result
 from specsolve._sinks.solver import Solver
 
@@ -268,10 +268,9 @@ def test_a_slow_step_shows_in_its_own_phase(
     timed.check()
 
 
-def test_a_clock_with_no_column_is_refused():
+def test_a_lap_takes_only_a_phase_a_metrics_column_carries():
     """A phase clocked under a name no `Metrics` column carries would be dropped from every archive."""
-    with pytest.raises(AssertionError, match="'nap' is not a phase"):
-        engine.Engine().lap('nap')
+    assert get_args(Phase) == PHASES, 'the phases a lap is typed to take are the Metrics clocks, in order'
 
 
 def test_the_model_keeps_the_archive_clock_its_row_recorded(dispatch_yaml, dispatch_table_inputs, tmp_path):

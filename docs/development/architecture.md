@@ -44,7 +44,7 @@ flowchart TB
             ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
-        ENG --> TABLES["_sinks/handoff.py<br/>cols · obj · rows · A · sos"]
+        ENG --> TABLES["_sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
         TABLES --> DIRECT["_sinks/, a solver<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
         DIRECT --> SOL["_result.py<br/>joined by label, never dense"]
@@ -92,7 +92,7 @@ flowchart TB
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
-phase covers, and [the diagram](../howto/faster.md#find-where-the-time-goes)
+phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
 draws what each hands to the next. The clock
 is one mark: each public call starts it with `Engine.start()`, and
 `Engine.lap(phase)` adds the time since the mark to that phase and moves the
@@ -222,7 +222,7 @@ onto a loaded solver by position.
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
 a formulation out.
 
-**A table is the boundary in both directions.** `_tables.py` reads a caller's
+**A table is the boundary in both directions.** `_inputs.py` reads a caller's
 table through the Arrow PyCapsule protocol, and a `Result` hands back polars.
 
 **Sinks take four streams**: `cols`, `rows`, `A` in CSR, and `sos`. A sink
@@ -237,13 +237,12 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_api.py` | the functions that take a spec, and `Model` |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
-| `_inputs.py` | `SpecLike` and `Source`, what every function takes |
+| `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | `tidy_sources`: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
-| `_tables.py` | caller tables in, via the Arrow PyCapsule protocol |
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
@@ -269,7 +268,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
 | `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
-| `_sinks/handoff.py` | what every sink reads |
+| `_sinks/tables.py` | what every sink reads |
 | `_sinks/capabilities.py` | what a sink can ingest |
 | `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
 
@@ -330,9 +329,9 @@ The names the code uses for its own parts. The names a caller meets are in
   variable at a coordinate, a row index for a constraint at one
   (`indices.py`). A label is a dimension's member, never a solver index.
 
-**Handoff**
+**Sink tables**
 : Everything a sink reads of a built model, and nothing more: the tables, the
-  column and row vectors, the matrix a chunk at a time (`handoff.py`).
+  column and row vectors, the matrix a chunk at a time (`tables.py`).
 
 **Collect engine**
 : Which polars engine materialises a table. A build within `IN_MEMORY_REACH`
@@ -345,7 +344,7 @@ The names the code uses for its own parts. The names a caller meets are in
 **Structure digest**
 : A digest of everything a re-solve may not change. A loaded solver keeps its
   model while the digest holds and every coefficient is within 1e-12 relative
-  of the one it holds (`handoff.py`).
+  of the one it holds (`tables.py`).
 
 **Kind**
 : One table family of an answer: `primal`, `dual`, `expression`, and each

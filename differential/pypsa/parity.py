@@ -355,7 +355,7 @@ def fed(sources: dict[str, object]) -> list[str]:
 def _keyed_model(model) -> dict[str, object]:
     """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
     built = model._engine._model
-    handoff = built.handoff
+    tables = built.tables
 
     def keys(held: dict) -> dict[int, tuple]:
         out = {}
@@ -368,27 +368,27 @@ def _keyed_model(model) -> dict[str, object]:
         return out
 
     columns, rows = keys(built.variables), keys(built.constraints)
-    starts = list(handoff.row_starts)
-    matrix = handoff.matrix
+    starts = list(tables.row_starts)
+    matrix = tables.matrix
     terms = {}
-    for r, (sense, rhs) in enumerate(zip(handoff.rows['sense'], handoff.rows['rhs'], strict=True)):
+    for r, (sense, rhs) in enumerate(zip(tables.rows['sense'], tables.rows['rhs'], strict=True)):
         span = matrix.slice(starts[r], starts[r + 1] - starts[r])
         pairs = frozenset((columns[c], round(v, 9)) for c, v in zip(span[COL], span[COEFF], strict=True) if v)
-        terms[rows[handoff.rows[ROW][r]]] = (str(sense), round(float(rhs), 9), pairs)
+        terms[rows[tables.rows[ROW][r]]] = (str(sense), round(float(rhs), 9), pairs)
     return {
         'columns': {
-            columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(handoff.cols.iter_rows())
+            columns[i]: (float(lb), float(ub), str(vtype)) for i, (lb, ub, vtype) in enumerate(tables.cols.iter_rows())
         },
         'rows': terms,
         'quadratic rows': frozenset(
-            (rows[r], columns[a], columns[b], round(v, 9)) for r, a, b, v in handoff.qmatrix.iter_rows() if v
+            (rows[r], columns[a], columns[b], round(v, 9)) for r, a, b, v in tables.qmatrix.iter_rows() if v
         ),
-        'objective': frozenset((columns[c], round(v, 9)) for c, v in handoff.obj.iter_rows() if v),
+        'objective': frozenset((columns[c], round(v, 9)) for c, v in tables.obj.iter_rows() if v),
         'quadratic objective': frozenset(
-            (frozenset((columns[a], columns[b])), round(v, 9)) for a, b, v in handoff.quad.iter_rows() if v
+            (frozenset((columns[a], columns[b])), round(v, 9)) for a, b, v in tables.quad.iter_rows() if v
         ),
-        'sense': handoff.objective_sense,
-        'constant': round(handoff.objective_constant, 9),
+        'sense': tables.objective_sense,
+        'constant': round(tables.objective_constant, 9),
     }
 
 

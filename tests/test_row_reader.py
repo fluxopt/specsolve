@@ -237,7 +237,7 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     still return plausible terms.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
-        tables = model._engine._model.handoff
+        tables = model._engine._model.tables
         for name in ('commit', 'balance'):
             indexed = model._engine._model.constraints[name]
             coordinates = indexed.table.collect()

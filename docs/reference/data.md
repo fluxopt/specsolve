@@ -35,6 +35,19 @@ dimensions raises.
 a table with a column of that name, a parquet path, or a bare sequence of
 labels. Other columns of the table are ignored.
 
+**A dimension's labels, and every column over the dimension, are of its declared
+`dtype`, `str` unless it declares one.** Another type is refused, and the message
+names the fix.
+
+| `dtype` | Labels it takes |
+|---|---|
+| `int` | an integer of any width |
+| `float` | a float of any width |
+| `str` | `String`, `Categorical` or `Enum` |
+| `datetime` | a datetime in any unit or time zone; **a date, as the microsecond its day starts on**, the one conversion |
+
+A table with no rows takes the declared type.
+
 **A dimension's labels list each label once, in order.** On a dimension the
 spec declares `ordered: true`,
 [`shift`](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift),
@@ -44,8 +57,7 @@ each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
 **A datetime label is held in microseconds**, in the time zone it arrives in.
-A column must be in the time zone of its dimension's labels. Under a `dtype: datetime`
-dimension, a date is the microsecond its day starts on.
+A column must be in the time zone of its dimension's labels.
 
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters, so a misspelled label, such as `gsa` for `gas`, is refused by name.
@@ -89,6 +101,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a labels table carrying a column named after a relation with a column over it | names the key it belongs under |
 | a datetime label finer than a microsecond | names a label, and the rounding |
 | a table missing a declared dimension column, or `value` | names the columns needed |
+| a dimension's labels, or a column over it, of another type than its `dtype` | names both types, and the `dtype` to declare or the column to convert |
 | a label the dimension does not have | names the parameter and the strays |
 | two rows for one coordinate | |
 | a relation with two values for one key | |
@@ -108,6 +121,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | What arrives | What happens |
 |---|---|
 | an undeclared column in a table | ignored |
+| a table with no rows whose column over a dimension is of another type | read in the declared type |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
 | a coordinate with no row, of a parameter declared `missing: absent` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |

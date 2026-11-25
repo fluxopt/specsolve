@@ -26,6 +26,7 @@ nav:
   - How-to guides:
       - Preparing the data: howto/data.md
       - Choosing a solver: howto/solvers.md
+      - Finding where the time goes: howto/timings.md
       - Making a solve faster: howto/faster.md
       - Starting from an earlier answer: howto/warm-start.md
       - Solving many scenarios: howto/scenarios.md
