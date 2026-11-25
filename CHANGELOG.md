@@ -11,7 +11,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 - feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
-- fix(data)!: a dimension's labels of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
+- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
 
 ## 0.12.0 (2026-11-23)
 
