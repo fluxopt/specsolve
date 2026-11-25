@@ -35,8 +35,10 @@ DELAY = 10.0
 WAIT = 0.1
 
 #: CPU time no phase holds. The laps tile each call, so what is left is the
-#: return from one call and the entry into the next: 50 to 110 µs of wall time (#2180).
-SLACK = 0.005
+#: return from one call and the entry into the next, and what a test does
+#: between its calls is done before its clock starts: 0.11 ms a call at the
+#: median and 0.25 ms at most, under pyarrow too (#2230).
+SLACK = 0.001
 
 
 def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
@@ -155,14 +157,14 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(
     and the solve after it, not the build, the write or the first solve.
     """
     load = dispatch_table_inputs['load']
-
+    halved = {'load': load.with_columns(value=load['value'] * 0.5)}
     out = tmp_path / 'case.zip'
 
     def call() -> sps.types.Model:
         model = sps.build(dispatch_yaml, dispatch_table_inputs)
         model.write(tmp_path / 'model.lp')
         model.solve()
-        model.update({'load': load.with_columns(value=load['value'] * 0.5)})
+        model.update(halved)
         model.solve(archive=out)
         return model
 
@@ -355,13 +357,14 @@ def test_the_digest_a_held_solver_reads_at_an_update_is_in_the_handoff(
     That read decides whether the solver keeps its model, so it is the handoff's.
     """
     load = dispatch_table_inputs['load']
+    halved = {'load': load.with_columns(value=load['value'] * 0.5)}
     out = tmp_path / 'case.zip'
     monkeypatch.setattr(Solver, 'structure', _slowed(Solver.structure, clock))
 
     def call() -> sps.types.Model:
         model = sps.build(dispatch_yaml, dispatch_table_inputs)
         model.solve()
-        model.update({'load': load.with_columns(value=load['value'] * 0.5)})
+        model.update(halved)
         model.solve(archive=out)
         return model
 
