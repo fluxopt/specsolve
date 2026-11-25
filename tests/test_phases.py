@@ -268,6 +268,24 @@ def test_a_slow_step_shows_in_its_own_phase(
     timed.check()
 
 
+@pytest.mark.xfail(strict=True, reason='the last archive lap comes before the sources are carried')
+def test_a_slow_step_after_the_archive_lands_shows_in_the_models_archive_clock(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock
+):
+    """The answer is handed the sources its archive carries after the archive lands, and that is the archive's too.
+
+    The archive's own row is written before the landing, so only the model's
+    clock can hold it.
+    """
+    monkeypatch.setattr(_api, 'carried_sources', _slowed(_api.carried_sources, clock))
+    out = tmp_path / 'case.zip'
+    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out), out, clock)
+
+    assert timed.kept['archive'] >= DELAY, f"the slowed step is in the model's archive clock: {timed.kept}"
+    assert timed.recorded['archive'] < DELAY, f'and not in the row, written before it: {timed.recorded}'
+    timed.check()
+
+
 def test_a_lap_takes_only_a_phase_a_metrics_column_carries():
     """A phase clocked under a name no `Metrics` column carries would be dropped from every archive."""
     assert get_args(Phase) == PHASES, 'the phases a lap is typed to take are the Metrics clocks, in order'
