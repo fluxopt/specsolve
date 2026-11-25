@@ -9,19 +9,15 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 **This release refuses some data that 0.12.x reads.**
 
-This release shows where a model spends its time. `model.timings()` logs each lap of a model as one row, with its run, phase, step, entry and seconds. The rows of a phase add up to its clock in `model.metrics()`. So when a phase is slow, its rows name the cause: the source that `tidy` read, the variable or constraint that `build` built, or the step of the handoff, which has the same name on every solver. The `run` column separates the solves of an `update` loop. The new how-to [Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/) shows each of these.
-
-This release also checks the type of each label at load. A dimension's labels, and every column over the dimension, must have the type that its `dtype` declares. A dimension without a `dtype` is `str`. Before, such labels loaded as they came, or failed later with a polars error.
+This release shows where a model spends its time. `model.timings()` logs each lap as one row, and the rows of a phase add up to its clock in `model.metrics()`. The how-to [Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/) shows how to read them. Labels of another type than their dimension's `dtype` are now refused at load.
 
 ### What to change in a spec file or its data
 
-- Give each dimension's labels, and every column over the dimension, the type that its `dtype` declares, or declare the type that the labels have ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
-- Declare `dtype: int` or `dtype: datetime` on a dimension whose labels are integers or datetimes. Without a `dtype`, such labels are refused ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
-- Expect any width, encoding or unit within a type to load: `Int32` under `int`, `Categorical` under `str`, nanoseconds under `datetime`. A date under `datetime` reads as the start of its day, and a table with no rows takes the declared type ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+- Give each dimension's labels, and every column over it, the type its `dtype` declares, or declare the type they have. A dimension without a `dtype` is `str` ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
 
 ### What to change in Python code
 
-- Replace `metrics.since(earlier)` with the rows of one run of `model.timings()`. A result's `metrics` holds its own run already ([#2207](https://github.com/fluxopt/specsolve/pull/2207)).
+- Replace `metrics.since(earlier)` with one run of `model.timings()` ([#2207](https://github.com/fluxopt/specsolve/pull/2207)).
 
 The pull requests in this release:
 
