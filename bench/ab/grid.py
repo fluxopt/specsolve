@@ -15,22 +15,25 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 from dataclasses import asdict, dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import polars as pl
+from mathspec import to_spec
 
 from bench.cases import CASES, DEFAULT_CACHE
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 #: The labels of every dimension past the first; the first takes the size.
 OTHER_DIMS = {'node': 4, 'tech': 3}
 
 #: Total columns of the model at each size. ``below`` and ``above`` straddle 250,000 columns.
 SIZES = {'tiny': 24, 's': 24_000, 'below': 240_000, 'above': 260_000, 'l': 1_200_000}
+
+#: PyPSA's own models, each captured where PyPSA hands it to specsolve: ``--sizes pypsa`` runs them.
+PYPSA = ('carbon_management',)
 
 #: The ladder cases the grid is run beside, at each size of a run that is also a rung of theirs: ``s`` or ``l``.
 LADDER = ('dispatch', 'nodal', 'transport', 'storage', 'fleet', 'profiled')
@@ -134,7 +137,7 @@ SHAPES: dict[str, Shape] = {
 
 @dataclass(frozen=True)
 class Cell:
-    """One model at one size, named by its ``id``: ``grid-<shape>-<size>``, ``case-<case>-<size>`` or ``port-<name>``."""
+    """One model at one size, named by its ``id``: ``grid-<shape>-<size>``, ``case-<case>-<size>``, ``port-<name>`` or ``pypsa-<name>``."""
 
     id: str
     #: The spec, as ``sps.build`` takes it.
@@ -146,18 +149,21 @@ class Cell:
 
 
 def ids(sizes: list[str]) -> list[str]:
-    """Every cell's id: each grid shape at each of *sizes*, each ladder case at those of *sizes* it has, then every port.
+    """Every cell's id: each grid shape at each of *sizes*, each ladder case at those of *sizes* it has, every port, then PyPSA's models.
 
     A port is a referenced model of ``examples/ports`` at its published size,
-    and has no size of its own.
+    and has no size of its own. PyPSA's models are cells only where *sizes*
+    names ``pypsa``, so a run over the grid does not wait on them.
     """
     from tools.constructs import REFERENCES
 
     rungs = {name: {shape.label for shape in CASES[name].ladder} for name in LADDER}
+    grid = [size for size in sizes if size in SIZES]
     return (
-        [f'grid-{name}-{size}' for name in SHAPES for size in sizes]
-        + [f'case-{name}-{size}' for name in LADDER for size in sizes if size in rungs[name]]
+        [f'grid-{name}-{size}' for name in SHAPES for size in grid]
+        + [f'case-{name}-{size}' for name in LADDER for size in grid if size in rungs[name]]
         + [f'port-{name}' for name in sorted(REFERENCES)]
+        + [f'pypsa-{name}' for name in PYPSA if 'pypsa' in sizes]
     )
 
 
@@ -169,6 +175,8 @@ def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
         from tests.fixtures import expanded
 
         return Cell(cell_id, expanded(port_spec(rest)), port_sources(rest))
+    if kind == 'pypsa':
+        return _captured(cell_id, Path(__file__).parent / rest)
     name, size = rest.rsplit('-', 1)
     if kind == 'case':
         case = CASES[name]
@@ -184,6 +192,13 @@ def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
         stamp.write_text(repr(asdict(shape)))
     paths = {p.stem: str(p) for p in sorted(key.glob('*.parquet'))}
     return Cell(cell_id, spec(shape), paths, solvable=not shape.quadratic)
+
+
+def _captured(cell_id: str, folder: Path) -> Cell:
+    """A model as ``capture.py`` in *folder* wrote it, its curves expanded, since specsolve builds no ``piecewise:`` block."""
+    sources: dict[str, object] = {p.stem: str(p) for p in sorted((folder / 'sources').glob('*.parquet'))}
+    sources |= json.loads((folder / 'scalars.json').read_text())
+    return Cell(cell_id, to_spec(folder / 'spec.yaml').expand('piecewise'), sources)
 
 
 def _digest(shape: Shape) -> str:

@@ -1,4 +1,4 @@
-scenario,generator,value
-base,block,100.0
-base,flex,80.0
-base,sink,30.0
+generator,scenario,value
+block,base,100.0
+flex,base,80.0
+sink,base,30.0

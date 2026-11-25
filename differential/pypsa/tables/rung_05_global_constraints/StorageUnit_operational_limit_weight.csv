@@ -1,2 +1,2 @@
-scenario,global_constraint,storage_unit,value
-base,op_gas,res5,1.0
+global_constraint,scenario,storage_unit,value
+op_gas,base,res5,1.0
