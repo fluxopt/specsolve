@@ -6,10 +6,11 @@ writes them: a result, a sweep's slice, or an archive.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
+from typing import TYPE_CHECKING, Literal, NamedTuple, get_args, get_type_hints
 
 import polars as pl
 
@@ -269,6 +270,14 @@ class Metrics(NamedTuple):
 #: The phases a model is clocked in, in the order they run, each named as its
 #: [`Metrics`][] column is less ``_seconds``.
 PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
+
+#: A name in [`PHASES`][], so a lap under a phase no [`Metrics`][] column
+#: carries is refused by the type checker.
+Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
+
+#: How a step ends a lap: ``(phase, step, entry)``, as
+#: [`Engine.lap`][specsolve._engine.engine.Engine.lap] takes them.
+Lap = Callable[[Phase, str | None, str | None], None]
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)

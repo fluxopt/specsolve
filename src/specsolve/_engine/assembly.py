@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
     from specsolve._engine.attaching import AttachedSources
+    from specsolve._records import Lap
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -113,7 +114,7 @@ class Assembly:
         program: program.Program,
         attached: AttachedSources,
         measured: Measured,
-        lap: Callable[[str, str | None, str | None], None],
+        lap: Lap,
     ) -> None:
         self.program = program
         self.lap = lap
