@@ -1,5 +1,5 @@
-scenario,snapshot,link,value
-base,2015-01-01T00:00:00.000000,cable,0.3
-base,2015-01-01T01:00:00.000000,cable,0.3
-base,2015-01-01T02:00:00.000000,cable,0.3
-base,2015-01-01T03:00:00.000000,cable,0.3
+link,scenario,snapshot,value
+cable,base,2015-01-01T00:00:00.000000,0.3
+cable,base,2015-01-01T01:00:00.000000,0.3
+cable,base,2015-01-01T02:00:00.000000,0.3
+cable,base,2015-01-01T03:00:00.000000,0.3

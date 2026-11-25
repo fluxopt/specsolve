@@ -1,6 +1,6 @@
 """Is the data there where an entry needs it? The two positions that ask.
 
-Everything else in this lane reads a missing ``neutral`` parameter row as a
+Everything else in this lane reads a missing row of a ``missing: 0`` parameter as a
 zero coefficient (the absence rules). These are the two places that reading
 has no answer for: **a divisor**, where zero is not a divisor at all, and **a
 constant side**, where zero is the bound rather than the absence of one. Both
@@ -75,7 +75,7 @@ def _constant_leaves(
     """Every parameter standing as a constant term under *node*, with the rows it must cover.
 
     A constant term is a parameter in a variable-free additive position — `hi`
-    in `x + hi`. Under a sum a missing neutral row is one term fewer, so a
+    in `x + hi`. Under a sum a missing ``missing: 0`` row is one term fewer, so a
     reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
     absence rules allow, so ``coefficient`` records having passed through such a
@@ -201,7 +201,7 @@ def _quotients(
     the coordinate. A quotient that stands at the row's own coordinate is
     also removed where a variable beside it there is absent, which takes the
     row; that absence narrows the quotient's own coordinates and adds none, so
-    a count stays one of the quotient's coordinates. A variable declared ``missing: neutral`` is a zero where it is
+    a count stays one of the quotient's coordinates. A variable declared ``missing: 0`` is a zero where it is
     absent, and removes nothing.
     """
     at_the_row = [node for e in expressions for node in _at_the_row(e)]
@@ -215,13 +215,13 @@ def _quotients(
                 continue
             needed = region
             for variable in sorted(_in_place(quotient.numerator)):
-                if ctx.program.variables[variable].missing != 'neutral':
+                if isinstance(ctx.program.variables[variable].missing, str):
                     present = absence.present(ctx.model, variable)
                     needed = present if needed is None else (needed & present)
             if any(quotient is node for node in at_the_row):
                 own = {d for p in params for d in ctx.dataset[p].dims} | set(getattr(needed, 'dims', ()))
                 for variable in sorted(row_variables):
-                    if ctx.program.variables[variable].missing != 'neutral':
+                    if isinstance(ctx.program.variables[variable].missing, str):
                         present = absence.present(ctx.model, variable)
                         present = present.any([d for d in present.dims if d not in own])
                         needed = present if needed is None else (needed & present)

@@ -1,4 +1,4 @@
-scenario,generator,value
-base,coal,100.0
-base,gas,100.0
-base,must_run,10.0
+generator,scenario,value
+coal,base,100.0
+gas,base,100.0
+must_run,base,10.0

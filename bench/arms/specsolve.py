@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import itertools
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -92,6 +93,23 @@ def _clocks(model: Any) -> dict[str, float]:
     return dict(getattr(getattr(model, '_engine', None), '_seconds', None) or {})
 
 
+def _laps(model: Any, since: int = 0) -> list[dict[str, Any]]:
+    """Every lap from the *since*-th on, as rows of `Model.timings`; empty on a checkout from before it (#2207).
+
+    Copied off the engine's log rather than read through ``timings()``: this
+    runs inside the timed call, and building a polars frame there is charged
+    to the wall time.
+    """
+    log = getattr(getattr(model, '_engine', None), '_log', None)
+    if log is None:
+        return []
+    steps = list(log._steps)
+    return [
+        {'run': run, 'phase': steps[code][0], 'step': steps[code][1], 'entry': steps[code][2], 'seconds': seconds}
+        for run, code, seconds in itertools.islice(zip(log._runs, log._codes, log._seconds, strict=True), since, None)
+    ]
+
+
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
 
@@ -107,7 +125,7 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         else:
             _loaded(sink, model).close()
 
-        return _counts(_tables(model), nonzeros=True) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=True) | {'phases': _clocks(model), 'laps': _laps(model)}
 
 
 def _loaded(sink: str, model: Any) -> Any:
@@ -169,11 +187,15 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
     one is kept. A *cold* window closes the held solver first, so the model
     is loaded from scratch.
     """
-    before = _clocks(model)
+    before, lapped = _clocks(model), len(_laps(model))
     model.update(sources)
     reloaded = _handed_off(model, sink, cold=cold)
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
-    return _counts(_tables(model), nonzeros=True) | {'reloaded': reloaded, 'phases': phases}
+    return _counts(_tables(model), nonzeros=True) | {
+        'reloaded': reloaded,
+        'phases': phases,
+        'laps': _laps(model, since=lapped),
+    }
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
@@ -301,7 +323,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with sps.build(spec, sources) as model:
-        return _counts(_tables(model), nonzeros=False) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=False) | {'phases': _clocks(model), 'laps': _laps(model)}
 
 
 def written(prepared: tuple[Path, dict[str, str]], path: Path) -> None:
