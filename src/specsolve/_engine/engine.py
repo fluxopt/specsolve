@@ -1,25 +1,26 @@
-"""Polars engine: build the model frames, hand them to a sink, read the answer back.
+"""Polars engine: build the model tables, hand them to a sink, read the answer back.
 
 The engine owns the lifecycle — a build, its solver, the counters and clocks
 [`Engine.diagnostics`][] reports — and none of the three questions it
 asks on the way: what the data is ([`attaching`][specsolve._engine.attaching]),
-what each declaration contributes ([`assembly`][specsolve._engine.assembly]),
+what each entry contributes ([`assembly`][specsolve._engine.assembly]),
 how a row or a solve reads back ([`readback`][specsolve._engine.readback]).
 The lane is described in docs/development/architecture.md.
 """
 
 from __future__ import annotations
 
+import math
 import warnings
-from contextlib import contextmanager
+from array import array
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import polars as pl
 
 from specsolve import _sinks as sinks
-from specsolve._answer_layout import BASIS, BASIS_STATUSES, kinds_of
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -28,29 +29,30 @@ from specsolve._engine.assembly import (
     declares_quadratic,
     short_parameters,
 )
-from specsolve._engine.attaching import attach
-from specsolve._engine.compiler import Compiler, Solution
+from specsolve._engine.attaching import AttachedSources, attach
+from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
-from specsolve._result import ConstraintRow, Diagnostics, Result
-from specsolve._sinks.solver import Basis
+from specsolve._outputs import kinds_of
+from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase, Step
+from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
+from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
-    import numpy as np
     from mathspec import program
     from polars._typing import PolarsDataType
 
-    from specsolve._answer_layout import Output
+    from specsolve._outputs import Output
     from specsolve._result import InfeasibleSubsystem
     from specsolve._sinks.solver import SolveAnswer
     from specsolve._status import SolveStatus
 
 
 def _statuses(codes: np.ndarray) -> pl.Series:
-    """Basis status codes as the series a frame is laid out from."""
+    """Basis status codes as the series a table is laid out from."""
     return pl.Series(VALUE, BASIS_STATUSES, dtype=BASIS).gather(codes)
 
 
@@ -70,8 +72,6 @@ def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.nd
     Raises:
         SpecsolveError: *sink* cannot take values that leave a column out.
     """
-    import numpy as np
-
     partial = bool(np.isnan(values).any())
     match sink.lp_values['partial' if partial else 'complete']:
         case 'refused':
@@ -101,7 +101,7 @@ def _no_built_model(doing: str) -> str:
 
 
 class Engine:
-    """Build a ``Program`` into polars frames, then sink it."""
+    """Build a ``Program`` into polars tables, then sink it."""
 
     def __init__(self) -> None:
         #: The build, or ``None`` where there is not one — closed, released by
@@ -114,11 +114,12 @@ class Engine:
         #: What the last solve concluded, or ``None`` once a load, a build or
         #: [`close`][] has changed what the solver holds.
         self._solved: SolveStatus | None = None
-        #: How many solves this model has been through, and how many loaded the solver from scratch.
-        self._solves = 0
-        self._loads = 0
-        #: Wall seconds each phase has spent, cumulative across rebuilds.
-        self._seconds: dict[str, float] = {}
+        #: Every lap of this model's life, in order: ``(run, phase, step, entry, seconds)``.
+        self._log = _Laps()
+        #: Per run, how many solves it took and how many solver instances they took.
+        self._counts: list[list[int]] = [[0, 0]]
+        #: When the last lap ended, or the call began: where the next lap measures from.
+        self._mark = perf_counter()
 
     @property
     def _model(self) -> BuiltModel:
@@ -127,32 +128,62 @@ class Engine:
             raise SpecsolveError(_no_built_model('to hand over'))
         return self._built
 
+    def start(self) -> None:
+        """Begin a call: the next [`lap`][] measures from now."""
+        self._mark = perf_counter()
+
+    def lap(self, phase: Phase, step: Step | None = None, entry: str | None = None) -> None:
+        """Log the wall time since the last lap, or since [`start`][], under *phase*.
+
+        Each lap begins where the one before it ended, so the laps of a call
+        add up to the whole call, and a step between two named steps is in the
+        lap after it. *step* names what the lap did inside *phase*, as the
+        build names each entry. The steps outside the engine lap here too, so
+        the log holds every phase of the model's life. A call that raises
+        keeps the laps it finished.
+        """
+        now = perf_counter()
+        self._log.append(len(self._counts) - 1, phase, step, entry, now - self._mark)
+        self._mark = now
+
+    def next_run(self) -> None:
+        """End the run: a result has been handed back, so the laps from here on are the next one's."""
+        self._counts.append([0, 0])
+
+    def timings(self) -> pl.DataFrame:
+        """Every lap of this model's life, one row each: ``(run, phase, step, entry, seconds)``."""
+        return self._log.table()
+
     # ------------------------------------------------------------------
     # build
     # ------------------------------------------------------------------
 
-    def build(self, program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> None:
-        """Attach *sources*, then build every declaration into the model frames.
+    def build(
+        self, program: program.Program, sources: Mapping[str, pl.LazyFrame], attached: AttachedSources | None = None
+    ) -> None:
+        """Attach *sources*, then build every entry into the model tables.
 
+        *attached* is *sources* already attached, as reading the assumptions
+        left them, and is not attached again; whoever attached it lapped it.
         A second call rebuilds over the same object. The held solver reads its
         [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of these
-        frames. A build that raises leaves no model rather than half of one.
+        tables. A build that raises leaves no model rather than half of one.
         """
         if self._solver is not None:
             self._solver.structure()
+            self.lap('handoff', 'digest')
         self._built = None
         self._solved = None
         self._measured = Measured()
-        with _clocked(self._seconds, 'attach'):
+        if attached is None:
             attached = attach(program, sources)
+            self.lap('attach')
         self._measured.sparse = short_parameters(program, attached)
-        assembly = Assembly(program, attached, self._measured)
-        with _clocked(self._seconds, 'build'):
-            self._built = assembly.run()
+        self._built = Assembly(program, attached, self._measured, self.lap).run()
 
     # ------------------------------------------------------------------
-    # sinks — see _sinks/; the engine only supplies the frames
+    # sinks — see _sinks/; the engine only supplies the tables
     # ------------------------------------------------------------------
 
     def row(self, name: str, coordinate: Mapping[str, object]) -> ConstraintRow:
@@ -171,14 +202,14 @@ class Engine:
         path = Path(path)
         suffix = path.suffix.lower()
         chosen = sinks.writer(suffix)
-        self.check(suffix)
-        with _clocked(self._seconds, 'write'):
-            chosen.write(self._model.handoff, path)
+        self.check_sink(suffix)
+        chosen.write(self._model.tables, path)
+        self.lap('write')
 
-    def check(self, sink: str) -> None:
+    def check_sink(self, sink: str) -> None:
         """Refuse the built model where the sink called *sink* cannot take it.
 
-        Read off the hand-off, so a square the data prices at zero or an
+        Read off the sink tables, so a square the data prices at zero or an
         integer variable with no column built asks for nothing. What
         [`solve`][] and [`write`][] refuse, this refuses, with the same
         message.
@@ -187,27 +218,47 @@ class Engine:
             SpecsolveError: A construct the sink cannot take, naming it and the
                 sinks that do; or a name belonging to no sink.
         """
-        if (refused := sinks.refusal(self._model.handoff, sink)) is not None:
+        if (refused := sinks.refusal(self._model.tables, sink)) is not None:
             raise SpecsolveError(refused)
 
-    def _hand_off(
-        self, solver_name: str, solver_options: Mapping[str, object] | None, *, carry_on: bool = False
+    def handoff(
+        self,
+        solver_name: str,
+        solver_options: Mapping[str, object] | None,
+        *,
+        start: Result | Mapping[str, Mapping[str, pl.LazyFrame]] | Literal['previous'] | None = 'previous',
     ) -> tuple[sinks.Solver, bool]:
-        """[`solve`][] up to the run, which is where a benchmark of an update stops the clock.
+        """The handoff phase whole: [`solve`][] up to the run, lapped as ``handoff``.
 
-        Returns the solver and whether it was loaded again, which
-        [`loaded`][specsolve._sinks.loaded] decides. A solver
-        kept forgets its last run unless *carry_on*. Counts toward neither
-        ``solves`` nor ``loads``, so timing this alone leaves them true.
+        *start* is matched, the sink checked, the solver loaded or the new
+        numbers pushed onto the one held, as [`loaded`][specsolve._sinks.loaded]
+        decides, and the start given. A solver kept forgets its last run unless
+        *start* is ``'previous'``. Counts toward neither ``solves`` nor
+        ``solver_instances``, so a benchmark that times this alone leaves them true.
+
+        Returns:
+            The solver, and whether it was loaded again.
+
+        Raises:
+            SpecsolveError: A *start* this model or this solver cannot start
+                from, or a sink that cannot take the built model.
         """
-        self.check(solver_name)
+        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
+        self.lap('handoff', 'start')
+        self.check_sink(solver_name)
         self._solved = None
-        with _clocked(self._seconds, 'handoff'):
-            held = self._solver
-            self._solver = sinks.loaded(held, solver_name, self._model.handoff, solver_options)
-            reloaded = self._solver is not held
-            if not reloaded and not carry_on:
-                self._solver.forget()
+        self.lap('handoff', 'check')
+        held = self._solver
+        self._solver = sinks.loaded(held, solver_name, self._model.tables, solver_options)
+        reloaded = self._solver is not held
+        self.lap('handoff', 'instance' if reloaded else 'push')
+        if not reloaded and start != 'previous':
+            self._solver.forget()
+        if isinstance(matched, Basis):
+            self._solver.start_from_basis(matched)
+        elif matched is not None:
+            self._solver.start_from_values(matched)
+        self.lap('handoff', 'warm')
         return self._solver, reloaded
 
     def solve(
@@ -230,17 +281,17 @@ class Engine:
             solver_name: One of [`SOLVERS`][specsolve._sinks.SOLVERS].
             solver_options: Forwarded to the solver verbatim, in its own
                 vocabulary (``{'time_limit': 60, 'mip_rel_gap': 0.01}``).
-            lower: How an expression the caller writes becomes a plan node,
+            lower: How an expression the caller writes becomes a program node,
                 for [`evaluate`][specsolve._result.Result.evaluate], or
-                ``None`` for a build from an already-lowered ``Program``.
+                ``None`` for a build from an already-compiled ``Program``.
             outputs: Which of
-                [`OUTPUTS`][specsolve._answer_layout.OUTPUTS] the
+                [`OUTPUTS`][specsolve._outputs.OUTPUTS] the
                 result carries, already checked.
             start: ``'previous'``, to carry on from the last solve while its
                 solver stays loaded and begin from nothing otherwise; ``None``,
                 to begin from nothing; or an earlier answer or a
                 [`Start`][specsolve.types.Start] already read
-                ([`read_start`][specsolve._sources.read_start]), matched by
+                ([`read_start`][specsolve._start.read_start]), matched by
                 coordinate: an LP from a basis where one is given
                 ([`matched_basis`][specsolve._engine.readback.matched_basis]),
                 and otherwise, and a mixed-integer model always, from values
@@ -253,19 +304,13 @@ class Engine:
             SpecsolveError: A *start* this model or this solver cannot start
                 from, refused before the solver loads.
         """
-        carry_on = start == 'previous'
-        matched = None if start is None or isinstance(start, str) else self._matched_start(start, solver_name)
-        solver, reloaded = self._hand_off(solver_name, solver_options, carry_on=carry_on)
-        if isinstance(matched, Basis):
-            solver.warm(matched)
-        elif matched is not None:
-            solver.start(matched)
-        handoff = self._model.handoff
-        self._solves += 1
+        solver, reloaded = self.handoff(solver_name, solver_options, start=start)
+        counts = self._counts[-1]
+        counts[0] += 1
         if reloaded:
-            self._loads += 1
-        with _clocked(self._seconds, 'solve'):
-            answer = solver.run(handoff, basis='basis' in outputs)
+            counts[1] += 1
+        answer = solver.run(self._model.tables, basis='basis' in outputs)
+        self.lap('solve')
         self._solved = answer.status
         return self._answered(answer, solver_name, lower, outputs)
 
@@ -322,22 +367,22 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
-        expressions, evaluate = self._readers(answer.primal, answer.dual, no_duals, lower)
         return Result(
             _status=answer.status,
             _objective=answer.objective,
-            _primals=primals,
-            _duals=duals,
-            _outputs={kind: self._output(kind, answer) for kind in kinds_of(outputs)},
-            _expressions=expressions,
-            _evaluate=evaluate,
+            _tables={
+                'primal': primals,
+                'dual': duals,
+                **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
+            },
+            _expressions=self._expressions(answer.primal, answer.dual, no_duals, lower),
             _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
         )
 
     def infeasible_subsystem(self) -> InfeasibleSubsystem:
-        """The infeasible subsystem of the last solve, by declaration and coordinate. See [`infeasible_subsystem`][specsolve._api.Model.infeasible_subsystem].
+        """The infeasible subsystem of the last solve, by entry and coordinate. See [`infeasible_subsystem`][specsolve._api.Model.infeasible_subsystem].
 
         Raises:
             SpecsolveError: No solve since the last build, update or close; a
@@ -356,18 +401,48 @@ class Engine:
         assert self._solver is not None, 'a solve leaves a solver, and whatever drops it drops the status too'
         found = self._solver.infeasible_subsystem()
         if found is None:
-            raise SpecsolveError(
-                _no_infeasible_subsystem_message(type(self._solver).__name__.lower(), self._discrete())
-            )
+            raise SpecsolveError(_no_infeasible_subsystem_message(self._solver.name, self._discrete()))
         return readback.infeasible_subsystem(self._model, found)
+
+    @property
+    def run(self) -> int:
+        """Which run the laps belong to now: how many results the model has handed back."""
+        return len(self._counts) - 1
+
+    def metrics(self, run: int | None = None) -> Metrics:
+        """This model's sizes, counters and clocks over its whole life, or over *run* alone; answerable after [`close`][].
+
+        The one place a [`Metrics`][] is built from the model: a result's, an
+        archive's and a sweep slice's row is its run's. The clocks are the
+        log's laps summed by phase, and the whole life's are the runs' added
+        up, so no run's clock passes it.
+        """
+        clocks = self._log.clocks(run)
+        solves, instances = (
+            (sum(c[0] for c in self._counts), sum(c[1] for c in self._counts)) if run is None else self._counts[run]
+        )
+        measured = self._measured
+        return Metrics(
+            columns=measured.columns,
+            rows=measured.rows,
+            nonzeros=measured.nonzeros,
+            solves=solves,
+            solver_instances=instances,
+            load_seconds=clocks['load'],
+            tidy_seconds=clocks['tidy'],
+            attach_seconds=clocks['attach'],
+            build_seconds=clocks['build'],
+            handoff_seconds=clocks['handoff'],
+            solve_seconds=clocks['solve'],
+            readback_seconds=clocks['readback'],
+            write_seconds=clocks['write'],
+            archive_seconds=clocks['archive'],
+        )
 
     def diagnostics(self) -> Diagnostics:
         """What this build and its solves did that the answer does not show; answerable after [`close`][]."""
         measured = self._measured
         return Diagnostics(
-            columns=measured.columns,
-            rows=measured.rows,
-            nonzeros=measured.nonzeros,
             omissions=_per_name('constraint', measured.omitted, rows_not_built=pl.UInt32),
             coefficient_range=_per_name('constraint', measured.coefficients, smallest=pl.Float64, largest=pl.Float64),
             bound_range=_per_name('variable', measured.bounds, smallest=pl.Float64, largest=pl.Float64),
@@ -380,9 +455,6 @@ class Engine:
                 missing=pl.UInt64,
             ),
             objective_range=measured.objective_range,
-            solves=self._solves,
-            loads=self._loads,
-            seconds=dict(self._seconds),
         )
 
     def _read_back(
@@ -391,10 +463,10 @@ class Engine:
         dual: pl.Series | None,
         dual_ray: pl.Series | None,
     ) -> tuple[dict[str, pl.LazyFrame], ...]:
-        """One solve's answer as one frame per declaration — a [`Result`][]'s own.
+        """One solve's answer as one table per entry — a [`Result`][]'s own.
 
-        The frames reference this build's label frames, which [`build`][]
-        replaces rather than mutates. A ``None`` vector yields no frames rather
+        The tables reference this build's index tables, which [`build`][]
+        replaces rather than mutates. A ``None`` vector yields no tables rather
         than empty ones.
         """
         return (
@@ -404,19 +476,19 @@ class Engine:
         )
 
     def _output(self, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-        """The frames of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer_layout.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+        """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
         match kind:
             case 'activity':
                 return {} if answer.activity is None else self._per_constraint(answer.activity)
             case 'reduced_cost':
                 if answer.primal is None or answer.dual is None:
                     return {}
-                return self._per_variable(readback.reduced_costs(self._model.handoff, answer.primal, answer.dual))
+                return self._per_variable(readback.reduced_costs(self._model.tables, answer.primal, answer.dual))
             case 'slack':
                 return (
                     {}
                     if answer.activity is None
-                    else self._per_constraint(readback.slacks(self._model.handoff, answer.activity))
+                    else self._per_constraint(readback.slacks(self._model.tables, answer.activity))
                 )
             case 'variable_basis':
                 return {} if answer.basis is None else self._per_variable(_statuses(answer.basis.columns))
@@ -426,7 +498,7 @@ class Engine:
                 raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
 
     def _per_constraint(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
-        """A vector over the rows as one frame per constraint, as [`_read_back`][] lays out a dual."""
+        """A vector over the rows as one table per constraint, as [`_read_back`][] lays out a dual."""
         model = self._model
         return {
             name: readback.laid_out(model.attached, model.constraints[name], c.dims, values)
@@ -434,34 +506,32 @@ class Engine:
         }
 
     def _per_variable(self, values: pl.Series) -> dict[str, pl.LazyFrame]:
-        """A vector over the columns as one frame per variable, as [`_read_back`][] lays out a primal."""
+        """A vector over the columns as one table per variable, as [`_read_back`][] lays out a primal."""
         model = self._model
         return {
             name: readback.laid_out(model.attached, model.variables[name], v.dims, values)
             for name, v in model.program.variables.items()
         }
 
-    def _readers(
+    def _expressions(
         self,
         primal: pl.Series | None,
         dual: pl.Series | None,
         no_duals: str | None,
         lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-    ) -> tuple[
-        dict[str, Callable[[], pl.DataFrame]],
-        Callable[[str | Mapping[str, object]], pl.DataFrame] | None,
-    ]:
-        """What [`evaluate`][specsolve._result.Result.evaluate] reads through: a reader per declared name, and the ad-hoc evaluator.
+    ) -> Expressions:
+        """What [`evaluate`][specsolve._result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
 
-        Both close over a snapshot the result owns, including a copy of the
-        variable registry, so they keep answering after an update or ``close()``.
+        The readers close over a snapshot the result owns, including a copy of
+        the variable registry, so they keep answering after an update or
+        ``close()``. A solve that left no primal has none.
         """
         if primal is None:
-            return {}, None
+            return Expressions()
         model = self._model
         solution = Solution(primal, dual, dict(model.constraints), no_duals)
-        compiler = Compiler(Scope(model.program, model.attached, dict(model.variables)), solution)
-        return readback.readers(compiler, model.program.expressions, lower)
+        builder = QueryBuilder(Scope(model.program, model.attached, dict(model.variables)), solution)
+        return readback.expressions(builder, model.program.expressions, lower)
 
     def reconstruct(
         self,
@@ -472,14 +542,14 @@ class Engine:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame] | None:
         """The ad-hoc evaluator for a saved solution, over this rebuilt model.
 
-        This build supplies the labels that put the saved values back in vector
+        This build supplies the solver indices that put the saved values back in vector
         order. It comes back where *lower* is given.
 
         Args:
-            primals: The saved ``(dims…, value)`` frame per variable.
+            primals: The saved ``(dims…, value)`` table per variable.
             duals: The same per constraint, or ``None`` where the solve left no duals.
             no_duals: Why there are no duals, or ``None`` when *duals* holds them.
-            lower: How an expression the caller writes becomes a plan node.
+            lower: How an expression the caller writes becomes a program node.
         """
         model = self._model
         primal = readback.reordered(model.attached, model.variables, model.program.variables, primals)
@@ -488,8 +558,7 @@ class Engine:
             if duals is not None
             else None
         )
-        _, evaluate = self._readers(primal, dual, no_duals, lower)
-        return evaluate
+        return self._expressions(primal, dual, no_duals, lower).undeclared
 
     def _discrete(self) -> list[str]:
         """The variables this model declared as anything but continuous."""
@@ -504,7 +573,7 @@ class Engine:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Drop the built model and close a loaded solver. A [`Result`][] keeps its own frames."""
+        """Drop the built model and close a loaded solver. A [`Result`][] keeps its own tables."""
         if self._solver is not None:
             self._solver.close()
             self._solver = None
@@ -519,8 +588,58 @@ class Engine:
         return False
 
 
+class _Laps:
+    """The engine's log of laps, held as columns so a long-lived model's log stays small.
+
+    Each step, ``(phase, step, entry)``, is stored once and a lap holds its
+    number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
+    Each run's seconds per phase are added up as its laps arrive, so a run's
+    clocks are read without the log, and the whole life's are the runs' summed
+    exactly and rounded once, so no run passes the whole, not even in the last
+    place.
+    """
+
+    def __init__(self) -> None:
+        self._steps: dict[tuple[str, str | None, str | None], int] = {}
+        self._runs = array('I')
+        self._codes = array('I')
+        self._seconds = array('d')
+        self._totals: list[dict[str, float]] = []
+
+    def append(self, run: int, phase: str, step: str | None, entry: str | None, seconds: float) -> None:
+        self._runs.append(run)
+        self._codes.append(self._steps.setdefault((phase, step, entry), len(self._steps)))
+        self._seconds.append(seconds)
+        while len(self._totals) <= run:
+            self._totals.append(dict.fromkeys(PHASES, 0.0))
+        self._totals[run][phase] += seconds
+
+    def clocks(self, run: int | None = None) -> dict[str, float]:
+        """Seconds per phase over every lap, or over *run*'s, every phase present."""
+        if run is not None:
+            return dict(self._totals[run])
+        return {phase: math.fsum(totals[phase] for totals in self._totals) for phase in PHASES}
+
+    def table(self) -> pl.DataFrame:
+        """Every lap as a row of [`TIMINGS_SCHEMA`][specsolve._records.TIMINGS_SCHEMA], in the order they ran."""
+        steps = list(self._steps)
+        codes = pl.Series(np.frombuffer(self._codes, dtype=np.uint32).copy())
+        named = {
+            column: pl.Series([step[i] for step in steps], dtype=pl.String).gather(codes)
+            for i, column in enumerate(('phase', 'step', 'entry'))
+        }
+        return pl.DataFrame(
+            {
+                'run': np.frombuffer(self._runs, dtype=np.uint32).copy(),
+                **named,
+                'seconds': np.frombuffer(self._seconds, dtype=np.float64).copy(),
+            },
+            schema=TIMINGS_SCHEMA,
+        )
+
+
 def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
-    """One [`Diagnostics`][specsolve._result.Diagnostics] frame: a row per name in *measured*, in build order.
+    """One [`Diagnostics`][specsolve._result.Diagnostics] table: a row per name in *measured*, in build order.
 
     *kind* names the first column, and the remaining *columns* carry each
     value in order — a scalar for one column, a tuple for several.
@@ -533,27 +652,26 @@ def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataTy
     )
 
 
-def expression_readers(
+def expressions_of(
     program: program.Program,
     sources: Mapping[str, pl.LazyFrame],
     lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
-) -> tuple[dict[str, Callable[[], pl.DataFrame]], Callable[[str | Mapping[str, object]], pl.DataFrame] | None]:
+) -> Expressions:
     """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
 
     Args:
-        program: A lowered program with no variables — a calculation, so every
+        program: A compiled program with no variables — a calculation, so every
             expression has a value with no solver.
         sources: Tidied sources, as
             [`tidy_sources`][specsolve._sources.tidy_sources] produces.
-        lower: How an ad-hoc expression becomes a plan node in the model's
+        lower: How an ad-hoc expression becomes a program node in the model's
             namespace, or ``None`` where ad-hoc evaluation is not offered.
 
     Returns:
-        One deferred reader per declared named expression, and the ad-hoc
-        evaluator; either compiles on call.
+        The readers, each of which builds its query on call.
     """
-    compiler = Compiler(Scope(program, attach(program, sources), {}))
-    return readback.readers(compiler, program.expressions, lower)
+    builder = QueryBuilder(Scope(program, attach(program, sources), {}))
+    return readback.expressions(builder, program.expressions, lower)
 
 
 def _no_infeasible_subsystem_message(solver_name: str, discrete: Sequence[str]) -> str:
@@ -582,13 +700,7 @@ def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:
             f'{status.termination_condition!r} rather than infeasible. Read dual() for the prices of a '
             f'model that does have one.'
         )
-    asks = {
-        'gurobi': "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the "
-        'solve to compute the certificate at all',
-        'xpress': "re-solve with solver_options={'presolve': 0}: xpress has a ray only where the simplex "
-        'found the infeasibility, and none where presolve found it first',
-    }
-    ask = asks.get(solver_name)
+    ask = sinks.SOLVERS[solver_name].dual_ray_advice
     return f'the model is infeasible, and the {solver_name} sink returned no dual ray to certify it. ' + (
         f'{ask}.' if ask else 'A ray comes from the simplex, so a run that never reached it has none to give.'
     )
@@ -621,13 +733,3 @@ def _no_duals_message(
         f'{termination_condition!r}. Duals come from a simplex basis, which a '
         f'run stopped short of one does not have.'
     )
-
-
-@contextmanager
-def _clocked(seconds: dict[str, float], phase: str) -> Iterator[None]:
-    """Add the block's wall time onto ``seconds[phase]``, on failure too."""
-    started = perf_counter()
-    try:
-        yield
-    finally:
-        seconds[phase] = seconds.get(phase, 0.0) + perf_counter() - started

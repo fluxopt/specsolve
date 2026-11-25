@@ -1,0 +1,621 @@
+version: 0
+description: The file states a plain `n.optimize()`, its multi-period class under the `multi_investment_periods`
+  keyword, and its stochastic class, which `n.set_scenarios(...)` sets. Every quantity chosen once the
+  future is known (second-stage) spans the futures dispatch is chosen in (`scenario`). Capacity is chosen
+  once, before the future is known, and paid at its expected cost in each investment `period` its build
+  year and lifetime span. Operation is the expectation over the scenarios' weights, with a share priced
+  at the worst-outcome mean cost (CVaR) only where a risk preference is set. A plain run's data has one
+  scenario, one period, unit weights, no outage and every `active` flag true, so the problem is the standard
+  one. On a security-constrained run, PyPSA copies each branch flow limit once per `outage`, and the outage
+  factors, `active` flags and scenario weights come from data prep.
+dimensions:
+  breakpoint: {dtype: int, ordered: true, description: 'the corners of a piecewise-linear curve, in order.
+      A curve runs over the breakpoints its data has rows for, so curves may differ in length'}
+  bus: {description: network nodes}
+  generator: {description: 'generating units, each on one bus'}
+  link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
+  link_output: {description: 'a link''s output ports, one label per port a link declares. The labels are
+      PyPSA''s `bus1`, `bus2`, … columns read long, data prep. A link of any number of output ports is
+      then one term in the balance'}
+  load: {description: 'demands, each on one bus'}
+  period: {dtype: int, ordered: true, description: investment periods. It is PyPSA's `investment_periods`}
+  process: {description: 'generalised multi-port converters, each with an internal power that every port
+      draws or delivers at its own rate'}
+  process_output: {description: 'a process''s ports, one label per port a process declares. The labels
+      are PyPSA''s `bus0`, `bus1`, …, each with a signed `rate`, data prep. A process of any number of
+      ports is then one term in the balance'}
+  scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
+  snapshot: {dtype: datetime, ordered: true, description: dispatch periods}
+  store: {description: 'pure energy stores, each on one bus'}
+relations:
+  Generator_bus: {key: generator, values: bus, description: the bus a generator sits on}
+  Link_bus0: {key: link, values: bus, description: the bus a link leaves}
+  Link_output_bus: {key: link_output, values: bus, description: 'the bus an output port delivers to. It
+      is PyPSA''s `bus1`, `bus2`, … columns. A link of three output ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Link_output_link: {key: link_output, values: link, description: the link an output port belongs to}
+  Load_bus: {key: load, values: bus, description: the bus a load sits on}
+  Process_output_bus: {key: process_output, values: bus, description: 'the bus a port draws from or delivers
+      to. It is PyPSA''s `bus0`, `bus1`, … columns. A process of three ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Process_output_process: {key: process_output, values: process, description: the process a port belongs
+      to}
+  Store_bus: {key: store, values: bus, description: the bus a store sits on}
+  snapshot_period: {key: snapshot, values: period, description: the investment period a snapshot falls
+      in}
+parameters:
+  Bus_attached:
+    dims: [bus, snapshot]
+    dtype: bool
+    description: whether a load, a unit, a port or a branch that is active in the snapshot's period is
+      attached to the bus, data prep. A bus nothing is attached to has no balance row
+  Generator_active:
+    dims: [generator, snapshot]
+    dtype: bool
+    description: whether a generator is active in a snapshot's period. It is PyPSA's `active`, from build
+      year and lifetime, data prep
+  Generator_active_asset:
+    dims: [generator]
+    dtype: bool
+    description: whether a generator is one of PyPSA's `active_assets`, by its `active` flag alone, without
+      build year and lifetime. A unit that is active in no snapshot of the horizon still counts. PyPSA
+      refuses one that differs by scenario (`constants.py:54`)
+  Generator_committable:
+    dims: [generator]
+    dtype: bool
+    description: whether output is gated by an on/off status decision
+  Generator_e_sum_max:
+    dims: [generator, scenario]
+    description: 'most energy over the horizon: a fuel or emission budget in energy terms. It is infinity
+      where no cap is meant'
+  Generator_marginal_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one unit of output
+  Generator_marginal_cost_curve_p:
+    dims: [breakpoint, generator]
+    missing: absent
+    description: 'the output at each breakpoint of a generator''s piecewise `marginal_cost` curve: PyPSA''s
+      `p_pu` breakpoints times `p_nom`, data prep. A generator with no curve has no rows'
+  Generator_marginal_cost_quadratic:
+    dims: [generator, scenario, snapshot]
+    description: cost of the square of one unit of output
+  Generator_p_max_pu:
+    dims: [generator, scenario, snapshot]
+    description: 'most output, per unit of nominal power: an availability profile'
+  Generator_p_min_pu:
+    dims: [generator, scenario, snapshot]
+    description: least output, per unit of nominal power
+  Generator_p_nom:
+    dims: [generator, scenario]
+    description: nominal power
+  Generator_p_nom_extendable:
+    dims: [generator]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Generator_sign:
+    dims: [generator]
+    description: the sign output enters its bus's balance with. It is PyPSA's `sign`, `1` unless given,
+      `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Link_active:
+    dims: [link, snapshot]
+    dtype: bool
+    description: whether a link is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Link_committable:
+    dims: [link]
+    dtype: bool
+    description: whether flow is gated by an on/off status decision
+  Link_e_sum_max:
+    dims: [link, scenario]
+    description: most energy of its flow at `bus0`, the withdrawal there, over the horizon. It is infinity
+      where no cap is meant
+  Link_e_sum_min:
+    dims: [link, scenario]
+    description: least energy of its flow at `bus0`, the withdrawal there, over the horizon. It is minus
+      infinity where no floor is meant
+  Link_efficiency:
+    dims: [link_output, scenario, snapshot]
+    description: 'share of the flow that arrives at an output port, PyPSA''s `efficiency`, `efficiency2`,
+      … read long: negative where that port consumes rather than delivers. Read at the snapshot the flow
+      arrives, so a delayed port delivers at its arrival snapshot''s efficiency (`constraints.py:1575`)'
+  Link_marginal_cost:
+    dims: [link, scenario, snapshot]
+    description: cost of one unit of flow
+  Link_marginal_cost_quadratic:
+    dims: [link, scenario, snapshot]
+    description: cost of the square of one unit of flow
+  Link_output_cyclic_delay:
+    dims: [link_output]
+    dtype: bool
+    description: whether a delayed port's flow wraps from the end of its investment period (PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …). Where it does not, the flow still in transit at each period's first snapshots
+      is lost. The flag is the same in every scenario, as the delay is
+  Link_output_delay:
+    dims: [link_output]
+    dtype: int
+    description: snapshots a port's delivery lags its link's flow (PyPSA's `delay`, `delay2`, … read long).
+      In data prep you divide it by the `snapshot_weightings.generators` value and round it up. It is
+      zero for a port that delivers at once. A port has the same delay in every scenario, because PyPSA
+      refuses a delay that differs by scenario (`constants.py:55`)
+  Link_p_max_pu:
+    dims: [link, scenario, snapshot]
+    description: most flow, per unit of nominal power
+  Link_p_min_pu:
+    dims: [link, scenario, snapshot]
+    description: 'least flow, per unit of nominal power: negative for a link that carries both ways'
+  Link_p_nom:
+    dims: [link, scenario]
+    description: nominal power
+  Link_p_nom_extendable:
+    dims: [link]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Load_active:
+    dims: [load]
+    dtype: bool
+    description: whether a load is active in the network, PyPSA's `active`. A load has no build year and
+      no lifetime, so the flag is the same in every snapshot. PyPSA refuses one that differs by scenario
+      (`constants.py:54`)
+  Load_p_set:
+    dims: [load, scenario, snapshot]
+    description: demand
+  Load_sign:
+    dims: [load]
+    description: the sign a load's demand enters its bus's balance with. It is PyPSA's `sign`, `-1` unless
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Process_active:
+    dims: [process, snapshot]
+    dtype: bool
+    description: whether a process is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Process_committable:
+    dims: [process]
+    dtype: bool
+    description: whether internal power is gated by an on/off status decision
+  Process_e_sum_max:
+    dims: [process, scenario]
+    description: most energy of its internal power over the horizon. It is infinity where no cap is meant
+  Process_e_sum_min:
+    dims: [process, scenario]
+    description: least energy of its internal power over the horizon. It is minus infinity where no floor
+      is meant
+  Process_marginal_cost:
+    dims: [process, scenario, snapshot]
+    description: cost of one unit of internal power
+  Process_marginal_cost_quadratic:
+    dims: [process, scenario, snapshot]
+    description: cost of the square of one unit of internal power
+  Process_output_cyclic_delay:
+    dims: [process_output]
+    dtype: bool
+    description: whether a delayed port's transfer wraps from the end of its investment period (PyPSA's
+      `cyclic_delay0`, `cyclic_delay1`, …). Where it does not, the energy still in transit at each period's
+      first snapshots is lost. The flag is the same in every scenario, as the delay is
+  Process_output_delay:
+    dims: [process_output]
+    dtype: int
+    description: snapshots a port's transfer lags its process's internal power (PyPSA's `delay0`, `delay1`,
+      … read long). In data prep you divide it by the `snapshot_weightings.generators` value and round
+      it up. It is zero for a port that transfers at once. A port has the same delay in every scenario,
+      as a link's port has
+  Process_p_max_pu:
+    dims: [process, scenario, snapshot]
+    description: most internal power, per unit of nominal power
+  Process_p_min_pu:
+    dims: [process, scenario, snapshot]
+    description: 'least internal power, per unit of nominal power: negative for a process that runs both
+      ways'
+  Process_p_nom:
+    dims: [process, scenario]
+    description: nominal internal power
+  Process_p_nom_extendable:
+    dims: [process]
+    dtype: bool
+    description: whether the nominal internal power is a decision
+  Process_rate:
+    dims: [process_output, scenario, snapshot]
+    description: the energy a port draws or delivers per unit of internal power (PyPSA's `rate0`, `rate1`,
+      … read long). It is negative where the port withdraws and positive where it injects. A link is a
+      process whose `bus0` rate is minus one and whose output rates are its efficiencies. The rate at
+      the snapshot the transfer arrives applies, so a delayed port transfers at its arrival snapshot's
+      rate (`constraints.py:1575`)
+  Store_active:
+    dims: [snapshot, store]
+    dtype: bool
+    description: whether a store is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Store_e_cyclic:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether the horizon closes on itself instead of opening on the initial energy
+  Store_e_cyclic_per_period:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether each investment period closes on itself instead of carrying its energy on to
+      the next. It overrides `e_cyclic` and `e_initial_per_period`. PyPSA reads it only under `multi_investment_periods`.
+      Otherwise you feed false in data prep
+  Store_e_initial:
+    dims: [scenario, store]
+    description: energy held before the first snapshot
+  Store_e_initial_per_period:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether each investment period opens on the initial energy instead of carrying the previous
+      period's. PyPSA reads it only under `multi_investment_periods`. Otherwise you feed false in data
+      prep
+  Store_e_max_pu:
+    dims: [scenario, snapshot, store]
+    description: most energy held, per unit of nominal capacity
+  Store_e_min_pu:
+    dims: [scenario, snapshot, store]
+    description: 'least energy held, per unit of nominal capacity: negative for a store that may go short'
+  Store_e_nom:
+    dims: [scenario, store]
+    description: nominal energy capacity
+  Store_e_nom_extendable:
+    dims: [store]
+    dtype: bool
+    description: whether the nominal energy capacity is a decision
+  Store_e_sum_max:
+    dims: [scenario, store]
+    description: most energy of its net dispatch over the horizon. It is infinity where no cap is meant
+  Store_e_sum_min:
+    dims: [scenario, store]
+    description: least energy of its net dispatch over the horizon. It is minus infinity where no floor
+      is meant
+  Store_efficiency_dispatch:
+    dims: [scenario, snapshot, store]
+    description: share of the energy drawn down that reaches the bus
+  Store_efficiency_store:
+    dims: [scenario, snapshot, store]
+    description: share of the power drawn from the bus that becomes energy held
+  Store_inactive_snapshots:
+    dims: [store]
+    dtype: int
+    description: how many snapshots a store is not active in. It is PyPSA's `(~active).sum()`, data prep.
+      A cyclic store reaches back this many snapshots further, so it closes on the last snapshot it is
+      active in
+  Store_inflow:
+    dims: [scenario, snapshot, store]
+    description: energy arriving per hour, a river into a reservoir
+  Store_marginal_cost:
+    dims: [scenario, snapshot, store]
+    description: cost of one unit of power delivered
+  Store_marginal_cost_dispatch:
+    dims: [scenario, snapshot, store]
+    description: cost of one unit of discharge, `p + p_store`
+  Store_marginal_cost_quadratic:
+    dims: [scenario, snapshot, store]
+    description: cost of the square of the net power delivered, so charging costs as much as delivering
+  Store_marginal_cost_storage:
+    dims: [scenario, snapshot, store]
+    description: cost of one unit of energy held over one snapshot
+  Store_marginal_cost_store:
+    dims: [scenario, snapshot, store]
+    description: cost of one unit of charging, `p_store`
+  Store_max_hours:
+    dims: [scenario, store]
+    missing: absent
+    description: energy capacity, as hours of discharge at the power rating. The rating is `e_nom / max_hours`.
+      No value means PyPSA's default of infinity, and the store's power is then unbounded
+  Store_opens_late:
+    dims: [snapshot, store]
+    dtype: bool
+    description: whether a snapshot is the first a store is active in, where that is not the first of
+      the horizon, data prep. It is PyPSA's `active.cumsum() == 1` over the snapshots it is active in,
+      past the first snapshot. It is false in a run where every store is active throughout
+  Store_p_min_pu:
+    dims: [scenario, snapshot, store]
+    description: most charging, per unit of the power rating, negated. It is PyPSA's `p_min_pu`, `-1`
+      unless given, read only where `max_hours` has a value
+  Store_retention:
+    dims: [scenario, snapshot, store]
+    description: share of energy kept over a snapshot. It is PyPSA's `(1 - standing_loss) ** elapsed hours`,
+      data prep
+  Store_sign:
+    dims: [store]
+    description: the sign the power a store delivers enters its bus's balance with. It is PyPSA's `sign`,
+      `1` unless given. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Store_split_dispatch:
+    dims: [scenario, store]
+    dtype: bool
+    description: 'whether a store charges through `p_store` apart from its net dispatch `p`. It is PyPSA''s
+      `split_dispatch()`: true where an efficiency differs from one, a cost applies to one direction only,
+      or `cycles_max` is finite, in any snapshot (`stores.py:88-116`), data prep. Where it is false, `p_store`
+      is held at zero and the charging bound applies to `p`'
+  period_weight_objective:
+    dims: [period]
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs. PyPSA
+      reads it only under `multi_investment_periods`. Otherwise you feed one in data prep, whatever the
+      column contains (`optimize.py:231-233`, `:293-297`)
+  period_weight_years:
+    dims: [period]
+    description: PyPSA's `investment_period_weightings.years` — what a period's energy weighs in a `primary_energy`,
+      `operational_limit` or `e_sum` row. PyPSA reads it only under `multi_investment_periods`. Otherwise
+      you feed one in data prep
+  scenario_weight:
+    dims: [scenario]
+    description: PyPSA's `scenario_weightings.weight` — the probability of a future
+  snapshot_weightings_generators:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.generators` — hours a snapshot weighs in an energy total
+  snapshot_weightings_objective:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.objective` — hours a snapshot weighs in the cost
+  snapshot_weightings_stores:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.stores` — hours a snapshot weighs in a storage balance
+variables:
+  Generator_p:
+    dims: [generator, scenario, snapshot]
+    where: Generator_active
+    description: '`Generator-p` — output of a generator in a snapshot'
+  Link_p:
+    dims: [link, scenario, snapshot]
+    where: Link_active
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end. A positive value
+      withdraws there and injects at every bus the link''s output ports deliver to'
+  Process_p:
+    dims: [process, scenario, snapshot]
+    where: Process_active
+    description: '`Process-p` — PyPSA''s internal power `p`. A positive value drives every port at its
+      own rate, withdrawing where the rate is negative and injecting where it is positive'
+  Store_e:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    description: '`Store-e` — energy held at the end of a snapshot'
+  Store_p:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    description: '`Store-p` — net power delivered to the bus. Charging is negative'
+  Store_p_store:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    description: '`Store-p_store` — power drawn from the bus to charge, so that `p + p_store` is the discharge.
+      It is held at zero by its rows where the store does not split its dispatch'
+  Generator_marginal_cost_piecewise:
+    dims: [generator, scenario, snapshot]
+    where: Generator_marginal_cost_curve AND Generator_active
+    description: '`Generator-marginal_cost_piecewise` — the running cost of a generator that pays along
+      a curve, held above the curve'
+constraints:
+  Bus_nodal_balance:
+    dims: [bus, scenario, snapshot]
+    where: Bus_attached
+    expression: Bus_injection == 0
+    description: '`Bus-nodal_balance` — what is generated at a bus meets the load there, less half of
+      every incident line''s and transformer''s loss. What is generated includes storage dispatch and
+      stores. It is net of what the links take away, plus what arrives over them after losses and any
+      delay at every port they deliver to. Each process port draws or delivers at its own rate, and each
+      passive branch carries its flow. PyPSA dissipates a branch''s loss half at either end. Each generator,
+      storage unit, store and load term enters with its component''s `sign` (`constraints.py:1480-1481`,
+      `:1592`), and an inactive load not at all. A bus nothing is attached to has no row. PyPSA refuses
+      one that carries load. The file states no assumption for it.'
+  Generator_e_sum_max:
+    dims: [generator, scenario]
+    where: Generator_e_sum_max AND count(Generator_active, over=snapshot) > 0
+    expression: sum(Generator_p * energy_limit_weight, over=snapshot) <= Generator_e_sum_max
+    description: '`Generator-e_sum_max` — energy over the horizon, each period weighted by its years,
+      is at most its budget. A budget of infinity is no row, and so is a generator active in no snapshot'
+  Generator_fix_p_lower:
+    dims: [generator, scenario, snapshot]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
+    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
+  Generator_fix_p_upper:
+    dims: [generator, scenario, snapshot]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
+    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
+  Link_e_sum_max:
+    dims: [link, scenario]
+    where: Link_e_sum_max AND count(Link_active, over=snapshot) > 0
+    expression: sum(Link_p * energy_limit_weight, over=snapshot) <= Link_e_sum_max
+    description: '`Link-e_sum_max` — energy withdrawn at `bus0` over the horizon, each period weighted
+      by its years, is at most its budget. A budget of infinity is no row, and so is a link active in
+      no snapshot'
+  Link_e_sum_min:
+    dims: [link, scenario]
+    where: Link_e_sum_min AND count(Link_active, over=snapshot) > 0
+    expression: sum(Link_p * energy_limit_weight, over=snapshot) >= Link_e_sum_min
+    description: '`Link-e_sum_min` — energy withdrawn at `bus0` over the horizon, each period weighted
+      by its years, is at least its floor. A floor of minus infinity is no row, and so is a link active
+      in no snapshot'
+  Link_fix_p_lower:
+    dims: [link, scenario, snapshot]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p >= Link_p_min_pu * Link_p_nom
+    description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
+      way'
+  Link_fix_p_upper:
+    dims: [link, scenario, snapshot]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p <= Link_p_max_pu * Link_p_nom
+    description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
+  Process_e_sum_max:
+    dims: [process, scenario]
+    where: Process_e_sum_max AND count(Process_active, over=snapshot) > 0
+    expression: sum(Process_p * energy_limit_weight, over=snapshot) <= Process_e_sum_max
+    description: '`Process-e_sum_max` — energy of the internal power over the horizon, each period weighted
+      by its years, is at most its budget. A budget of infinity is no row, and so is a process active
+      in no snapshot'
+  Process_e_sum_min:
+    dims: [process, scenario]
+    where: Process_e_sum_min AND count(Process_active, over=snapshot) > 0
+    expression: sum(Process_p * energy_limit_weight, over=snapshot) >= Process_e_sum_min
+    description: '`Process-e_sum_min` — energy of the internal power over the horizon, each period weighted
+      by its years, is at least its floor. A floor of minus infinity is no row, and so is a process active
+      in no snapshot'
+  Process_fix_p_lower:
+    dims: [process, scenario, snapshot]
+    where: not Process_p_nom_extendable AND not Process_committable AND Process_active
+    expression: Process_p >= Process_p_min_pu * Process_p_nom
+    description: '`Process-fix-p-lower` — a fixed process runs at least its minimum, negative for the
+      other way'
+  Process_fix_p_upper:
+    dims: [process, scenario, snapshot]
+    where: not Process_p_nom_extendable AND not Process_committable AND Process_active
+    expression: Process_p <= Process_p_max_pu * Process_p_nom
+    description: '`Process-fix-p-upper` — a fixed process runs at most its nominal power'
+  Store_e_sum_max:
+    dims: [scenario, store]
+    where: Store_e_sum_max AND count(Store_active, over=snapshot) > 0
+    expression: sum(Store_p * energy_limit_weight, over=snapshot) <= Store_e_sum_max
+    description: '`Store-e_sum_max` — net energy delivered over the horizon, each period weighted by its
+      years, is at most its budget. A budget of infinity is no row, and so is a store active in no snapshot'
+  Store_e_sum_min:
+    dims: [scenario, store]
+    where: Store_e_sum_min AND count(Store_active, over=snapshot) > 0
+    expression: sum(Store_p * energy_limit_weight, over=snapshot) >= Store_e_sum_min
+    description: '`Store-e_sum_min` — net energy delivered over the horizon, each period weighted by its
+      years, is at least its floor. A floor of minus infinity is no row, and so is a store active in no
+      snapshot'
+  Store_energy_balance:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    expression: ((Store_energy_carried_in - ((Store_p * snapshot_weightings_stores) / Store_efficiency_dispatch))
+      + (((Store_efficiency_store - (1 / Store_efficiency_dispatch)) * Store_p_store) * snapshot_weightings_stores))
+      + (Store_inflow * snapshot_weightings_stores) == Store_e
+    description: '`Store-energy_balance` — the energy carried in, less the discharge drawn down before
+      its efficiency, plus the charge after its own, plus inflow not spilled. The net dispatch `p` is
+      the discharge less `p_store`, so `p_store` enters with both efficiencies (`constraints.py:2472-2476`)'
+  Store_fix_e_lower:
+    dims: [scenario, snapshot, store]
+    where: not Store_e_nom_extendable AND Store_active
+    expression: Store_e >= Store_e_min_pu * Store_e_nom
+    description: '`Store-fix-e-lower` — a fixed store holds at least its floor'
+  Store_fix_e_upper:
+    dims: [scenario, snapshot, store]
+    where: not Store_e_nom_extendable AND Store_active
+    expression: Store_e <= Store_e_max_pu * Store_e_nom
+    description: '`Store-fix-e-upper` — a fixed store holds at most its nominal capacity'
+  Store_fix_p_store_lower:
+    dims: [scenario, snapshot, store]
+    where: NOT Store_e_nom_extendable AND Store_active
+    expression: Store_p_store >= 0
+    description: '`Store-fix-p_store-lower` — charging is non-negative'
+  Store_fix_p_store_upper:
+    dims: [scenario, snapshot, store]
+    where: NOT Store_e_nom_extendable AND Store_active AND (NOT Store_split_dispatch OR Store_max_hours)
+    expression: Store_p_store <= Store_charge_cap_pu * Store_e_nom
+    description: '`Store-fix-p_store-upper` — a fixed store charges at most its power rating where it
+      splits its dispatch, and not at all where it does not. A store that splits and has no `max_hours`
+      has no row'
+expressions:
+  Bus_injection:
+    dims: [bus, scenario, snapshot]
+    expression: (((Generator_injection + Link_injection) + Load_injection) + Process_injection) + Store_injection
+    description: what every component puts into a bus, less what it takes out of it. PyPSA writes each
+      term into the balance, and a load on its right-hand side
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+  Generator_opex: {expression: 'sum(sum((Generator_running_cost * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p * Generator_p)
+      * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Generator_running_cost:
+    dims: [generator, scenario, snapshot]
+    description: 'what a generator''s output costs in a snapshot: the value read off its piecewise curve
+      where it has one, and its linear `marginal_cost` otherwise. A curve replaces the linear cost, as
+      PyPSA drops the unit from that term (`optimize.py:333-348`)'
+    cases:
+      curve: {when: Generator_marginal_cost_curve, expression: Generator_marginal_cost_piecewise}
+    otherwise: Generator_p * Generator_marginal_cost
+  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
+      over=link_output, by=Link_output_bus[bus])'}
+  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      over=snapshot)'}
+  Link_output_arrival:
+    dims: [link_output, scenario, snapshot]
+    description: what a link delivers to an output port at a snapshot. It is its flow delayed by the port's
+      `delay` within its investment period. It is multiplied by the port's efficiency at the snapshot
+      the flow arrives. Where the port is `cyclic_delay`, the delayed flow wraps from the period's end.
+      Where it is not, the flow still in transit at the period's first snapshots is lost. A port that
+      does not delay (`delay` zero) delivers its flow unshifted, cyclic or not
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot_period[period]) * Link_efficiency
+  Load_demand:
+    dims: [load, scenario, snapshot]
+    description: what a load draws from its bus's balance. It is its demand times its sign where it is
+      active, and nothing where it is not. PyPSA drops an inactive load from the balance (`constraints.py:1591-1592`)
+    cases:
+      active: {when: Load_active, expression: Load_sign * Load_p_set}
+    otherwise: '0'
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=process), over=snapshot)'}
+  Process_output_arrival:
+    dims: [process_output, scenario, snapshot]
+    description: what a process transfers at a port at a snapshot. It is its internal power delayed by
+      the port's `delay` within its investment period. It is multiplied by the port's rate at the snapshot
+      the transfer arrives. Where the port is `cyclic_delay`, the delayed transfer wraps from the period's
+      end. Where it is not, the energy still in transit at the period's first snapshots is lost. A port
+      that does not delay (`delay` zero) transfers at once, cyclic or not
+    cases:
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          * Process_rate'}
+    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot_period[period]) * Process_rate
+  Store_charge_cap_pu:
+    dims: [scenario, snapshot, store]
+    description: the most charging through `p_store`, per unit of `e_nom`. It is `-p_min_pu / max_hours`
+      for a store that splits its dispatch, and zero otherwise (`stores.py:79-86`)
+    cases:
+      split: {when: Store_split_dispatch, expression: -Store_p_min_pu / Store_max_hours}
+    otherwise: '0'
+  Store_energy_carried_in:
+    dims: [scenario, snapshot, store]
+    description: the energy a store opens a snapshot with. At the first snapshot it is active in, it is
+      its last such snapshot's less standing loss where it is cyclic. Where it is not, it is the given
+      initial energy, which no standing loss has touched yet. Otherwise it is the previous snapshot's
+      less standing loss. A store built in a later period opens in that period, and a cyclic one that
+      retires closes on its own last snapshot. Per period, the same holds with each investment period
+      as the horizon
+    cases:
+      cyclic: {when: Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
+          AND (position(snapshot) == 0 OR Store_opens_late), expression: 'Store_retention * shift(shift(Store_e,
+          along=snapshot, offset=1, edge=''wrap''), along=snapshot, offset=Store_inactive_snapshots, edge=''wrap'')'}
+      opening: {when: NOT Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
+          AND (position(snapshot) == 0 OR Store_opens_late), expression: Store_e_initial}
+      period_cyclic: {when: Store_e_cyclic_per_period, expression: 'Store_retention * shift(Store_e, along=snapshot,
+          offset=1, edge=''wrap'', within=snapshot_period[period])'}
+      period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
+          within=snapshot_period[period]) == 0', expression: Store_e_initial}
+    otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
+  Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
+  Store_opex: {expression: '(((sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot) + sum(sum((((Store_p
+      * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=store), over=snapshot)) + sum(sum(((Store_e * Store_marginal_cost_storage)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=store),
+      over=snapshot)) + sum(sum((((Store_p + Store_p_store) * Store_marginal_cost_dispatch) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot)) + sum(sum(((Store_p_store
+      * Store_marginal_cost_store) * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]),
+      over=store), over=snapshot)'}
+  energy_limit_weight:
+    dims: [snapshot]
+    expression: snapshot_weightings_generators * at(period_weight_years, by=snapshot_period[period])
+    description: 'what one unit of power at a snapshot counts for in an `e_sum` row: the generator weighting
+      times the years of the snapshot''s period, as in an `operational_limit` row (`constraints.py:2935-2937`)'
+  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+  scenario_opex:
+    dims: [scenario]
+    expression: ((Generator_opex + Link_opex) + Process_opex) + Store_opex
+    description: 'what a future costs to run: every operating term, weighted by the snapshot''s hours
+      and its period, before the scenario''s own weight. A start and a stop cost what they cost, unweighted,
+      as PyPSA adds them (`optimize.py:448-468`)'
+  total_cost:
+    dims: []
+    expression: risk_weighted_opex
+    description: what the system costs. Capacity counts once per active period at its expected cost over
+      the scenarios. Operation counts in expectation over the scenarios, and a share of it at the tail
+conditions:
+  Generator_marginal_cost_curve: {condition: 'count(Generator_marginal_cost_curve_p, over=breakpoint)
+      > 0 AND Generator_active_asset', description: 'a generator that pays along a piecewise `marginal_cost`
+      curve: one of PyPSA''s `active_assets` with curve data (`optimize.py:307`, `piecewise.py:230-257`)'}
+objective: {sense: minimize, expression: total_cost}

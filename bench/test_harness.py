@@ -24,15 +24,27 @@ from typing import Any
 
 import numpy as np
 import pytest
-import yaml
 
-from bench import comment, crossover, floor, plot, profile_build, profile_phases, report, results, tidy, warm_payoff
+from bench import comment, floor, plot, profile_build, report, results, tidy
 from bench import conftest as harness
 from bench import results as bench_results
-from bench.ab.compare import Row, Worker, checkouts, compare, same_model, verdict
-from bench.ab.grid import SHAPES, spec, tables
+from bench.ab.compare import (
+    RAW_SCHEMA,
+    Row,
+    Worker,
+    _ask,
+    chance,
+    checkouts,
+    compare,
+    phase_table,
+    raw,
+    same_model,
+    table,
+    verdict,
+)
+from bench.ab.grid import SHAPES, SIZES, cell, ids, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import TIMED_THROUGH, _handoff, checked_sources, unsupported
+from bench.arms.specsolve import TIMED_THROUGH, _laps, _tables, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
     _holder_if_alive,
@@ -279,8 +291,8 @@ def test_narrower_sinks_still_write_the_provenance() -> None:
 
 def test_no_workflow_retypes_the_published_selection() -> None:
     """A run that retypes the published selection is a number whose fingerprint
-    no longer describes it. `bench.yml` and `codspeed.yml` take narrower
-    selections of their own; the published one lives in the `ladder` task.
+    no longer describes it. `codspeed.yml` takes a narrower
+    selection of its own; the published one lives in the `ladder` task.
     """
 
     root = Path(__file__).resolve().parents[1]
@@ -290,18 +302,6 @@ def test_no_workflow_retypes_the_published_selection() -> None:
 
     guilty = [w.name for w in sorted((root / '.github' / 'workflows').glob('*.y*ml')) if marker in w.read_text()]
     assert not guilty, f'{guilty} spell out `{marker}`; call `pixi run ladder` so the selection has one home'
-
-
-def test_the_memory_gate_leaves_out_the_benchmark_that_solves() -> None:
-    """`bench.yml` fails a pull request on a memray peak, so a benchmark that
-    solves would hold it to the solver's own allocations. Both passes leave the
-    sweep out, or the gate would compare two different selections.
-    """
-    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github' / 'workflows' / 'bench.yml').read_text())
-    passes = [step['run'] for step in workflow['jobs']['bench']['steps'] if 'pytest bench' in step.get('run', '')]
-    assert len(passes) == 2, 'a base pass and a head pass'
-    assert all('-k "$UNGATED"' in run for run in passes), 'both passes take the same selection'
-    assert workflow['env']['UNGATED'] == 'not test_sweep', 'the sweep is the benchmark that solves'
 
 
 @pytest.mark.parametrize(
@@ -809,7 +809,9 @@ def test_no_budget_measures_everything() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
+@pytest.mark.parametrize(
+    'case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector', 'curves']
+)
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_builds_the_same_model(case_name: str, dialect: str) -> None:
     """Every arm but `specsolve` is a model somebody typed twice, or specsolve on another engine.
@@ -842,7 +844,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     """The LP file at *path* as HiGHS reads it, with nothing left that depends on a name or an order.
 
     A column is its cost, bounds and integrality. A row is its bounds and the
-    multiset of its entries, each a coefficient with its column's description.
+    multiset of its coefficients, each with its column's description.
     Two models with the same rows and columns in another order, or under other
     names, compare equal. A model that is the other one relabelled along time is also equal,
     which is why the objective test above stays beside this one.
@@ -862,11 +864,11 @@ def _canonical(path: Path) -> dict[str, Any]:
     a = lp.a_matrix_
     assert a.format_ == highspy.MatrixFormat.kColwise, 'HiGHS reads an LP file into a column-wise matrix'
     start, index, value = np.asarray(a.start_), np.asarray(a.index_), np.asarray(a.value_)
-    entries: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
+    coefficients: list[list[tuple[float, Any]]] = [[] for _ in range(m)]
     for j in range(n):
         for e in range(start[j], start[j + 1]):
-            entries[int(index[e])].append((_rounded(value[e]), columns[j]))
-    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(entries[i]))) for i in range(m)]
+            coefficients[int(index[e])].append((_rounded(value[e]), columns[j]))
+    rows = [(_rounded(lp.row_lower_[i]), _rounded(lp.row_upper_[i]), tuple(sorted(coefficients[i]))) for i in range(m)]
     return {
         'sense': str(lp.sense_),
         'offset': _rounded(lp.offset_),
@@ -875,6 +877,7 @@ def _canonical(path: Path) -> dict[str, Any]:
     }
 
 
+# Not `curves`: linopy writes each segment row divided by its x-step, the expansion multiplies through by it.
 @pytest.mark.parametrize('case_name', ['dispatch', 'transport', 'storage', 'fleet', 'nodal', 'network', 'sector'])
 @pytest.mark.parametrize('dialect', [a for a in sorted(ARMS) if a != 'specsolve'])
 def test_a_hand_written_arm_writes_the_same_matrix(case_name: str, dialect: str, tmp_path: Path) -> None:
@@ -1014,20 +1017,16 @@ def test_the_long_table_renders_from_the_committed_results() -> None:
     assert len(lines) > 1, 'the committed provenance produces rows, not just a header'
 
 
-def test_the_profilers_wrap_the_class_that_actually_builds() -> None:
-    """Both profilers monkeypatch private engine names, so a refactor in `src/`
-    can retire them without touching `bench/` (#1245)."""
+def test_the_profiler_wraps_the_class_that_actually_builds() -> None:
+    """The profiler monkeypatches private engine names, so a refactor in `src/`
+    can retire it without touching `bench/` (#1245)."""
     import importlib
-
-    from specsolve._engine.assembly import Assembly
 
     for module_path, class_name, method in profile_build.STEPS:
         module = importlib.import_module(module_path)
         owner = module if class_name is None else getattr(module, class_name, None)
         assert owner is not None, f'profile_build patches {class_name} in {module_path}, which moved'
         assert hasattr(owner, method), f'profile_build patches {class_name or module_path}.{method}, which moved'
-    for method in profile_phases.PHASES:
-        assert hasattr(Assembly, method), f'profile_phases patches Assembly.{method}, which moved'
 
 
 # ---------------------------------------------------------------------------
@@ -1139,6 +1138,120 @@ def test_a_record_from_before_the_harness_carried_a_machine_still_renders() -> N
     """A `.jsonl` result is taken verbatim, so an older run record must render."""
     assert report.provenance([{'record': 'run', 'platform': None}]) == '? (?), python ? — .'
     assert report.provenance([{'record': 'run'}]) == '? (?), python ? — .'
+
+
+def test_the_fingerprint_records_the_host_and_the_unpinned_dependencies(request: pytest.FixtureRequest) -> None:
+    """Two runs of one server type differed by host alone, and nothing in the file said so (#2168)."""
+    machine_info: dict[str, object] = {}
+    harness.pytest_benchmark_update_machine_info(request.config, machine_info)
+    host = machine_info['host']
+    assert isinstance(host, dict) and isinstance(host.get('polars_threads'), int), 'polars sizes its pool per machine'
+    assert {'mathspec', 'polars-runtime-32'} <= set(machine_info['versions']), (  # type: ignore[arg-type]
+        'the two dependencies the result files could not vouch for are fingerprinted'
+    )
+
+
+_X86_CPUINFO = """processor\t: 0
+vendor_id\t: AuthenticAMD
+cpu family\t: 25
+model\t\t: 1
+model name\t: AMD EPYC-Milan Processor
+stepping\t: 1
+microcode\t: 0x1000065
+cpu MHz\t\t: 2396.398
+siblings\t: 8
+cpu cores\t: 8
+
+processor\t: 1
+model name\t: the second processor, which is not read
+"""
+
+_ARM64_CPUINFO = """processor\t: 0
+BogoMIPS\t: 50.00
+Features\t: fp asimd evtstrm aes pmull sha1 sha2 crc32
+CPU implementer\t: 0x41
+CPU architecture: 8
+CPU variant\t: 0x3
+CPU part\t: 0xd0c
+CPU revision\t: 1
+"""
+
+
+@pytest.mark.parametrize(
+    ('cpuinfo', 'expected'),
+    [
+        pytest.param(
+            _X86_CPUINFO,
+            {
+                'model name': 'AMD EPYC-Milan Processor',
+                'cpu family': '25',
+                'model': '1',
+                'stepping': '1',
+                'microcode': '0x1000065',
+                'cpu MHz': '2396.398',
+                'siblings': '8',
+                'cpu cores': '8',
+            },
+            id='x86-first-processor-only',
+        ),
+        pytest.param(_ARM64_CPUINFO, {}, id='arm64-writes-none-of-them'),
+    ],
+)
+def test_the_host_reads_its_processor_fields_from_cpuinfo(
+    tmp_path: Path, cpuinfo: str, expected: dict[str, str]
+) -> None:
+    (tmp_path / 'cpuinfo').write_text(cpuinfo)
+    (tmp_path / 'meminfo').write_text('MemTotal:       32864564 kB\nMemFree:        1 kB\n')
+    host = harness._host(tmp_path / 'cpuinfo', tmp_path / 'meminfo')
+    assert {k: v for k, v in host.items() if k in harness.CPUINFO} == expected, 'exactly the first processor fields'
+    assert host['memory_kb'] == 32864564
+
+
+@pytest.mark.parametrize(
+    ('ours', 'theirs', 'warned'),
+    [
+        pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_400_000_000}, False, id='one-host-read-twice'),
+        pytest.param({'clock_hz': 2_396_398_000}, {'clock_hz': 2_200_000_000}, True, id='another-clock'),
+        pytest.param({'host': {'microcode': '0xa0011d5'}}, {'host': {'microcode': '0xa0011d1'}}, True, id='microcode'),
+        pytest.param(
+            {'host': {'cpu cores': '8', 'siblings': '8'}},
+            {'host': {'cpu cores': '4', 'siblings': '8'}},
+            True,
+            id='core-layout',
+        ),
+        pytest.param({}, {}, False, id='a-file-from-before-the-host-was-recorded'),
+        pytest.param(
+            {'clock_hz': 2_396_398_000, 'host': {'microcode': '0xa0011d5', 'cpu cores': '8', 'siblings': '8'}},
+            {'clock_hz': 2_400_000_000},
+            False,
+            id='a-new-file-against-one-from-before',
+        ),
+    ],
+)
+def test_the_comment_warns_when_the_two_runs_were_taken_on_different_machines(
+    ours: dict[str, object], theirs: dict[str, object], warned: bool
+) -> None:
+    """#2139's comment compared a 2.4 GHz host with the 2.2 GHz host of the committed run, and blamed the code (#2168)."""
+    pr = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **ours}], [], [])
+    base = comment.Side({}, [{**_run('AMD EPYC-Milan Processor', 8), **theirs}], [], [])
+    lines = comment.hosts(pr, base)
+    assert bool(lines) is warned, f'a warning exactly where the machines differ, got {lines}'
+
+
+def test_half_a_core_layout_is_left_out_rather_than_raising() -> None:
+    """A `.jsonl` run record is taken verbatim, so it can carry one of the two layout fields."""
+    run = {**_run('AMD EPYC-Milan Processor', 8), 'host': {'siblings': '8'}}
+    assert report.machine(run) == 'AMD EPYC-Milan Processor, 8 cores (Linux 6.8.0)'
+
+
+def test_the_clock_reads_back_from_a_pytest_benchmark_file(tmp_path: Path) -> None:
+    """The committed files already carry py-cpuinfo's clock, so an old run is compared by it too."""
+    path = tmp_path / 'latest.json'
+    path.write_text(
+        json.dumps({'machine_info': {'cpu': {'brand_raw': 'x', 'count': 8, 'hz_actual': [2_200_000_000, 0]}}})
+    )
+    run = next(r for r in bench_results.records(path) if r['record'] == 'run')
+    assert report.machine(run) == 'x, 8 cores at 2.2 GHz (?)'
 
 
 #: Renders the marginal table for three cases of identical width. Run twice
@@ -1291,7 +1404,7 @@ def test_an_empty_fragment_never_blanks_the_page() -> None:
 
 def test_the_marginal_table_carries_no_ratio_between_libraries() -> None:
     """A build-only number is not comparable across libraries: one that defers
-    its coefficients to its writer pays at the seam instead."""
+    its coefficients to its writer pays at the handoff instead."""
     table = report.marginal([_loop('dispatch', 'specsolve', 1200), _loop('dispatch', 'linopy', 1200)])
     assert 'specsolve: steady' in table and 'linopy: steady' in table, 'both libraries still get their columns'
     assert '\u00f7' not in table, 'no ratio column here — the build is not the same work in each'
@@ -1304,6 +1417,63 @@ def test_a_model_table_shows_the_numbers_and_leaves_the_dividing_to_the_reader()
     table = report.table('dispatch', rows, 'lp')
     assert 'wall: specsolve' in table and 'wall: linopy' in table, 'every library measured is still a column'
     assert '\u00f7' not in table, 'the per-model table carries no ratio'
+
+
+def _phase_rows(table: str) -> dict[str, list[str]]:
+    """The body rows of a rendered phase table, keyed by phase, each split into its cells."""
+    rows = [line for line in table.splitlines() if line.startswith('| ') and not line.startswith(('| phase', '| ---'))]
+    return {cells[0]: cells[1:] for cells in ([c.strip() for c in row.strip('|').split('|')] for row in rows)}
+
+
+def test_the_phase_table_runs_along_the_ladder_in_the_order_the_engine_runs() -> None:
+    """A phase is a row, a rung a column smallest first, and a phase a rung never clocked reads a dash."""
+    records = [
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='s',
+            counts={'columns': 1000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 0.004, 'attach': 0.001},
+        ),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'load': 0.0005, 'build': 2.5, 'attach': 0.002},
+        ),
+        _timing('linopy', sink='highs', size='m', counts={'columns': 10000, 'rows': 1, 'nonzeros': 1}),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert list(rows) == ['load', 'attach', 'build'], 'the phases in the order the engine runs them'
+    assert rows['build'] == ['4 ms', '2.5 s'], 'one column per rung, smallest first, each in its own unit'
+    assert rows['load'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
+
+
+def test_a_rung_without_clocks_keeps_its_column_as_a_dash() -> None:
+    """A case clocked at one rung and not another shows both rungs, the unclocked one as dashes.
+
+    The table kept only the rungs that carried clocks, so a rung measured
+    before the phases existed vanished from its case instead of reading `—`.
+    """
+    records = [
+        _timing('specsolve', sink='highs', size='s', counts={'columns': 1000, 'rows': 1, 'nonzeros': 1}),
+        _timing(
+            'specsolve',
+            sink='highs',
+            size='m',
+            counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
+            phase_seconds={'build': 2.5},
+        ),
+    ]
+    rows = _phase_rows(report.phases(report.best(records)))
+
+    assert rows['build'] == ['—', '2.5 s'], 'the rung no clock reached keeps its column, as a dash'
+
+
+def test_a_run_without_phase_clocks_renders_no_phase_table() -> None:
+    assert report.phases(report.best([_timing('specsolve', sink='highs')])) == '', 'no clocks, no table'
 
 
 def test_a_fresh_process_is_published_in_its_own_table(tmp_path: Path) -> None:
@@ -1480,15 +1650,16 @@ def test_the_rounds_follow_the_rung_below_unless_a_count_is_given(args: tuple[st
 
 @pytest.mark.parametrize('label', [pytest.param(s.label, id=s.label) for s in CASES['declarations'].ladder])
 def test_the_generated_declaration_model_is_the_language(label: str, tmp_path: Path) -> None:
-    """A generated model file still has to pass the front door."""
+    """A generated model file still has to pass `to_spec`."""
     from mathspec import to_spec
 
     case = CASES['declarations']
     shape = case.shape(label)
     schema = to_spec(str(case.spec_path(shape, cache=tmp_path)))
-    n = shape.sizes['declaration']
-    assert len(schema.variables) == n, 'one variable declaration per unit of the swept count'
-    assert len(schema.constraints) == n + 1, 'a capacity constraint per declaration, plus one balance'
+    n, empty = shape.sizes['declaration'], shape.empty
+    assert len(schema.variables) == n + 2 * empty, 'a variable per swept declaration, and two kinds of empty one'
+    assert len(schema.constraints) == n + 1 + 2 * empty, 'a capacity constraint per variable, plus one balance'
+    assert len(schema.assumptions) == empty, 'an empty rung counts along store once per kind'
 
 
 def test_the_generated_declaration_model_builds(tmp_path: Path) -> None:
@@ -1509,9 +1680,37 @@ def test_only_the_masked_declaration_rungs_carry_a_where() -> None:
     case = CASES['declarations']
     for shape in case.ladder:
         text = _declarations_spec(shape)
-        assert ('where:' in text) == shape.masked, (
-            f'{shape.label}: a where: belongs on the masked rungs and only on those'
+        assert ('where: "p_max > 0"' in text) == shape.masked, (
+            f'{shape.label}: the vacuous where: belongs on the masked rungs and only on those'
         )
+
+
+def test_an_empty_declaration_rung_writes_its_twins_lp_file(tmp_path: Path) -> None:
+    """None of the empty declarations reaches the matrix, and the rung draws its twin's numbers.
+
+    The difference between the pair is then what the empty declarations cost
+    and nothing else, which is the measurement.
+    """
+    import specsolve as sps
+
+    case = CASES['declarations']
+    written = {}
+    for label, empty in (('twin', 0), ('empty', 3)):
+        shape = Shape(label, {'declaration': 2, 'unit': 8, 'snapshot': 20}, 20 * 16, empty=empty)
+        (tmp_path / label).mkdir()
+        paths = case.write(shape, tmp_path / label)
+        sps.write(case.spec_path(shape, cache=tmp_path / label), paths, tmp_path / f'{label}.lp')
+        written[label] = (tmp_path / f'{label}.lp').read_text()
+    assert written['empty'] == written['twin'], 'an empty declaration changed the written model'
+
+
+def test_the_empty_declaration_rung_pairs_with_a_dense_twin() -> None:
+    ladder = {s.label: s for s in CASES['declarations'].ladder}
+    empty = [s for s in ladder.values() if s.empty]
+    assert [s.label for s in empty] == ['n008e'], 'one empty rung, beside the masked n008m'
+    twin = ladder['n008']
+    assert empty[0].sizes == twin.sizes, 'an empty rung and its twin build the same model'
+    assert empty[0].nominal_variables == twin.nominal_variables, 'an empty declaration adds no column'
 
 
 def test_the_masked_declaration_rungs_pair_with_a_dense_twin() -> None:
@@ -1538,10 +1737,23 @@ def test_a_masked_rung_without_a_dense_twin_is_refused(counts, masked, complaint
 
 
 @pytest.mark.parametrize(
+    ('empty', 'per_kind', 'complaint'),
+    [
+        pytest.param((4,), 1, 'no dense twin', id='empty-without-a-twin'),
+        pytest.param((2,), 0, 'at least one declaration', id='empty-rung-that-adds-nothing'),
+    ],
+)
+def test_an_empty_rung_without_a_twin_or_declarations_is_refused(empty, per_kind, complaint) -> None:
+    with pytest.raises(ValueError, match=complaint):
+        _declaration_sweep(pool=8, snapshots=10, counts=(2, 8), empty=empty, per_kind=per_kind)
+
+
+@pytest.mark.parametrize(
     ('label', 'sweep'),
     [
         pytest.param('n008', 'declaration', id='dense-rung'),
         pytest.param('n008m', 'declaration', id='masked-rung'),
+        pytest.param('n008e', 'declaration', id='empty-rung'),
         pytest.param('d50', 'density', id='density-rung'),
         pytest.param('w10', 'width', id='width-rung'),
         pytest.param('m', 'size ladder', id='size-rung'),
@@ -1565,6 +1777,7 @@ def test_every_rung_label_lands_in_its_own_sweep(label: str, sweep: str) -> None
         pytest.param('n008', '8', id='count'),
         pytest.param('n128', '128', id='larger-count'),
         pytest.param('n008m', '8 masked', id='masked-twin-prints-beside-its-count'),
+        pytest.param('n008e', '8 + empty', id='empty-twin-prints-beside-its-count'),
     ],
 )
 def test_a_declaration_rung_prints_its_count_and_whether_it_is_masked(label: str, printed: str) -> None:
@@ -1632,30 +1845,10 @@ def test_the_floor_builds_the_model_specsolve_builds() -> None:
 
     sources = checked_sources(case, case.ladder[0].label, paths)
     with sps.build(case.spec, sources) as model:
-        tables = _handoff(model)
+        tables = _tables(model)
         assert floor_model.column_count == tables.column_count, 'the floor holds a different number of variables'
         assert floor_model.row_count == tables.row_count, 'the floor holds a different number of constraints'
         assert floor_model.nonzeros == tables.matrix.height, 'the floor holds a different coefficient matrix'
-
-
-def test_a_started_master_reproduces_the_cold_answer() -> None:
-    """A start may move the route and never the optimum."""
-    run = warm_payoff.sweep(warm_payoff.SIZES['xs'], n_snap=4, steps=8)
-    assert len(run.steps) > 1, 'a single rebuild carries nothing, so the start would go unexercised'
-    for i, step in enumerate(run.steps):
-        assert step.warm_objective == pytest.approx(step.cold_objective, rel=1e-9), (
-            f'step {i}: a start moved the answer'
-        )
-
-
-def test_every_way_the_crossover_bench_solves_reaches_one_optimum() -> None:
-    """A method moves the route and what the answer carries, never the optimum."""
-    rows = crossover.measured('dispatch', '2xs')
-    assert [method for method, *_ in rows] == list(crossover.METHODS), "one row per method, in the table's order"
-    simplex = rows[0][2]
-    for method, _, objective, duals in rows:
-        assert objective == pytest.approx(simplex, rel=1e-6), f'{method} reached another optimum'
-        assert duals, f'{method} left no duals, which an LP solved to optimality has'
 
 
 def test_the_floor_and_specsolve_agree_on_the_answer() -> None:
@@ -1925,10 +2118,10 @@ def test_a_fresh_process_reports_its_window_and_its_peak() -> None:
 def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
     verb: str, method: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`bench.yml` runs this harness against the base branch's `src/`.
+    """This harness can run against an older checkout's `src/`.
 
-    A base with no `Engine._hand_off` raised in every window cell, which failed
-    the base pass, so the gate never compared anything.
+    A base with no `Engine.handoff` raised in every window cell, which failed
+    the base pass, so nothing was compared.
     """
     assert unsupported(verb) is None, f'this checkout has Engine.{method}'
     monkeypatch.delattr(Engine, method)
@@ -1977,10 +2170,43 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     model = args[0]
     window = module.window(*args, **kwargs)['phases']
     assert {'attach', 'build', 'handoff'} <= window.keys(), 'a window rebuilds and hands off'
-    whole = model._engine._seconds
-    assert all(0 <= window[phase] < whole[phase] for phase in ('attach', 'build')), (
+    whole = model.metrics()
+    assert all(0 <= window[phase] < getattr(whole, f'{phase}_seconds') for phase in ('attach', 'build')), (
         "a window's phases are its own, not the setup's build summed in"
     )
+
+
+@pytest.mark.parametrize('verb', ['emit', 'build', 'window'])
+def test_the_specsolve_arm_keeps_the_laps_its_phases_sum(verb: str) -> None:
+    """Every verb carries its laps, and they add up to its phases; a window's are only its own.
+
+    The engine's log holds every lap of the model's life, so a window that
+    copied it whole would carry the setup's build too.
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    if verb == 'emit':
+        counts = module.build_and_emit('lp', prepared)
+    elif verb == 'build':
+        counts = module.build_only(prepared)
+    else:
+        args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
+        counts = module.window(*args, **kwargs)
+        assert len(counts['laps']) < args[0].timings().height, "a window's laps leave out the setup's"
+
+    summed: dict[str, float] = {}
+    for lap in counts['laps']:
+        summed[lap['phase']] = summed.get(lap['phase'], 0.0) + lap['seconds']
+    clocked = {phase: seconds for phase, seconds in counts['phases'].items() if seconds > 0}
+    assert summed == pytest.approx(clocked, rel=1e-9), 'the laps of each phase add up to its clock, to rounding'
+    assert {lap['entry'] for lap in counts['laps'] if lap['step'] == 'variable'}, 'a build lap names its entry'
+    assert json.loads(json.dumps(counts['laps'])) == counts['laps'], 'the laps come back whole from a result file'
+
+
+def test_the_specsolve_arm_reads_no_laps_off_a_checkout_without_a_lap_log() -> None:
+    """A checkout from before #2207 keeps no lap log, which `bench.ab` meets on an older base."""
+    assert _laps(SimpleNamespace(_engine=SimpleNamespace())) == [], 'an engine without a lap log has no laps'
 
 
 def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
@@ -2005,7 +2231,7 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
     prepared = module.prepare(case_name, 'xs', case.data(case.shape('xs')), {})
     args, kwargs = module.read_setup(prepared, into)
     model, answer, _ = args
-    assert answer.primal.len() == _handoff(model).column_count, 'the answer spans every built column'
+    assert answer.primal.len() == _tables(model).column_count, 'the answer spans every built column'
     assert (answer.dual is None) == bool(model._engine._discrete()), (
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
@@ -2138,6 +2364,20 @@ def test_an_ab_verdict_is_a_two_sided_sign_test(ratios: list[float], expected: s
     assert verdict(ratios) == expected
 
 
+def test_a_pypsa_model_is_a_cell_only_where_a_run_asks_for_it() -> None:
+    """A run over the grid's sizes, the default among them, does not wait on PyPSA's models."""
+    assert 'pypsa-carbon_management' in ids(['pypsa']), '--sizes pypsa runs it'
+    assert not [c for c in ids(list(SIZES)) if c.startswith('pypsa-')], 'and no grid size does'
+
+
+def test_the_captured_carbon_management_reads_as_its_spec_declares() -> None:
+    """Every source of the capture tidies, so a change to what loading refuses fails here rather than in an A/B."""
+    import specsolve as sps
+
+    captured = cell('pypsa-carbon_management')
+    assert len(sps.tidy(captured.spec, captured.sources)) == 369, 'one table per source PyPSA hands over'
+
+
 @pytest.mark.parametrize('name', list(SHAPES))
 def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
     """A shape the language refuses would read as an error on both sides and prove nothing."""
@@ -2145,7 +2385,7 @@ def test_every_grid_shape_builds_and_solves_where_highs_can(name: str) -> None:
 
     shape = SHAPES[name]
     model = sps.build(spec(shape), tables(shape, 24))
-    assert model.diagnostics().columns > 0
+    assert model.metrics().columns > 0
     if not shape.quadratic:
         assert sps.solve(spec(shape), tables(shape, 24), 'highs').status == 'ok'
 
@@ -2164,7 +2404,7 @@ def test_a_focus_times_one_function_and_says_where_it_is_not_reached() -> None:
         AB_ROOT,
         AB_ROOT,
         rounds=1,
-        focus='specsolve._engine.compiler:Compiler._aligned_bound',
+        focus='specsolve._engine.queries:QueryBuilder._aligned_bound',
     )
     assert reached.base[0]['calls'] > 0, 'a model with bounds over every dimension reaches the aligned bound'
     assert reached.base[0]['seconds'] < reached.base[0]['total_seconds'], 'the focus clock counts only the function'
@@ -2204,6 +2444,146 @@ def test_a_memory_run_judges_each_peak_in_its_own_process() -> None:
     assert row.ratios[0] == row.head[0]['peak_mb'] / row.base[0]['peak_mb']
 
 
+@pytest.mark.parametrize(
+    ('memory', 'builds'),
+    [
+        pytest.param(True, 1, id='a memory run builds once'),
+        pytest.param(False, 2, id='a timed run builds once off the clock first'),
+    ],
+)
+def test_a_memory_peak_is_of_a_process_that_built_once(
+    memory: bool, builds: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The peak is the highest the process ever stood, so a build off the clock is inside it.
+
+    A memory run used to build twice, as a timed run does. Its peak then turned
+    on whether the first model's garbage was collected before the second build
+    reached its own peak: over six processes on one tree `grid-worst-l` peaked
+    between 591 and 667 MB built twice, and between 572 and 580 MB built once
+    (#2143). The stand-in `specsolve` under the tree counts the builds of a
+    real worker process.
+    """
+    package = tmp_path / 'src/specsolve'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_text(
+        'import os\n'
+        'from types import SimpleNamespace\n'
+        '\n'
+        'import polars as pl\n'
+        '\n'
+        '\n'
+        'def build(spec, sources):\n'
+        "    with open(os.environ['AB_BUILDS'], 'a') as log:\n"
+        "        log.write('built\\n')\n"
+        "    no_clocks = pl.DataFrame({'phase': [], 'seconds': []})\n"
+        '    return SimpleNamespace(metrics=lambda: SimpleNamespace(columns=1, rows=1, phases=no_clocks))\n'
+    )
+    log = tmp_path / 'builds'
+    monkeypatch.setenv('AB_BUILDS', str(log))
+    workers = {} if memory else {'base': Worker(tmp_path, op='build', focus=None)}
+    try:
+        _ask(workers, {'base': tmp_path}, 'base', 'grid-baseline-tiny', 'build', None, None)
+    finally:
+        for worker in workers.values():
+            worker.close()
+    built = len(log.read_text().splitlines())
+    assert built == builds, f'the worker built {built} times: a peak is of one build, a timing of the second of two'
+
+
+def _timed_run(seconds: float, **phases: float) -> dict[str, Any]:
+    """One worker answer: its total and the seconds it spent in each phase."""
+    return {'seconds': seconds, 'calls': None, 'fingerprint': None, 'columns': 1, 'rows': 1, 'phases': phases}
+
+
+def test_the_raw_table_holds_every_number_the_report_takes_its_medians_from() -> None:
+    """A PR's table prints medians; the raw table keeps each round, paired, so two runs pool by a concat."""
+    base = [{'seconds': s, 'calls': None, 'peak_mb': 300.0, 'phases': {'build': s / 2}} for s in (0.10, 0.12, 0.11)]
+    head = [{'seconds': s, 'calls': None, 'peak_mb': 290.0, 'phases': {'build': s / 2}} for s in (0.08, 0.09, 0.07)]
+    numbers = raw([Row('grid-baseline-s', base=base, head=head)], base='b0', head='h0', op='build')
+
+    whole = numbers.filter(phase='', metric='seconds').sort('side', 'round')
+    assert whole['value'].to_list() == [0.10, 0.12, 0.11, 0.08, 0.09, 0.07], 'every round on each side, in order'
+    assert whole.filter(side='head', round=1)['value'].item() == head[1]['seconds'], (
+        'round pairs a head number with the base number measured beside it'
+    )
+    assert numbers.filter(phase='build').height == 6, 'each phase clock, every round, both sides'
+    assert numbers.filter(metric='calls').is_empty(), 'a number the worker did not produce is an absent row'
+    assert set(numbers['base']) == {'b0'} and set(numbers['op']) == {'build'}, 'each row names what it measured'
+
+
+def test_a_raw_table_of_nothing_still_has_its_columns() -> None:
+    """A run whose every cell errored writes a table another run still concatenates onto."""
+    assert dict(raw([], base='b0', head='h0', op='build').schema) == RAW_SCHEMA, 'the schema, not an empty frame'
+
+
+def _phase_lines(row: Row) -> dict[str, list[str]]:
+    """*row*'s lines of the phase table, keyed by phase, each split into its cells."""
+    return {
+        cells[1]: cells
+        for cells in (
+            [c.strip() for c in line.strip('|').split('|')] for line in phase_table([row])[5:] if line.startswith('|')
+        )
+    }
+
+
+def test_a_slower_cell_names_the_phase_that_moved() -> None:
+    """The totals say a cell got slower; the phase table says it was the build, and the solve held."""
+    row = Row(
+        'c',
+        base=[_timed_run(2.0, build=1.0, solve=1.0)] * 6,
+        head=[_timed_run(3.0, build=2.0, solve=1.0)] * 6,
+    )
+    lines = _phase_lines(row)
+
+    assert row.verdict == 'slower', 'the total moved'
+    assert lines['build'][-1] == 'slower', f'the build moved: {lines["build"]}'
+    assert lines['solve'][-1] == 'no change', f'the solve held: {lines["solve"]}'
+
+
+def test_the_phase_table_says_how_many_of_its_verdicts_chance_alone_gives() -> None:
+    """Hundreds of phase rows at six rounds read faster or slower by chance alone, so the table says how many."""
+    row = Row(
+        'c',
+        base=[_timed_run(2.0, build=1.0, solve=1.0)] * 6,
+        head=[_timed_run(3.0, build=2.0, solve=1.0)] * 6,
+    )
+    expected = f'{2 * chance(6):.1f}'
+    assert phase_table([row])[-1] == (
+        f'1 slower, 1 no change. With nothing changed, about {expected} of these 2 phases read faster or slower.'
+    ), 'the verdicts counted, and the chance count beside them'
+
+
+def test_a_solve_cell_reports_the_size_of_the_model_it_solved() -> None:
+    """A solve run left the table's columns and rows blank, though the result's metrics hold them."""
+    from bench.ab import worker
+    from bench.ab.grid import cell
+
+    solved = worker._solve(cell('grid-baseline-tiny'))
+    metrics = solved.result.metrics
+    assert solved.sizes == {'columns': metrics.columns, 'rows': metrics.rows}, 'the size the solve itself reports'
+    assert min(solved.sizes.values()) > 0, f'a model with columns and rows: {solved.sizes}'
+
+
+def test_a_phase_only_head_clocked_reads_a_dash_and_takes_no_verdict() -> None:
+    """A base older than a phase has none of it, so there is nothing to compare it with."""
+    row = Row('c', base=[_timed_run(1.0, build=1.0)] * 6, head=[_timed_run(1.0, load=0.1, build=0.9)] * 6)
+    lines = _phase_lines(row)
+
+    assert list(lines) == ['load', 'build'], 'the phases in the order head ran them'
+    assert lines['load'][2] == '—', f'base has no load: {lines["load"]}'
+    assert lines['load'][-1] == '—', f'and no verdict on it: {lines["load"]}'
+
+
+def test_a_memory_comparison_reports_no_phases() -> None:
+    """The phases are clocks, and a memory run's verdict is on its peak, so their table would mislead."""
+    run = {**_timed_run(1.0, build=1.0), 'peak_mb': 100.0}
+
+    assert 'Where the time went' not in table(
+        [Row('c', base=[run] * 6, head=[run] * 6, metric='peak_mb')], [], 6, memory=True
+    )
+    assert 'Where the time went' in table([Row('c', base=[run] * 6, head=[run] * 6)], [], 6)
+
+
 def test_two_different_models_fail_however_fast() -> None:
     def run(seconds: float) -> dict[str, Any]:
         return {'seconds': seconds, 'calls': None, 'fingerprint': None}
@@ -2222,12 +2602,28 @@ def test_two_different_models_fail_however_fast() -> None:
         pytest.param(lambda n: {**n, 'rows.row': n['rows.row'] + 1}, False, id='an integer moved by one'),
         pytest.param(lambda n: {**n, 'cost': n['cost'][:-1]}, False, id='one cost fewer'),
         pytest.param(lambda n: {k: v for k, v in n.items() if k != 'cost'}, False, id='a field missing'),
+        pytest.param(
+            lambda n: {**n, 'rhs': np.array([1e9, 4.76837158203125e-07])},
+            True,
+            id='a sum that cancels to zero, off by the last bits of its terms',
+        ),
+        pytest.param(
+            lambda n: {**n, 'rhs': np.array([1e9, 1e-2])}, False, id='a number near zero moved past those last bits'
+        ),
+        pytest.param(
+            lambda n: {**n, 'cols.ub': np.array([np.inf, 2.0])}, False, id='a bound moved beside an infinite one'
+        ),
     ],
 )
 def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
     tmp_path: Path, change: Any, same: bool
 ) -> None:
-    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rows.row': np.arange(3)}
+    numbers = {
+        'cost': np.array([1.0, 2.5, 1e6]),
+        'rhs': np.array([1e9, 0.0]),
+        'cols.ub': np.array([np.inf, 1.0]),
+        'rows.row': np.arange(3),
+    }
     np.savez(tmp_path / 'base.npz', **numbers)
     np.savez(tmp_path / 'head.npz', **change(numbers))
     assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same

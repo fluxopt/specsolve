@@ -30,10 +30,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -46,7 +47,7 @@ objective:
 """
 #: The same restriction said as a set; it reaches the default's optimum on every sink.
 SOS2_SPEC = override(raw_of(NONCONVEX_YAML), **{'piecewise.cost_curve.method': 'sos2'})
-#: two dims in the frame, so the emitted ``dims`` has an order to get wrong.
+#: two dimensions, so the emitted ``dims`` has an order to get wrong.
 TWO_DIM_YAML = """
 dimensions:
   snapshot: {dtype: int, ordered: true}
@@ -68,10 +69,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot, generator]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
 
 constraints:
   balance:
@@ -106,11 +108,12 @@ variables:
 
 piecewise:
   chp:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [power, power_bp]
-      - [fuel, fuel_bp]
-      - [heat, heat_bp]
+      power: [power, power_bp]
+      fuel: [fuel, fuel_bp]
+      heat: [heat, heat_bp]
 
 constraints:
   balance:
@@ -145,10 +148,11 @@ variables:
 
 piecewise:
   cost_curve:
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y]
     activity: u
 
 constraints:
@@ -194,10 +198,11 @@ variables:
 piecewise:
   cost_curve:
     description: cost bounded below by the curve, which is exact where the curve is convex
-    over: bp
+    along: bp
+    dims: [snapshot]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, '>=']
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, '>=']
     method: lp
 
 constraints:
@@ -213,8 +218,8 @@ objective:
 """
 
 
-def curve_frame(points: dict) -> pl.DataFrame:
-    """A per-generator curve ``{(generator, bp): value}`` as the tidy frame it is supplied as."""
+def curve_table(points: dict) -> pl.DataFrame:
+    """A per-generator curve ``{(generator, bp): value}`` as the tidy table it is supplied as."""
     return pl.DataFrame(
         {
             'generator': [g for g, _ in points],

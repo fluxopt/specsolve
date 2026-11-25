@@ -48,17 +48,17 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{gen}^{\mathrm{p,nom}}`$ | `gen_p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{B} \times \mathcal{L}`$, $`0`$ where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{L}`$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
-| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$, `neutral` where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
 | $`\mathit{gen}`$ | `gen` over $`\mathcal{G}`$ — output of a generator |
-| $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence entry, so it needs no variable of its own. |
+| $`p`$ | `p` over $`\mathcal{L}`$ — the one decision per link, PyPSA's p — what it draws at its input. Every other end's flow is that draw scaled by its incidence value, so it needs no variable of its own. |
 
 #### Variable domains
 
@@ -85,13 +85,13 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{b,l} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -134,7 +134,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
           columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus
         dims: [bus]
@@ -149,7 +149,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       p:
         description: >-
           the one decision per link, PyPSA's p — what it draws at its input. Every
-          other end's flow is that draw scaled by its incidence entry, so it needs
+          other end's flow is that draw scaled by its incidence value, so it needs
           no variable of its own.
         dims: [link]
         bounds:
@@ -175,10 +175,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_multilink.yaml', sources) as solution:
-        solution.objective  # 1100.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_multilink.yaml', sources) as result:
+        result.objective  # 1100.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -238,10 +238,10 @@ finding the input, numbering the outputs, padding the narrow links with `''`
 and a filler efficiency no equation reads. The wide schema demands that
 reshape of any tidy source; the specsolve tab attaches the incidence table as it
 stands. PyPSA fixes the input's share at `-1`, so the pivot asserts it. In
-rows that constant is data: an input entry of `-1.05` models a link burning 5%
+rows that constant is data: an input value of `-1.05` models a link burning 5%
 of its draw in station load, with no new column and no new construct.
 
-**When a link end needs a name of its own, the incidence entry stops being
+**When a link end needs a name of its own, the incidence value stops being
 enough.** A per-end variable or bound (a heat-offtake cap on the CHP's heat
 port alone), a value pulled through an end's bus with `at(..., by=…)`, or a
 link touching the same bus twice all need the ends as a dimension with leg

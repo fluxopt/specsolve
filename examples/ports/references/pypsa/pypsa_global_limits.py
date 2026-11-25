@@ -16,7 +16,7 @@ own objects. Nothing here imports specsolve.
 **Four limits, one shape.** Each bounds a sum over a set PyPSA selects by an
 attribute:
 
-- ``operational_limit`` — energy a carrier delivers over the horizon (``gas``)
+- ``operational_limit`` — energy a carrier delivers over every snapshot (``gas``)
 - the per-(bus, carrier) capacity cap — wind capacity at ``east``
 - ``transmission_volume_expansion_limit`` — ``p_nom * length`` over the links
 - ``transmission_expansion_cost_limit`` — ``capital_cost * p_nom`` over the links
@@ -66,7 +66,7 @@ BUS_CAPACITY_CAP = ('east', 'nom_max_wind', 17.0)
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

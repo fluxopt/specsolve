@@ -58,7 +58,7 @@ def spec(expression: str, **patch) -> dict:
     ],
 )
 def test_both_lanes_reach_one_optimum(expression):
-    """The differential oracle: a power is one number per coordinate on either lane."""
+    """Checked against the linopy lane: a power is one number per coordinate on either lane."""
     with differential(spec(expression), SOURCES):
         pass
 
@@ -103,19 +103,19 @@ def test_a_missing_row_under_a_power_that_adds_reads_as_zero_on_both_lanes():
     sources = {**SOURCES, 'period': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 1.0]})}
     model = spec(
         'sum(p * cost * (1 + period) ** 2)',
-        parameters={**SPEC['parameters'], 'period': {'dims': ['g'], 'missing': 'neutral'}},
+        parameters={**SPEC['parameters'], 'period': {'dims': ['g'], 'missing': 0}},
     )
     with differential(model, sources) as run:
         assert float(run.result.objective) == pytest.approx(60.0), 'c is priced at 5 * 1 ** 2, not left free'
 
 
 # ---------------------------------------------------------------------------
-# the plan boundary: a guard no file can reach
+# the program boundary: a guard no file can reach
 # ---------------------------------------------------------------------------
 
 
 def test_a_power_over_a_variable_is_refused_at_the_plan_boundary():
-    """Purpose-built, because `check` refuses it before a plan exists, so the plan is built by hand."""
+    """Purpose-built, because `check` refuses it before a program exists, so the program is built by hand."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
         'parameters': {'growth': {'dims': []}, 'period': {'dims': ['g']}},

@@ -33,8 +33,8 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, `neutral` where the data has no row — how much of each nutrient a dollar of each food buys |
 | $`\mathrm{daily\_minimum}`$ | `daily_minimum` over $`\mathcal{N}`$ — how much of a nutrient a day has to supply |
+| $`\mathrm{nutrient\_per\_dollar}`$ | `nutrient_per_dollar` over $`\mathcal{F} \times \mathcal{N}`$, $`0`$ where the data has no row — how much of each nutrient a dollar of each food buys |
 
 #### Variables
 
@@ -67,7 +67,7 @@ Stigler's diet problem (1945): the cheapest set of foods meeting a year's nutrit
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -92,7 +92,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nutrient_per_dollar:
         description: how much of each nutrient a dollar of each food buys
         dims: [food, nutrient]
-        missing: neutral
+        missing: 0
       daily_minimum:
         description: how much of a nutrient a day has to supply
         dims: [nutrient]
@@ -117,10 +117,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/stigler_diet.yaml', sources) as solution:
-        solution.objective  # 0.10866227820675685
-        solution.dual('meet_requirement')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/stigler_diet.yaml', sources) as result:
+        result.objective  # 0.10866227820675685
+        result.dual('meet_requirement')
     ```
 
 === "linopy"

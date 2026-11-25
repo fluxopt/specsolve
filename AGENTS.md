@@ -51,7 +51,7 @@ In the tree nothing is marked: `Co-Authored-By: Claude …` is the record.
 ## Simplicity is the design
 
 - **The simplest thing that works.** No new layer, protocol, registry, config
-  object or plugin seam unless something concrete needs it *now* — a second
+  object or plugin interface unless something concrete needs it *now* — a second
   implementation, an extension point a third party builds against, a constraint
   nothing else meets. "It will make the next change easier" is not evidence; the
   next change can add it, and by then it will know what shape it wants.
@@ -77,7 +77,7 @@ result, a sweep or an archive writes to disk also raises a layout number, so a
 file in the old layout is refused by name: `INPUTS_LAYOUT` in
 `_archive_layout.py` for an archive's `spec.yaml`, `sources/` and `axis.json`,
 and `ANSWER_LAYOUT` in `_answer_layout.py` for everything else,
-`catalog.parquet` included. `load_inputs` then still reads an
+`catalog.parquet` included. `read_inputs` then still reads an
 archive whose answer alone is out of date. A new output in `OUTPUT_KINDS` is the
 exception: an answer's `format.json` names the outputs it holds, so an older
 answer reads the new one as not asked for, and the layout stays. Changing what
@@ -280,7 +280,7 @@ written.** `feat fix perf refactor docs` owe a changelog line,
 
 A diff across several rows takes the topmost it touches: a feature lands with
 its docs and its tests and is still a `feat`. A reshuffle inside `src/` that no
-consumer can tell apart — a module moved, a private name changed — is `chore`;
+caller can tell apart — a module moved, a private name changed — is `chore`;
 `refactor` publishes, so it is for the ones a changelog reader would want. Three
 cases the table decides and a writer still gets wrong:
 
@@ -315,7 +315,7 @@ yes  fix(data): a piecewise curve that is short of a breakpoint is refused at lo
 
 no   fix(data): fix dtype bug
      ^ an activity, not an outcome
-no   perf(engine): the bound attach reads the ordinal off the Enum, not a dictionary
+no   perf(engine): the bound attach reads the position off the Enum, not a dictionary
      ^ how it was done
 no   fix(data): a piecewise curve short of a breakpoint is refused, not read as the origin
      ^ telegraphed, and the tail is a fragment → the yes above
@@ -387,7 +387,8 @@ skipped. A body invalidated by a rewrite is closed and re-filed, not annotated.
 - **"Discuss", "should we", "is it worth" are questions.** Answer, then stop.
 - **Do not widen scope.** Name the adjacent thing in a sentence instead.
 - **Recommend, do not survey.**
-- **A language feature is triaged first: macro, primitive, formulation, or refused** — the
-  ceiling is relational, degree 2 in the math and 1 beside it. Locality prices a primitive
-  rather than barring it. The deliberate non-primitives in
-  [limits.md](https://mathspec.readthedocs.io/en/latest/about/limits/) come first.
+- **A language feature is triaged first: macro, operator, formulation, or refused** — the
+  ceiling is relational, degree 2 in the math and 1 beside it. Locality prices an operator
+  rather than barring it.
+  [What mathspec refuses](https://mathspec.readthedocs.io/en/latest/about/limits/#what-mathspec-refuses)
+  comes first.

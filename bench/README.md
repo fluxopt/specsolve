@@ -25,7 +25,7 @@ pixi run refresh
 # or a rung at a time — the same five tasks `refresh` depends on, in order
 pixi run ladder        # --sizes 3xs 2xs 2xs5 xs xs5 … m5 l  -> bench/results/latest.json
 pixi run density       # --sizes d100 d50 d25 d08  -> bench/results/density.json
-pixi run declarations  # --sizes n002 … n128, n008m n128m -> bench/results/declarations.json
+pixi run declarations  # --sizes n002 … n128, n008m n128m n008e -> bench/results/declarations.json
 pixi run report        # every results file       -> written into the page
 pixi run plot          #                           -> the chart page
 
@@ -116,6 +116,14 @@ each other on one machine, which is the page's actual claim. What it costs is
 that the whole ladder has to be re-taken in one run rather than a rung at a
 time, or the page mixes two machines.
 
+**One server type is not one machine.** Each run draws a fresh `ccx33`, and two
+of them measured the same code with specsolve 1.24x to 1.75x apart while linopy
+stayed within 9% (#2168). The other libraries do not stand in for specsolve
+here. Every result file records the host, its processor's `/proc/cpuinfo`
+fields, its memory and polars' thread count, and the pull request comment warns
+when the two runs it compares report a different clock, core layout or
+microcode.
+
 The workflow reads the repository variable `BENCH_RUNNER` for its label, so
 pointing the run at a box is a settings change rather than a commit. Unset, it
 falls back to a hosted runner, which is a fallback and not a place to take
@@ -124,9 +132,12 @@ numbers.
 **Set the box up once, snapshot it, and let the workflow do the rest.** After
 that a run is one dispatch: `provision` creates the server from the snapshot,
 `benchmark` lands on the runner that snapshot already carries, and `teardown`
-deletes it — `if: always()`, on a hosted runner, because deleting is the only
-thing that stops the bill and a teardown running on the machine it is deleting
-dies half way. `reap-benchmark-box.yml` sweeps daily for a box that outlived
+shuts it down and deletes it — `if: always()`, on a hosted runner, because
+deleting is the only thing that stops the bill and a teardown running on the
+machine it is deleting dies half way. The shutdown comes first because a
+runner deleted while running keeps its session on GitHub, and the next box's
+runner stops for good after four minutes of "a session for this runner
+already exists". `reap-benchmark-box.yml` sweeps daily for a box that outlived
 any believable run.
 
 **A pull request labelled `trigger:published-bench` takes the same run** on its
@@ -325,7 +336,7 @@ process launched for them has to build the arrays first. Their other verbs,
 other two need nothing a contributor does not already have. So are `mps`, the
 other file format every arm with a writer reaches, and `xpress`, which only
 specsolve reaches — its wheel's Community licence refuses a solve over 5,000 rows
-plus columns but not a load, so the hand-off measures at every rung. A cell
+plus columns but not a load, so the handoff measures at every rung. A cell
 whose solver package is not installed is skipped with the package's name. It is also the only
 sink two of the three arms can reach, and a cell an arm cannot reach is skipped
 with the reason rather than left to look like a measurement that failed.
@@ -335,12 +346,12 @@ with the reason rather than left to look like a measurement that failed.
 Publishing both is the answer to *"you wrote their arm badly"*: the gap between
 them is how much of any result is the library and how much is the style, and
 that is a question about our arm too — `gurobipy-matrix` reaches the same
-`loadModel` seam our own `Gurobi` constructor does, so what separates it from
+`loadModel` handoff our own `Gurobi` constructor does, so what separates it from
 `specsolve` is only where the matrix came from.
 
 **`pyomo` is here because leaving it out would look chosen.** Slow is the
 expected answer and not the point: it is the baseline most readers already
-have, and appsi's `set_instance` reaches the same seam our sinks do — the
+have, and appsi's `set_instance` reaches the same handoff our sinks do — the
 solver's own model, populated, with nothing solved. Nothing of pyomo's is
 switched off that pyomo does not switch off itself; `symbolic_solver_labels`
 is already false by default, which is the cheap side of the same choice
@@ -350,7 +361,7 @@ is already false by default, which is the cheap side of the same choice
 `bench/models/<case>/linopy.py` is `examples/ports/references/linopy/<case>.py`
 against the ladder's parquet — scripts #681 reviewed for idiom and the docs
 execute, which is what keeps this arm from being a strawman somebody wrote in
-an afternoon. The linopy oracle in `tests/linopy_lane` is not this arm and is
+an afternoon. The linopy lane in `tests/linopy_lane` is not this arm and is
 not measured.
 
 **A hand-written arm is a model somebody typed twice**, and nothing structural
@@ -373,7 +384,7 @@ number for the common case, which is why both run by default.
 **What an arm's own defaults cost is the next arm's problem, and it is
 load-bearing.** The retired linopy arm passed `set_names=False` because linopy
 names every variable and constraint while our sinks name nothing, and naming is
-**82% of linopy's HiGHS hand-off** (0.11s against 0.02s at 200k variables) and
+**82% of linopy's HiGHS handoff** (0.11s against 0.02s at 200k variables) and
 35% of its Gurobi one. Any arm added here answers the same question in its own
 docstring: which defaults were switched off, and what each one cost.
 
@@ -510,7 +521,7 @@ written against this table:
 | **before the clock** | `prepare` — splitting parquet paths into parameters vs dimensions (harness bookkeeping: it re-parses the YAML only because the *runner* decides which file is which) |
 | `import` | `import specsolve` |
 | `build` | `sps.build(...)` — the engine scans the parquet itself |
-| `emit` | `model.write(path)` / `Highs(_handoff(model))` |
+| `emit` | `model.write(path)` / `Highs(_tables(model))` |
 | `teardown` | `model.close()` — releases the built model |
 | **after the clock** | row, column and nonzero counts off the built frames |
 
@@ -525,7 +536,7 @@ Two of those are deliberate calls rather than defaults:
   any more — `close()` drops frames this process owns — so the phase is kept as
   a tripwire rather than a cost: if it ever stops reading ~0, something
   acquired a lifetime again.
-Every arm starts from the same parquet files and stops at the same seam, so
+Every arm starts from the same parquet files and stops at the same handoff, so
 each pays for its own data ingestion. That is the honest unit. The *phases* are
 not comparable one-for-one across arms — a library that defers coefficient
 materialisation to its writer spends nothing in `build` that another spends
@@ -568,6 +579,7 @@ verdict off the SQL"), not to cover the language:
 | `sector` | dense snapshots x dense carriers x sparse portfolio | mixed density in one model — the shape a sector-coupled model actually has, and where the sparsity claim is visible |
 | `storage` | a cyclic `shift` recurrence | the self-join, and the only locality class with no linopy cost analogue: xarray shifts an array, we join a term stream against itself on `snapshot.ord - 1` |
 | `commitment` | dispatch gated by a binary `u`, `p <= p_max * u` | the MILP of the comparison, so integrality reaches every sink at scale |
+| `curves` | dispatch with each unit's cost bounded below by its own convex piecewise curve, five breakpoints, `method: lp` | a `shift` along `bp` in every segment row, and the curve's assumptions: PyPSA's spec declares 27 curves. specsolve builds the expansion of `piecewise.yaml`, linopy `add_piecewise_formulation(method='lp')`. The two agree on counts and objective, not row by row: linopy divides each segment row by its step in `p`, the expansion multiplies by it |
 | `milp` | the A/B grid's `milp` shape over `(snapshot, node, tech)`: a binary `u` that switches dispatch `p` (`p <= ub * u`), a row mask on a relation's label, a `sum(by=)` into regions | the constructs in one model, as specsolve alone: no other arm has a formulation, so CodSpeed keeps its history and the comparison tables have no row for it |
 
 **`nodal` is the case worth explaining.** It is dispatch over nodes and
@@ -598,7 +610,7 @@ effect from the other. Run the full ladder with `--sizes all`.
 
 **The declaration count is the third swept axis.** Every size rung grows
 `snapshot` and holds its case's declaration count fixed, so a cost paid *per
-declaration* — a labelled frame each, a stack at the end — is sampled at
+declaration* — an indexed frame each, a stack at the end — is sampled at
 whatever counts the cases happen to have. The `declarations` case splits a
 fixed pool of 512 units per snapshot into 2 / 8 / 32 / 128 variable
 declarations (rungs `n002`…`n128`), each with its own capacity constraint and
@@ -614,14 +626,25 @@ beside the rung's data.
 `n008` and `n128` with a `where:` on every declaration, and nothing else
 changed: same units, same snapshots, same parquet, one keyword apart. They are
 there because *how many declarations carry a mask* is an axis of its own — the
-engine compiles a predicate and decides a semi-join per masked declaration,
-before it pays anything per row — and no other case reaches past two. The mask
-is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly positive), so the pair
-builds the identical model and the difference is the price of the `where:`
-alone, with no row-count change mixed into it. The density sweep answers the
-other half of the question, how much a mask *keeps*, and cannot answer this
-one: the mask that isolates the per-declaration cost is the one that keeps
-everything.
+engine builds the query for a predicate and decides a semi-join per masked
+declaration, before it pays anything per row — and no other case reaches past
+two. The mask is `dispatch`'s vacuous one (`p_max > 0`, drawn strictly
+positive), so the pair builds the identical model and the difference is the
+price of the `where:` alone, with no row-count change mixed into it. The density
+sweep answers the other half of the question, how much a mask *keeps*, and
+cannot answer this one: the mask that isolates the per-declaration cost is the
+one that keeps everything.
+
+**A third pairing prices declarations that hold no row.** `n008e` is `n008`
+plus 60 declarations of each kind that holds no row in PyPSA's spec: a variable
+and its constraint over `store`, a dimension without a label; a variable and
+its constraint whose `where:` admits nothing (`p_max > 1000`, drawn below 150);
+and an assumption that counts along `store`. PyPSA's spec declares every
+component and a network has rows for few of them, so most of its declarations
+are of these kinds. None of the 300 reaches the matrix, and the rung draws its
+twin's numbers, so the pair writes one LP file and the difference is what the
+empty declarations cost, with nothing else mixed in. No other case has a
+declaration that holds no row.
 
 **The report measures what survived rather than trusting the declaration.**
 `dispatch` declares `where: p_max > 0` against a p_max that is always positive,
@@ -650,7 +673,7 @@ decision rather than an omission.
 nothing about how much headroom is left in it. `bench/floor.py` is what a
 number is read against: it hand-writes **one** model — `transport` — from the
 case's cached parquet straight into numpy arrays and a CSR matrix, no specsolve
-and no expression engine anywhere in the path, and ends at the same seam as
+and no expression engine anywhere in the path, and ends at the same handoff as
 the `highs` sink: a populated `highspy.Highs` with `run()` never called. What
 it costs is the irreducible price of emitting the coefficients, and with it
 the sentence becomes *"we are at Nx the floor"* — a claim about engineering
@@ -690,11 +713,9 @@ it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
 multiplies a variable: the matrix moves, so every such update loads the solver
 again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
-name one; the other cases skip it. A `start=` changes only what the solver
-begins from, which moves the solve and not anything timed here;
-`bench/warm_payoff.py` is where a carried basis is weighed.
+name one; the other cases skip it. A `start=` changes only what the solver begins from, which moves the solve and not anything timed here.
 
-The clock stops at `Engine._hand_off`, the half of `Engine.solve` before the run, so
+The clock stops at `Engine.handoff`, the half of `Engine.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the
@@ -702,18 +723,17 @@ same on every case's `2xs` and `xs` rungs on every pull request. The phases are
 `window`, `window-reshaped`, `window-one`, `window-coefficient` and
 `window-cold`, and only `bench.tidy` renders them.
 
-`test_sweep` is `solve_over` across four hand-built slices of one rung, folded
-in order on one model: the first slice loads and the rest push, which the test
-asserts. A sweep cannot be timed short of its solves, so the solver runs on
-every slice, and the sweep's own per-slice clocks are summed into the result's
+`test_sweep` is `solve_over` across four scenarios of one rung, each with the
+same values, folded in order on one model: the first slice loads and the rest
+push, which the test asserts. A sweep cannot be timed short of its solves, so
+the solver runs on every slice, and the sweep's own per-slice clocks are summed
+into the result's
 phases — `solve_seconds` is what the wall time owes the solver, and the rest is
 the sweep's. Its phase is `sweep`. It is taken at `2xs`, `xs` and `s` only
 (`SWEPT_SIZES`), where the solver is not yet the whole cost. It never runs under
 CodSpeed (`NOT_UNDER_CODSPEED` in `conftest.py`): its memory instrument tracks
 the solver's own allocations, and `commitment` swept at `s` ran that job's 20
-minutes out on its own. `bench.yml` leaves it out for the same reason
-(`UNGATED`): its gate is a memray peak, which would hold a pull request to the
-solver's allocations. So a sweep keeps no history: it is measured where someone
+minutes out on its own. So a sweep keeps no history: it is measured where someone
 runs `pytest bench -k test_sweep`.
 
 ## Reading an answer back
@@ -722,7 +742,7 @@ runs `pytest bench -k test_sweep`.
 out against the build as a `Result`, with what `solve` attaches to it
 (`Model._with_record_fields`), then every value read back — `frames`
 collects each variable's primal and each constraint's dual and activity,
-`parquet` is `Result.save`. The answer is built before the clock rather than
+`parquet` writes the answer as an archive holds it. The answer is built before the clock rather than
 solved for (`read_setup`): every column and row zero, reported optimal, and no
 duals for a model with an integer variable, which is what a real solve leaves.
 The cost is set by how many values are laid out, not what they are, so no
@@ -734,7 +754,7 @@ are `read-frames` and `read-parquet`, rendered by `bench.tidy` alone.
 
 `test_fresh` prices the first window of a process started for one solve, from
 launch to exit: the interpreter, the library's import, the build and the
-hand-off. Every other test runs in a process that has imported its library
+handoff. Every other test runs in a process that has imported its library
 already. The test pickles what `prepare` returns and runs `python -m
 bench.fresh` on it; the child times the arm's own `build_and_emit` as the phase
 `first_window`, so `wall_seconds` less `first_window` is the interpreter and the
@@ -748,62 +768,25 @@ child process. Its phase is `fresh`. `bench.report` prints it as the `fresh`
 table, and the page carries no fence for it, so the page publishes only the
 warm charts.
 
-## The warm-start payoff
-
-*Does carrying a basis across a genuine rebuild pay?* is the question #382 has
-to answer before the engine work is worth writing, and until this module there
-was nothing in the tree to answer it on: `examples/benders/run.py` is the only
-driver that rebuilds a model every iteration, and its master is 3 columns and
-25 rows, where a cold solve costs one simplex iteration.
-
-`bench/warm_payoff.py` is that missing case — a capacity-expansion Benders
-whose master is sized from data (`bench/expansion/*.yaml`), with the master
-solved three ways at every rebuild: cold, from the previous iteration's basis
-spliced per declaration, and from that basis merely truncated to the new
-height. The subproblem is a real dispatch LP and is deliberately *not* what is
-measured: `cap_hat * avail` reaches the rows as a right-hand side, so a new
-capacity pushes values onto the loaded solver and never rebuilds.
-
-```bash
-pixi run -e bench python -m bench.warm_payoff s m l --steps 400
-pixi run -e bench python -m bench.warm_payoff m --wall   # only on an idle box
-```
-
-**Simplex iterations are the measurement.** They are deterministic, so this
-ladder needs no idle machine, and they are the quantity a basis actually moves.
-`--wall` prints seconds and the load averages beside them, and carries none of
-the argument.
-
-It is **not an arm** — like `floor.py` it hardcodes one model, prints its own
-table and never touches the ladder's results files — and it is **not a
-feature**: no `src/` code carries a basis across a rebuild, and the splice
-lives here so that the evidence could be taken before the engine work was
-written. Its models sit under `bench/expansion/` rather than `bench/models/`,
-which `tests/test_bench_models.py` reserves for files backing a ladder case.
-
-The splice exists because **rows do not append**: a master with two cut
-families numbers rows per declaration, so a row gained by `optimality_cut`
-shifts every row of `feasibility_cut`. A wrong carry cannot produce a wrong
-answer — a basis moves the route, not the optimum — so the third arm is how the
-splice is shown to be worth its complication at all.
-
 ## The other question: regressions
 
-*Did this change make it worse?* is a different question from *how do we
-compare to another library*, and it wants a different metric — but it does not
-want a different harness. It is the same suite, run twice:
+*Did this change make it worse?* is answered by the same A/B that proves a
+speed-up ([`ab/`](#proving-a-speed-up-ab)): it exits 1 on any cell that is
+slower or builds another model, and `--memory` asks the same of peak memory.
+Run it at the sizes the change reaches. No pull request runs it in CI, because
+a shared runner's clock is noise.
+
+To chase a memory regression to a call stack, the memray peak is the
+instrument. It is the same suite, run twice:
 
 ```bash
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # base
-pixi run -e bench pytest bench --sizes s m -k "not test_sweep" --benchmark-memory --benchmark-autosave   # head
-pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json \
-    --columns peak --fail-on peak:20%
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # base
+pixi run -e bench pytest bench/test_ladder.py --sizes s m -k "not test_sweep and not test_fresh" --benchmark-memory --benchmark-autosave   # head
+pixi run -e bench benchmem compare .benchmarks/*/0001_*.json .benchmarks/*/0002_*.json --columns peak
 ```
 
-That is what `.github/workflows/bench.yml` runs on a pull request labelled
-`trigger:bench` — the base's `src/` and then the head's, under one harness —
-and the memray peak at 20% is what it gates on. Wall time and `rss` are
-reported beside it and never gated. The sweep is left out, because it solves.
+The sweep is left out because it solves, and `test_fresh` because its work is
+in a child process that memray does not follow.
 
 **Why the metric changes with the question.** Measured on `dispatch/m`:
 
@@ -821,8 +804,7 @@ and cancels, leaving a metric that is deterministic and attributable to a call
 stack — which RSS, sensitive to machine load, is not.
 
 So: `rss` for the comparison we publish, the memray peak for the regressions we
-chase. Both come out of the same run — the choice is which column a table reads,
-and `--benchmark-memory-compare-fail` is what turns the second into a gate.
+chase. Both come out of the same run — the choice is which column a table reads.
 
 ## Proving a speed-up: `ab/`
 
@@ -832,7 +814,7 @@ A/B of its base and its head over one grid of models:
 ```bash
 pixi run -e bench ab perf/placement perf/ordering            # the build, every cell
 pixi run -e bench ab perf/ordering perf/bounds \
-    --focus specsolve._engine.compiler:Compiler._aligned_bound  # one function
+    --focus specsolve._engine.queries:QueryBuilder._aligned_bound  # one function
 pixi run -e bench ab origin/main perf/stream-build --op solve   # the solve, where HiGHS can
 pixi run -e bench ab HEAD HEAD -k tiny                         # an A/A, to see the noise
 ```
@@ -845,7 +827,8 @@ installed, and the worker refuses to run if it imported `specsolve` from
 anywhere else. The base is the PR's own base branch, so a stacked PR proves its
 own change. A claim about memory takes `--memory`: the verdict is on the
 peak resident memory of a fresh process per measurement, at the cost of a second
-of imports each time.
+of imports each time. That process runs the cell once: its peak is the highest
+it ever stood, so a warm run would be counted in it.
 
 **The grid** (`ab/grid.py`) is one model with an axis for each thing a change
 may assume: the dimension count, terms per row, a term over fewer dimensions,
@@ -863,14 +846,21 @@ the grid, at each size of the run that is also one of their rungs: `s` or `l`. L
 models of `examples/ports` as `port-<name>`, at their published size: real
 formulations, as a check on a grid this harness chose.
 
+**`--sizes pypsa` adds PyPSA's own `carbon_management`** as
+`pypsa-carbon_management`: 2,131,927 columns, 4,418,981 rows and 9,787,131
+nonzeros, #2130's count. It is the spec and data PyPSA hands specsolve,
+captured once into `ab/carbon_management/`, whose `README.md` names the source,
+its CC-BY-4.0 license and what is changed; `capture.py` there writes them again.
+
 **A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
 Six rounds is the least that can pass, and `compare` refuses fewer. Every
 timed build is warm, and the sides alternate ABBA.
 The first round also saves each side's built model, or a solve's objective. A
 difference beyond the last bits fails the cell as *differs*, so a speed-up that
-changes the model is caught. Floats that differ only within `LAST_BITS` are
-one number summed in another order: the cell keeps its verdict, marked *last
-bits*. With `--focus`, the clock counts only the time inside that function,
+changes the model is caught. Floats that differ only within `LAST_BITS` of
+themselves, or of the largest number of their array, are one number summed in
+another order: the cell keeps its verdict, marked *last bits*. The second bound
+holds a sum that cancels to near zero, which carries the last bits of its terms. With `--focus`, the clock counts only the time inside that function,
 and a cell that never calls it reads *not reached*. The run exits 1 on any
 cell that is *slower*, *differs* or fails.
 
@@ -880,7 +870,14 @@ the report prints how many such cells to expect. Re-run a lone verdict with
 that `pytest bench` takes, and refuses a busy machine.
 
 Paste the table into the PR's `<details>` with its header: the header names
-both commits, what the clock counts, and the machine.
+both commits, what the clock counts, and the machine. `--raw ab.parquet` keeps
+every round's numbers as one long table, one row per number, which the medians
+are taken from:
+
+```python
+pl.read_parquet('ab.parquet').filter(phase='build', metric='seconds')  # each round's build, both sides
+pl.concat([pl.read_parquet(p) for p in ('ab.parquet', 'more.parquet')])  # a re-run pooled with the first
+```
 
 ## The same suite, a third instrument: CodSpeed
 
@@ -901,14 +898,14 @@ cannot drift between them, because there is one of them.
 [CodSpeed](https://codspeed.io) (`.github/workflows/codspeed.yml`) is where
 the history is kept: it stores a number per benchmark for every commit on
 `main`, which is what a regression found months later is bisected against.
-What it adds over `bench.yml` is not the metric but **the baseline** —
-`bench.yml` can only compare against a base it checks out and measures itself,
-which costs two passes and is why it waits for a label. Two jobs:
+What it adds over an A/B is not the metric but **the baseline**: an A/B
+measures a base it checks out itself, while CodSpeed holds a number for every
+commit. It runs on `main` only. Two jobs:
 
 | job | instrument | runner | rungs | runs on |
 |---|---|---|---|---|
-| Memory (heap) | `memory` | free, one polars thread | `s` | every pull request, every push to `main` |
-| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main`, and a pull request labelled `trigger:bench` |
+| Memory (heap) | `memory` | free, one polars thread | `s` | every push to `main` |
+| Wall time | `walltime` | CodSpeed's metered bare metal (`codspeed-macro`) | `2xs` `m` `l` | every push to `main` |
 
 `walltime` runs only on the metered runner because a shared runner's clock says
 nothing, and `simulation` — CodSpeed's default — runs the workload under an
@@ -922,7 +919,7 @@ names: `test_rebuild`, which pedantic rounds make meaningless there,
 `test_sweep`, which solves, and `test_fresh`, whose work is in a child process.
 
 **It gates nothing.** Both jobs are `continue-on-error` and no ruleset names
-them; `bench.yml` remains the check that fails a pull request.
+them.
 
 ## Two ladders
 
@@ -1007,8 +1004,6 @@ every consumer whichever of the two the case has.
 | `results.py` | pytest-benchmark JSON -> the flat records the report and the plot read |
 | `tidy.py` | the same records as one long CSV — a row per number, dims in columns, no nulls. What a plot nobody planned for is built from |
 | `floor.py` | the speed-of-light floor — `transport` hand-written into a populated `Highs`, no engine involved |
-| `warm_payoff.py` / `expansion/` | does a basis carried across a rebuild pay? A scaled Benders, its master solved cold and warm at every rebuild |
 | `report.py` / `plot.py` | the published tables, and the chart page's data literal |
 | `ab/` | the A/B of two refs over a grid of models: does this change make the code faster, and does it build the same model |
 | `profile_build.py` | which *query* inside one build spends the time — a profiler, not a benchmark. Wraps every collect, so read its shares and not its seconds |
-| `profile_phases.py` | which *phase*, in seconds comparable to a real run. Hoists the parse, the lowering and the parquet read out of the loop and reuses one attachment, which takes the spread from 12-55% down to a few percent — the difference between a 10% change being visible and not |

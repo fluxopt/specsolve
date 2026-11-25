@@ -1,6 +1,6 @@
 """Every expression to a bounded depth on both lanes, and the rewrites that must not move it.
 
-The AST is closed, so the set of spellings at a given depth is finite and
+The set of program nodes is closed, so the set of spellings at a given depth is finite and
 "every one of them agrees" can be checked rather than sampled. The model is the
 one ``conftest.law_spec`` builds for ``test_arithmetic_laws.py``.
 
@@ -38,7 +38,7 @@ from tests.linopy_lane.loader import OracleCannotBuildError
 if TYPE_CHECKING:
     from tests.expression_space import Node, Rewrite
 
-#: The shared fixture, taken once: `x` total, `y` masked at `f=b`, `w` dense.
+#: The shared fixture, taken once: `x` total, `y` absent at `f=b`, `w` dense.
 DATA = law_data()
 
 #: Every twentieth rewrite joins the depth-two space in the census below — a
@@ -46,7 +46,7 @@ DATA = law_data()
 CENSUS_STEP = 20
 #: Of the 56 cases that samples, what answered and what a lane refused when the
 #: floor and the ceiling were measured (#1213). Every refusal is the asymmetry
-#: #1137 settled: a `sum` acting along a dimension a constant term of the
+#: #1137 decided: a `sum` acting along a dimension a constant term of the
 #: expression does not carry, which the linopy lane builds and the relational
 #: one refuses by name.
 ANSWERS = 38
@@ -86,7 +86,7 @@ def _answer(node: Node) -> Answer:
         with differential(row_spec(node), DATA) as run:
             return Answer(value=float(run.result.objective))
     except OracleCannotBuildError as exc:
-        return Answer(skipped=f'the oracle cannot build it: {str(exc).splitlines()[0]}', refused=True)
+        return Answer(skipped=f'the linopy lane cannot build it: {str(exc).splitlines()[0]}', refused=True)
     except SpecsolveError as exc:
         if 'specsolve cannot build' not in str(exc):
             raise

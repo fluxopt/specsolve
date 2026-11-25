@@ -104,8 +104,8 @@ def test_the_data_from_files_solves_as_the_first_model_did(data: tuple[dict[str,
 
 def test_an_archive_reads_back_the_answer_it_kept(data: tuple[dict[str, Any], str]) -> None:
     namespace, _ = data
-    assert namespace['archived'].result.objective == pytest.approx(namespace['result'].objective), (
-        'the page says load_archive gives the answer without solving again'
+    assert namespace['archived'].objective == pytest.approx(namespace['result'].objective), (
+        'the page says read_archive gives the answer without solving again'
     )
 
 
@@ -133,7 +133,7 @@ def test_a_window_keeps_its_size(over_time: tuple[dict[str, Any], str]) -> None:
 def test_a_window_without_lookahead_empties_the_battery(over_time: tuple[dict[str, Any], str]) -> None:
     namespace, _ = over_time
     windows = namespace['windows']
-    ends = windows.primal('soc').filter(pl.col('hour') % 3 == 2)['value'].to_list()
+    ends = windows.primal('soc').filter(pl.col('snapshot') % 3 == 2)['value'].to_list()
     assert ends == pytest.approx([0.0] * 4), 'the page says every window ends with the battery empty'
     gap = namespace['schedule_cost'](windows) / namespace['whole'].objective - 1
     assert gap == pytest.approx(0.12, abs=0.005), 'the page says the windows cost 12% more'
@@ -153,7 +153,7 @@ def test_lookahead_closes_the_gap_and_grows_the_window(over_time: tuple[dict[str
 def test_the_update_loop_stays_on_the_fast_path(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
     numbers = namespace['after_numbers']
-    assert (numbers.loads, numbers.solves) == (1, 5), 'the page says five answers came off one loaded model'
+    assert (numbers.solver_instances, numbers.solves) == (1, 5), 'the page says five answers came off one loaded model'
 
 
 def test_more_wind_saves_less_each_time(session: tuple[dict[str, Any], str]) -> None:
@@ -174,18 +174,20 @@ def test_a_update_answers_what_a_fresh_build_answers(session: tuple[dict[str, An
 
 def test_growing_a_coordinate_set_loads_again(session: tuple[dict[str, Any], str]) -> None:
     namespace, _ = session
-    assert namespace['after_rows'].loads == 2, 'the page says new snapshots cost a reload'
+    assert namespace['after_rows'].solver_instances == 2, 'the page says new snapshots cost a reload'
     assert namespace['longer'].objective == pytest.approx(2 * 10500.0), 'the page says two days cost twice one day'
 
 
 def test_pinning_a_variable_stays_on_the_fast_path(lifecycle: tuple[dict[str, Any], str]) -> None:
     """A pin writes bounds, not a row, so the loaded model is kept."""
     namespace, _ = lifecycle
-    assert namespace['pinning'].loads == 1, 'a pin writes bounds, so the solver keeps the model it has loaded'
+    assert namespace['pinning'].solver_instances == 1, (
+        'a pin writes bounds, so the solver keeps the model it has loaded'
+    )
     assert namespace['held'] > namespace['unpinned'], 'holding gas at 60 has to cost something, or it pins nothing'
 
 
-def test_integrality_is_a_declaration_and_costs_the_duals(lifecycle: tuple[dict[str, Any], str]) -> None:
+def test_integrality_is_declared_and_costs_the_duals(lifecycle: tuple[dict[str, Any], str]) -> None:
     """The relax page's claim: a domain edit is a rebuild, and a MILP has no prices."""
     namespace, printed = lifecycle
     assert namespace['milp'].has_primal, 'the integer solve still answers'
@@ -214,7 +216,7 @@ def scenarios() -> tuple[dict[str, Any], str]:
 
 def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str, Any], str]) -> None:
     namespace, _ = scenarios
-    objectives = dict(namespace['scenarios'].record.select('scenario', 'objective').iter_rows())
+    objectives = dict(namespace['scenarios'].records.select('scenario', 'objective').iter_rows())
     assert objectives == pytest.approx({'cold': 16530.0, 'mild': 10500.0}), 'one solve for each label of scenario'
     wide = namespace['gas'].pivot(on='scenario', index='snapshot', values='value').sort('snapshot')
     assert (wide['cold'] >= wide['mild']).all(), 'gas covers the extra load of the cold scenario'
@@ -222,6 +224,6 @@ def test_a_cold_scenario_costs_more_and_burns_more_gas(scenarios: tuple[dict[str
 
 def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, Any], str]) -> None:
     namespace, _ = scenarios
-    objectives = dict(namespace['both'].record.select('scenario', 'objective').iter_rows())
+    objectives = dict(namespace['both'].records.select('scenario', 'objective').iter_rows())
     assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
     assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'

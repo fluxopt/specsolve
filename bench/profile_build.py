@@ -25,7 +25,7 @@ STEPS = (
     ('specsolve._engine.assembly', 'Assembly', '_build_variable'),
     ('specsolve._engine.assembly', 'Assembly', '_build_constraint'),
     ('specsolve._engine.assembly', 'Assembly', '_build_objective'),
-    ('specsolve._engine.labels', None, 'frame'),
+    ('specsolve._engine.indices', None, 'table'),
     ('specsolve._engine.attaching', None, 'attach'),
 )
 
@@ -49,9 +49,9 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
         finally:
             elapsed = time.perf_counter() - started
             key = (phase['now'], ' '.join(self.explain(optimized=False).split())[:88])
-            entry = timings.setdefault(key, [0.0, 0])
-            entry[0] += elapsed
-            entry[1] += 1
+            tally = timings.setdefault(key, [0.0, 0])
+            tally[0] += elapsed
+            tally[1] += 1
 
     pl.LazyFrame.collect = collect
 

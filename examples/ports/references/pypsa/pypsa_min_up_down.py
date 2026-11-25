@@ -24,12 +24,13 @@ The three units carry different window lengths — 3, 2 and 1.
 
 ``up_time_before`` and ``down_time_before`` are both set to 0, against PyPSA's
 default of 1 and 0. The default says the unit was already running before the
-horizon, which emits a further block pinning the status on for the remainder of
-its minimum up time. With both at 0 that block does not appear, every unit begins
-the horizon **off**, and the first snapshot's transition rows are the mirror of
-the ones ``pypsa_unit_commitment`` ports: a unit committed in the first snapshot
-pays for a start and nothing is charged for a stop, where a unit that began the
-horizon running pays for no start and is charged if it goes down.
+first snapshot, which emits a further constraint pinning the status on for the
+remainder of its minimum up time. With both at 0 that constraint does not appear,
+every unit is **off** before the first snapshot, and the first snapshot's
+transition rows are the mirror of the ones ``pypsa_unit_commitment`` ports: a
+unit committed in the first snapshot pays for a start and nothing is charged for
+a stop, where a unit that was running before the first snapshot pays for no
+start and is charged if it goes down.
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_min_up_down.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

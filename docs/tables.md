@@ -49,7 +49,7 @@ sources = {
 }
 ```
 
-A source can also be a pandas frame or a parquet path; see
+A source can also be a pandas `DataFrame` or a parquet path; see
 [the data contract](reference/data.md).
 
 ## Solve
@@ -97,12 +97,12 @@ for file in sorted(run.rglob('*.parquet')):
 `sources/` holds each table as the solve read it, and `answer/` holds one
 file for each variable and constraint.
 
-[`load_archive`](reference/api.md#specsolve.load_archive) reads the answer
+[`read_archive`](reference/api.md#specsolve.read_archive) reads the answer
 back without solving again:
 
 ```python exec="true" source="material-block" result="text" session="data" workdir="examples"
-archived = sps.load_archive(run)
-print(archived.result.objective)
+archived = sps.read_archive(run)
+print(archived.objective)
 ```
 
 To zip an archive, see [Archiving a solve](howto/archiving.md). To query many

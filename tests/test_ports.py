@@ -1,6 +1,6 @@
 """Referenced models, checked against an optimum that did not come from specsolve.
 
-The differential harness compares two lanes consuming the same resolved AST, so
+The differential harness compares two lanes reading the same resolved program, so
 a shared misreading passes it; this corpus is the net for that class. Each
 expected objective was published with the model, produced by somebody else's
 code, or reached by a hand-written formulation on another modelling stack.
@@ -27,17 +27,17 @@ def test_port_reaches_the_reference_optimum(port: dict[str, Any]) -> None:
     at a different vertex than the source prints, so a corpus pinned to a
     solution would fail on a solver upgrade that broke nothing. ``rtol`` is per
     port because a published optimum is rounded and a solved one is not."""
-    with sps.solve(expanded(port['spec']), sources(port['name'])) as solution:
-        assert solution.is_ok, f'{port["name"]} did not solve: {solution.status}'
-        assert solution.objective == pytest.approx(port['objective'], rel=port['rtol']), (
+    with sps.solve(expanded(port['spec']), sources(port['name'])) as result:
+        assert result.is_ok, f'{port["name"]} did not solve: {result.status}'
+        assert result.objective == pytest.approx(port['objective'], rel=port['rtol']), (
             f'{port["name"]} disagrees with {port["provenance"]}'
         )
 
 
 def test_port_is_inside_the_language(port: dict[str, Any]) -> None:
     """Compiles with no data attached, so a language regression fails separately
-    from a semantics one: this breaks when lowering stops accepting the model,
-    the test above when it lowers and misses the number."""
+    from a semantics one: this breaks when compiling stops accepting the model,
+    the test above when it compiles and misses the number."""
     sps.check(expanded(port['spec']))
 
 
@@ -57,10 +57,10 @@ def test_port_reaches_the_reference_duals(port: dict[str, Any]) -> None:
     if not expected:
         pytest.skip(f'{port["name"]} records no duals (a MILP has none)')
 
-    with sps.solve(expanded(port['spec']), sources(port['name'])) as solution:
+    with sps.solve(expanded(port['spec']), sources(port['name'])) as result:
         for constraint, table in expected.items():
             dims = [c for c in table if c != 'value']
-            got = solution.dual(constraint).sort(dims)
+            got = result.dual(constraint).sort(dims)
             want = pl.DataFrame(table).with_columns(pl.col(d).cast(got.schema[d]) for d in dims).sort(dims)
 
             assert got[dims].equals(want[dims]), f'{port["name"]}.{constraint}: dual is keyed differently'
@@ -105,10 +105,10 @@ def test_the_instance_can_tell_the_rule_from_its_misreading(
     )
     spec['constraints'][constraint]['expression'] = misread
 
-    with sps.solve(expanded(port_spec(name)), sources(name)) as solution:
-        as_shipped = solution.objective
-    with sps.solve(expanded(spec), sources(name)) as solution:
-        misreading = solution.objective
+    with sps.solve(expanded(port_spec(name)), sources(name)) as result:
+        as_shipped = result.objective
+    with sps.solve(expanded(spec), sources(name)) as result:
+        misreading = result.objective
 
     assert misreading != pytest.approx(as_shipped, rel=1e-09), (
         f'{name} reaches {as_shipped!r} whether {constraint} reads `{shipped}` or `{misread}` — '

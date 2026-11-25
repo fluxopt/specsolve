@@ -48,16 +48,17 @@ def test_ruff_is_the_same_version_in_ci_and_in_the_hook():
 
 
 #: `polars>=2.0` -> ('polars', '2.0', None), `mathspec>=0.2.1,<0.3` ->
-#: ('mathspec', '0.2.1', '0.3'). A lower bound is a claim the `floors`
-#: environment has to pin to prove; a ceiling, where there is one, is not.
-_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,<([0-9][0-9a-zA-Z.]*))?$')
+#: ('mathspec', '0.2.1', '0.3'), `highspy>=1.13,!=1.16.0` -> ('highspy', '1.13', None).
+#: A lower bound is a claim the `floors` environment has to pin to prove; an
+#: excluded release or a ceiling, where there is one, is not.
+_FLOOR = re.compile(r'^([A-Za-z0-9._-]+)>=([0-9][0-9a-zA-Z.]*)(?:,!=[0-9][0-9a-zA-Z.]*)*(?:,<([0-9][0-9a-zA-Z.]*))?$')
 
 
 def _declared_floors() -> dict[str, str]:
     declared = tomllib.loads((REPO / 'pyproject.toml').read_text())['project']['dependencies']
     unparsed = [spec for spec in declared if not _FLOOR.match(spec)]
     assert not unparsed, (
-        f'{unparsed} is not a `name>=version` lower bound, with or without a `,<version` ceiling. A '
+        f'{unparsed} is not a `name>=version` lower bound, with or without `,!=version` exclusions and a `,<version` ceiling. A '
         f'runtime dependency written any other way has no floor for the `floors` environment to '
         f'pin, so teach this pattern the new shape rather than leaving the dependency unchecked.'
     )
@@ -75,8 +76,28 @@ def _pinned_in_the_floors_environment() -> dict[str, str]:
     return {name: spec for name, spec in pinned.items() if isinstance(spec, str) and name not in _RUNNER}
 
 
+def _pinned_to_a_commit() -> dict[str, dict[str, str]]:
+    """The `floors` pins that name a git commit rather than a release, by package."""
+    pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
+    pinned = pixi['feature']['floors']['pypi-dependencies']
+    return {name: spec for name, spec in pinned.items() if isinstance(spec, dict) and 'git' in spec}
+
+
+def test_a_dependency_ahead_of_its_release_is_pinned_to_one_commit_everywhere():
+    """Until the release, the floor is a commit, and the default and `floors` environments install the same one."""
+    pixi = tomllib.loads((REPO / 'pyproject.toml').read_text())['tool']['pixi']
+    default = {
+        name: spec for name, spec in pixi['pypi-dependencies'].items() if isinstance(spec, dict) and 'git' in spec
+    }
+    assert default == _pinned_to_a_commit(), (
+        f'the default environment installs {default} and `floors` installs {_pinned_to_a_commit()}: '
+        f'a dependency followed ahead of its release has one commit, or the suite tests one and the floor another'
+    )
+
+
 def test_the_floors_environment_pins_every_declared_lower_bound():
-    declared, pinned = _declared_floors(), _pinned_in_the_floors_environment()
+    declared = {name: floor for name, floor in _declared_floors().items() if name not in _pinned_to_a_commit()}
+    pinned = _pinned_in_the_floors_environment()
     assert pinned == {name: f'=={floor}' for name, floor in declared.items()}, (
         f'the `floors` pixi environment pins {pinned}, but `[project.dependencies]` declares '
         f'{declared}. That environment exists to prove each declared lower bound is real, which it '

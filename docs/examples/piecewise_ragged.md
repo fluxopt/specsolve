@@ -27,25 +27,25 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` — dispatchable units |
 | $`\mathcal{B}`$ | index $`b`$ — `bp` — breakpoints, as many as the longest curve needs |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` — dispatchable units |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{max}}`$ | `p_max` over $`\mathcal{G}`$ — maximum dispatch |
+| $`\mathrm{bp\_x}`$ | `bp_x` over $`\mathcal{B} \times \mathcal{G}`$, `absent` where the data has no row — breakpoint dispatch levels, one curve per generator and no two the same length |
+| $`\mathrm{bp\_y}`$ | `bp_y` over $`\mathcal{B} \times \mathcal{G}`$, `absent` where the data has no row — cost at each breakpoint |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{bp\_x}`$ | `bp_x` over $`\mathcal{G} \times \mathcal{B}`$, `absent` where the data has no row — breakpoint dispatch levels, one curve per generator and no two the same length |
-| $`\mathrm{bp\_y}`$ | `bp_y` over $`\mathcal{G} \times \mathcal{B}`$, `absent` where the data has no row — cost at each breakpoint |
+| $`\mathrm{p}^{\mathrm{max}}`$ | `p_max` over $`\mathcal{G}`$ — maximum dispatch |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — dispatched power |
-| $`\mathit{op\_cost}`$ | `op_cost` over $`\mathcal{T} \times \mathcal{G}`$ — operating cost, piecewise-linear in dispatch |
+| $`\mathit{op\_cost}`$ | `op_cost` over $`\mathcal{G} \times \mathcal{T}`$ — operating cost, piecewise-linear in dispatch |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — dispatched power |
 
 #### Notation
 
@@ -55,22 +55,22 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 
 #### Variable domains
 
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`op_cost`**
 
 ```math
-\mathit{op\_cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathit{op\_cost}_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} \mathit{op\_cost}_{t,g}
+\min \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} \mathit{op\_cost}_{g,t}
 ```
 
 #### Subject to
@@ -78,13 +78,13 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 **`balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,t} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
 **`cost_curve`**
 
 ```math
-\mathit{op\_cost}_{t,g} \ge \mathrm{conv}_{b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined}}(\mathrm{bp\_x}_{g,b},\ \mathrm{bp\_y}_{g,b})(p_{t,g}) \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+\mathit{op\_cost}_{g,t} \ge \mathrm{conv}_{b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined}}(\mathrm{bp\_x}_{b,g},\ \mathrm{bp\_y}_{b,g})(p_{g,t}) \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Assumptions
@@ -92,31 +92,31 @@ Least-cost dispatch where each generator's cost curve has as many breakpoints as
 **`cost_curve_complete`**
 
 ```math
-\mathrm{bp\_x}_{g,b} \text{ is defined} \wedge \mathrm{bp\_y}_{g,b} \text{ is defined} \qquad \forall\, g \in \mathcal{G},\ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined}
+\mathrm{bp\_x}_{b,g} \text{ is defined} \wedge \mathrm{bp\_y}_{b,g} \text{ is defined} \qquad \forall\, b \in \mathcal{B},\ g \in \mathcal{G} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined}
 ```
 
 **`cost_curve_increasing`**
 
 ```math
-\mathrm{bp\_x}_{g,b \boxminus_{0} 1} < \mathrm{bp\_x}_{g,b} \qquad \forall\, g \in \mathcal{G},\ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined} \wedge \mathrm{bp\_x}_{g,b - 1} \text{ is defined}
+\mathrm{bp\_x}_{b \boxminus_{0} 1,g} < \mathrm{bp\_x}_{b,g} \qquad \forall\, b \in \mathcal{B},\ g \in \mathcal{G} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined} \wedge \mathrm{bp\_x}_{b - 1,g} \text{ is defined}
 ```
 
 **`cost_curve_curvature`**
 
 ```math
-\left( \mathrm{bp\_y}_{g,b} - \mathrm{bp\_y}_{g,b \boxminus_{0} 1} \right) \cdot \left( \mathrm{bp\_x}_{g,b \boxplus_{0} 1} - \mathrm{bp\_x}_{g,b} \right) \le \left( \mathrm{bp\_y}_{g,b \boxplus_{0} 1} - \mathrm{bp\_y}_{g,b} \right) \cdot \left( \mathrm{bp\_x}_{g,b} - \mathrm{bp\_x}_{g,b \boxminus_{0} 1} \right) \qquad \forall\, g \in \mathcal{G},\ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined} \wedge \mathrm{bp\_x}_{g,b - 1} \text{ is defined} \wedge \mathrm{bp\_x}_{g,b + 1} \text{ is defined}
+\left( \mathrm{bp\_y}_{b,g} - \mathrm{bp\_y}_{b \boxminus_{0} 1,g} \right) \cdot \left( \mathrm{bp\_x}_{b \boxplus_{0} 1,g} - \mathrm{bp\_x}_{b,g} \right) \le \left( \mathrm{bp\_y}_{b \boxplus_{0} 1,g} - \mathrm{bp\_y}_{b,g} \right) \cdot \left( \mathrm{bp\_x}_{b,g} - \mathrm{bp\_x}_{b \boxminus_{0} 1,g} \right) \qquad \forall\, b \in \mathcal{B},\ g \in \mathcal{G} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined} \wedge \mathrm{bp\_x}_{b - 1,g} \text{ is defined} \wedge \mathrm{bp\_x}_{b + 1,g} \text{ is defined}
 ```
 
 **`cost_curve_contiguous`**
 
 ```math
-\lvert \{ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{g,b} \text{ is defined} \wedge \neg \left( \mathrm{bp\_x}_{g,b - 1} \text{ is defined} \right) \} \rvert = 1 \qquad \forall\, g \in \mathcal{G}
+\lvert \{ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined} \wedge \neg \left( \mathrm{bp\_x}_{b - 1,g} \text{ is defined} \right) \} \rvert = 1 \qquad \forall\, g \in \mathcal{G} \,:\, \lvert \{ b \in \mathcal{B} \,:\, \mathrm{bp\_x}_{b,g} \text{ is defined} \} \rvert > 0
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -171,14 +171,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     piecewise:
       cost_curve:
         description: >-
-          each unit's own curve — `points: bp_x` says a curve runs as far as its own
+          each unit's own curve — `where: bp_x` says a curve runs as far as its own
           breakpoints do, so the hydro unit pays for two weights and the gas turbine
           for four
-        over: bp
-        points: bp_x
+        along: bp
+        dims: [snapshot, generator]
+        where: bp_x
         links:
-          - [p, bp_x]
-          - [op_cost, bp_y, ">="]
+          p: [p, bp_x]
+          op_cost: [op_cost, bp_y, ">="]
         method: convex
 
     constraints:
@@ -194,10 +195,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve(to_spec('examples/piecewise_ragged.yaml').expand(), sources) as solution:
-        solution.objective  # 426.0
-        solution.dual('balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve(to_spec('examples/piecewise_ragged.yaml').expand(), sources) as result:
+        result.objective  # 426.0
+        result.dual('balance')
     ```
 
 === "linopy"

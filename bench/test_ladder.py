@@ -1,4 +1,4 @@
-"""The ladder: one model, two lanes, one seam — measured by whichever plugin is loaded.
+"""The ladder: one model, two lanes, one handoff — measured by whichever plugin is loaded.
 
     pixi run refresh    # every rung, then both writers, in order — or by hand:
     pixi run ladder     # the size ladder alone, at the rungs pyproject.toml names
@@ -105,7 +105,8 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     not. ``live_fraction`` is measured, not declared. ``variables`` is the
     numeric x of a scaling curve; ``size`` is a label. ``phase_seconds`` is
     the last round's split, not a minimum: it attributes the wall time, it
-    does not replace it.
+    does not replace it. ``laps`` is the same round's rows of
+    `Model.timings`, which its ``phase_seconds`` sum.
     """
     shape = shape_of(case_name, size)
     assert 0 < counts['columns'] <= shape.nominal_variables
@@ -119,6 +120,8 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     info['variables'] = shape.nominal_variables
     if counts.get('phases'):
         info['phase_seconds'] = counts['phases']
+    if counts.get('laps'):
+        info['laps'] = counts['laps']
 
 
 def _measured(benchmark: Any) -> float | None:
@@ -155,7 +158,7 @@ def test_emit(
 ) -> None:
     """Build the model and hand it over — an LP file on disk, or a populated solver.
 
-    Every arm starts from the same parquet and stops at the same seam, and pays
+    Every arm starts from the same parquet and stops at the same handoff, and pays
     for its own data ingestion. A floor arm is the exception: it times its
     ``load`` alone, over the finished arrays ``prepare`` wrote and
     ``load_setup`` reads back in the spawned child.

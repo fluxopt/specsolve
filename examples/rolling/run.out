@@ -1,13 +1,13 @@
 4 days of 12 hours: six of cheap wind, then six of none.
-full foresight   one window                      cost  62400.00   peak soc  120.0
+full foresight   one solve                       cost  62400.00   peak soc  120.0
 
-rolling  steps=8   lookahead=0   windows  6   cost  74000.00   peak soc   90.0   + 18.6%
-rolling  steps=8   lookahead=4   windows  6   cost  68000.00   peak soc  120.0   +  9.0%
-rolling  steps=8   lookahead=8   windows  6   cost  62400.00   peak soc  120.0   +  0.0%
+rolling  horizon=8   lookahead=0   windows  6   cost  74000.00   peak soc   90.0   + 18.6%
+rolling  horizon=8   lookahead=4   windows  6   cost  68000.00   peak soc  120.0   +  9.0%
+rolling  horizon=8   lookahead=8   windows  6   cost  62400.00   peak soc  120.0   +  0.0%
 
 The store cycles in every schedule — this is not a model where storage
 stops being worth having. What myopia costs is the end of each window:
-charge a window cannot spend before its horizon runs out is worth
+charge a window cannot spend before its last snapshot is worth
 nothing to it, so it arrives empty and the next window starts from zero.
 Lookahead gives it somewhere to spend that charge, and the gap closes.
 

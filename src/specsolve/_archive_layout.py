@@ -14,6 +14,7 @@ import json
 import shutil
 import tempfile
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -24,22 +25,26 @@ import polars.selectors as cs
 from specsolve import _parquet as parquet
 from specsolve._answer_layout import (
     FORMAT_FILE,
-    OUTPUT_KINDS,
+    HORIZON_FILE,
+    MANIFEST_FILE,
+    METRICS_FILE,
+    other_layout,
     write_format,
     write_whole,
 )
-from specsolve._inputs import lowered
+from specsolve._collect import collected
+from specsolve._inputs import as_program
 from specsolve._names import RESERVED_PREFIX, RUN, VALUE
-from specsolve._sweep import MANIFEST_FILE, OWNED_FILE, WINDOWS_DIR
-from specsolve.errors import LayoutError
+from specsolve._outputs import OUTPUT_KINDS
+from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 
     from mathspec.program import Program
     from mathspec.spec import Spec
 
-    from specsolve._answer_layout import FrameWriter
+    from specsolve._answer_layout import TableWriter
 
 #: The archive's one layout. ``axis.json`` also marks a sweep archive.
 SPEC_MEMBER = 'spec.yaml'
@@ -53,17 +58,32 @@ ANSWER_DIR = 'answer'
 #: change to what an archive writes, ``catalog.parquet`` included, raises
 #: [`ANSWER_LAYOUT`][specsolve._answer_layout.ANSWER_LAYOUT] instead.
 #: Stamped in the archive's own ``format.json``.
-INPUTS_LAYOUT = 2
+INPUTS_LAYOUT = 3
 
 
-def check_the_target(out: Path) -> None:
-    """Refuse a directory target that already holds something, before anything is solved."""
-    if out.suffix != '.zip' and out.is_dir() and any(out.iterdir()):
-        raise LayoutError(
-            f'{str(out)!r} already holds something, and a directory archive is written whole rather than '
-            f'merged into what is there. Name a directory that does not exist, or delete this one. A .zip '
-            f'target is replaced instead.'
-        )
+def check_the_target(out: Path, *, resumable: bool = False) -> None:
+    """Refuse a directory target that already holds something, before anything is solved.
+
+    Where *resumable*, a directory holding a sweep's ``axis.json`` is taken,
+    for the sweep to check its answer is its own and resume it, unless its
+    spec and sources are in another layout.
+    """
+    if out.suffix == '.zip' or not out.is_dir() or not any(out.iterdir()):
+        return
+    if resumable and (out / AXIS_MEMBER).is_file():
+        if (other := other_layout(out, INPUTS_LAYOUT)) is not None:
+            raise LayoutError(
+                f'{str(out)!r} holds a sweep archive whose spec and sources are {other}, and this package '
+                f'writes layout {INPUTS_LAYOUT}, so it does not resume it. Name a directory that does not '
+                f'exist, or delete this one.'
+            )
+        return
+    what = 'something other than a sweep archive to resume' if resumable else 'something'
+    raise LayoutError(
+        f'{str(out)!r} already holds {what}, and a directory archive is written into an empty directory '
+        f'rather than merged into what is there. Name a directory that does not exist, or delete this one. '
+        f'A .zip target is replaced instead.'
+    )
 
 
 def _staging_for(out: Path) -> Path:
@@ -82,10 +102,10 @@ def write_archive(
     spec: Spec,
     tables: Mapping[str, pl.LazyFrame],
     *,
-    axis: Mapping[str, object] | None,
-    answer: Callable[[Path, FrameWriter], None],
+    answer: Callable[[Path, TableWriter], object],
+    metrics: Callable[[], pl.DataFrame],
 ) -> Path:
-    """Write a spec, its data and its answer to *out*: a directory, or one zip where the suffix is ``.zip``.
+    """Write a spec, its data and one solve's answer to *out*: a directory, or one zip where the suffix is ``.zip``.
 
     Args:
         out: Where to write; its parent is made if it does not exist. Its
@@ -93,35 +113,29 @@ def write_archive(
         spec: The spec as written, held as ``spec.yaml``.
         tables: The tidy table each source stands for, keyed as the file
             declares, each written as ``sources/<key>.parquet``.
-        axis: The axis as its ``to_dict`` writes it, or ``None`` where the
-            sources are not cut.
         answer: Lays the answer out in the directory it is given, writing
             each table with the writer it is given, which adds the run.
+        metrics: The row ``answer/metrics.parquet`` holds, called once every
+            other member is written and packed, so a clock it reads covers
+            them.
 
     Returns:
         *out*, which lands whole or not at all.
     """
     zipped = out.suffix == '.zip'
     run = out.name.removesuffix('.zip')
-
-    def write(frame: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
-        write_whole(_with_run(frame.lazy(), run), path)
-
+    write = _writer_for(run)
     staging = _staging_for(out)
     part = staging / out.name
     tree = staging / 'tree' if zipped else part
     try:
-        (tree / SOURCES_DIR).mkdir(parents=True)
-        write_format(tree, layout=INPUTS_LAYOUT)
-        (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
-        for name, table in tables.items():
-            write(table, tree / SOURCES_DIR / f'{name}.parquet')
-        if axis is not None:
-            (tree / AXIS_MEMBER).write_text(json.dumps(axis))
+        _write_inputs(tree, spec, tables, None, write)
         answer(tree / ANSWER_DIR, write)
-        _write_catalogs(lowered(spec), tree, run, axis)
+        _write_catalogs(as_program(spec), tree, run, None)
         if zipped:
             _pack(tree, part)
+            shutil.rmtree(tree)
+        _write_last(metrics(), run, tree, part if zipped else None)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -130,6 +144,117 @@ def write_archive(
     part.replace(out)
     shutil.rmtree(staging)
     return out
+
+
+@contextmanager
+def sweep_archive(
+    out: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
+) -> Generator[tuple[Path, TableWriter], None, None]:
+    """A sweep's archive at *out*, open for its answer to be written into slice by slice.
+
+    Yields the directory the answer goes in and the writer that adds the run.
+    A directory archive is written where it lies: its spec, sources and axis
+    first, ``axis.json`` last of them, so a resume holds the data of the run
+    that finished it.
+    ``catalog.parquet`` lands once the body ends without raising, so an
+    interrupted sweep leaves a directory that reads back the slices it
+    finished. A zip is staged beside *out* and packed at the end; an
+    interrupted one leaves nothing, and is not resumed.
+
+    *tables* and *axis* are as [`write_archive`][] takes them, *axis* as its
+    ``to_dict`` writes it.
+    """
+    zipped = out.suffix == '.zip'
+    run = out.name.removesuffix('.zip')
+    write = _writer_for(run)
+    staging = _staging_for(out) if zipped else None
+    tree = out if staging is None else staging / 'tree'
+    try:
+        if staging is None and (tree / AXIS_MEMBER).is_file():
+            _refuse_other_inputs(tree, spec, tables, axis)
+        else:
+            _write_inputs(tree, spec, tables, axis, write)
+        yield tree / ANSWER_DIR, write
+        _write_catalogs(as_program(spec), tree, run, axis)
+        if staging is not None:
+            _pack(tree, staging / out.name)
+            (staging / out.name).replace(out)
+    finally:
+        if staging is not None:
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def _writer_for(run: str) -> TableWriter:
+    """The writer that lands a table whole, as an archive named *run* holds it."""
+
+    def write(table: pl.DataFrame | pl.LazyFrame, path: Path) -> None:
+        write_whole(_with_run(table.lazy(), run), path)
+
+    return write
+
+
+def _write_inputs(
+    tree: Path,
+    spec: Spec,
+    tables: Mapping[str, pl.LazyFrame],
+    axis: Mapping[str, object] | None,
+    write: TableWriter,
+) -> None:
+    """The stamp, ``spec.yaml``, ``sources/`` and, for a sweep, ``axis.json``, into *tree*."""
+    (tree / SOURCES_DIR).mkdir(parents=True, exist_ok=True)
+    write_format(tree, layout=INPUTS_LAYOUT)
+    (tree / SPEC_MEMBER).write_bytes(spec.to_yaml().encode())
+    for name, source in tables.items():
+        write(source, tree / SOURCES_DIR / f'{name}.parquet')
+    if axis is not None:
+        (tree / AXIS_MEMBER).write_text(json.dumps(axis))
+
+
+def carried_sources(out: Path, tables: Mapping[str, pl.LazyFrame]) -> dict[str, Path] | dict[str, pl.LazyFrame]:
+    """The sources an answer archived at *out* carries: the path to each member of a directory, *tables* for a zip.
+
+    A zip has no member a path reaches, so its answer holds the tables it was
+    written from, which are in memory already; a directory's holds none of them.
+    """
+    if out.suffix == '.zip':
+        return dict(tables)
+    return {name: out / SOURCES_DIR / f'{name}.parquet' for name in tables}
+
+
+def _refuse_other_inputs(
+    tree: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
+) -> None:
+    """Refuse a resume of the sweep archived at *tree* from another spec, axis or sources than it holds.
+
+    The slices on disk were solved from what *tree* holds, so a resume either
+    matches it and writes none of it again, or would describe answers it did
+    not produce. ``sweep.json`` names the keys and not the carry or the
+    lookahead, so the axis is compared here as ``axis.json`` holds it. A
+    source is compared as the table it is written as, without its run, rather
+    than hashed: encoding it again costs what writing it did. Called before
+    anything is written, so a refused directory is left as it was found.
+
+    Raises:
+        SpecsolveError: A spec, an axis or a source that differs, each named.
+    """
+    differ = [SPEC_MEMBER] if (tree / SPEC_MEMBER).read_text() != spec.to_yaml() else []
+    held_axis, asked_axis = json.loads((tree / AXIS_MEMBER).read_text()), json.loads(json.dumps(axis))
+    if held_axis != asked_axis:
+        differ.append(f'{AXIS_MEMBER} (holding {held_axis}, and this call asks for {asked_axis})')
+    held = {member.stem: member for member in (tree / SOURCES_DIR).glob('*.parquet')}
+    differ += [
+        f'{SOURCES_DIR}/{name}.parquet'
+        for name in sorted(held.keys() | tables.keys())
+        if name not in held
+        or name not in tables
+        or not parquet.read(held[name]).drop(RUN, strict=False).equals(tables[name].pipe(collected))
+    ]
+    if differ:
+        raise SpecsolveError(
+            f'{str(tree)!r} holds this sweep solved from other inputs than this call passes: '
+            f'{", ".join(differ)} differ, and the slices it holds were solved from what it holds. Archive to a '
+            f'new directory, or delete this one to solve it again.'
+        )
 
 
 #: ``catalog.parquet``'s columns, in order.
@@ -145,12 +270,8 @@ _CATALOG_SCHEMA = {
 }
 
 
-#: Where an archive keeps an EachWindow sweep's per-window frames, and their own catalog.
-_WINDOWS = f'{ANSWER_DIR}/{WINDOWS_DIR}'
-
-
 def _answered_under(under: str) -> dict[str, list[str]]:
-    """The directories under *under* that hold an answer, per kind of declaration, each output beside its core kind."""
+    """The directories under *under* that hold an answer, per kind of entry, each output beside its core kind."""
     held = {'variable': [f'{under}/primal'], 'constraint': [f'{under}/dual'], 'expression': [f'{under}/expression']}
     for kind, carried in OUTPUT_KINDS.items():
         held[carried.per].append(f'{under}/{kind}')
@@ -168,29 +289,21 @@ _HELD_UNDER = MappingProxyType(
 )
 
 
-#: The directories under ``answer/windows/`` that hold one directory of windows per name of each kind.
-_HELD_IN_WINDOWS = MappingProxyType(_answered_under(_WINDOWS))
-
-
-#: What ``answer/windows/owned.parquet`` holds, as its catalog rows describe it.
-_OWNED = 'the coordinate of the sliced dimension that each window owns, by window and index inside the window'
+#: What ``answer/horizon.parquet`` holds, as its catalog row describes it.
+_HORIZON = "the labels of the windowed dimension in each window's horizon, by window"
 
 
 def _write_catalogs(program: Program, tree: Path, run: str, axis: Mapping[str, object] | None) -> None:
-    """``catalog.parquet`` for what *tree* holds, and ``answer/windows/catalog.parquet`` where the windows were kept."""
-    dims = _axis_dims(tree, axis)
-    parquet.write(_catalog(program, tree, run, _HELD_UNDER, dims), tree / CATALOG_MEMBER)
-    if (tree / _WINDOWS).is_dir():
-        owned = f'{_WINDOWS}/{OWNED_FILE}'
-        windows = _catalog(program, tree, run, _HELD_IN_WINDOWS, dims, extra=[(owned, 'owned', 'window', _OWNED)])
-        parquet.write(windows, tree / _WINDOWS / CATALOG_MEMBER)
+    """``catalog.parquet`` for what *tree* holds, with a row for ``answer/horizon.parquet`` where a sweep cut windows."""
+    horizon = f'{ANSWER_DIR}/{HORIZON_FILE}'
+    extra = [(horizon, 'horizon', 'window', _HORIZON)] if (tree / horizon).is_file() else []
+    write_whole(_catalog(program, tree, run, _HELD_UNDER, _axis_dims(tree, axis), extra), tree / CATALOG_MEMBER)
 
 
 def _axis_dims(tree: Path, axis: Mapping[str, object] | None) -> dict[str, str]:
     """The dimension of each column a sweep adds to its files: the axis column, and the key naming each slice.
 
-    A window's answer and cut sources hold the axis column where the spec
-    declares the local index. Empty for a single solve.
+    Empty for a single solve.
     """
     if axis is None:
         return {}
@@ -258,21 +371,36 @@ def _declared_files(
         yield name, 'parameter', parameter.description, parameter.dtype, [(d, d) for d in parameter.dims]
     answered = {'variable': program.variables, 'constraint': program.constraints, 'expression': program.expressions}
     for kind, declared in answered.items():
-        for name, declaration in declared.items():
-            yield name, kind, declaration.description, None, [(d, d) for d in declaration.dims]
+        for name, entry in declared.items():
+            yield name, kind, entry.description, None, [(d, d) for d in entry.dims]
 
 
-def _with_run(frame: pl.LazyFrame, run: str) -> pl.LazyFrame:
-    """*frame* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
+def _with_run(table: pl.LazyFrame, run: str) -> pl.LazyFrame:
+    """*table* as an archive holds it, in types parquet readers agree on, with [`RUN`][] set to *run*.
 
     An unsigned integer up to ``UInt32`` becomes ``Int64``; ``UInt64`` stays, as ``Int64`` cannot hold it. A
     timestamp in a time zone becomes the same instant in UTC.
     """
-    return frame.with_columns(
+    return table.with_columns(
         cs.by_dtype(pl.UInt8, pl.UInt16, pl.UInt32).cast(pl.Int64),
         cs.datetime(time_zone='*').dt.convert_time_zone('UTC'),
         pl.lit(run, dtype=pl.String).alias(RUN),
     )
+
+
+def _write_last(row: pl.DataFrame, run: str, tree: Path, packed: Path | None) -> None:
+    """*row* as ``answer/metrics.parquet``, into *tree*, or appended to the zip *packed* where there is one.
+
+    Appended rather than packed with the rest, since what packing costs is
+    one of the clocks the row records.
+    """
+    member = f'{ANSWER_DIR}/{METRICS_FILE}'
+    written = tree / member
+    written.parent.mkdir(parents=True, exist_ok=True)
+    write_whole(_with_run(row.lazy(), run), written)
+    if packed is not None:
+        with zipfile.ZipFile(packed, 'a', compression=zipfile.ZIP_STORED) as appended:
+            appended.write(written, member)
 
 
 def _pack(tree: Path, into: Path) -> None:
@@ -308,7 +436,9 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
                 f'{str(held)!r} is a directory archive, so it is read where it lies and into= has nothing to '
                 f'do. Drop into=; it is for unpacking a .zip.'
             )
-        _check_the_layout(held, (file.relative_to(held).as_posix() for file in held.rglob('*') if file.is_file()))
+        _refuse_stray_or_missing_members(
+            held, (file.relative_to(held).as_posix() for file in held.rglob('*') if file.is_file())
+        )
         return held
     if into is None:
         raise LayoutError(
@@ -316,12 +446,12 @@ def opened(path: str | Path, into: str | Path | None) -> Path:
             f'archive is read where it lies and needs none.'
         )
     with zipfile.ZipFile(held) as archive:
-        _check_the_layout(held, (name for name in archive.namelist() if not name.endswith('/')))
+        _refuse_stray_or_missing_members(held, (name for name in archive.namelist() if not name.endswith('/')))
         archive.extractall(into)
     return Path(into)
 
 
-def _check_the_layout(named: Path, members: Iterable[str]) -> None:
+def _refuse_stray_or_missing_members(named: Path, members: Iterable[str]) -> None:
     """Refuse anything that is not this layout, before a byte is unpacked."""
     found = sorted(members)
     strays = [

@@ -101,9 +101,9 @@ one per value that exists. Every variable and constraint also runs over
 
 From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
 on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.7× at 1M columns, 1.75 GB against 0.65 GB, and the memory
+There it is 2.5× at 1M columns, 1.80 GB against 0.72 GB, and the memory
 budget stops linopy at that size
-([#2039](https://github.com/fluxopt/specsolve/pull/2039)).
+([#2086](https://github.com/fluxopt/specsolve/pull/2086)).
 
 ## A script that builds one model
 
@@ -116,10 +116,10 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.51 s</td><td class="own">0.47 s</td><td class="own">0.49 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.009">0.46 s · 1.0x</td><td data-ratio="0.977">0.50 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td><td data-ratio="0.956">0.47 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.088">0.96 s · 2.1x</td><td data-ratio="2.141">1.10 s · 2.1x</td><td data-ratio="1.969">0.92 s · 2.0x</td><td data-ratio="1.935">0.95 s · 1.9x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.500">0.69 s · 1.5x</td><td data-ratio="1.735">0.89 s · 1.7x</td><td data-ratio="1.449">0.68 s · 1.4x</td><td data-ratio="1.507">0.74 s · 1.5x</td></tr>
+<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.53 s</td><td class="own">0.45 s</td><td class="own">0.57 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="0.981">0.45 s · 1.0x</td><td data-ratio="0.984">0.52 s · 1.0x</td><td data-ratio="1.017">0.46 s · 1.0x</td><td data-ratio="1.036">0.59 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.029">0.93 s · 2.0x</td><td data-ratio="2.514">1.32 s · 2.5x</td><td data-ratio="2.097">0.94 s · 2.1x</td><td data-ratio="2.121">1.21 s · 2.1x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.409">0.65 s · 1.4x</td><td data-ratio="1.988">1.05 s · 2.0x</td><td data-ratio="1.403">0.63 s · 1.4x</td><td data-ratio="1.600">0.91 s · 1.6x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
@@ -127,6 +127,57 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 A script that builds one small model with specsolve and hands it to the solver
 finishes in about half a second, about half of linopy's time
 ([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
+
+## Where specsolve's build spends its time
+
+Each table follows one model up its size ladder and splits specsolve's time
+into the [phases](../reference/api.md#specsolve.types.Metrics) its engine
+clocks. A phase that grows faster than the model is where a build slows down
+first. A phase a run did not clock reads `—`.
+
+<!-- bench:phases -->
+
+<details markdown="1">
+<summary><b>dispatch</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 200 columns | 1k columns | 5k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 0.764 ms | 0.758 ms | 0.649 ms | 0.627 ms | 0.721 ms | 0.809 ms | 0.714 ms | 0.805 ms | 0.921 ms | 0.798 ms |
+| build | 5.48 ms | 6.02 ms | 6.54 ms | 7.72 ms | 9.31 ms | 12.3 ms | 23.7 ms | 39.3 ms | 160 ms | 315 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>network</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 800 columns | 4k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 2.49 ms | 2.97 ms | 2.45 ms | 2.6 ms | 3.31 ms | 7.32 ms | 8.96 ms | 22.3 ms | 39.2 ms |
+| build | 20.2 ms | 21.2 ms | 21.1 ms | 25.1 ms | 31 ms | 94.8 ms | 140 ms | 584 ms | 1.25 s |
+
+</details>
+
+<details markdown="1">
+<summary><b>nodal</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 0.849 ms | 0.922 ms | 0.901 ms | 0.939 ms | 0.911 ms | 1.5 ms | 2.21 ms | 7.16 ms | 13.2 ms |
+| build | 5.98 ms | 6.61 ms | 7.26 ms | 9.71 ms | 9.57 ms | 17.1 ms | 22.8 ms | 84.4 ms | 160 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>sector</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 3.44 ms | 1.24 ms | 1.02 ms | 1.18 ms | 1.35 ms | 2.89 ms | 4.03 ms | 15.3 ms | 22.3 ms |
+| build | 14.4 ms | 9.16 ms | 9.52 ms | 13.4 ms | 16.6 ms | 44.8 ms | 91.9 ms | 472 ms | 952 ms |
+
+</details>
+
+<!-- bench:/phases -->
 
 ## Not measured yet
 

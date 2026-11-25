@@ -1,15 +1,15 @@
 """`cases:` — one quantity, a value per region, on both lanes.
 
-Each lane builds a region against its own mask and adds the results. The tests
+Each lane builds a region against its own condition and adds the results. The tests
 hold three things:
 
 * a region's value reaches the coordinates it claims, and only those;
 * a region's **absence** stays inside it — an ``otherwise`` that shifts with no
   ``edge=`` has nothing at the first position, and must not unmake a row the
   other regions do cover;
-* a region's data is required **where that region applies**, so a parameter
-  standing for one region is not asked to cover the whole frame, and a hole
-  inside the region it does stand for is still refused.
+* a region reads its data **where that region applies**, so rows outside it
+  change nothing, and a missing row inside it takes the parameter's declared
+  ``missing:`` value there.
 """
 
 from __future__ import annotations
@@ -19,17 +19,17 @@ from pathlib import Path
 
 import pytest
 import yaml
+from mathspec.errors import SchemaError
 
 import specsolve as sps
-from specsolve.errors import DataError
-from tests.differential import RTOL, both_lanes_refuse, differential
+from tests.differential import RTOL, differential
 from tests.oracle import specsolve_linopy
 
 CAPPED_BY_REGION = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {
-        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': 'neutral'},
-        'hi': {'dims': ['t'], 'missing': 'neutral'},
+        'flag': {'dims': ['t'], 'dtype': 'bool', 'missing': False},
+        'hi': {'dims': ['t'], 'missing': 0},
         'cost': {'dims': ['t']},
     },
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1000}}},
@@ -53,8 +53,8 @@ CAPPED_SOURCES = {
 }
 
 
-def _frames(sources):
-    """A dimension's labels as a Series and every parameter as a frame, the shape both lanes take."""
+def _tables(sources):
+    """A dimension's labels as a Series and every parameter as a table, the shape both lanes take."""
     import polars as pl
 
     built = {}
@@ -68,7 +68,7 @@ def _frames(sources):
 
 
 def test_each_region_carries_the_coordinates_it_claims():
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES), lp=True, outputs=frozenset({'activity'})) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 40 and 60, the rest at 5'
         caps = run.result.activity('under_cap').sort('t')
         assert list(caps.get_column('value')) == [40.0, 5.0, 60.0, 5.0], (
@@ -87,42 +87,30 @@ def test_each_region_carries_the_coordinates_it_claims():
 )
 def test_a_constant_side_is_asked_for_data_only_where_its_region_applies(hi, objective):
     """`hi` is the flagged region's cap, so it answers for that region and is never asked about the rest."""
-    with differential(CAPPED_BY_REGION, _frames(CAPPED_SOURCES | {'hi': hi})) as run:
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES | {'hi': hi})) as run:
         assert run.oracle == pytest.approx(objective, rel=RTOL), 'rows outside the region change nothing'
 
 
-@pytest.mark.parametrize('lane', ['relational', 'linopy'])
-def test_a_hole_inside_the_region_is_still_refused_on_each_lane(lane):
-    """Narrowing the question to the region must not stop it being asked there.
-
-    Asserted lane by lane: one lane refusing satisfies a ``pytest.raises``
-    around both.
-    """
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})
-    with tempfile.TemporaryDirectory() as work:
-        path = Path(work) / 'capped.yaml'
-        path.write_text(yaml.safe_dump(CAPPED_BY_REGION))
-        build = (
-            (lambda: sps.build(path, sources))
-            if lane == 'relational'
-            else (lambda: specsolve_linopy.build(path, dict(sources)))
+def test_a_missing_row_inside_the_region_reads_as_zero():
+    """`hi` is `missing: 0`, so the flagged step it has no row at caps at 0, on both lanes."""
+    with differential(CAPPED_BY_REGION, _tables(CAPPED_SOURCES | {'hi': {'t': [0], 'value': [40.0]}})) as run:
+        assert run.oracle == pytest.approx(40.0 + 5.0 + 0.0 + 5.0, rel=RTOL), (
+            't=2 is flagged and hi has no row there, so it caps at 0'
         )
-        with pytest.raises(DataError, match=r"parameter 'hi' covers 1 fewer coordinate"):
-            build()
 
 
 @pytest.mark.parametrize(
     ('flagged', 'objective', 'reads'),
     [
         pytest.param(
-            True, 130.0, 'the region takes the whole frame, so hi caps every step', id='a region that is everywhere'
+            True, 130.0, 'the region takes every coordinate, so hi caps every step', id='a region that is everywhere'
         ),
         pytest.param(
             False, 20.0, 'the region takes nothing, so the otherwise 5 caps every step', id='a region that is nowhere'
         ),
     ],
 )
-def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
+def test_a_region_whose_condition_reads_no_dimension(flagged, objective, reads):
     """A scalar `when` names no coordinate set to cut the region down by, so it cuts by its own constant."""
     spec = CAPPED_BY_REGION | {
         'parameters': CAPPED_BY_REGION['parameters'] | {'flag_all': {'dims': [], 'dtype': 'bool'}},
@@ -130,7 +118,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
             'cap': {'dims': ['t'], 'cases': {'flagged': {'when': 'flag_all', 'expression': 'hi'}}, 'otherwise': 5}
         },
     }
-    sources = _frames(
+    sources = _tables(
         CAPPED_SOURCES
         | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}, 'flag_all': {'value': [flagged]}}
     )
@@ -141,7 +129,7 @@ def test_a_region_whose_mask_reads_no_dimension(flagged, objective, reads):
 CARRIED_IN = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {
-        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': 'neutral'},
+        'switchable': {'dims': ['g'], 'dtype': 'bool', 'missing': False},
         'before': {'dims': ['g']},
         'cap': {'dims': ['g']},
         'step': {'dims': ['g']},
@@ -177,7 +165,7 @@ CARRIED_IN = {
 
 
 def _carried_sources(switchable, before):
-    return _frames(
+    return _tables(
         {
             't': [0, 1, 2, 3],
             'g': ['base', 'peak'],
@@ -203,7 +191,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert sorted(set(rows.get_column('t'))) == [0, 1, 2, 3], 't == 0 is built like any other position'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
 
 
@@ -214,7 +202,7 @@ def test_a_region_that_claims_no_coordinate_does_not_unmake_the_row():
             [False, True],
             [1.0, 0.0],
             4890.0,
-            'boundary: peak was off before the horizon, so it may start at first_step 55',
+            'boundary: peak was off before the first snapshot, so it may start at first_step 55',
             id='peak starts cold',
         ),
         pytest.param(
@@ -253,9 +241,9 @@ def test_a_region_binding_tighter_makes_the_model_infeasible_on_both_lanes():
 
 
 def test_a_region_that_claims_nothing_does_not_unmake_the_row():
-    """The complement of a mask reading no dimension claims nothing, and so may restrict nothing.
+    """The complement of a condition reading no dimension claims nothing, and so may restrict nothing.
 
-    With a true scalar mask the ``otherwise`` claims nothing, while its
+    With a true scalar condition the ``otherwise`` claims nothing, while its
     ``shift`` with no ``edge=`` is still absent at the first position.
     """
     spec = CARRIED_IN | {
@@ -268,13 +256,13 @@ def test_a_region_that_claims_nothing_does_not_unmake_the_row():
             }
         },
     }
-    sources = _carried_sources([False, True], [1.0, 0.0]) | _frames({'everywhere': {'value': [True]}})
-    sources['load'] = _frames({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
+    sources = _carried_sources([False, True], [1.0, 0.0]) | _tables({'everywhere': {'value': [True]}})
+    sources['load'] = _tables({'load': {'t': [0, 1, 2, 3], 'value': [70.0, 60.0, 60.0, 60.0]}})['load']
     with differential(spec, sources, outputs=frozenset({'activity'})) as run:
         rows = run.result.activity('ramp')
         assert rows.height == 8, 'every (t, g) coordinate has a ramp row, the first position included'
         assert int((run.model.constraints['ramp'].labels == -1).sum()) == 0, (
-            'the linopy lane masks out no ramp row either'
+            'the linopy lane leaves no ramp row absent either'
         )
         assert run.oracle == pytest.approx(3990.0, rel=RTOL), (
             'carried is 1 everywhere, so the first position is held to step rather than first_step'
@@ -295,14 +283,14 @@ def test_one_parameter_answering_for_two_regions():
             }
         },
     }
-    sources = _frames(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
+    sources = _tables(CAPPED_SOURCES | {'hi': {'t': [0, 1, 2, 3], 'value': [40.0, 10.0, 60.0, 20.0]}})
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(160.0, rel=RTOL), 'the flagged steps read hi and the rest read twice it'
 
 
-def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
-    """A rate stated for the steps its region claims is not asked about the rest."""
-    spec = CAPPED_BY_REGION | {
+def _divided_by_region(rate):
+    """`CAPPED_BY_REGION` with the flagged cap divided by a `rate` declared *rate*."""
+    return CAPPED_BY_REGION | {
         'expressions': {
             'cap': {
                 'dims': ['t'],
@@ -310,34 +298,45 @@ def test_a_divisor_is_asked_for_data_only_where_its_region_applies():
                 'otherwise': 5,
             },
         },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
+        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': rate},
     }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0, 2], 'value': [2.0, 2.0]}})
-    with differential(spec, sources) as run:
-        assert run.oracle == pytest.approx(60.0, rel=RTOL), 'the flagged steps cap at 40/2 and 60/2, the rest at 5'
 
 
-def test_a_hole_in_a_divisor_inside_its_region_is_still_refused():
-    """Narrowing the divisor's question to the region must not stop it being asked there (#1465)."""
-    spec = CAPPED_BY_REGION | {
-        'expressions': {
-            'cap': {
-                'dims': ['t'],
-                'cases': {'flagged': {'when': 'flag', 'expression': 'hi / rate'}},
-                'otherwise': 5,
-            },
-        },
-        'parameters': CAPPED_BY_REGION['parameters'] | {'rate': {'dims': ['t'], 'missing': 'neutral'}},
-    }
-    sources = _frames(CAPPED_SOURCES | {'rate': {'t': [0], 'value': [2.0]}})
-    both_lanes_refuse(spec, sources, match=r"parameter 'rate' is used as a divisor but covers 1 fewer coordinate")
+@pytest.mark.parametrize(
+    ('rate', 'objective', 'reads'),
+    [
+        pytest.param(
+            {'t': [0, 2], 'value': [2.0, 2.0]},
+            20.0 + 5.0 + 30.0 + 5.0,
+            'the flagged steps cap at 40/2 and 60/2',
+            id='every flagged step has a rate',
+        ),
+        pytest.param(
+            {'t': [0], 'value': [2.0]},
+            20.0 + 5.0 + 60.0 + 5.0,
+            't=2 has no rate, so it divides by the declared 1',
+            id='a flagged step without a rate',
+        ),
+    ],
+)
+def test_a_divisor_inside_a_region_reads_its_declared_value_where_it_has_no_row(rate, objective, reads):
+    """`rate` is `missing: 1`, so the steps outside the region owe it nothing and a flagged step without a row divides by 1."""
+    spec = _divided_by_region({'dims': ['t'], 'missing': 1})
+    with differential(spec, _tables(CAPPED_SOURCES | {'rate': rate})) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+
+
+def test_a_divisor_inside_a_region_that_a_missing_row_makes_zero_is_refused_at_load():
+    """`missing: 0` under a divisor is refused by mathspec before any data arrives, region or not."""
+    with pytest.raises(SchemaError, match="the divisor contains 'rate', which is declared missing: 0"):
+        sps.build(_divided_by_region({'dims': ['t'], 'missing': 0}), _tables(CAPPED_SOURCES))
 
 
 #: `cap` is a sum over `g` inside the flagged region: `hi` owes two coordinates
 #: per flagged step, and none for the steps the `otherwise` carries.
 SUMMED_BY_REGION = CAPPED_BY_REGION | {
     'dimensions': CAPPED_BY_REGION['dimensions'] | {'g': {'dtype': 'str'}},
-    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 'neutral'}},
+    'parameters': CAPPED_BY_REGION['parameters'] | {'hi': {'dims': ['t', 'g'], 'missing': 0}},
     'expressions': {
         'cap': {
             'dims': ['t'],
@@ -356,14 +355,14 @@ SUMMED_SOURCES = CAPPED_SOURCES | {
 
 def test_a_region_narrows_what_a_summed_constant_side_owes():
     """Data for the steps a region claims, at every coordinate the sum reads — and no more."""
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES)) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES)) as run:
         assert run.oracle == pytest.approx(110.0, rel=RTOL), 'the flagged steps cap at 30+10 and 30+30, the rest at 5'
 
 
 #: The whole cased quantity under the sum, rather than a sum inside a region:
 #: `bound` is cased over `(k, t)` and the row reads its total over `t`.
 SUMMED_CASES = {
-    'dimensions': {'k': {'dtype': 'str'}, 't': {'ordered': True}},
+    'dimensions': {'k': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'hi': {'dims': ['k', 't']}, 'lo': {'dims': ['k', 't']}},
     'variables': {'x': {'dims': ['k'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {
@@ -383,22 +382,22 @@ SUMMED_CASES_SOURCES = {
 
 
 def test_a_cased_quantity_summed_onto_a_constant_side_builds():
-    """A region's claim survives the reduction that keeps the dims it reads.
+    """A region's claim survives the reduction that keeps the dimensions it reads.
 
     After the sum over `t` the `a` term has no row at `k = b` and the
     `otherwise` term none at `k = a`; neither is a hole.
     """
-    with differential(SUMMED_CASES, _frames(SUMMED_CASES_SOURCES)) as run:
+    with differential(SUMMED_CASES, _tables(SUMMED_CASES_SOURCES)) as run:
         assert run.oracle == pytest.approx(18.0, rel=RTOL), 'k=a caps at 5+6 and k=b at 3+4'
 
 
-def test_a_hole_the_summed_region_reads_is_one_summand_fewer():
-    """A neutral hole under the sum inside the region contributes nothing (#1465).
+def test_a_hole_the_summed_region_reads_is_one_term_fewer():
+    """A missing row under the sum inside the region adds 0 (#1465).
 
     Step 2 loses `v`'s 30, so the flagged steps cap at 30+10 and 30, the rest at 5.
     """
     holed = {'t': [0, 0, 2], 'g': ['u', 'v', 'u'], 'value': [30.0, 10.0, 30.0]}
-    with differential(SUMMED_BY_REGION, _frames(SUMMED_SOURCES | {'hi': holed})) as run:
+    with differential(SUMMED_BY_REGION, _tables(SUMMED_SOURCES | {'hi': holed})) as run:
         assert run.oracle == pytest.approx(80.0, rel=RTOL), 'the flagged steps cap at 40 and 30, the rest at 5'
 
 
@@ -409,8 +408,8 @@ OUTAGE_FLOW = {
     'dimensions': {'line': {'dtype': 'str'}, 'outage': {'dtype': 'str'}},
     'relations': {'outage_line': {'key': 'outage', 'values': 'line'}},
     'parameters': {
-        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': 'neutral'},
-        'share': {'dims': ['line', 'outage'], 'missing': 'neutral'},
+        'active': {'dims': ['line'], 'dtype': 'bool', 'missing': False},
+        'share': {'dims': ['line', 'outage'], 'missing': 0},
         'cap': {'dims': ['line']},
     },
     'variables': {'s': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 100}}},
@@ -442,31 +441,29 @@ def test_a_region_worth_zero_read_through_a_pullback_owes_nothing():
         'share': {'line': ['a', 'b'], 'outage': ['out_a', 'out_a'], 'value': [0.0, 0.5]},
         'cap': {'line': ['a', 'b'], 'value': [10.0, 10.0]},
     }
-    with differential(OUTAGE_FLOW, _frames(sources)) as run:
+    with differential(OUTAGE_FLOW, _tables(sources)) as run:
         assert float(run.result.objective) == pytest.approx(15.0, rel=RTOL), 's_a at 10 leaves s_b 5'
 
 
-def test_a_read_through_a_cased_divisor_is_refused_where_the_case_that_applies_has_no_row():
-    """`b` answers for the steps where `a` is not positive, and has no row at 3, so the read divides by nothing there.
+def test_a_read_through_a_cased_divisor_whose_otherwise_is_missing_zero_is_refused_at_load():
+    """`b` answers where `a` is not positive and is `missing: 0`, so its missing row at 3 would make `v / e` divide by 0.
 
-    The flagged case has no row at 3 either, since it does not claim it. Read
-    as zero there, it would make the divisor zero and the quotient absent,
-    rather than refused for the missing row of `b`.
+    mathspec refuses the read at load, before it looks at which rows `b` has.
     """
     spec = {
         'dimensions': {'h': {'dtype': 'int'}},
-        'parameters': {'a': {'dims': ['h']}, 'b': {'dims': ['h'], 'missing': 'neutral'}},
+        'parameters': {'a': {'dims': ['h']}, 'b': {'dims': ['h'], 'missing': 0}},
         'variables': {'v': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
         'expressions': {
             'e': {'dims': ['h'], 'cases': {'flagged': {'when': 'a > 0', 'expression': 'a'}}, 'otherwise': 'b'}
         },
         'objective': {'sense': 'maximize', 'expression': 'sum(v)'},
     }
-    sources = _frames(
+    sources = _tables(
         {'h': [1, 2, 3], 'a': {'h': [1, 2, 3], 'value': [2.0, -1.0, -1.0]}, 'b': {'h': [2], 'value': [4.0]}}
     )
-    result = sps.solve(spec, sources)
-    with pytest.raises(
-        DataError, match=r"parameter 'a, b' is used as a divisor but has no row at 1 of the coordinates"
+    with (
+        sps.solve(spec, sources) as result,
+        pytest.raises(SchemaError, match="the divisor contains 'b', which is declared missing: 0"),
     ):
         result.evaluate('v / e')

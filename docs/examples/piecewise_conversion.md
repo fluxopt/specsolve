@@ -25,30 +25,30 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `time` — dispatch periods |
+| $`\mathcal{B}`$ | index $`b`$ — `bp` — breakpoints, as many as the longest curve needs |
 | $`\mathcal{C}`$ | index $`c`$ — `converter` with $`\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}`$ — units converting one carrier into others |
 | $`\mathcal{F}`$ | index $`f`$ — `flow` with $`\mathrm{converter\_of}: \mathcal{F} \to \mathcal{C}`$ — a converter's inputs and outputs, one row each |
-| $`\mathcal{B}`$ | index $`b`$ — `bp` — breakpoints, as many as the longest curve needs |
+| $`\mathcal{T}`$ | index $`t`$ — `time` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{bp\_rate}`$ | `bp_rate` over $`\mathcal{F} \times \mathcal{B}`$, `absent` where the data has no row — what each flow runs at, at each breakpoint of its converter's curve |
-| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{C} \times \mathcal{B}`$, `neutral` where the data has no row — how far each converter's curve runs |
-| $`\mathrm{rate}^{\mathrm{max}}`$ | `rate_max` over $`\mathcal{F}`$ — what each flow runs at when its converter is at its last breakpoint |
-| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver heat |
-| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$, `neutral` where the data has no row — which flows deliver power |
-| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$, `neutral` where the data has no row — what a unit of each input flow costs |
+| $`\mathrm{bp\_present}`$ | `bp_present` over $`\mathcal{B} \times \mathcal{C}`$, `false` where the data has no row — how far each converter's curve runs |
+| $`\mathrm{bp\_rate}`$ | `bp_rate` over $`\mathcal{B} \times \mathcal{F}`$, `absent` where the data has no row — what each flow runs at, at each breakpoint of its converter's curve |
+| $`\mathrm{fuel\_price}`$ | `fuel_price` over $`\mathcal{F}`$, $`0`$ where the data has no row — what a unit of each input flow costs |
 | $`\mathrm{heat\_demand}`$ | `heat_demand` over $`\mathcal{T}`$ — heat to be delivered |
+| $`\mathrm{is\_heat}`$ | `is_heat` over $`\mathcal{F}`$, $`0`$ where the data has no row — which flows deliver heat |
+| $`\mathrm{is\_power}`$ | `is_power` over $`\mathcal{F}`$, $`0`$ where the data has no row — which flows deliver power |
 | $`\mathrm{power\_demand}`$ | `power_demand` over $`\mathcal{T}`$ — power to be delivered |
+| $`\mathrm{rate}^{\mathrm{max}}`$ | `rate_max` over $`\mathcal{F}`$ — what each flow runs at when its converter is at its last breakpoint |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
 | $`\mathit{rate}`$ | `rate` over $`\mathcal{F} \times \mathcal{T}`$ — what each flow runs at |
-| $`\mathit{weight}`$ | `weight` over $`\mathcal{C} \times \mathcal{T} \times \mathcal{B}`$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
+| $`\mathit{weight}`$ | `weight` over $`\mathcal{B} \times \mathcal{C} \times \mathcal{T}`$ — how much of each breakpoint the converter's operating point is made of — one convex combination per converter and period, over the breakpoints its own curve runs to |
 
 #### Variable domains
 
@@ -61,7 +61,7 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 **`weight`**
 
 ```math
-0 \le \mathit{weight}_{c,t,b} \le 1 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T},\ b \in \mathcal{B} \,:\, \mathrm{bp\_present}_{c,b}
+0 \le \mathit{weight}_{b,c,t} \le 1 \qquad \forall\, b \in \mathcal{B},\ c \in \mathcal{C},\ t \in \mathcal{T} \,:\, \mathrm{bp\_present}_{b,c}
 ```
 
 #### Objective
@@ -72,22 +72,22 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 
 #### Subject to
 
-**`one_operating_point`**
+**`heat_balance`**
 
 ```math
-\sum_{b \in \mathcal{B}} \mathit{weight}_{c,t,b} = 1 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T}
+\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{is\_heat}_{f} = \mathrm{heat\_demand}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
 **`on_the_curve`**
 
 ```math
-\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{\mathrm{converter\_of}(f),t,b} \cdot \mathrm{bp\_rate}_{f,b} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
+\mathit{rate}_{f,t} = \sum_{b \in \mathcal{B}} \mathit{weight}_{b,\mathrm{converter\_of}(f),t} \cdot \mathrm{bp\_rate}_{b,f} \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T}
 ```
 
-**`heat_balance`**
+**`one_operating_point`**
 
 ```math
-\sum_{f \in \mathcal{F}} \mathit{rate}_{f,t} \cdot \mathrm{is\_heat}_{f} = \mathrm{heat\_demand}_{t} \qquad \forall\, t \in \mathcal{T}
+\sum_{b \in \mathcal{B}} \mathit{weight}_{b,c,t} = 1 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T}
 ```
 
 **`power_balance`**
@@ -99,13 +99,13 @@ Least-cost heat and power from two converters whose flows are tied to one piecew
 **`on_one_segment`**
 
 ```math
-\left( \mathit{weight}_{c,t,b} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T}
+\left( \mathit{weight}_{b,c,t} \right)_{b \in \mathcal{B}} \in \mathrm{SOS}2 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -146,22 +146,22 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: how far each converter's curve runs
         dims: [converter, bp]
         dtype: bool
-        missing: neutral
+        missing: false
       rate_max:
         description: what each flow runs at when its converter is at its last breakpoint
         dims: [flow]
       is_heat:
         description: which flows deliver heat
         dims: [flow]
-        missing: neutral
+        missing: 0
       is_power:
         description: which flows deliver power
         dims: [flow]
-        missing: neutral
+        missing: 0
       fuel_price:
         description: what a unit of each input flow costs
         dims: [flow]
-        missing: neutral
+        missing: 0
       heat_demand:
         description: heat to be delivered
         dims: [time]
@@ -221,9 +221,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve(to_spec('examples/piecewise_conversion.yaml').expand(), sources) as solution:
-        solution.objective  # 5990.0
+    # sources: parameter name -> table or parquet path
+    with sps.solve(to_spec('examples/piecewise_conversion.yaml').expand(), sources) as result:
+        result.objective  # 5990.0
     ```
 
 === "linopy"

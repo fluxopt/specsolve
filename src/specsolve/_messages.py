@@ -2,7 +2,7 @@
 
 A message raised from one place stays beside its ``raise``. One raised from two
 lives here, so the two cannot drift. The engine may import this module: it is a
-leaf that knows no YAML, schema or AST.
+leaf that knows no YAML, schema or program.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ _DATETIME = '%Y-%m-%d %H:%M:%S%.f'
 
 
 def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
-    """``t=1, g=gas`` per row of a frame holding the columns *schema* names, in its order.
+    """``t=1, g=gas`` per row of a table holding the columns *schema* names, in its order.
 
     The one way specsolve writes a coordinate, in a printed row and in a
     refusal alike. A missing label writes ``null``, and an empty *schema*
@@ -37,11 +37,11 @@ def coordinate_expr(schema: Mapping[str, pl.DataType]) -> pl.Expr:
 
 
 def coordinate_text(coordinate: Mapping[str, object]) -> str:
-    """One coordinate, ``dim: label`` in dim order, as [`coordinate_expr`][] writes it."""
+    """One coordinate, ``dim: label`` in dimension order, as [`coordinate_expr`][] writes it."""
     if not coordinate:
         return ''
-    frame = pl.DataFrame([dict(coordinate)])
-    return frame.select(coordinate_expr(frame.schema)).item()
+    table = pl.DataFrame([dict(coordinate)])
+    return table.select(coordinate_expr(table.schema)).item()
 
 
 def coordinates_text(dims: Sequence[str], rows: Iterable[Sequence[object]]) -> str:
@@ -57,7 +57,7 @@ def missing_row_message(kind: str, name: str, coordinate: str, missing: int) -> 
     else:
         ways = (
             '  Declare `missing: absent`, if the parameter does not exist there.\n'
-            '  Declare `missing: neutral`, if a missing row contributes nothing.\n'
+            '  Declare `missing: 0`, if a missing row contributes nothing.\n'
             '  Declare `missing: <value>`, if a missing row reads as one value.'
         )
     return (
@@ -71,16 +71,16 @@ def uncovered_constant_message(names: str, missing: int, subject: str) -> str:
     """The message for a constant side covering fewer coordinates than its rows."""
     return (
         f"{subject}: parameter '{names}' covers {missing} fewer coordinates than the rows "
-        f'built here. A missing neutral row is read as 0, and on the constant side that zero is a '
+        f'built here. A missing row of a `missing: 0` parameter is read as 0, and on the constant side that zero is a '
         f'bound rather than an absence — the row still exists, and it binds.\n'
         f'  Supply the missing rows, if the value is what was meant.\n'
         f'  Declare the parameter `missing: absent`, if the row should not exist there.\n'
-        f'  Drop the declaration, if the spec has no such quantity at all.'
+        f'  Drop the entry, if the spec has no such quantity at all.'
     )
 
 
 def sparse_divisor_message(name: str, missing: int) -> str:
-    """The message for a divisor parameter that is sparse over its index."""
+    """The message for a divisor parameter that is sparse over its dimensions."""
     return (
         f"parameter '{name}' is used as a divisor but covers {missing} fewer "
         f'coordinates than it is indexed over. A missing row means a zero '
@@ -94,7 +94,7 @@ def reported_divisor_message(name: str, missing: int) -> str:
     """The message for a divisor parameter a reported expression reads short of a row."""
     return (
         f"parameter '{name}' is used as a divisor but has no row at {missing} of the coordinates "
-        f'the expression divides at. A missing row of a neutral parameter is not absence, so the '
+        f'the expression divides at. A missing row of a `missing: 0` parameter is not absence, so the '
         f'quotient is not dropped there, and there is no number to divide by.\n'
         f'  Supply the missing rows.\n'
         f'  Declare the parameter `missing: absent`, if the quotient has no value there.'
@@ -107,19 +107,7 @@ def non_finite_message(divisors: str, count: int) -> str:
     return (
         f'{count} value(s) are not finite{by}: a divisor is zero there, or a value is infinite, '
         f'and the model needs a finite number.\n'
-        f'  Supply finite, non-zero values, or mask the coordinates out with a where.'
-    )
-
-
-def null_bounds_message(name: str, rows: int) -> str:
-    """The message for a bound parameter missing values at some coordinates."""
-    return (
-        f"variable '{name}': {rows} rows have NULL bounds — a bound parameter is missing "
-        f'values for some coordinates. The two ways out build different models, so the '
-        f'language will not pick one:\n'
-        f'  supply the value           the variable exists there, bounded (`inf` is a value)\n'
-        f'  missing: absent            the variable exists there, and that side is open\n'
-        f'  where: "<the parameter>"   the variable does not exist there at all'
+        f'  Supply finite, non-zero values, or leave the coordinates absent with a where.'
     )
 
 
@@ -128,7 +116,7 @@ def no_model_behind_this_answer_message() -> str:
     return (
         'this answer has no model behind it, so a quantity the file never named cannot be read from '
         'it: an answer read back off disk carries the values without the model to splice the '
-        'expression into. Re-ask with sps.solve(archive.spec, archive.sources), which reads any '
+        'expression into. Re-ask with sps.solve(result.spec, result.sources), which reads any '
         'expression; a name the spec declares is readable either way.'
     )
 
@@ -163,7 +151,7 @@ def negative_window_message(name: str, widths: Sequence[int]) -> str:
 
 
 def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
-    """``unknown <kind> '<name>'``, plus the near miss, or every declaration the name prefixes.
+    """``unknown <kind> '<name>'``, plus the near miss, or every entry the name prefixes.
 
     Single-line: it is raised as ``KeyError``, whose ``str`` reprs a newline.
     """
@@ -172,8 +160,7 @@ def unknown_name_message(kind: str, name: str, known: Iterable[str]) -> str:
     family = [c for c in candidates if c.startswith(f'{name}_')]
     if family:
         return (
-            f"unknown {kind} '{name}': no declaration has that name, but "
-            f'{len(family)} begin with it — {", ".join(family)}.'
+            f"unknown {kind} '{name}': no entry has that name, but {len(family)} begin with it — {', '.join(family)}."
         )
 
     return f"unknown {kind} '{name}'. {did_you_mean(name, candidates)}"

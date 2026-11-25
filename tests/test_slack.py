@@ -67,9 +67,9 @@ def test_the_slack_is_the_distance_to_binding_however_the_row_is_written(solver_
 def test_an_equality_off_its_right_hand_side_reads_below_zero_either_way() -> None:
     """``==`` holds only at zero, so a residual of either sign is a violation of that size."""
     with sps.build(spec({'fixed': 'y == 2'}), {}) as model:
-        handoff = model._engine._model.handoff
-        over = readback.slacks(handoff, pl.Series('value', [2.5]))
-        under = readback.slacks(handoff, pl.Series('value', [1.5]))
+        tables = model._engine._model.tables
+        over = readback.slacks(tables, pl.Series('value', [2.5]))
+        under = readback.slacks(tables, pl.Series('value', [1.5]))
     assert (over.item(), under.item()) == pytest.approx((-0.5, -0.5)), 'the residual, signed as a violation'
 
 
@@ -82,11 +82,10 @@ def test_an_integer_answer_has_a_slack() -> None:
         assert answer.slack('cap')['value'].item() == pytest.approx(2.0), 'two below a cap of 4'
 
 
-def test_a_saved_answer_reads_back_its_slack(tmp_path: Path) -> None:
-    with sps.solve(spec({'cap': 'x <= 4', 'floor': 'x >= 1'}), {}, outputs=SLACK) as answer:
+def test_an_archived_answer_reads_back_its_slack(tmp_path: Path) -> None:
+    with sps.solve(spec({'cap': 'x <= 4', 'floor': 'x >= 1'}), {}, outputs=SLACK, archive=tmp_path) as answer:
         live = answer.slack('cap')
-        answer.save(tmp_path)
-    assert sps.load_result(tmp_path).slack('cap').equals(live)
+    assert sps.read_archive(tmp_path).slack('cap').equals(live)
 
 
 def test_a_solve_not_asked_for_its_slack_names_the_output() -> None:
@@ -101,26 +100,26 @@ def test_a_solve_not_asked_for_its_slack_names_the_output() -> None:
 # sweeps
 # ---------------------------------------------------------------------------
 
-#: The dispatch model of ``test_strategy``: ``balance`` is an equality, met at
+#: The dispatch model of ``test_solve_over``: ``balance`` is an equality, met at
 #: every snapshot, so its slack is zero in every scenario.
-SHAPES = [pytest.param(how, id=how) for how in ('held', 'spilled', 'archived')]
+SHAPES = [pytest.param(how, id=how) for how in ('held', 'archiving', 'archived')]
 
 
 def _swept(tmp_path: Path, how: str) -> Sweep:
-    from tests.test_strategy import DISPATCH, scenario_sources
+    from tests.test_solve_over import DISPATCH, scenario_sources
 
-    axis = sps.EachCoordinate('scenario')
+    axis = sps.EachLabel('scenario')
     if how == 'archived':
         sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, archive=tmp_path / 'run.zip')
-        archive = sps.load_archive(tmp_path / 'run.zip')
-        assert isinstance(archive, sps.types.SweepArchive)
-        return archive.sweep
-    spill = {'spill_to': tmp_path / 'spill'} if how == 'spilled' else {}
-    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, **spill)
+        archive = sps.read_archive(tmp_path / 'run.zip')
+        assert isinstance(archive, sps.types.Sweep)
+        return archive
+    archiving = {'archive': tmp_path / 'run'} if how == 'archiving' else {}
+    return sps.solve_over(DISPATCH, scenario_sources(), axis, outputs=SLACK, **archiving)
 
 
 @pytest.mark.parametrize('how', SHAPES)
 def test_a_sweep_reads_each_slices_slack(tmp_path: Path, how: str) -> None:
-    frame = _swept(tmp_path, how).slack('balance')
-    assert frame.height == 12, 'three scenarios of four snapshots'
-    assert np.abs(frame['value'].to_numpy()).max() < 1e-9, 'an equality met at every snapshot is zero away from binding'
+    table = _swept(tmp_path, how).slack('balance')
+    assert table.height == 12, 'three scenarios of four snapshots'
+    assert np.abs(table['value'].to_numpy()).max() < 1e-9, 'an equality met at every snapshot is zero away from binding'

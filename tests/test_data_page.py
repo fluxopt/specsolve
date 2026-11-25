@@ -41,8 +41,8 @@ def test_the_preparation_code_runs_and_solves(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.chdir(ROOT)
     scope: dict = {}
     exec(_block('read_csv'), scope)  # the page's code, run as the reader would
-    with sps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as solution:
-        assert solution.objective == pytest.approx(10500.0, rel=1e-9), (
+    with sps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as result:
+        assert result.objective == pytest.approx(10500.0, rel=1e-9), (
             'the prepared sources do not reach the optimum references.json records for dispatch'
         )
 
@@ -52,8 +52,8 @@ def test_the_linopy_shapes_block_runs_and_solves() -> None:
     pytest.importorskip('pandas')
     scope: dict = {}
     exec(_block('pd.Series'), scope)
-    with sps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as solution:
-        assert solution.objective == pytest.approx(10500.0, rel=1e-9), (
+    with sps.solve(str(ROOT / 'examples' / 'dispatch.yaml'), scope['sources']) as result:
+        assert result.objective == pytest.approx(10500.0, rel=1e-9), (
             'linopy-shaped Series sources do not reach the recorded dispatch optimum'
         )
 
@@ -84,8 +84,8 @@ def test_the_pypsa_shapes_block_produces_tidy_sources() -> None:
     sources = scope['sources'] | {
         key: pl.DataFrame(instance[key]) for key in ('line', 'cap', 'neg_cap', 'generator', 'line_from', 'line_to')
     }
-    with sps.solve(str(ROOT / 'examples' / 'transport.yaml'), sources) as solution:
-        assert solution.objective == pytest.approx(4400.0, rel=1e-9), (
+    with sps.solve(str(ROOT / 'examples' / 'transport.yaml'), sources) as result:
+        assert result.objective == pytest.approx(4400.0, rel=1e-9), (
             'pypsa-shaped sources do not reach the recorded transport optimum'
         )
 

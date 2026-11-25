@@ -76,13 +76,13 @@ def test_commitment_milp_agrees_and_stays_integral(commitment_inputs):
 
 
 def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitment_run):
-    """Every column's variable type crosses, in label order, in the one load.
+    """Every column's variable type crosses, in index order, in the one load.
 
     Integrality is applied by column index, so a vector that is short, shifted
-    or in another order relabels which variables are integral and the
+    or in another order reassigns which variables are integral and the
     objective moves. A binary model is the sharp case.
     """
-    tables = commitment_run.engine._model.handoff
+    tables = commitment_run.engine._model.tables
     with Highs(tables, None) as sink:
         loaded = sink.run(tables)
     assert loaded.status.is_ok
@@ -94,7 +94,7 @@ def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitme
 
 
 def test_highs_numbers_a_continuous_column_zero_and_an_integer_one():
-    """The two numbers the hand-off's boolean integrality vector *is*.
+    """The two numbers the sink tables' boolean integrality vector *is*.
 
     ``_built`` widens ``cols.integral`` — one boolean per column — straight to
     the ``int32`` vector HiGHS reads as variable types, which is only the same
@@ -110,11 +110,11 @@ def test_highs_numbers_a_continuous_column_zero_and_an_integer_one():
 def test_cols_vtype_is_an_enum_over_every_declared_domain(commitment_run):
     """``cols.vtype`` is an Enum, and its members are ``program.VariableDomain``.
 
-    An Enum rejects a value outside it, so a fourth domain added to the plan
+    An Enum refuses a value outside it, so a fourth domain added to the program
     and not reaching the column fails where the column is built.
     """
-    vtype = commitment_run.engine._model.handoff.cols.schema['vtype']
-    held = set(commitment_run.engine._model.handoff.cols['vtype'].unique().to_list())
+    vtype = commitment_run.engine._model.tables.cols.schema['vtype']
+    held = set(commitment_run.engine._model.tables.cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
     assert set(vtype.categories.to_list()) == set(get_args(program.VariableDomain))

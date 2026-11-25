@@ -6,11 +6,11 @@ A cap on what each technology may generate in each calendar month, with the mont
 
 ## The problem
 
-$$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{t,g} \quad\le\quad \bar E_{m,g}$$
+$$\sum_{t \thinspace:\thinspace \mathrm{month}(t) = m} p_{g,t} \quad\le\quad \bar E_{g,m}$$
 
 $\mathrm{month}$ is a **coordinate the snapshot dimension declares**, not a
-calendar the language understands. Its values arrive as a column in the
-snapshot index.
+calendar the language understands. Its values arrive as a column of
+`month_of`, a table passed beside the snapshot labels.
 
 Compare [transport](transport.md): there, $\mathrm{gen\_bus}$ is a relation over
 `generator` and the sum is over generators at a bus. Here $\mathrm{month\_of}$ is a
@@ -29,37 +29,37 @@ A cap on what each technology may generate per calendar month — an aggregate o
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — dispatch periods, each falling in one month |
-| $`\mathcal{M}`$ | index $`m`$ — `month` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — the grouping the budget is stated over |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
+| $`\mathcal{M}`$ | index $`m`$ — `month` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — the grouping the budget is stated over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{month\_of}: \mathcal{T} \to \mathcal{M}`$ — dispatch periods, each falling in one month |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 | $`c`$ | `cost` over $`\mathcal{G}`$ — marginal cost |
 | $`\ell`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\bar E`$ | `monthly_cap` over $`\mathcal{M} \times \mathcal{G}`$ — the budget the group sum is checked against, one per month and technology |
+| $`\bar E`$ | `monthly_cap` over $`\mathcal{G} \times \mathcal{M}`$ — the budget the group sum is checked against, one per month and technology |
+| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-0 \le p_{t,g} \le \bar p_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le p_{g,t} \le \bar p_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot c_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot c_{g}
 ```
 
 #### Subject to
@@ -67,19 +67,19 @@ A cap on what each technology may generate per calendar month — an aggregate o
 **`balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \ell_{t} \qquad \forall\, t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,t} = \ell_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
 **`monthly_budget`**
 
 ```math
-\sum_{t \in \mathcal{T} \,:\, \mathrm{month\_of}(t) = m} p_{t,g} \le \bar E_{m,g} \qquad \forall\, m \in \mathcal{M},\ g \in \mathcal{G}
+\sum_{t \in \mathcal{T} \,:\, \mathrm{month\_of}(t) = m} p_{g,t} \le \bar E_{g,m} \qquad \forall\, g \in \mathcal{G},\ m \in \mathcal{M}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -140,15 +140,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     objective:
       sense: minimize
-      description: total cost of generation over the horizon
+      description: total cost of generation over every snapshot
       expression: sum(p * cost)
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/monthly_budget.yaml', sources) as solution:
-        solution.objective  # 9500.0
-        solution.dual('monthly_budget')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/monthly_budget.yaml', sources) as result:
+        result.objective  # 9500.0
+        result.dual('monthly_budget')
     ```
 
 === "linopy"
@@ -222,10 +222,10 @@ month     generator   dual
 2030-03   wind        -0.0
 ```
 
-Per-month *results* need no language support: a primal is a tidy frame, so a
+Per-month *results* need no language support: a primal is a tidy table, so a
 join and a `group_by` do it:
 
 ```python
-sol.primal('p').join(index, on='snapshot').group_by('month').agg(pl.col('value').sum())
+sol.primal('p').join(month_of, on='snapshot').group_by('month').agg(pl.col('value').sum())
 ```
 

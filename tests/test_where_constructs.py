@@ -1,10 +1,10 @@
 """What a ``where:`` may say about data beyond one comparison per parameter.
 
 A comparison of two expressions reads arithmetic, a count reduces a dimension
-away, and a shift reads a predicate at the neighbouring coordinate. Each is
-asserted through the differential harness. The masks sit on *variables*, and an
-admitted member is worth one in the objective, so the optimum counts exactly
-the coordinates the mask keeps.
+away, and a shift reads a condition at the neighbouring coordinate. Each is
+asserted through the differential harness. The conditions sit on *variables*, and an
+admitted label is worth one in the objective, so the optimum counts exactly
+the coordinates the condition keeps.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from tests.differential import RTOL, differential
 
 #: ``a`` is cheap and runs at three consecutive steps, ``b`` is dear and runs
 #: at two that are not consecutive, ``c`` is cheap and runs at one. Chosen so
-#: the three masks keep three different sets.
+#: the three conditions keep three different sets.
 UNITS = ['a', 'b', 'c']
 STEPS = [0, 1, 2, 3]
 
@@ -35,7 +35,7 @@ BASE: dict[str, Any] = {
     'parameters': {
         'p_min': {'dims': ['unit'], 'missing': 'absent'},
         'p_max': {'dims': ['unit']},
-        'live': {'dims': ['unit', 'step'], 'dtype': 'bool', 'missing': 'neutral'},
+        'live': {'dims': ['unit', 'step'], 'dtype': 'bool', 'missing': False},
     },
 }
 
@@ -118,17 +118,17 @@ def test_a_null_spreads_through_the_arithmetic_of_a_side():
 # ---------------------------------------------------------------------------
 
 
-def test_a_where_counting_a_predicate_reduces_the_dimension_it_counts_along():
-    """``count(live, over=step)`` is one number per unit, so the mask is over ``unit`` alone."""
+def test_a_where_counting_a_condition_reduces_the_dimension_it_counts_along():
+    """``count(live, over=step)`` is one number per unit, so the condition is over ``unit`` alone."""
     admitted = both(spec(['unit'], 'count(live, over=step) >= 2'), sources())
 
     assert admitted == pytest.approx(2.0, rel=RTOL), "'a' runs three steps and 'b' two; 'c' runs one"
 
 
-def test_a_count_of_a_predicate_nothing_admits_is_zero_rather_than_absent():
+def test_a_count_of_a_condition_nothing_admits_is_zero_rather_than_absent():
     """A unit the table has no row for is counted, not dropped.
 
-    Counted as absent it would be missing from the answer, and the mask would
+    Counted as absent it would be missing from the answer, and the condition would
     admit nobody rather than the one unit that runs nowhere.
     """
     grounded = {coordinate: runs for coordinate, runs in LIVE.items() if coordinate[0] != 'c'}
@@ -139,11 +139,11 @@ def test_a_count_of_a_predicate_nothing_admits_is_zero_rather_than_absent():
 
 
 # ---------------------------------------------------------------------------
-# a predicate read at the neighbouring coordinate
+# a condition read at the neighbouring coordinate
 # ---------------------------------------------------------------------------
 
 
-def test_a_where_shifting_a_predicate_reads_it_one_coordinate_back():
+def test_a_where_shifting_a_condition_reads_it_one_coordinate_back():
     """``shift(live, along=step, offset=1)`` is ``live`` at the step before.
 
     ``a`` runs 0, 1, 2, so steps 1 and 2 have a live predecessor; ``b`` runs 0

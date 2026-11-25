@@ -22,17 +22,17 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "mathspec>=0.4.0,<0.5",
+    "mathspec>=0.5.0a1,<0.6",
     "polars>=1.33.1",
     "numpy>=1.26",
-    # 1.13 is the first highspy with the bulk `changeRowsBounds`.
-    "highspy>=1.13",
+    # 1.13 is the first highspy with the bulk `changeRowsBounds`; 1.16.0 fails four tests of the suite.
+    "highspy>=1.13,!=1.16.0",
 ]
 
 [project.optional-dependencies]
 gurobi = [
-    # 11 is the release whose status codes the sink maps.
-    "gurobipy>=11",
+    # 11 is the release whose status codes the sink maps; 14 solves a nonconvex row under `QCPDual` without its prices.
+    "gurobipy>=11,<14",
     "scipy>=1.11",
 ]
 xpress = [
@@ -130,7 +130,7 @@ specsolve = { path = "." }
 polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
-mathspec = "==0.4.0"
+mathspec = "==0.5.0a1"
 pytest = "*"
 pytest-xdist = "*"
 
@@ -192,10 +192,10 @@ docs-test = { cmd = "pytest tests/test_docs_math.py tests/test_docstring_links.p
 
 [tool.pixi.feature.bench.tasks]
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
-declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep, dense and masked" }
+declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m n008e --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep: dense, masked, and with declarations that hold no row" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
 plot = { cmd = "python -m bench.plot", description = "The chart page's rows" }
-ab = { cmd = "python -m bench.ab.compare", description = "A/B of two git refs over the grid in bench/ab: ab <base> <head> [--focus module:Class.method] [-k cell]" }
+ab = { cmd = "python -m bench.ab.compare", description = "A/B of two git refs over the grid in bench/ab: ab <base> <head> [--focus module:Class.method] [-k cell] [--out ab.md] [--raw ab.parquet]" }
 table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
 
 [tool.pixi.feature.bench.tasks.ladder]

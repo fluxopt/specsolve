@@ -12,34 +12,42 @@ import specsolve as sps
 
 sps.solve(spec, sources, archive='runs/base')
 sps.solve(spec, peak, archive='runs/peak')
-sps.solve_over(spec, by_scenario, sps.EachCoordinate('scenario'), archive='runs/scenarios')
-rolling = sps.EachWindow('snapshot', steps=4, lookahead=0, into='t')
-sps.solve_over(spec, by_snapshot, rolling, archive='runs/rolling')
-sps.solve_over(spec, by_snapshot, rolling, archive='runs/rolling-kept', keep_windows=True)
+sps.solve_over(spec, by_scenario, sps.EachLabel('scenario'), archive='runs/scenarios')
+sps.solve_over(spec, longer, sps.EachWindow('t', horizon=4, lookahead=0), archive='runs/rolling')
 ```
 
-**A sweep writes columns a single solve does not**: its key, or the dimension
-a rolling horizon cuts. To compare a base run with a sweep, solve the base as
-a sweep of one slice.
+**A sweep writes one file per slice, and each carries the sweep's key**:
+`scenario`, or `t_start` for a rolling horizon. To compare a base run with a
+sweep, solve the base as a sweep of one slice.
 
 **Write a directory, not a `.zip`.** No query engine reads inside a zip.
 
 ## The three tables
 
-Read one table per glob:
+A single solve writes one file per table. A sweep writes one file per slice,
+in a directory of the same name, as it solves them, so a glob also reads the
+slices a running sweep has finished. So a table of the answer is two globs. polars refuses a glob that matches no file,
+so expand them first, and a folder of only solves or only sweeps reads too:
 
 ```python
+from glob import glob
+
 import polars as pl
 
-answers = pl.read_parquet('runs/*/answer/record.parquet')
-metrics = pl.read_parquet('runs/*/answer/metrics.parquet')
+
+def files(*patterns):
+    return sorted(file for pattern in patterns for file in glob(pattern))
+
+
+answers = pl.read_parquet(files('runs/*/answer/record.parquet', 'runs/*/answer/record/*.parquet'))
+metrics = pl.read_parquet(files('runs/*/answer/metrics.parquet', 'runs/*/answer/metrics/*.parquet'))
 catalog = pl.read_parquet('runs/*/catalog.parquet')
 ```
 
 | glob | one row per | says |
 |---|---|---|
-| `answer/record.parquet` | solve, or sweep slice | how it ended, and on which solver |
-| `answer/metrics.parquet` | the same | what the build and its solves spent |
+| `answer/record.parquet`, `answer/record/*.parquet` | solve, or sweep slice | how it ended, and on which solver |
+| `answer/metrics.parquet`, `answer/metrics/*.parquet` | the same | how long each phase took |
 | `catalog.parquet` | column of labels of each file | [what a file holds](#what-a-file-holds) |
 
 **Every row names its archive in `specsolve_run`.** A sweep writes one row per
@@ -50,8 +58,8 @@ answers.select('specsolve_run', 'slice_axis', 'slice').sort('specsolve_run', 'sl
 # specsolve_run  slice_axis      slice
 # base           null            null
 # peak           null            null
-# rolling        snapshot_start  0
-# rolling        snapshot_start  4
+# rolling        t_start         0
+# rolling        t_start         4
 # ...
 # scenarios      scenario        high
 # scenarios      scenario        low
@@ -69,19 +77,17 @@ pl.read_parquet('runs/base/answer/primal/p.parquet').head(3)
 # 0  coal       5.0    base
 ```
 
-**A glob over runs of different shapes is refused:**
-
-```text
-SchemaError: extra column in file outside of expected schema: snapshot
-```
-
-Union the files by name instead:
+**A sweep's files add its key column**, so union solves and sweeps by name:
 
 ```python
-from glob import glob
-
-p = pl.concat([pl.read_parquet(file) for file in sorted(glob('runs/*/answer/primal/p.parquet'))], how='diagonal')
+held = files('runs/*/answer/primal/p.parquet', 'runs/*/answer/primal/p/*.parquet')
+p = pl.concat([pl.read_parquet(file) for file in held], how='diagonal')
 ```
+
+**A rolling horizon's files hold every row each window solved.** Where the
+windows look ahead, `answer/horizon.parquet` lists the rows of each window's
+horizon: join on `specsolve_run`, the key and the windowed dimension to keep
+those.
 
 Every column has a type that parquet readers agree on
 ([the rule](../reference/data.md#column-types-in-an-archive)).
@@ -110,7 +116,7 @@ p.join(sited, on=['specsolve_run', 'generator']).group_by('specsolve_run', 't', 
 | roles | `ends: {key: line, values: {bus0: bus, bus1: bus}}` | once per role, on the role's column |
 | a partition | `shift`, `sum_back` or `position` with `within=` | none |
 
-**A sum through a bare relation counts a member once per row it is related
+**A sum through a bare relation counts a label once per row it is related
 to.** `wind` is connected to both buses, so it counts twice:
 
 ```python
@@ -156,8 +162,8 @@ assert len(specs) == 1, 'one spec, or this compares nothing'
 **Find the sources that differ:**
 
 ```python
-base = sps.load_archive('runs/base')
-other = sps.load_archive('runs/peak')
+base = sps.read_archive('runs/base')
+other = sps.read_archive('runs/peak')
 
 moved = [name for name in sorted(base.sources) if not base.sources[name].equals(other.sources[name])]
 moved  # ['load']
@@ -178,7 +184,11 @@ DuckDB reads a directory archive as it is:
 
 ```sql
 select specsolve_run, slice, rows, nonzeros, build_seconds, solve_seconds
-from read_parquet('runs/*/answer/metrics.parquet')
+from (
+    select * from read_parquet('runs/*/answer/metrics.parquet')
+    union all
+    select * from read_parquet('runs/*/answer/metrics/*.parquet')
+) as metrics
 order by build_seconds + solve_seconds desc;
 ```
 
@@ -188,8 +198,8 @@ with no error:
 <!-- warehouse: not run, union_by_name is DuckDB's own -->
 ```sql
 select *
-from read_parquet('runs/*/answer/primal/p.parquet', union_by_name = true)
-order by specsolve_run, t, snapshot;
+from read_parquet(['runs/*/answer/primal/p.parquet', 'runs/*/answer/primal/p/*.parquet'], union_by_name = true)
+order by specsolve_run, t;
 ```
 
 Join values to their sources on the columns both carry:
@@ -200,10 +210,10 @@ from read_parquet('runs/base/answer/primal/p.parquet') p
 join read_parquet('runs/base/sources/sited.parquet') s using (generator, specsolve_run);
 ```
 
-For Fabric Direct Lake or Unity Catalog, write one Delta Lake table per glob:
+For Fabric Direct Lake or Unity Catalog, write one Delta Lake table per table:
 
 <!-- warehouse: not run, deltalake is not a dependency here -->
 ```python
-for table in ('answer/record', 'answer/metrics', 'sources', 'catalog'):
-    pl.read_parquet(f'runs/*/{table}.parquet').write_delta(f'lake/{table.replace("/", "_")}', mode='overwrite')
+for name, table in (('record', answers), ('metrics', metrics), ('catalog', catalog)):
+    table.write_delta(f'lake/{name}', mode='overwrite')
 ```

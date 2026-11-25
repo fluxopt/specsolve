@@ -52,8 +52,8 @@ left over when the load is low.
 `diagnostics` counts what the model did:
 
 ```python exec="true" source="material-block" result="text" session="change" workdir="examples"
-after_numbers = model.diagnostics()
-print(f'{after_numbers.loads} load, {after_numbers.solves} solves')
+after_numbers = model.metrics()
+print(f'{after_numbers.solver_instances} solver instance, {after_numbers.solves} solves')
 ```
 
 The solver loaded the model once and solved it five times. The answer is the
@@ -64,7 +64,7 @@ fresh = sps.solve('dispatch.yaml', sources | {'p_max': p_max})
 print(fresh.objective)
 ```
 
-## A longer horizon
+## More snapshots
 
 Now solve two days. The `snapshot` labels and the `load` grow to eight rows,
 and the capacity goes back to the data:
@@ -73,10 +73,10 @@ and the capacity goes back to the data:
 two_days = pl.DataFrame({'snapshot': range(8), 'value': 2 * load['value'].to_list()})
 
 longer = model.update({'snapshot': two_days['snapshot'], 'load': two_days, 'p_max': sources['p_max']}).solve()
-after_rows = model.diagnostics()
+after_rows = model.metrics()
 
 print(longer.objective)
-print(f'{after_rows.loads} loads, {after_rows.solves} solves')
+print(f'{after_rows.solver_instances} solver instances, {after_rows.solves} solves')
 ```
 
 Two days cost twice one day. New snapshots add new columns, so the solver
@@ -85,5 +85,5 @@ loaded the model a second time.
 
 ## Next
 
-In [the next tutorial](sweep.md) you solve a horizon too large for one solve,
+In [the next tutorial](sweep.md) you solve a model too large for one solve,
 a window at a time.

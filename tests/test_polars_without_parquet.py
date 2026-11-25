@@ -8,6 +8,8 @@ refused with a message that names the call and what still works.
 
 from __future__ import annotations
 
+import sys
+import zoneinfo
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -15,6 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve import _parquet as parquet
+from specsolve._names import RUN
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -57,21 +60,19 @@ def test_polars_has_parquet_where_it_was_built_with_it(polars_parquet):
     assert parquet.require('a test') == 'polars', 'the polars this suite runs on reads and writes parquet'
 
 
-def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_frame_inputs):
-    result = sps.solve(dispatch_yaml, dispatch_frame_inputs)
+def test_a_solve_from_tables_needs_no_parquet(polars_without_parquet, dispatch_yaml, dispatch_table_inputs):
+    result = sps.solve(dispatch_yaml, dispatch_table_inputs)
     assert result.termination_condition == 'optimal'
-    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_frame_inputs), sps.EachCoordinate('scenario'))
-    assert sweep.record['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
+    sweep = sps.solve_over(dispatch_yaml, _by_scenario(dispatch_table_inputs), sps.EachLabel('scenario'))
+    assert sweep.records['termination_condition'].unique().to_list() == ['optimal'], 'every scenario solved'
 
 
 def _saved(dispatch_yaml: Path, inputs: dict[str, object], tmp_path: Path) -> dict[str, Path]:
     """One of each thing on disk a reader takes, written while parquet still works."""
-    sps.solve(dispatch_yaml, inputs).save(tmp_path / 'result')
     sps.solve(dispatch_yaml, inputs, archive=tmp_path / 'archive')
-    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), spill_to=tmp_path / 'sweep')
+    sps.solve_over(dispatch_yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp_path / 'sweep')
     inputs['load'].write_parquet(tmp_path / 'load.parquet')
     return {
-        'result': tmp_path / 'result',
         'archive': tmp_path / 'archive',
         'sweep': tmp_path / 'sweep',
         'path': tmp_path / 'load.parquet',
@@ -95,61 +96,87 @@ CALLS: list[tuple[str, Callable[..., object], str]] = [
     (
         'solve-over-archive',
         lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), archive=tmp / 'new'
+            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp / 'new'
         ),
         'archive=',
     ),
     (
-        'solve-over-spill',
+        'solve-over-zip',
         lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario'), spill_to=tmp / 'new'
+            yaml, _by_scenario(inputs), sps.EachLabel('scenario'), archive=tmp / 'new.zip'
         ),
-        'spill_to=',
+        'archive=',
     ),
-    ('result-save', lambda yaml, inputs, saved, tmp: sps.solve(yaml, inputs).save(tmp / 'new'), 'Result.save'),
-    (
-        'sweep-save',
-        lambda yaml, inputs, saved, tmp: sps.solve_over(
-            yaml, _by_scenario(inputs), sps.EachCoordinate('scenario')
-        ).save(tmp / 'new'),
-        'Sweep.save',
-    ),
-    ('load-result', lambda yaml, inputs, saved, tmp: sps.load_result(saved['result']), 'reading a saved answer'),
-    ('scan-result', lambda yaml, inputs, saved, tmp: sps.scan_result(saved['result']), 'reading a saved answer'),
-    ('load-sweep', lambda yaml, inputs, saved, tmp: sps.load_sweep(saved['sweep']), 'reading a saved sweep'),
-    ('scan-sweep', lambda yaml, inputs, saved, tmp: sps.scan_sweep(saved['sweep']), 'reading a saved sweep'),
-    ('load-archive', lambda yaml, inputs, saved, tmp: sps.load_archive(saved['archive']), 'reading an archive'),
+    ('read-sweep-archive', lambda yaml, inputs, saved, tmp: sps.read_archive(saved['sweep']), 'reading an archive'),
+    ('scan-sweep-archive', lambda yaml, inputs, saved, tmp: sps.scan_archive(saved['sweep']), 'reading an archive'),
+    ('read-archive', lambda yaml, inputs, saved, tmp: sps.read_archive(saved['archive']), 'reading an archive'),
     ('scan-archive', lambda yaml, inputs, saved, tmp: sps.scan_archive(saved['archive']), 'reading an archive'),
-    ('load-inputs', lambda yaml, inputs, saved, tmp: sps.load_inputs(saved['archive']), 'reading an archive'),
+    ('read-inputs', lambda yaml, inputs, saved, tmp: sps.read_inputs(saved['archive']), 'reading an archive'),
 ]
 
 
 @pytest.mark.parametrize(('call', 'names'), [pytest.param(call, names, id=label) for label, call, names in CALLS])
 def test_every_call_that_needs_parquet_says_so_by_name(
-    monkeypatch, call, names, dispatch_yaml, dispatch_frame_inputs, tmp_path
+    monkeypatch, call, names, dispatch_yaml, dispatch_table_inputs, tmp_path
 ):
     """The refusal names the call, where polars would raise an ``AttributeError`` from inside itself."""
-    saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
+    saved = _saved(dispatch_yaml, dispatch_table_inputs, tmp_path)
     _take_parquet_away(monkeypatch)
     try:
         with pytest.raises(sps.errors.SpecsolveError, match='this polars was built without it') as raised:
-            call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
+            call(dispatch_yaml, dispatch_table_inputs, saved, tmp_path)
     finally:
         parquet._polars_has_parquet.cache_clear()
     assert names in str(raised.value), 'the refusal names the call'
     assert 'Load pyarrow first' in str(raised.value), 'and names what lifts it'
-    assert not (tmp_path / 'new').exists(), 'nothing was written before the refusal'
+    assert not list(tmp_path.glob('new*')), 'nothing was written before the refusal'
 
 
 @pytest.mark.parametrize('call', [pytest.param(call, id=label) for label, call, _ in CALLS])
 def test_every_call_that_needs_parquet_goes_through_pyarrow_where_it_can_be_imported(
-    monkeypatch, call, dispatch_yaml, dispatch_frame_inputs, tmp_path
+    monkeypatch, call, dispatch_yaml, dispatch_table_inputs, tmp_path
 ):
     """The same calls succeed where pyarrow is importable, reading what polars wrote and writing what it reads."""
     pytest.importorskip('pyarrow')
-    saved = _saved(dispatch_yaml, dispatch_frame_inputs, tmp_path)
+    saved = _saved(dispatch_yaml, dispatch_table_inputs, tmp_path)
     _take_parquet_away(monkeypatch, pyarrow=True)
     try:
-        call(dispatch_yaml, dispatch_frame_inputs, saved, tmp_path)
+        call(dispatch_yaml, dispatch_table_inputs, saved, tmp_path)
     finally:
         parquet._polars_has_parquet.cache_clear()
+
+
+@pytest.fixture
+def no_time_zone_database(monkeypatch):
+    """A Python that can name no time zone, as the browser's is until ``tzdata`` is loaded."""
+    monkeypatch.setitem(sys.modules, 'tzdata', None)
+    zoneinfo.reset_tzpath(to=[])
+    zoneinfo.ZoneInfo.clear_cache()
+    yield
+    zoneinfo.reset_tzpath()
+    zoneinfo.ZoneInfo.clear_cache()
+
+
+def test_a_sweep_is_archived_and_read_back_with_no_time_zone_database(
+    monkeypatch, no_time_zone_database, dispatch_yaml, dispatch_table_inputs, tmp_path
+):
+    """Archiving a sweep read each slice's record out as Python values, and its UTC timestamp needs the database.
+
+    The browser has none, so polars failed on the first slice. The record now
+    stays a table from the fold to the file. These are the steps of
+    ``tools/pyodide/probe.py``, which is where it was seen.
+    """
+    pytest.importorskip('pyarrow')
+    _take_parquet_away(monkeypatch, pyarrow=True)
+    try:
+        sources = _by_scenario(dispatch_table_inputs)
+        runs = sps.solve_over(dispatch_yaml, sources, sps.EachLabel('scenario'), archive=tmp_path / 'study.zip')
+        study = sps.read_archive(tmp_path / 'study.zip', tmp_path / 'study')
+        again = sps.solve_over(study.spec, study.sources, study.axis)
+    finally:
+        parquet._polars_has_parquet.cache_clear()
+    assert study.records.drop(RUN).equals(runs.records.drop(RUN)), 'every record, its timestamp included'
+    assert study.primal('p').equals(runs.primal('p')), 'and every value'
+    assert again.records['objective'].to_list() == pytest.approx(runs.records['objective'].to_list()), (
+        'and it solves again from what the archive holds'
+    )

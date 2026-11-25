@@ -22,8 +22,8 @@ tables. No YAML is written at runtime.
 Each spec is parsed and built once, above the loop, and ``update`` puts the
 next iteration's numbers on the model that is already there. The subproblem's
 ``cap_hat`` reaches its rows as a right-hand side, so HiGHS keeps the model it
-holds and re-solves from the last basis; the master grows a row a step and is
-loaded again, as ``diagnostics().loads`` reports.
+holds and re-solves from the last basis; the master grows a row a step and
+takes a new solver each time, as ``metrics().solver_instances`` reports.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def slice_for(spec, **extra):
     models says which slice it means.
     """
     known = {**spec.parameters, **spec.dimensions}
-    return {name: frame for name, frame in {**SOURCES, **extra}.items() if name in known}
+    return {name: table for name, table in {**SOURCES, **extra}.items() if name in known}
 
 
 EMPTY = {
@@ -76,7 +76,7 @@ EMPTY = {
 }
 
 
-def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
+def slope_at(result: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.DataFrame, float]:
     """How the subproblem's value moves with capacity, and its value there.
 
     The capacity constraint's shadow price is that derivative, weighted by
@@ -84,7 +84,7 @@ def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.Dat
     ``dual`` and a join against the model's own ``avail`` table.
     """
     slope = (
-        solution.dual('capacity')
+        result.dual('capacity')
         .join(SOURCES['avail'], on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')
@@ -94,7 +94,7 @@ def slope_at(solution: sps.types.Result, capacity: pl.DataFrame) -> tuple[pl.Dat
     return slope, here
 
 
-def cut_from_ray(solution: sps.types.Result) -> tuple[pl.DataFrame, float]:
+def cut_from_ray(result: sps.types.Result) -> tuple[pl.DataFrame, float]:
     """The feasibility cut carried by a certificate that this capacity cannot be dispatched.
 
     ``dual_ray`` weights the subproblem's rows so that together they
@@ -105,14 +105,14 @@ def cut_from_ray(solution: sps.types.Result) -> tuple[pl.DataFrame, float]:
     slope ``Σ_s u·avail`` per generator, against ``minus Σ_s v·load``.
     """
     slope = (
-        solution.dual_ray('capacity')
+        result.dual_ray('capacity')
         .join(SOURCES['avail'], on=['snapshot', 'generator'], suffix='_avail')
         .with_columns((pl.col('value') * pl.col('value_avail')).alias('term'))
         .group_by('generator')
         .agg(pl.col('term').sum().alias('slope'))
     )
     against = (
-        solution.dual_ray('balance')
+        result.dual_ray('balance')
         .join(SOURCES['load'], on='snapshot', suffix='_load')
         .select((pl.col('value') * pl.col('value_load')).sum())
         .item()
@@ -184,8 +184,8 @@ def main() -> None:
         print(f'difference: {abs(upper - truth):.1e}')
         print(f'cuts: {tables["cut_const"].height} optimality, {tables["fcut_const"].height} feasibility')
         for name, model in (('the subproblem', sub_model), ('the master', master)):
-            seen = model.diagnostics()
-            print(f'{name} loaded the solver {seen.loads} time(s) in {seen.solves} solves')
+            seen = model.metrics()
+            print(f'{name} took {seen.solver_instances} solver instance(s) in {seen.solves} solves')
 
 
 if __name__ == '__main__':

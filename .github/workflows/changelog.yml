@@ -31,4 +31,4 @@ jobs:
         run: |
           set -euo pipefail
           git show "origin/${BASE_REF}:CHANGELOG.md" > "${RUNNER_TEMP}/base.md"
-          python3 -m tools.changelog entry "$PR_TITLE" "${RUNNER_TEMP}/base.md"
+          python3 -m tools.changelog line "$PR_TITLE" "${RUNNER_TEMP}/base.md"

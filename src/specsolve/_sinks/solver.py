@@ -12,9 +12,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, BASIS_STATUSES, FIXED, SUPERBASIC
-from specsolve._names import VALUE
-from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._names import COEFF, VALUE
+from specsolve._sinks.tables import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -23,9 +22,20 @@ if TYPE_CHECKING:
     import numpy as np
 
     from specsolve._sinks.capabilities import Capabilities
-    from specsolve._sinks.handoff import Handoff, Ints
+    from specsolve._sinks.tables import Ints, SinkTables
     from specsolve._status import SolveStatus
 
+
+#: A basis status in the one vocabulary every solver's is read into, each at
+#: the index that is its code. A row's bound is its right-hand side, so a
+#: binding ``<=`` row is ``at_upper``, a binding ``>=`` row ``at_lower``, and
+#: a nonbasic ``==`` row, like a nonbasic variable whose bounds are equal,
+#: ``fixed``. ``superbasic`` is nonbasic between its bounds.
+BASIS_STATUSES = ('basic', 'at_lower', 'at_upper', 'fixed', 'superbasic')
+BASIC, AT_LOWER, AT_UPPER, FIXED, SUPERBASIC = range(len(BASIS_STATUSES))
+
+#: [`BASIS_STATUSES`][] as the dtype a basis is read back in.
+BASIS = pl.Enum(BASIS_STATUSES)
 
 #: The status of a nonbasic row, by its sense.
 _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
@@ -33,7 +43,7 @@ _ROW_BOUND = {'<=': AT_UPPER, '>=': AT_LOWER, '==': FIXED}
 
 @dataclass(frozen=True)
 class Basis:
-    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in label order."""
+    """Where the solve ended: a [`BASIS_STATUSES`][] code per column and per row, in index order."""
 
     columns: np.ndarray[tuple[int], np.dtype[np.int8]]
     rows: np.ndarray[tuple[int], np.dtype[np.int8]]
@@ -83,28 +93,31 @@ class Solver(ABC):
     A driver gets one from [`loaded`][specsolve._sinks.loaded],
     then runs and closes it::
 
-        solver = loaded(held, name, handoff, options)
-        solver.run(handoff)  # …repeatedly
+        solver = loaded(held, name, tables, options)
+        solver.run(tables)  # …repeatedly
         solver.close()
     """
 
     def __init__(
         self,
-        handoff: Handoff,
+        tables: SinkTables,
         solver_options: Mapping[str, Any] | None = None,
     ) -> None:
         #: The options the model was loaded with.
         self._options = dict(solver_options or {})
-        self._load(handoff)
-        #: The loaded frames, until [`structure`][] replaces them with their digest.
-        self._handoff: Handoff | None = handoff
+        self._load(tables)
+        #: The loaded tables, until [`structure`][] replaces them with their digest.
+        self._tables: SinkTables | None = tables
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The matrix's coefficients as loaded, in entry order, for [`keeps`][].
-        self._coefficients = handoff.matrix['coeff'].to_numpy()
+        #: The matrix's coefficients as loaded, in matrix order, for [`keeps`][].
+        self._coefficients = tables.matrix[COEFF].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
-        self._columns = handoff.column_count
-        self._rows = handoff.row_count
+        self._columns = tables.column_count
+        self._rows = tables.row_count
+
+    #: What a caller names this member by, and its key in ``SOLVERS``.
+    name: ClassVar[str]
 
     #: The packages this member imports lazily, all needed for it to run.
     requires: ClassVar[tuple[str, ...]]
@@ -122,21 +135,26 @@ class Solver(ABC):
     #: so the solve warns, or ``refused`` where it cannot take them.
     lp_values: ClassVar[Mapping[Literal['complete', 'partial'], Literal['used', 'no_gain', 'refused']]]
 
+    #: What makes this member leave a [`dual_ray`][] on an infeasible solve
+    #: that left none, as the clause a refusal ends on. ``None`` where no
+    #: option does.
+    dual_ray_advice: ClassVar[str | None] = None
+
     #: Option names, casefolded, whose value an answer records: the ones that
     #: change what a solve returns. Any other option is recorded by name
     #: alone, so a credential passed as an option never reaches an archive.
     recorded_options: ClassVar[frozenset[str]]
 
     def structure(self) -> bytes:
-        """The loaded model's digest, read off its frames once, after which the frames are let go."""
+        """The loaded model's digest, read off its tables once, after which the tables are let go."""
         if self._structure is None:
-            assert self._handoff is not None, 'a solver holds the handoff it loaded until its digest replaces it'
-            self._structure = self._handoff.structure
-            self._handoff = None
+            assert self._tables is not None, 'a solver holds the tables it loaded until its digest replaces it'
+            self._structure = self._tables.structure
+            self._tables = None
         return self._structure
 
-    def keeps(self, handoff: Handoff, solver_options: Mapping[str, Any] | None) -> bool:
-        """Whether this held solver may keep its load and take *handoff* by value.
+    def keeps(self, tables: SinkTables, solver_options: Mapping[str, Any] | None) -> bool:
+        """Whether this held solver may keep its load and take *tables* by value.
 
         The same options and [`structure`][], and every matrix coefficient
         within 1e-12 relative of the one loaded, which stays: a coefficient
@@ -146,8 +164,8 @@ class Solver(ABC):
 
         return (
             self._options == dict(solver_options or {})
-            and self.structure() == handoff.structure
-            and np.allclose(handoff.matrix['coeff'].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
+            and self.structure() == tables.structure
+            and np.allclose(tables.matrix[COEFF].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
         )
 
     @classmethod
@@ -172,17 +190,17 @@ class Solver(ABC):
         return all(importlib.util.find_spec(package.partition('.')[0]) is not None for package in cls.requires)
 
     @abstractmethod
-    def _load(self, handoff: Handoff) -> None:
-        """Hand *handoff* to the solver and hold whatever reads it back. Called by ``__init__``."""
+    def _load(self, tables: SinkTables) -> None:
+        """Hand *tables* to the solver and hold whatever reads it back. Called by ``__init__``."""
 
     @abstractmethod
-    def push(self, handoff: Handoff) -> None:
-        """*handoff*'s bounds, costs and right-hand sides onto the loaded model, as whole vectors.
+    def push(self, tables: SinkTables) -> None:
+        """*tables*' bounds, costs and right-hand sides onto the loaded model, as whole vectors.
 
-        Called only after *handoff*'s digest matched the loaded one.
+        Called only after *tables*' digest matched the loaded one.
         """
 
-    def warm(self, basis: Basis) -> None:
+    def start_from_basis(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.
 
         Raises:
@@ -190,13 +208,13 @@ class Solver(ABC):
         """
         self._spans('basis', basis.columns, self._columns, 'columns')
         self._spans('basis', basis.rows, self._rows, 'rows')
-        self._warm(basis)
+        self._start_from_basis(basis)
 
     @abstractmethod
-    def _warm(self, basis: Basis) -> None:
-        """Set *basis* on the loaded model in the solver's own statuses. [`warm`][] has checked its spans."""
+    def _start_from_basis(self, basis: Basis) -> None:
+        """Set *basis* on the loaded model in the solver's own statuses. [`start_from_basis`][] has checked its spans."""
 
-    def start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+    def start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
         """Start the next [`run`][] from *values*, one per column and NaN where none is given.
 
         A mixed-integer model takes them as a starting incumbent, completing
@@ -207,46 +225,46 @@ class Solver(ABC):
             SpecsolveError: Values that do not span the loaded model.
         """
         self._spans('start', values, self._columns, 'columns')
-        self._start(values)
+        self._start_from_values(values)
 
     @abstractmethod
-    def _start(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
-        """Hand the values *values* gives to the solver to start from. [`start`][] has checked their span."""
+    def _start_from_values(self, values: np.ndarray[tuple[int], np.dtype[np.float64]]) -> None:
+        """Hand the values *values* gives to the solver to start from. [`start_from_values`][] has checked their span."""
 
     def _spans(self, what: str, values: Sized, expected: int, axis: str) -> None:
         """Refuse a *what* whose *values* do not span the loaded model's *expected* *axis*."""
         if len(values) != expected:
             raise SpecsolveError(
-                f'this {what} carries {len(values)} entries for a model with {expected} {axis}. It is '
+                f'this {what} carries {len(values)} elements for a model with {expected} {axis}. It is '
                 f'positional, so one laid out for a differently shaped model would start the solve from a '
                 f'state about a different one. This is an engine bug rather than a problem with the model '
                 f'— please report it.'
             )
 
-    def run(self, handoff: Handoff, *, basis: bool = False) -> SolveAnswer:
+    def run(self, tables: SinkTables, *, basis: bool = False) -> SolveAnswer:
         """Solve what is loaded and read it back, with the [`Basis`][] it ended on where *basis* asks.
 
         Raises:
             SpecsolveError: A solver vector that does not span the model.
         """
-        answer = self._run(handoff)
+        answer = self._run(tables)
         if basis and answer.primal is not None:
-            answer = replace(answer, basis=self._settled(handoff))
-        self._check_span('primal', answer.primal, handoff.column_count)
-        self._check_span('dual', answer.dual, handoff.row_count)
-        self._check_span('activity', answer.activity, handoff.row_count)
-        self._check_span('dual ray', answer.dual_ray, handoff.row_count)
+            answer = replace(answer, basis=self._seated(tables))
+        self._refuse_another_length('primal', answer.primal, tables.column_count)
+        self._refuse_another_length('dual', answer.dual, tables.row_count)
+        self._refuse_another_length('activity', answer.activity, tables.row_count)
+        self._refuse_another_length('dual ray', answer.dual_ray, tables.row_count)
         return answer
 
-    def _settled(self, handoff: Handoff) -> Basis | None:
-        """[`_basis`][], [`settled`][] against the model it was read from, after its spans are checked."""
+    def _seated(self, tables: SinkTables) -> Basis | None:
+        """[`_basis`][], [`seated`][] against the model it was read from, after its spans are checked."""
         read = self._basis()
         if read is None:
             return None
         columns, rows = read
-        self._check_span('column basis', columns, handoff.column_count)
-        self._check_span('row basis', rows, handoff.row_count)
-        return settled(handoff, columns, rows)
+        self._refuse_another_length('column basis', columns, tables.column_count)
+        self._refuse_another_length('row basis', rows, tables.row_count)
+        return seated(tables, columns, rows)
 
     @abstractmethod
     def _basis(self) -> tuple[np.ndarray, np.ndarray] | None:
@@ -255,24 +273,24 @@ class Solver(ABC):
         Called only after a run that left a primal. ``None`` where it ended at
         no vertex: a mixed-integer model, an interior-point run without
         crossover. A nonbasic row may carry any nonbasic code, and a column at
-        equal bounds either bound's: [`_settled`][] reads both off the model.
+        equal bounds either bound's: [`_seated`][] reads both off the model.
         """
 
-    def _check_span(self, quantity: str, values: Sized | None, expected: int) -> None:
+    def _refuse_another_length(self, quantity: str, values: Sized | None, expected: int) -> None:
         """Refuse a solver vector that does not span the model. ``None`` passes."""
         if values is not None and len(values) != expected:
             raise SpecsolveError(
-                f'{type(self).__name__} returned {len(values)} {quantity} values for a model with '
+                f'{self.name} returned {len(values)} {quantity} values for a model with '
                 f'{expected}. Reading a solution back is positional, so a vector that does not span '
                 f'the model describes a different one. This is an engine bug rather than a problem '
                 f'with the model — please report it.'
             )
 
     @abstractmethod
-    def _run(self, handoff: Handoff) -> SolveAnswer:
+    def _run(self, tables: SinkTables) -> SolveAnswer:
         """Solve what is loaded and read it back.
 
-        *handoff* is read only for the objective's constant. An infeasible solve
+        *tables* is read only for the objective's constant. An infeasible solve
         returns what [`dual_ray`][] gives.
         """
 
@@ -316,7 +334,7 @@ class Solver(ABC):
     def handle(self) -> Any:
         """The native object the load handed back, or ``None`` once closed.
 
-        Owned by this holder: [`close`][] releases it, not the caller.
+        This holder keeps it: [`close`][] releases it, not the caller.
         """
 
     @abstractmethod
@@ -350,8 +368,8 @@ def spelled_senses(spelling: Mapping[str, str]) -> np.ndarray[tuple[int, ...], n
     return out
 
 
-def settled(handoff: Handoff, columns: np.ndarray, rows: np.ndarray) -> Basis:
-    """*columns* and *rows*, [`BASIS_STATUSES`][] codes, with each nonbasic one at a bound *handoff* has.
+def seated(tables: SinkTables, columns: np.ndarray, rows: np.ndarray) -> Basis:
+    """*columns* and *rows*, [`BASIS_STATUSES`][] codes, with each nonbasic one at a bound *tables* has.
 
     A member reads only basic or not, and which bound a column sits at, and a
     basis carried from another model may name a bound this one lacks. So a
@@ -361,13 +379,13 @@ def settled(handoff: Handoff, columns: np.ndarray, rows: np.ndarray) -> Basis:
     """
     import numpy as np
 
-    cols = handoff.dense_columns(np.inf)
+    cols = tables.dense_columns(np.inf)
     lower, upper = np.isfinite(cols.lb), np.isfinite(cols.ub)
     side = np.where(upper & ((columns == AT_UPPER) | ~lower), AT_UPPER, np.where(lower, AT_LOWER, SUPERBASIC))
     side = np.where(cols.lb == cols.ub, FIXED, side)
     columns = np.where(np.isin(columns, (AT_LOWER, AT_UPPER, FIXED)), side, columns)
     bound = np.asarray([_ROW_BOUND[sense] for sense in SENSE_CODES], dtype=np.int8)
-    rows = np.where(np.isin(rows, (BASIC, SUPERBASIC)), rows, bound[handoff.dense_rows(np.inf).sense])
+    rows = np.where(np.isin(rows, (BASIC, SUPERBASIC)), rows, bound[tables.dense_rows(np.inf).sense])
     return Basis(columns.astype(np.int8), rows.astype(np.int8))
 
 
@@ -392,7 +410,7 @@ def solver_codes(codes: np.ndarray, native: Mapping[int, int]) -> np.ndarray[tup
 def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] — a solver hands back its own array type
     """One quantity a solver produced, in its own index — every sink's read-back.
 
-    A series rather than a ``(label, value)`` frame: the read-back takes a
-    declaration's share by slicing.
+    A series rather than an ``(index, value)`` table: the read-back takes an
+    entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)

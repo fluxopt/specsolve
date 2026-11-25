@@ -1,2 +1,2 @@
-scenario,snapshot,line,value
-base,2015-01-01T00:00:00.000000,bc,16.0
+line,scenario,snapshot,value
+bc,base,2015-01-01T00:00:00.000000,16.0

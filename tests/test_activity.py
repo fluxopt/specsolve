@@ -1,7 +1,7 @@
 """Activity: a constraint row's left-hand side, read back after a solve.
 
 The value is the solver's own, so a CSR recomputation agreeing with it checks
-the whole chain: matrix, hand-off, solve, read-back. Unlike a dual, an
+the whole chain: matrix, handoff, solve, read-back. Unlike a dual, an
 activity exists at any mixed-integer incumbent.
 """
 
@@ -24,10 +24,10 @@ ACTIVITY = frozenset({'activity'})
 def _agrees_with_csr(run) -> None:
     """Each constraint's activity against its slice of the recomputation."""
     recomputed = recomputed_row_values(run.engine, run.result)
-    for name, block in run.engine._model.constraints.items():
+    for name, indexed in run.engine._model.constraints.items():
         got = run.result.activity(name)['value'].to_numpy()
-        assert got == pytest.approx(recomputed[block.start : block.start + block.height], rel=ACTIVITY_RTOL), (
-            f'the solver judged feasibility against a different {name!r} LHS than the CSR block holds. '
+        assert got == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=ACTIVITY_RTOL), (
+            f'the solver judged feasibility against a different {name!r} LHS than its CSR rows hold. '
             f'Activity is the *whole* left-hand side, which is Ax on a linear row and x^T Q x + Ax '
             f'on a quadratic one — `recomputed_row_values` adds both, and this disagreement is that '
             f'invariant failing.'
@@ -69,9 +69,9 @@ def test_a_milp_returns_activity_where_dual_refuses(commitment_inputs):
             run.result.dual('balance')
 
 
-def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_frame_inputs):
+def test_equality_row_activity_equals_rhs(dispatch_yaml, dispatch_table_inputs):
     """On an `==` row activity equals the rhs up to solver tolerance, by construction."""
-    data = dispatch_frame_inputs
+    data = dispatch_table_inputs
     with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         got = sol.activity('power_balance').sort('snapshot')['value'].to_numpy()
         assert got == pytest.approx(data['load'].sort('snapshot')['value'].to_numpy(), rel=ACTIVITY_RTOL), (
@@ -93,9 +93,9 @@ def test_infeasible_solve_refuses_activity(dispatch_yaml, dispatch_inputs):
             result.activity('power_balance')
 
 
-def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_frame_inputs):
-    """close() releases the activity frames with the primal and dual ones."""
-    data = dispatch_frame_inputs
+def test_a_closed_result_refuses_activity(dispatch_yaml, dispatch_table_inputs):
+    """close() releases the activity tables with the primal and dual ones."""
+    data = dispatch_table_inputs
     with sps.solve(dispatch_yaml, data, outputs=ACTIVITY) as sol:
         pass
     with pytest.raises(SpecsolveError, match='closed'):

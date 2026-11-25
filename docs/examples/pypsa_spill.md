@@ -24,32 +24,32 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
-| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
-| $`\mathrm{inflow}`$ | `inflow` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the data has no row — energy arriving at a storage unit whether or not it was wanted — zero for a unit that receives none |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
+| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
-| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, `neutral` where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
+| $`\mathit{spill}`$ | `spill` over $`\mathcal{T} \times \mathcal{S}`$, $`0`$ where the mask leaves it out — inflow let go rather than kept, and never more than that snapshot's arrival. A unit that receives no inflow has none to let go, which is a spill of zero rather than a quantity with no value — so the energy balance keeps its row there. |
 
 #### Notation
 
@@ -62,7 +62,7 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 **`p`**
 
 ```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_dispatch`**
@@ -92,15 +92,15 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
+**`energy_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathrm{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 **`energy_balance_initial`**
@@ -109,16 +109,16 @@ PyPSA storage spillage: water a reservoir cannot hold leaves through a second si
 \mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathrm{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{pos}(t) = 0
 ```
 
-**`energy_balance`**
+**`nodal_balance`**
 
 ```math
-\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} + \mathrm{inflow}_{t,s} - \mathit{spill}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -175,7 +175,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           energy arriving at a storage unit whether or not it was wanted — zero for
           a unit that receives none
         dims: [snapshot, storage]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -213,7 +213,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           balance keeps its row there.
         dims: [snapshot, storage]
         where: "inflow != 0"
-        missing: neutral
+        missing: 0
         bounds:
           lower: 0
           upper: inflow
@@ -252,10 +252,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_spill.yaml', sources) as solution:
-        solution.objective  # 3200.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_spill.yaml', sources) as result:
+        result.objective  # 3200.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -272,7 +272,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         by names. PyPSA declares the spill variable only for units whose inflow is
         positive somewhere; the port declares it for every unit and bounds it above
         by the inflow, which pins it to zero for the battery. Same model, and the
-        port's spelling is the one that keeps the energy balance a single block.
+        port's spelling is the one that keeps the energy balance a single constraint.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])
@@ -319,25 +319,25 @@ rather than wrong.
 only for units whose inflow is positive somewhere. The port matches that with
 `where: "inflow != 0"`, so `spill` has six coordinates rather than twelve.
 
-The mask is safe only because of the line beside it. A constraint mentioning a
-masked variable loses its **row**, not only the term. On its own the mask would
-delete the battery's whole energy balance. Its stored energy would come from
-nowhere, and the model would report **0.0** instead of 3200. `missing: neutral`
+The condition is safe only because of the line beside it. A constraint mentioning
+an absent variable loses its **row**, not only the term. On its own the condition
+would delete the battery's whole energy balance. Its stored energy would come from
+nowhere, and the model would report **0.0** instead of 3200. `missing: 0`
 says the missing coordinates hold a spill of zero rather than a quantity with no
 value, so the row stands without the term.
 
-**The mask compares a value rather than naming the parameter.** `where: inflow`
-would be a **no-op** here: a `where:` on a bare parameter reads *defined and
-finite*, and the padded `0.0` is both. Nor can the zeros be dropped from the
-table. `inflow` is a term on the energy balance's constant side, and a sparse
-parameter there is refused at load. A missing row read as zero would be a bound
-rather than an absence. The sparsity that matters is in the *value*, and
+**The condition compares a value rather than naming the parameter.**
+`where: inflow` would be a **no-op** here: a `where:` on a bare parameter reads
+*defined and finite*, and the padded `0.0` is both. Nor can the zeros be dropped
+from the table. `inflow` is a term on the energy balance's constant side, and a
+sparse parameter there is refused at load. A missing row read as zero would be a
+bound rather than an absence. The sparsity that matters is in the *value*, and
 `!= 0` is how the model asks for it.
 
 ## What it exercises
 
-`missing: neutral` on a masked variable, the declaration that keeps a row whose
-term has gone, against an energy balance carrying two independent sinks. Also
-the asymmetry underneath it: a masked **variable** takes its row, while a sparse
-**parameter** on a constant side is refused. The two halves of this model's
-sparsity are spelled in two different ways.
+`missing: 0` on a variable with a condition, the declaration that keeps a
+row whose term has gone, against an energy balance carrying two independent
+sinks. Also the asymmetry underneath it: an absent **variable** takes its row,
+while a sparse **parameter** on a constant side is refused. The two halves of
+this model's sparsity are spelled in two different ways.

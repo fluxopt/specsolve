@@ -1,13 +1,13 @@
-"""Model builder: logical plan + data → linopy Model.
+"""Model builder: program + data → linopy Model.
 
 **One section per kind of translation**, in the order a build performs them:
-the four declarations (``Variables``, ``Special-ordered sets``,
+the four kinds of entry (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
-exist to make, then ``Plan evaluation`` for what an expression is worth.
+exist to make, then ``Program evaluation`` for what an expression is worth.
 
 Two questions a build asks are answered beside it: ``operators.py`` evaluates
-a built-in once its operands are values, and ``where.py`` turns a predicate
-into the boolean array a declaration is masked by. The positions an absent
+a built-in once its operands are values, and ``where.py`` turns a condition
+into the boolean array that narrows an entry. The positions an absent
 value is spelled differently in are ``absence.py``. *Which* linopy call each
 construct becomes is the table in ``docs/about/linopy.md``.
 """
@@ -24,7 +24,7 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
-from specsolve._messages import negative_window_message, non_finite_message, null_bounds_message
+from specsolve._messages import negative_window_message, non_finite_message
 from specsolve._sinks.capabilities import Capabilities, Capability, spelled
 from specsolve.errors import DataError, SpecsolveError
 from tests.linopy_lane import absence
@@ -57,7 +57,7 @@ def build_model(
     relations: dict[tuple[str, str], xr.DataArray],
     given: Mapping[str, xr.DataArray] | None = None,
 ) -> None:
-    """Populate a linopy Model from a lowered program and loaded parameters.
+    """Populate a linopy Model from a compiled program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and the
     objective as declared in *program*. Nothing is re-checked here: a program
@@ -83,9 +83,6 @@ def _build_variables(ctx: EvaluationContext) -> None:
         with note(f"while building variable '{name}'"):
             coords = {d: ctx.master_coords[d] for d in vdef.dims}
             mask = evaluate_where(vdef.where, ctx)
-
-            _check_bounds_are_defined(name, vdef, ctx, mask)
-
             lower, upper = _bound(vdef.lower, ctx, -math.inf), _bound(vdef.upper, ctx, math.inf)
             if vdef.domain != 'continuous':
                 lower, upper = _whole(lower, np.ceil), _whole(upper, np.floor)
@@ -100,30 +97,10 @@ def _build_variables(ctx: EvaluationContext) -> None:
             )
 
 
-def _check_bounds_are_defined(name: str, vdef: program.Variable, ctx: EvaluationContext, mask: Any) -> None:
-    """Refuse a bound with no value at build, before the NaN reaches linopy's IO layer.
-
-    Checked against the variable's own mask: a coordinate the variable does not
-    occupy needs no bound, and each one counts once however many of its bounds
-    are missing, as the relational lane counts its columns. A ``missing:
-    absent`` bound is not asked: its gap is an open side (:func:`_bound`).
-    """
-    stated = [side for side in (vdef.lower, vdef.upper) if side is not None]
-    owed = [ctx.dataset[p].isnull() for p in sorted(program.parameters_of(*stated)) if not ctx.absent(p)]
-    if not owed:
-        return
-    frame = xr.DataArray(True).expand_dims({d: ctx.master_coords[d] for d in vdef.dims})
-    missing = int((functools.reduce(operator.or_, owed) & frame & mask).sum())
-    if missing:
-        raise DataError(null_bounds_message(name, missing))
-
-
 def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: float) -> Any:
     """A bound as linopy takes it: the literal, the named parameter's array, or *open_side* where it is open.
 
-    A gap is open under ``missing: absent``, and not filled otherwise:
-    absence's zero is a coefficient and never a bound, so a gap survives to
-    :func:`_check_bounds_are_defined`.
+    A gap is open under ``missing: absent``; under a value it reads as that value.
     """
     if bound is None:
         return open_side
@@ -132,7 +109,7 @@ def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: 
     if isinstance(bound, program.ParameterReference):
         values = ctx.dataset[bound.name]
         return values.fillna(open_side) if ctx.absent(bound.name) else values
-    msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
+    msg = f'bounds accept a number or a parameter, and compiling admits nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
 
 
@@ -237,11 +214,11 @@ def _refuse_a_coefficient_that_is_not_finite(
     """Refuse a quotient by zero that reaches a row the build keeps, and clear one that reaches none.
 
     A zero under a term is asked of the row rather than of the divisor's own
-    coordinates: a ``where``, a mask on the dividend, a shift and a sum with
+    coordinates: a ``where``, a condition on the dividend, a shift and a sum with
     no terms each decide whether the quotient lands in a row, and the built
     row is where all four have answered. Asked only of a row that divides, so
     an infinite limit on a side with no divisor stays the limit that never
-    binds. linopy refuses an infinity even in a row it then masks, so what
+    binds. linopy refuses an infinity even in a row it then leaves out, so what
     reaches no row is cleared: a coefficient to zero, a constant to absent.
 
     Raises:
@@ -259,10 +236,10 @@ def _refuse_a_coefficient_that_is_not_finite(
     kept = mask & whole.const.notnull() & (whole.vars != -1).any(TERM_DIM)
     sides = [side.to_linexpr() if hasattr(side, 'to_linexpr') else side for side in (term, other)]
     terms = [side for side in sides if hasattr(side, 'nterm')]
-    entries = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
+    coefficients = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
     constants = sum(int((np.isinf(s.const) & kept).sum()) for s in terms)
-    if entries or constants:
-        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), entries or constants)}')
+    if coefficients or constants:
+        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), coefficients or constants)}')
     return tuple(_cleared(side, ~kept) for side in sides)
 
 
@@ -332,7 +309,7 @@ def _term_free(side: Any) -> bool:
 
     A bare ``Variable`` is a term; a ``LinearExpression`` over an empty axis has
     a term dimension of length zero; anything else is data. Both sides
-    term-free is a constraint the *data* emptied — a dimension with no members
+    term-free is a constraint the *data* emptied — a dimension with no labels
     reduces away to a number — which the absence rules say is not a row. An
     expression naming no variable to begin with is refused at load.
     """
@@ -349,9 +326,9 @@ def _term_free(side: Any) -> bool:
 def _build_objective(ctx: EvaluationContext) -> None:
     """Build the declared objective, if any, onto the model.
 
-    An objective has no ``where``, so its divisor check runs with no row mask.
+    An objective has no ``where``, so its divisor check runs with no row condition.
     The expression is scalar by the time it gets here, the language having
-    refused one carrying dims, so it is evaluated like any other; linopy's
+    refused one carrying dimensions, so it is evaluated like any other; linopy's
     ``*`` answers a product of two variables with a ``QuadraticExpression`` on
     its own.
     """
@@ -375,7 +352,7 @@ _LINOPY_SENSE: dict[program.ObjectiveSense, str] = {'minimize': 'min', 'maximize
 OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
     "the objective carries a constant term, and this lane cannot build one: linopy's objective "
     'takes no constant. The relational lane builds it and returns the right number, so the spec '
-    'is sayable and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
+    'is in the language and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
     'Dropping the constant here is refused deliberately — it would answer a different model.'
 )
 
@@ -388,12 +365,12 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Plan evaluation
+# Program evaluation
 # ---------------------------------------------------------------------------
 
 
 def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
-    """One plan node as a linopy term, an array, or a number.
+    """One program node as a linopy term, an array, or a number.
 
     One node kind per branch: a variable is its linopy term, a parameter its
     filled array, arithmetic the Python operator linopy overloads, and an
@@ -451,7 +428,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_shift(
             _eval(node.operand, ctx),
             over=node.along,
-            offset=_amount(node.offset, ctx),
+            offset=_kept_absent(node.offset, ctx),
             wrap=node.wrap,
             fill=node.fill,
             by=_partition(node, ctx),
@@ -463,7 +440,7 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
         return operator_sum_back(
             _eval(node.operand, ctx),
             over=node.along,
-            within=_amount(node.width, ctx),
+            within=_kept_absent(node.width, ctx),
             wrap=node.wrap,
             by=_partition(node, ctx),
         )
@@ -511,9 +488,13 @@ def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any,
     return product
 
 
+def _zero(missing: object) -> bool:
+    return not isinstance(missing, str) and missing == 0
+
+
 def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
     return any(
-        isinstance(n, program.ParameterReference) and ctx.program.parameters[n.name].missing == 'neutral'
+        isinstance(n, program.ParameterReference) and _zero(ctx.program.parameters[n.name].missing)
         for n in program.walk(node)
     )
 
@@ -585,6 +566,11 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
+def _kept_absent(amount: int | str, ctx: EvaluationContext) -> Any:
+    """An amount as :func:`_amount` reads it, a ``missing: absent`` row kept NaN for the operator to carry."""
+    return ctx.dataset[amount] if isinstance(amount, str) and ctx.absent(amount) else _amount(amount, ctx)
+
+
 def _refuse_a_negative_window(name: str, ctx: EvaluationContext) -> None:
     """A width below zero counts no positions, so the data is refused, as the other lane refuses it."""
     widths = np.asarray(ctx.dataset[name], dtype=float).ravel()
@@ -616,7 +602,7 @@ def _grouped_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationCont
 def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:
     """A sum through the rows of a relation: every row carries its dropped columns' term to its added ones.
 
-    The operand's dims become the relation's roles, so two roles over one
+    The operand's dimensions become the relation's roles, so two roles over one
     dimension stay apart; the membership array multiplies in, a pair it does
     not relate leaves no term rather than a zero one, the dropped roles sum
     out, and the added roles take their dimensions back.
@@ -665,7 +651,7 @@ def _partition(node: program.Translate | program.WindowSum, ctx: EvaluationConte
     """The relation a windowed operator may not reach across, as its values.
 
     **Named for the dimension its values are labels of**, not for itself: an
-    amount declared over the group's own dim is read through this array by
+    amount declared over the group's own dimension is read through this array by
     :func:`~tests.linopy_lane.operators._per_group`, which pairs the two by that
     name.
     """

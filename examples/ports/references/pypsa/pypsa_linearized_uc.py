@@ -19,10 +19,10 @@ and the two transition variables in [0, 1] instead of {0, 1} and leaves every
 constraint where it was. A unit may then be committed by a third.
 
 ``base`` carries unequal start-up and shut-down costs. PyPSA tightens the
-relaxation with an extra dispatch-limit block wherever a generator's two costs
-*match*, and that block reaches for the ramp-limit parameters, so ``base`` is
+relaxation with an extra dispatch-limit constraint wherever a generator's two costs
+*match*, and that constraint reaches for the ramp-limit parameters, so ``base`` is
 left untightened. ``peak`` is not, its two costs both being zero: PyPSA emits four
-further blocks for it, every one of which collapses to a row the port already
+further constraints for it, every one of which collapses to a row the port already
 holds, since ``p_min_pu`` is 0 and there are no ramp limits. Hence the same
 objective and the same prices out of a model with more rows in it.
 
@@ -42,7 +42,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_linearized_uc.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 
@@ -53,7 +53,7 @@ def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:
 
     Nothing here says the model is relaxed: ``committable=True`` is the same
     switch the integer model uses, and the mode is chosen at ``optimize`` time.
-    Both ``*_time_before`` are 0, so no status is pinned by a prior horizon.
+    Both ``*_time_before`` are 0, so no status is pinned from before the first snapshot.
     """
     n = pypsa.Network()
     n.set_snapshots(tables['snapshot']['snapshot'])

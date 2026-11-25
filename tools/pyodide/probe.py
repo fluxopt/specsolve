@@ -2,7 +2,7 @@
 
 Run by ``run.mjs`` inside Pyodide, never by pytest. The polars there has no
 streaming engine and no parquet. Before pyarrow: a solve and a sweep from
-frames, the sweep over an axis read from JSON, and an archive refused by name.
+tables, the sweep over an axis read from JSON, and an archive refused by name.
 After: the sweep archived as a zip and read back, and solved again from it.
 """
 
@@ -57,7 +57,7 @@ def _by_scenario() -> dict[str, object]:
 
 
 def _objectives(sweep: sps.types.Sweep) -> dict[str, float]:
-    return dict(sweep.record.select('scenario', 'objective').iter_rows())
+    return dict(sweep.records.select('scenario', 'objective').iter_rows())
 
 
 def without_pyarrow() -> str:
@@ -71,7 +71,7 @@ def without_pyarrow() -> str:
         f'gas covers the load above the wind: {result.objective} != {expected}'
     )
 
-    axis = json.loads(json.dumps(sps.EachCoordinate('scenario').to_dict()))
+    axis = json.loads(json.dumps(sps.EachLabel('scenario').to_dict()))
     objectives = _objectives(sps.solve_over(SPEC, _by_scenario(), axis))
     assert objectives == EXPECTED, f'one solve per scenario, gas covering the flat load above the wind: {objectives}'
     try:
@@ -87,11 +87,11 @@ def without_pyarrow() -> str:
 
 
 def with_pyarrow() -> str:
-    archived = sps.solve_over(SPEC, _by_scenario(), sps.EachCoordinate('scenario'), archive='/tmp/study.zip')
+    archived = sps.solve_over(SPEC, _by_scenario(), sps.EachLabel('scenario'), archive='/tmp/study.zip')
     assert _objectives(archived) == EXPECTED, 'the archived sweep answers as the one in memory did'
-    study = sps.load_archive('/tmp/study.zip', '/tmp/study')
-    assert _objectives(study.sweep) == EXPECTED, 'the archive reads back through pyarrow'
-    assert study.sweep.primal('p').equals(archived.primal('p')), 'every value it wrote'
+    study = sps.read_archive('/tmp/study.zip', '/tmp/study')
+    assert _objectives(study) == EXPECTED, 'the archive reads back through pyarrow'
+    assert study.primal('p').equals(archived.primal('p')), 'every value it wrote'
     again = sps.solve_over(study.spec, study.sources, study.axis)
     assert _objectives(again) == EXPECTED, 'and solves again from what it holds'
     return 'a sweep archived as a zip through pyarrow, read back and solved again from it'

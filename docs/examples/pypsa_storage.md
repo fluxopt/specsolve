@@ -4,13 +4,13 @@
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **15253.178322993519**, matched to `rtol=1e-09`.
 
-Non-cyclic: the horizon starts at `soc_initial` and its end is free.
+Non-cyclic: the level starts at `soc_initial` and ends free.
 [Cyclic storage](pypsa_cyclic_storage.md) closes that loop, kept separate so
 it can fail on its own.
 
 The battery sits at `south`, beside the expensive oil generator. It displaces
 oil entirely: every snapshot runs oil at zero. It drains to empty by the third
-snapshot, which is what a free end of horizon buys.
+snapshot, which is what a free final level buys.
 
 ## The model
 
@@ -18,42 +18,42 @@ snapshot, which is what a free end of horizon buys.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA linear optimal power flow with a storage unit carrying energy between snapshots. Non-cyclic — the horizon starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
+PyPSA linear optimal power flow with a storage unit carrying energy between snapshots. Non-cyclic — the level starts at the initial state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
-| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
-| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
-| $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
-| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
-| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full — PyPSA's capacity times its hours of storage, carried as a column because a bound takes a name or a number, never arithmetic (issue 31) |
-| $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
-| $`\mathrm{efficiency\_store}`$ | `efficiency_store` over $`\mathcal{S}`$ — share of charging energy that reaches the store |
 | $`\mathrm{efficiency\_dispatch}`$ | `efficiency_dispatch` over $`\mathcal{S}`$ — share of stored energy that reaches the bus on the way out |
+| $`\mathrm{efficiency\_store}`$ | `efficiency_store` over $`\mathcal{S}`$ — share of charging energy that reaches the store |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
+| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
+| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
+| $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
+| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full — PyPSA's capacity times its hours of storage, carried as a column because a bound takes a name or a number, never arithmetic (issue 31) |
 | $`\mathrm{standing\_loss}`$ | `standing_loss` over $`\mathcal{S}`$ — share of the carried-over level lost between snapshots |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a link, signed towards its `link_to` bus |
+| $`f`$ | `f` over $`\mathcal{L} \times \mathcal{T}`$ — flow on a link, signed towards its `link_to` bus |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus — PyPSA splits a unit's power into two non-negative variables rather than one signed one, so the two efficiencies can differ |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
@@ -66,16 +66,16 @@ PyPSA linear optimal power flow with a storage unit carrying energy between snap
 
 #### Variable domains
 
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`f`**
 
 ```math
-\mathrm{neg\_rating}_{l} \le f_{t,l} \le \mathrm{rating}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{neg\_rating}_{l} \le f_{l,t} \le \mathrm{rating}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_dispatch`**
@@ -99,27 +99,15 @@ PyPSA linear optimal power flow with a storage unit carrying energy between snap
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
+**`energy_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{t,l} \right) + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`ramp_up`**
-
-```math
-p_{t,g} - p_{t - 1,g} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`ramp_down`**
-
-```math
-p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) + p^{\mathrm{store}}_{t,s} \cdot \mathrm{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathrm{efficiency\_dispatch}_{s}} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
 **`energy_balance_initial`**
@@ -128,23 +116,35 @@ p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\math
 \mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} \cdot \mathrm{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathrm{efficiency\_dispatch}_{s}} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{pos}(t) = 0
 ```
 
-**`energy_balance`**
+**`nodal_balance`**
 
 ```math
-\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) + p^{\mathrm{store}}_{t,s} \cdot \mathrm{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathrm{efficiency\_dispatch}_{s}} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{l,t} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{l,t} \right) + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`ramp_down`**
+
+```math
+p_{g,t - 1} - p_{g,t} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`ramp_up`**
+
+```math
+p_{g,t} - p_{g,t - 1} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
       PyPSA linear optimal power flow with a storage unit carrying energy between
-      snapshots. Non-cyclic — the horizon starts at the initial
+      snapshots. Non-cyclic — the level starts at the initial
       state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
     dimensions:
@@ -314,10 +314,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_storage.yaml', sources) as solution:
-        solution.objective  # 15253.178322993519
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_storage.yaml', sources) as result:
+        result.objective  # 15253.178322993519
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

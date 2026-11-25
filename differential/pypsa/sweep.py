@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The coverage question the block-level one cannot reach, as a rule with no data in it.
+"""The coverage question the entry-level one cannot reach, as a rule with no data in it.
 
 Stamps and a program in, sentences out, so it is testable without pypsa.
 """
@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 
 
 def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]]) -> list[str]:
-    """Every conjunct of every mask true somewhere on the ladder and false somewhere.
+    """Every conjunct of every condition true somewhere on the ladder and false somewhere.
 
-    A mask is exercised as a whole the moment one of its conjuncts varies, so
-    `committable AND p_nom_mod > 0` passes block-level coverage while
+    A condition is exercised as a whole the moment one of its conjuncts varies, so
+    `committable AND p_nom_mod > 0` passes entry-level coverage while
     `committable` is true everywhere (mathspec#312).
 
     Each rung records one character per conjunct — ``t`` held everywhere, ``f``
@@ -28,7 +28,7 @@ def untested_conjuncts(name: str, program: Any, stamps: list[Mapping[str, Any]])
     somewhere (``f`` or ``b``), which one ``b`` satisfies alone and two rungs
     disagreeing satisfy between them.
 
-    A conjunct of a block no rung builds is not reported; the block is already
+    A conjunct of an entry no rung builds is not reported; the entry is already
     a gap of its own.
     """
     gaps = []

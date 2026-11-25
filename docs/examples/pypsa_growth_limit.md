@@ -13,7 +13,7 @@ that allowance, which turns a flat cap into a growth rate
 new[period] - max_relative_growth * new[period - 1] <= max_growth
 ```
 
-Two things the source settles. The quantity on both sides is **newly built**
+Two things the source decides. The quantity on both sides is **newly built**
 capacity, not standing capacity: `vars.where(first_active)` counts an asset in
 the period it first exists and never again. And the first period has no
 predecessor, so its row is the bare allowance.
@@ -34,30 +34,30 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
-| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{build\_period}: \mathcal{G} \to \mathcal{E},\ \mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the axis capacity is built along |
 | $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{gen\_carrier}: \mathcal{G} \to \mathcal{C}`$ — what a generator burns, and what a growth limit is a property of |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_carrier}: \mathcal{G} \to \mathcal{C},\ \mathrm{build\_period}: \mathcal{G} \to \mathcal{E}`$ — generating units, each built in one period and standing from then on |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{build\_period}: \mathcal{G} \to \mathcal{E},\ \mathrm{gen\_carrier}: \mathcal{G} \to \mathcal{C}`$ — generating units, each built in one period and standing from then on |
+| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{build\_period}: \mathcal{G} \to \mathcal{E},\ \mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the axis capacity is built along |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the horizon's start |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{activity}`$ | `activity` over $`\mathcal{G} \times \mathcal{E}`$ — 1 where a generator stands in a period and 0 where it does not |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity through one period |
-| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
-| $`\mathrm{activity}`$ | `activity` over $`\mathcal{E} \times \mathcal{G}`$ — 1 where a generator stands in a period and 0 where it does not |
 | $`\mathrm{capped\_carrier}`$ | `capped_carrier` over $`\mathcal{C}`$ — 1 for the carrier whose growth is capped, 0 for the rest — the selection PyPSA makes by reading its carrier table |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
 | $`\mathrm{max\_growth}`$ | `max_growth` (scalar) — most capacity of that carrier that may be newly built in one period |
 | $`\mathrm{max\_relative\_growth}`$ | `max_relative_growth` (scalar) — how much of the previous period's new capacity is added to that allowance — what makes the limit a growth rate rather than a flat cap |
+| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity a generator may build |
+| $`\mathrm{period\_weight}`$ | `period_weight` over $`\mathcal{E}`$ — what one period's costs are worth at the start of the first period |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot, zero where it does not yet stand |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot, zero where it does not yet stand |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
 #### Definitions
@@ -77,7 +77,7 @@ PyPSA's carrier growth limit: how much of a technology may be built in one inves
 **`p`**
 
 ```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_nom`**
@@ -97,22 +97,10 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period\_of}(t)} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{e,g} \cdot \mathrm{period\_weight}_{e}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{opex}_{g} \cdot \mathrm{period\_weight}_{\mathrm{period\_of}(t)} + \sum_{g \in \mathcal{G},\ e \in \mathcal{E}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g} \cdot \mathrm{activity}_{g,e} \cdot \mathrm{period\_weight}_{e}
 ```
 
 #### Subject to
-
-**`within_capacity`**
-
-```math
-p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`power_balance`**
-
-```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
-```
 
 **`growth_limit`**
 
@@ -120,10 +108,22 @@ p_{t,g} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{\mathrm{period\_of}(t)
 \mathit{new\_capacity}_{e} - \mathit{new\_capacity}_{e \boxminus_{0} 1} \cdot \mathrm{max\_relative\_growth} \le \mathrm{max\_growth} \qquad \forall\, e \in \mathcal{E}
 ```
 
+**`power_balance`**
+
+```math
+\sum_{g \in \mathcal{G}} p_{g,t} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+p_{g,t} \le p^{\mathrm{nom}}_{g} \cdot \mathrm{activity}_{g,\mathrm{period\_of}(t)} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -170,7 +170,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: demand to be met
         dims: [snapshot]
       period_weight:
-        description: what one period's costs are worth at the horizon's start
+        description: what one period's costs are worth at the start of the first period
         dims: [period]
       opex:
         description: cost of one unit of output
@@ -252,10 +252,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_growth_limit.yaml', sources) as solution:
-        solution.objective  # 47110.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_growth_limit.yaml', sources) as result:
+        result.objective  # 47110.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"
@@ -321,7 +321,7 @@ and the same instance builds 30, 40 and 50 of wind, 30 of gas, and costs
 −120.
 
 **`edge=0` keeps the first period's row.** Without it the shifted term is absent
-in the first period and the *row* goes with it. A masked variable term deletes
+in the first period and the *row* goes with it. An absent variable term deletes
 the row rather than zeroing it. PyPSA emits the bare allowance there:
 
 ```

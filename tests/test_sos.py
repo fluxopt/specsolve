@@ -10,6 +10,7 @@ SOS1, SOS2 and the unrestricted LP all have *different* optima.
 from __future__ import annotations
 
 import itertools
+import json
 from typing import Any
 
 import polars as pl
@@ -17,6 +18,7 @@ import pytest
 from mathspec import to_spec
 
 import specsolve as sps
+from specsolve._names import COL
 from specsolve.errors import LanguageError, SpecsolveError
 from tests.conftest import EXAMPLES_DIR, expanded, solve_written_file
 
@@ -59,7 +61,7 @@ BASE: dict[str, Any] = {
 
 
 def spec(sos_type: int) -> dict[str, Any]:
-    """The base model with one set over ``take``'s ``size`` dim."""
+    """The base model with one set over ``take``'s ``size`` dimension."""
     return BASE | {'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': sos_type}}}
 
 
@@ -97,8 +99,8 @@ def test_the_three_regimes_have_different_optima():
 # ---------------------------------------------------------------------------
 
 
-#: A dim the model declares and ``take`` does not carry, so a set over it has
-#: no members — the one case needing a declaration the base model lacks.
+#: A dimension the model declares and ``take`` does not carry, so a set over it has
+#: no members — the one case needing an entry the base model lacks.
 UNCARRIED = {'dimensions': BASE['dimensions'] | {'other': {'dtype': 'str'}}}
 
 #: A member the set cannot hold at zero from one side, because the model
@@ -111,18 +113,20 @@ OPEN_BELOW = {'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'upper
     ('blocks', 'expected', 'also'),
     [
         pytest.param(
-            {'pick': {'variable': 'nope', 'along': 'size'}}, "'nope' is not a declared variable", {}, id='no-var'
+            {'pick': {'variable': 'nope', 'along': 'size'}}, "'nope' is not a declared variable", {}, id='no-variable'
         ),
-        pytest.param({'pick': {'variable': 'take', 'along': 'site2'}}, "undeclared dimension 'site2'", {}, id='no-dim'),
+        pytest.param(
+            {'pick': {'variable': 'take', 'along': 'site2'}}, "undeclared dimension 'site2'", {}, id='no-dimension'
+        ),
         pytest.param(
             {'pick': {'variable': 'take', 'along': 'other'}},
             "along 'other' is not a dim of variable 'take'",
             UNCARRIED,
-            id='a-dim-the-variable-does-not-carry',
+            id='a-dimension-the-variable-does-not-carry',
         ),
         pytest.param(
             {'pick': {'variable': 'take', 'along': 'size'}, 'again': {'variable': 'take', 'along': 'size', 'type': 2}},
-            "already carries the set declared by 'pick'",
+            "already carries the set declared by 'again'",
             {},
             id='two-sets-over-one-variable',
         ),
@@ -161,7 +165,7 @@ def test_both_lanes_and_the_enumeration_agree(sos_type):
     """The differential claim, plus the one oracle that is nobody's code.
 
     The harness is imported **inside the test**: importing it is the
-    oracle's guard, and the rest of this module runs on the bare install.
+    linopy lane's guard, and the rest of this module runs on the bare install.
     """
     from tests.differential import differential
 
@@ -194,7 +198,7 @@ def test_the_native_sink_reaches_the_same_optimum(sos_type):
 
 @pytest.mark.parametrize('sos_type', [1, 2], ids=['sos1', 'sos2'])
 def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
-    """The section, in label order, and read back by a solver that takes it."""
+    """The section, in index order, and read back by a solver that takes it."""
     path = sps.write(spec(sos_type), DATA, tmp_path / 'model.lp')
     text = path.read_text()
 
@@ -203,7 +207,7 @@ def test_the_lp_file_carries_the_set_and_a_reader_agrees(sos_type, tmp_path):
     assert section == [
         f's0: S{sos_type} :: x0:1 x1:2 x2:3 x3:4',
         f's1: S{sos_type} :: x4:1 x5:2 x6:3 x7:4',
-    ], 'the section is not the sets in label order, weighted by declared position'
+    ], 'the section is not the sets in index order, weighted by declared position'
 
     gurobipy = pytest.importorskip('gurobipy', reason='no shipped solver but gurobi reads an SOS section')
     with gurobipy.Env(params={'OutputFlag': 0}) as env:
@@ -230,7 +234,7 @@ def test_highs_refuses_the_written_section_which_is_why_a_set_is_written_out_for
 
 
 def test_a_set_on_a_sink_with_no_concept_is_refused_naming_the_expansion():
-    """Nothing is rewritten at the hand-off: the language writes a set out, and the refusal says so."""
+    """Nothing is rewritten at the handoff: the language writes a set out, and the refusal says so."""
     with pytest.raises(SpecsolveError, match='special-ordered sets') as refusal:
         sps.solve(spec(1), DATA)
     assert 'expand()' in str(refusal.value) and 'gurobi' in str(refusal.value), (
@@ -258,21 +262,21 @@ def test_a_member_that_may_go_negative_is_held_at_zero_from_below():
 # ---------------------------------------------------------------------------
 
 
-def test_a_masked_member_leaves_the_set_and_its_neighbours_adjacent():
-    """Membership is the variable's own, so a mask closes the gap it leaves.
+def test_an_absent_member_leaves_the_set_and_its_neighbours_adjacent():
+    """Membership is the variable's own, so a condition closes the gap it leaves.
 
-    With size 1 masked out at every site the members that exist are 0, 2 and
+    With size 1 absent at every site the members that exist are 0, 2 and
     3. A weight orders the members and nothing more, so a sink branching on
     the set reads ``{0, 2}`` as consecutive in the list it was handed, which
-    the unmasked model refuses.
+    the model without the `where` refuses.
     """
     raw = spec(2)
     raw['variables'] = {
         'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'size != 1'}
     }
     with sps.build(raw, DATA) as model:
-        sets = model._engine._model.handoff.sos
-    assert sets['weight'].to_list() == [1, 3, 4] * 2, 'the masked member is still in the list, or the order moved'
+        sets = model._engine._model.tables.sos
+    assert sets['weight'].to_list() == [1, 3, 4] * 2, 'the absent member is still in the list, or the order moved'
 
 
 def test_a_set_written_out_is_integrality_and_the_dual_message_names_it():
@@ -289,12 +293,12 @@ def test_a_sos2_set_of_one_member_restricts_nothing():
     exist — which would pin the one member of the set to zero and quietly
     delete it from the model.
 
-    Masked down per site, so one set keeps three members and the other has
+    Narrowed per site, so one set keeps three members and the other has
     one: a set that is dropped whole must also not shift the rows the sets
     after it own.
     """
     raw = spec(2)
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     raw['variables'] = {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}}
     live = DATA | {
         'live': _table({(site, size): (site == 'north' or size == 0) for site in SITES for size in SIZES}).with_columns(
@@ -323,7 +327,7 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         'dimensions': {'site': {'dtype': 'str'}, 'size': {'dtype': 'int', 'ordered': True}},
         'parameters': {
             'worth': {'dims': ['site', 'size']},
-            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'},
+            'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False},
         },
         'variables': {'take': {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 1}, 'where': 'live'}},
         'sos': {'pick': {'variable': 'take', 'along': 'size', 'type': 1}},
@@ -342,9 +346,9 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
         }
 
     with sps.build(raw, live(together)) as model:
-        one_set = model._engine._model.handoff
+        one_set = model._engine._model.tables
         model.update(live(apart))
-        two_sets = model._engine._model.handoff
+        two_sets = model._engine._model.tables
         assert (one_set.cols.equals(two_sets.cols), one_set.column_count, one_set.row_count) == (True, 2, 0), (
             'the two builds differ in something other than their sets, so this proves nothing'
         )
@@ -354,29 +358,36 @@ def test_regrouping_the_members_is_a_different_model_to_a_loaded_solver():
 def test_a_set_that_runs_along_a_leading_dim_still_arrives_grouped():
     """The one shape where the stream is not already in ``(set, weight)`` order.
 
-    With ``over`` first in the ``dims``, a set's members are ``|site|``
-    apart in label order, so every set interleaves with every other. The sinks
-    read a set's edges off neighbouring rows, so an ungrouped stream links
-    members to the wrong binaries — and still reaches a plausible optimum.
+    The dimensions sort by name, so ``over`` leads where its name sorts first:
+    `site` renamed `unit` puts `size` ahead of it. A set's members are then
+    ``|unit|`` apart in index order, so every set interleaves with every other.
+    The sinks read a set's edges off neighbouring rows, so an ungrouped stream
+    links members to the wrong binaries — and still reaches a plausible optimum.
     """
-    raw = spec(1)
-    raw['variables'] = {'take': {'dims': ['size', 'site'], 'bounds': {'lower': 0, 'upper': 'cap'}}}
-    with sps.build(raw, DATA) as model:
-        sets = model._engine._model.handoff.sos
+    raw = json.loads(json.dumps(spec(1)).replace('site', 'unit'))
+    data = {
+        'unit': SITES,
+        'size': SIZES,
+        'value': _table(VALUE).rename({'site': 'unit'}),
+        'cap': _table(CAP).rename({'site': 'unit'}),
+    }
+    assert sps.check(raw).variables['take'].dims == ('size', 'unit'), 'the set runs along the leading dim'
+    with sps.build(raw, data) as model:
+        sets = model._engine._model.tables.sos
         assert sets['set'].to_list() == [0, 0, 0, 0, 1, 1, 1, 1], 'the members of a set did not end up together'
         assert sets['weight'].to_list() == [1, 2, 3, 4] * 2, 'a set is not in weight order'
-        assert sets['col'].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
+        assert sets[COL].to_list() == [0, 2, 4, 6, 1, 3, 5, 7], 'a member is not the column its coordinate got'
 
 
 @pytest.mark.parametrize('dims', [['site', 'size'], ['size', 'site']], ids=['over-last', 'over-first'])
-def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
-    """A label is a position where nothing was dropped, and both paths say so.
+def test_a_condition_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dims: list[str]):
+    """A column index is a position where nothing was dropped, and both paths say so.
 
-    An unmasked variable's sets and weights are arithmetic on the label, which
-    *is* the coordinate's position in the declared product. A masked one has
-    to read the coordinates, a dropped row being a label that no longer
-    decomposes. A mask that drops nothing sends the same model down both
-    paths, so either the two frames are one frame or one of them is wrong —
+    A variable with no `where` has sets and weights that are arithmetic on the column index, which
+    *is* the coordinate's position in the declared product. A narrowed one has
+    to read the coordinates, a dropped row being a column index that no longer
+    decomposes. A condition that drops nothing sends the same model down both
+    paths, so either the two tables are one table or one of them is wrong —
     and a member in the wrong set is linked to another set's binaries.
 
     Both orders of the ``dims``, because the split is where ``over`` sits
@@ -385,38 +396,38 @@ def test_a_mask_that_drops_nothing_places_the_sets_where_the_arithmetic_does(dim
     take = {'dims': dims, 'bounds': {'lower': 0, 'upper': 'cap'}}
     raw = spec(2) | {'variables': {'take': take}}
     masked = raw | {
-        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}},
+        'parameters': raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}},
         'variables': {'take': take | {'where': 'live'}},
     }
     live = _table(dict.fromkeys(((site, size) for site in SITES for size in SIZES), 1.0)).with_columns(
         pl.col('value').cast(pl.Boolean)
     )
     with sps.build(raw, DATA) as placed, sps.build(masked, DATA | {'live': live}) as counted:
-        assert placed._engine._model.handoff.sos.equals(counted._engine._model.handoff.sos), (
+        assert placed._engine._model.tables.sos.equals(counted._engine._model.tables.sos), (
             'the two placements disagree about which coordinate is in which set, or at which weight'
         )
 
 
-def test_a_mask_that_empties_a_set_leaves_the_numbering_dense():
-    """A set number is a dense index, the way a column's and a row's are.
+def test_a_condition_that_empties_a_set_leaves_the_numbering_dense():
+    """A set number is a contiguous index, the way a column's and a row's are.
 
-    A coordinate's *position* is not: it counts the product the mask never
+    A coordinate's *position* is not: it counts the product the condition never
     materialised, which is what may pass 2^31 while every survivor fits
     (``engine._DTYPES``). So a set is renumbered wherever a row was dropped,
     and what reaches a sink counts the sets that exist rather than the ones
-    the declaration would have had.
+    the entry would have had.
 
-    The mask empties the *first* set here, which is the one arrangement where
+    The condition empties the *first* set here, which is the one arrangement where
     a hole and no hole are different numbers.
     """
     take = {'dims': ['site', 'size'], 'bounds': {'lower': 0, 'upper': 'cap'}, 'where': 'live'}
     raw = spec(1) | {'variables': {'take': take}}
-    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': 'neutral'}}
+    raw['parameters'] = raw['parameters'] | {'live': {'dims': ['site', 'size'], 'dtype': 'bool', 'missing': False}}
     live = _table({(site, size): float(site == 'south') for site in SITES for size in SIZES}).with_columns(
         pl.col('value').cast(pl.Boolean)
     )
     with sps.build(raw, DATA | {'live': live}) as model:
-        assert model._engine._model.handoff.sos['set'].to_list() == [0, 0, 0, 0], (
+        assert model._engine._model.tables.sos['set'].to_list() == [0, 0, 0, 0], (
             'the emptied set left a hole, so a set number is a position rather than an index'
         )
 

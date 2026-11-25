@@ -39,7 +39,7 @@ within_cap:
 `at` and `sum(by=)` take the same argument: the relation names one table, and
 the operator says which direction it is walked.
 
-A per-period **parameter** needs neither: join it onto the snapshot index
+A per-period **parameter** needs neither: join it onto the snapshot labels
 before the model sees it. `p_nom` is a **variable**, which no join can reach,
 so the pullback is a construct in the language.
 
@@ -53,64 +53,64 @@ Least-cost investment and dispatch together: capacity is decided once per period
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
-| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the grouping capacity is decided over |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
+| $`\mathcal{E}`$ | index $`e`$ — `period` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — investment periods, the grouping capacity is decided over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{period\_of}: \mathcal{T} \to \mathcal{E}`$ — dispatch periods, each falling in one investment period |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`\mathrm{weight}`$ | `weight` over $`\mathcal{T}`$ — what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of running a generator for one snapshot-hour |
 | $`\mathrm{capex}`$ | `capex` over $`\mathcal{G} \times \mathcal{E}`$ — cost of holding a unit of capacity through a period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
+| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of running a generator for one snapshot-hour |
+| $`\mathrm{weight}`$ | `weight` over $`\mathcal{T}`$ — what one snapshot stands for — a 2050 snapshot represents four hours, so the operating cost of a coarse period is not understated against a fine one |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E} \times \mathcal{G}`$ — capacity a generator holds for the whole of a period |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
+| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G} \times \mathcal{E}`$ — capacity a generator holds for the whole of a period |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_nom`**
 
 ```math
-0 \le p^{\mathrm{nom}}_{e,g} \le 100 \qquad \forall\, e \in \mathcal{E},\ g \in \mathcal{G}
+0 \le p^{\mathrm{nom}}_{g,e} \le 100 \qquad \forall\, g \in \mathcal{G},\ e \in \mathcal{E}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{weight}_{t} + \sum_{e \in \mathcal{E},\ g \in \mathcal{G}} p^{\mathrm{nom}}_{e,g} \cdot \mathrm{capex}_{g,e}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{opex}_{g} \cdot \mathrm{weight}_{t} + \sum_{g \in \mathcal{G},\ e \in \mathcal{E}} p^{\mathrm{nom}}_{g,e} \cdot \mathrm{capex}_{g,e}
 ```
 
 #### Subject to
 
-**`within_cap`**
-
-```math
-p_{t,g} \le p^{\mathrm{nom}}_{\mathrm{period\_of}(t),g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,t} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+```
+
+**`within_cap`**
+
+```math
+p_{g,t} \le p^{\mathrm{nom}}_{g,\mathrm{period\_of}(t)} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -177,15 +177,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     objective:
       sense: minimize
-      description: weighted operating cost over the horizon, plus what the capacity costs to hold
+      description: weighted operating cost over every snapshot, plus what the capacity costs to hold
       expression: sum(p * opex * weight) + sum(p_nom * capex)
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/multi_period.yaml', sources) as solution:
-        solution.objective  # 10020.0
-        solution.dual('balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/multi_period.yaml', sources) as result:
+        result.objective  # 10020.0
+        result.dual('balance')
     ```
 
 === "linopy"

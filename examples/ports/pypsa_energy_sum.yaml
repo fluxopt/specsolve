@@ -1,6 +1,6 @@
 description: >-
-  PyPSA energy-total bounds: a generator's dispatch reduced over the whole
-  horizon and bounded — a contracted delivery on one, a reservoir's season on
+  PyPSA energy-total bounds: a generator's dispatch reduced over every
+  snapshot and bounded — a contracted delivery on one, a reservoir's season on
   another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
 
 dimensions:
@@ -33,13 +33,13 @@ parameters:
     dims: [generator]
   e_sum_max:
     description: >-
-      most energy a generator may deliver over the whole horizon, for the
+      most energy a generator may deliver over every snapshot, for the
       generators that have such a limit
     dims: [generator]
     missing: absent
   e_sum_min:
     description: >-
-      least energy a generator must deliver over the whole horizon, for the
+      least energy a generator must deliver over every snapshot, for the
       generators that owe one
     dims: [generator]
     missing: absent
@@ -64,14 +64,14 @@ constraints:
   energy_cap:
     description: >-
       a generator with a ceiling on total energy delivers no more than it over
-      the horizon — the weighting is what makes the sum an energy rather than a
+      every snapshot — the weighting is what makes the sum an energy rather than a
       count of snapshots
     dims: [generator]
     where: e_sum_max
     expression: sum(p * weighting, over=snapshot) <= e_sum_max
 
   energy_floor:
-    description: a generator that owes a total delivers at least it over the horizon
+    description: a generator that owes a total delivers at least it over every snapshot
     dims: [generator]
     where: e_sum_min
     expression: sum(p * weighting, over=snapshot) >= e_sum_min
