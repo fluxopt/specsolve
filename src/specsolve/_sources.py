@@ -24,6 +24,8 @@ from specsolve._names import POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mathspec.program import Dimension, Program, Relation
 
     from specsolve._inputs import Label, Source
@@ -52,14 +54,17 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
     as tidy ``(dims…, value)``, a dimension's labels as one column
     under its own name in the order they arrived, a relation as one column
-    per declared column. A datetime label is held in microseconds, and a date
-    under a ``datetime`` dimension as the microsecond its day starts on.
+    per declared column. A dimension's labels are of its declared ``dtype``,
+    ``str`` unless declared; the one conversion is a date under ``datetime``,
+    held as the microsecond its day starts on. A datetime label is held in
+    microseconds.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
             accepts or short of the columns its entry needs; a dimension's
-            labels holding one twice; a parameter with two rows for one
+            labels of another type than its ``dtype``, or holding one twice; a
+            parameter with two rows for one
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
             row twice, or a label its column's dimension lacks; a datetime
@@ -223,7 +228,8 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
 
     Raises:
         DataError: A table with no column named after the dimension, labels
-            no table can be made of, a null label, or a label held twice.
+            no table can be made of, a null label, labels of another type than
+            the dimension declares, or a label held twice.
     """
     given = as_table(source, (dim,))
     table = given if given is not None else _labels_from_sequence(dim, source, dtype)
@@ -239,6 +245,7 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
         (dim,) if dtype == 'datetime' else (),
     )
     _refuse_null_labels(dim, labels[dim])
+    labels = _of_declared_dtype(dim, labels, dtype)
     _refuse_repeated_labels(dim, labels[dim], given_as_table=given is not None)
     return labels.lazy()
 
@@ -290,6 +297,39 @@ _DECLARED: dict[str, pl.DataType] = {
     'str': pl.String(),
     'datetime': pl.Datetime('us'),
 }
+
+
+#: Whether a label column's type is one the declared dimension dtype holds: any width of integer or float,
+#: any encoding of string, any unit or time zone of datetime. A date under ``datetime`` arrives here as a
+#: datetime already, [`in_microseconds`][] having read it as the microsecond its day starts on.
+_HOLDS: dict[str, Callable[[pl.DataType], bool]] = {
+    'int': lambda t: t.is_integer(),
+    'float': lambda t: t.is_float(),
+    'str': lambda t: t == pl.String or isinstance(t, (pl.Categorical, pl.Enum)),
+    'datetime': lambda t: isinstance(t, pl.Datetime),
+}
+
+
+def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFrame:
+    """*labels* if their type is one *dtype* holds; an empty table, holding no label to misread, takes it.
+
+    Raises:
+        DataError: Labels of another type than the one declared.
+    """
+    given = labels.schema[dim]
+    if _HOLDS[dtype](given):
+        return labels
+    if labels.height == 0:
+        return labels.with_columns(pl.col(dim).cast(_DECLARED[dtype]))
+    own = next(
+        (name for name, holds in _HOLDS.items() if holds(given) or (name == 'datetime' and given == pl.Date)), None
+    )
+    instead = f'Declare `dtype: {own}` for labels of that type, or convert' if own else 'Convert'
+    raise DataError(
+        f"the labels of dimension '{dim}' are {given}, and the spec declares `dtype: {dtype}`"
+        f'{" (`str` unless it says otherwise)" if dtype == "str" else ""}. {instead} the labels to '
+        f'{_DECLARED[dtype]} before attaching.'
+    )
 
 
 def _labels_from_sequence(dim: str, values: Source, dtype: str) -> pl.LazyFrame:

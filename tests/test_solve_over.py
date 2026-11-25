@@ -709,6 +709,13 @@ COORDINATE_TYPES = [
 ]
 
 
+def windowed(coordinates) -> dict:
+    """``WINDOW`` with ``snapshot`` declared the dtype its *coordinates* are."""
+    first = coordinates[0]
+    dtype = 'datetime' if isinstance(first, datetime.datetime) else 'str' if isinstance(first, str) else 'int'
+    return {**WINDOW, 'dimensions': {**WINDOW['dimensions'], 'snapshot': {'dtype': dtype, 'ordered': True}}}
+
+
 @pytest.mark.parametrize('coordinates', COORDINATE_TYPES)
 def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     """The only requirement on a windowed dimension is that it is orderable.
@@ -716,7 +723,9 @@ def test_a_window_spans_coordinates_whatever_they_are_numbered(coordinates):
     The initial condition's `where: "position(snapshot) == 0"` counts within the window, so
     it matches each window's first label whatever the labels are.
     """
-    runs = sps.solve_over(WINDOW, coordinate_sources(coordinates), sps.EachWindow('snapshot', horizon=2, lookahead=0))
+    runs = sps.solve_over(
+        windowed(coordinates), coordinate_sources(coordinates), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+    )
 
     assert len(runs) == 3
     assert runs.keys == coordinates[::2], 'a window is keyed by its first coordinate'
@@ -733,7 +742,9 @@ def test_stitch_recovers_coordinates_no_arithmetic_could(coordinates):
     only way back to it: nothing the caller holds could reconstruct these.
     """
     runs = sps.solve_over(
-        WINDOW, coordinate_sources(coordinates, load=10.0), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+        windowed(coordinates),
+        coordinate_sources(coordinates, load=10.0),
+        sps.EachWindow('snapshot', horizon=2, lookahead=0),
     )
     assert runs.primal('soc')['snapshot'].to_list() == coordinates
 
@@ -773,7 +784,9 @@ def test_a_sweep_over_a_datetime_axis_in_any_unit_solves(unit, kind):
     """
     keys = _in_unit(unit)
     if kind == 'window':
-        runs = sps.solve_over(WINDOW, coordinate_sources(keys), sps.EachWindow('snapshot', horizon=2, lookahead=0))
+        runs = sps.solve_over(
+            windowed(HOURS), coordinate_sources(keys), sps.EachWindow('snapshot', horizon=2, lookahead=0)
+        )
         assert runs.primal('soc')['snapshot'].to_list() == HOURS, 'the stitch gives back every hour'
     else:
         runs = sps.solve_over(DISPATCH, _keyed_by_datetime(keys), sps.EachLabel('scenario'))

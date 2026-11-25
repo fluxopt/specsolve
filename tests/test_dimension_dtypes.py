@@ -45,7 +45,6 @@ def _sources(labels: pl.Series) -> dict[str, object]:
         pytest.param('str', pl.Series(DAYS), 'Date', id='str-given-dates'),
     ],
 )
-@pytest.mark.xfail(strict=True, reason='labels of another type than declared are taken as they come')
 def test_labels_of_another_type_than_the_declared_dtype_are_refused(dtype, labels, given):
     """The refusal names the dimension, the type given and the type declared, on both lanes."""
     sentence = both_lanes_refuse(_spec(dtype), _sources(labels), match='declares')
@@ -72,7 +71,6 @@ def test_labels_the_declared_dtype_holds_build(dtype, labels):
         assert model.metrics().columns == 2, 'one column per label'
 
 
-@pytest.mark.xfail(strict=True, reason='an empty labels table keeps the type it came in')
 def test_an_empty_labels_table_takes_the_declared_dtype():
     """No label is held, so an empty table, even one polars typed `Null`, reads as the declared type."""
     spec = _spec('int') | {'parameters': {'cap': {'dims': ['d'], 'missing': 'absent'}}}
