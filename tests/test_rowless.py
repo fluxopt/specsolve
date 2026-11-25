@@ -429,7 +429,6 @@ def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Pat
     )
 
 
-@pytest.mark.xfail(strict=True, reason='settle reads a parameter without a row as false, whatever its missing value')
 @pytest.mark.parametrize(
     ('where', 'rows'),
     [
@@ -440,8 +439,9 @@ def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Pat
 def test_a_where_holds_where_its_parameter_has_no_row_and_the_missing_value_passes(where, rows):
     """Fuzz seeds 441 and 884: `p != 1` under `missing: 0`, with no row of `p`, admits every coordinate.
 
-    The relational lane built none of them, as if a coordinate without a row
-    failed every condition on it.
+    The data settled such a `where` false: a parameter with no row, or one
+    whose rows all failed, was read as failing at every coordinate, though a
+    coordinate without a row reads the missing value, and here that passes.
     """
     spec = {
         **TABLED_SPEC,
