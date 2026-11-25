@@ -18,7 +18,7 @@ from specsolve._engine.scope import UNIT, position_column
 from specsolve._names import LABEL
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from mathspec import program
 
@@ -67,7 +67,9 @@ def table(
 
     Returns:
         ``(dims…, index)`` in that column order and in index order; the next
-        free index is ``start`` plus its height. With no dimensions it is
+        free index is ``start`` plus its height, each column in one chunk, so
+        a table laid out against it is written as one parquet row group
+        rather than one per chunk the cross join left. With no dimensions it is
         ``([`UNIT`][], index)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
@@ -78,7 +80,7 @@ def table(
             if factored is not None:
                 return factored
 
-    surviving = narrowed(scope, dims, where)
+    surviving = _survivors(scope, dims, where)
     for presence in presences:
         surviving = presence.narrow(surviving, presence.joined_on or ())
 
@@ -93,10 +95,27 @@ def table(
     )
     if not dropped and dims:
         materialised.replace_column(materialised.get_column_index(index), materialised.get_column(index).set_sorted())
-        return materialised
+        return materialised.rechunk()
     if dropped:
         materialised = materialised.with_row_index(index, offset=start).with_columns(pl.col(index).cast(pl.Int64))
-    return materialised.select(*(dims or (UNIT,)), pl.col(index).set_sorted())
+    return materialised.select(*(dims or (UNIT,)), pl.col(index).set_sorted()).rechunk()
+
+
+def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
+    """The coordinates of *dims* the condition keeps, built from the dimensions it reads crossed with the ones it leaves free.
+
+    A condition over some of the dimensions is evaluated on their product only,
+    so the full product is never built where the condition leaves a dimension
+    free in the middle of the order; dimensions sorted by name put one there,
+    as ``snapshot`` in ``(node, snapshot, tech)`` under a condition over
+    ``(node, tech)``. The rows come out of order, which the caller's numbering
+    sorts.
+    """
+    free = tuple(d for d in dims if where is not None and d not in where.dims)
+    if not free or len(free) == len(dims):
+        return narrowed(scope, dims, where)
+    read = tuple(d for d in dims if d not in free)
+    return narrowed(scope, read, where).join(scope.product(free), how='cross')
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
@@ -147,10 +166,10 @@ def _factored(
         )
         .pipe(collected)
     )
-    return in_position_order(indexed, index).with_columns(pl.col(index).set_sorted())
+    return in_position_order(indexed, index).with_columns(pl.col(index).set_sorted()).rechunk()
 
 
-def _free_prefix(dims: tuple[str, ...], touched: frozenset[str]) -> int:
+def _free_prefix(dims: tuple[str, ...], touched: Collection[str]) -> int:
     """How many leading dimensions the condition does not read; 0 when it reads the first dimension or none.
 
     Only a prefix leaves the survivors contiguous in row-major order.

@@ -98,7 +98,7 @@ variables:
       their rows.
     dims: [snapshot, line]
     where: loss_max
-    missing: neutral
+    missing: 0
     bounds:
       lower: 0
       upper: loss_max
