@@ -849,8 +849,8 @@ formulations, as a check on a grid this harness chose.
 **`--sizes pypsa` adds PyPSA's own `carbon_management`** as
 `pypsa-carbon_management`: 2,131,927 columns, 4,418,981 rows and 9,787,131
 nonzeros, #2130's count. It is the spec and data PyPSA hands specsolve,
-captured once into `ab/carbon_management/`; `capture.py` there writes them
-again, and says which PyPSA it needs and what it changes to make them build.
+captured once into `ab/carbon_management/`, whose `README.md` names the source,
+its CC-BY-4.0 license and what is changed; `capture.py` there writes them again.
 
 **A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
 Six rounds is the least that can pass, and `compare` refuses fewer. Every

@@ -4,18 +4,8 @@
         python bench/ab/carbon_management/capture.py
 
 The spec and sources are what PyPSA's `feat/mathspec-formulation` branch hands
-`linopy.Model.from_spec`, intercepted there. Each source becomes a table: an
-Index its labels, a DataFrame itself, a DataArray one row per cell with a column
-per dimension and `value`, its NaN cells dropped. A scalar goes to `scalars.json`.
-
-Three changes make the capture build, and each is the data PyPSA meant:
-
-- a label column is cast to its dimension's `dtype`: a datetime under a `str`
-  dimension is written `YYYY-MM-DD HH:MM:SS`, an `int` dimension is `Int64`, an
-  empty column takes the declared type;
-- the four `*_nom_max` parameters whose NaN means no limit read a dropped row as
-  absent, `missing: absent`;
-- every table is written zstd at level 22, the smallest that reads back alike.
+`linopy.Model.from_spec`, intercepted there. `README.md` beside this file names
+the source, its license and what is changed from it.
 """
 
 from __future__ import annotations
