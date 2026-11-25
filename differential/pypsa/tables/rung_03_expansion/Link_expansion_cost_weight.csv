@@ -1,3 +1,3 @@
-scenario,global_constraint,link,value
-base,cost_dc,cable,20.0
-base,cost_dc_exact,cable,20.0
+global_constraint,link,scenario,value
+cost_dc,cable,base,20.0
+cost_dc_exact,cable,base,20.0

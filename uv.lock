@@ -554,16 +554,16 @@ wheels = [
 
 [[package]]
 name = "mathspec"
-version = "0.4.0"
+version = "0.5.0a1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyparsing" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/bb/1e366dafeb11858332d0e47e11b57aa6e61bc2b2f0be46a017dba6f4421a/mathspec-0.4.0.tar.gz", hash = "sha256:183822f956dcd3a0eb1aefba5bbdee2715ba5f5e9230fab301d9636fe26bc972", size = 180003, upload-time = "2026-10-22T11:52:28.679Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/8e/5d5de8262971e50b83c44a29e83c598e97a2096089ebca69ef8fe3eaa935/mathspec-0.5.0a1.tar.gz", hash = "sha256:0f5c4b7c6b1d9d9352cae6ba6b62f97c622113af4bbf1f94fa0ca48b00ef1a36", size = 201123, upload-time = "2026-11-23T15:34:47.122Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/b6/8b3c314d6124bf4b81289eb469fcb9e78c6e785374daf0c45686aa626924/mathspec-0.4.0-py3-none-any.whl", hash = "sha256:17f6c64ab0023b8d3f28e60438fea1e288c712a4e91055c8c9babad2f9f4edc8", size = 187812, upload-time = "2026-10-22T11:52:27.296Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/bd/c4c122f6fbbd4d54af97ff06acf44cb58ed4a72676c0b4677cf7e3760c72/mathspec-0.5.0a1-py3-none-any.whl", hash = "sha256:269a9eae9e835353394cf09f181f0c613b535792439348326b7b6e2b8c0d4815", size = 205601, upload-time = "2026-11-23T15:34:45.958Z" },
 ]
 
 [[package]]
@@ -1581,7 +1581,7 @@ docs = [
 requires-dist = [
     { name = "gurobipy", marker = "extra == 'gurobi'", specifier = ">=11,<14" },
     { name = "highspy", specifier = ">=1.13,!=1.16.0" },
-    { name = "mathspec", specifier = ">=0.4.0,<0.5" },
+    { name = "mathspec", specifier = ">=0.5.0a1,<0.6" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "polars", specifier = ">=1.33.1" },
     { name = "scipy", marker = "extra == 'gurobi'", specifier = ">=1.11" },

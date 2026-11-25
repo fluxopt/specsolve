@@ -105,7 +105,8 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     not. ``live_fraction`` is measured, not declared. ``variables`` is the
     numeric x of a scaling curve; ``size`` is a label. ``phase_seconds`` is
     the last round's split, not a minimum: it attributes the wall time, it
-    does not replace it.
+    does not replace it. ``laps`` is the same round's rows of
+    `Model.timings`, which its ``phase_seconds`` sum.
     """
     shape = shape_of(case_name, size)
     assert 0 < counts['columns'] <= shape.nominal_variables
@@ -119,6 +120,8 @@ def _record(benchmark: Any, counts: dict[str, Any], case_name: str, size: str) -
     info['variables'] = shape.nominal_variables
     if counts.get('phases'):
         info['phase_seconds'] = counts['phases']
+    if counts.get('laps'):
+        info['laps'] = counts['laps']
 
 
 def _measured(benchmark: Any) -> float | None:

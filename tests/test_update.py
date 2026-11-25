@@ -46,7 +46,7 @@ PLANTS = ['a', 'b', 'c', 'd']
 REACH = {
     'dimensions': {'zone': {'dtype': 'str'}, 'plant': {'dtype': 'str'}},
     'parameters': {
-        'reach': {'dims': ['zone', 'plant'], 'missing': 'neutral'},
+        'reach': {'dims': ['zone', 'plant'], 'missing': 0},
         'cost': {'dims': ['plant']},
         'demand': {'dims': ['zone']},
         'levy': {'dims': []},
@@ -573,7 +573,7 @@ def test_new_numbers_on_a_row_the_build_dropped_are_refused_as_a_fresh_build_ref
     """
     spec = {
         'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
-        'parameters': {'a': {'dims': ['t'], 'missing': 'neutral'}, 'cap': {'dims': ['t']}, 'eff': {'dims': ['t']}},
+        'parameters': {'a': {'dims': ['t'], 'missing': 0}, 'cap': {'dims': ['t']}, 'eff': {'dims': ['t']}},
         'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0}}},
         'constraints': {'limit': {'dims': ['t'], 'expression': 'a * x <= cap / eff'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(x)'},

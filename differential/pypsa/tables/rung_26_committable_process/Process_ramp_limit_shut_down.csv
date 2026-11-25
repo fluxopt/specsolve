@@ -1,2 +1,2 @@
-scenario,process,value
-base,warm_conv,0.6
+process,scenario,value
+warm_conv,base,0.6

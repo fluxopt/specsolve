@@ -36,66 +36,66 @@ Dantzig's transportation problem with economies of scale — GAMS model library 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{P}`$ | index $`p`$ — `plant` — canning plants, with limited capacity |
-| $`\mathcal{M}`$ | index $`m`$ — `market` — markets, with demand to be met |
 | $`\mathcal{B}`$ | index $`b`$ — `bp` — breakpoints of the discretised square-root curve |
+| $`\mathcal{M}`$ | index $`m`$ — `market` — markets, with demand to be met |
+| $`\mathcal{P}`$ | index $`p`$ — `plant` — canning plants, with limited capacity |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{P}`$ — capacity of each plant |
-| $`\mathrm{demand}`$ | `demand` over $`\mathcal{M}`$ — demand at each market |
-| $`\mathrm{distance}`$ | `distance` over $`\mathcal{P} \times \mathcal{M}`$ — distance from plant to market |
-| $`\mathrm{freight}`$ | `freight` (scalar) — freight rate per case per unit distance |
 | $`\mathrm{bp\_x}`$ | `bp_x` over $`\mathcal{B}`$ — breakpoint shipment levels — one curve, the same on every route, so it carries the breakpoint dimension alone and broadcasts across the pairs |
 | $`\mathrm{bp\_y}`$ | `bp_y` over $`\mathcal{B}`$ — the curve's value at each breakpoint |
+| $`\mathrm{capacity}`$ | `capacity` over $`\mathcal{P}`$ — capacity of each plant |
+| $`\mathrm{demand}`$ | `demand` over $`\mathcal{M}`$ — demand at each market |
+| $`\mathrm{distance}`$ | `distance` over $`\mathcal{M} \times \mathcal{P}`$ — distance from plant to market |
+| $`\mathrm{freight}`$ | `freight` (scalar) — freight rate per case per unit distance |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{shipment}`$ | `shipment` over $`\mathcal{P} \times \mathcal{M}`$ — cases shipped from a plant to a market |
-| $`\mathit{scaled}`$ | `scaled` over $`\mathcal{P} \times \mathcal{M}`$ — what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
+| $`\mathit{scaled}`$ | `scaled` over $`\mathcal{M} \times \mathcal{P}`$ — what the objective is charged on — the square root of the shipment, read off the curve rather than computed |
+| $`\mathit{shipment}`$ | `shipment` over $`\mathcal{M} \times \mathcal{P}`$ — cases shipped from a plant to a market |
 
 #### Variable domains
-
-**`shipment`**
-
-```math
-\mathit{shipment}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
-```
 
 **`scaled`**
 
 ```math
-\mathit{scaled}_{p,m} \ge 0 \qquad \forall\, p \in \mathcal{P},\ m \in \mathcal{M}
+\mathit{scaled}_{m,p} \ge 0 \qquad \forall\, m \in \mathcal{M},\ p \in \mathcal{P}
+```
+
+**`shipment`**
+
+```math
+\mathit{shipment}_{m,p} \ge 0 \qquad \forall\, m \in \mathcal{M},\ p \in \mathcal{P}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{p \in \mathcal{P},\ m \in \mathcal{M}} \frac{\mathit{scaled}_{p,m} \cdot \mathrm{distance}_{p,m} \cdot \mathrm{freight}}{1000}
+\min \sum_{m \in \mathcal{M},\ p \in \mathcal{P}} \frac{\mathit{scaled}_{m,p} \cdot \mathrm{distance}_{m,p} \cdot \mathrm{freight}}{1000}
 ```
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-\sum_{m \in \mathcal{M}} \mathit{shipment}_{p,m} \le \mathrm{capacity}_{p} \qquad \forall\, p \in \mathcal{P}
-```
-
 **`meet_demand`**
 
 ```math
-\sum_{p \in \mathcal{P}} \mathit{shipment}_{p,m} \ge \mathrm{demand}_{m} \qquad \forall\, m \in \mathcal{M}
+\sum_{p \in \mathcal{P}} \mathit{shipment}_{m,p} \ge \mathrm{demand}_{m} \qquad \forall\, m \in \mathcal{M}
+```
+
+**`within_capacity`**
+
+```math
+\sum_{m \in \mathcal{M}} \mathit{shipment}_{m,p} \le \mathrm{capacity}_{p} \qquad \forall\, p \in \mathcal{P}
 ```
 
 **`economies_of_scale`**
 
 ```math
-\left( \mathit{shipment}_{p,m},\ \mathit{scaled}_{p,m} \right) \in \mathrm{pwl}_{b \in \mathcal{B}}(\mathrm{bp\_x}_{b},\ \mathrm{bp\_y}_{b}) \qquad \forall\, m \in \mathcal{M},\ p \in \mathcal{P}
+\left( \mathit{shipment}_{m,p},\ \mathit{scaled}_{m,p} \right) \in \mathrm{pwl}_{b \in \mathcal{B}}(\mathrm{bp\_x}_{b},\ \mathrm{bp\_y}_{b}) \qquad \forall\, m \in \mathcal{M},\ p \in \mathcal{P}
 ```
 
 #### Assumptions
@@ -176,10 +176,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
           chord underneath the true curve and buy transport cheaper than the model
           allows. The binaries are what make the answer right — and what make this
           port a MILP.
-        over: bp
+        along: bp
+        dims: [plant, market]
         links:
-          - [shipment, bp_x]
-          - [scaled, bp_y]
+          shipment: [shipment, bp_x]
+          scaled: [scaled, bp_y]
 
     constraints:
       within_capacity:

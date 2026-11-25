@@ -1108,7 +1108,7 @@ def test_a_windowed_sweep_runs_again_from_its_archive_whatever_shape_a_source_ov
     """
     from tests.test_solve_over import WINDOW, span_sources
 
-    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['snapshot'], 'missing': 'neutral'}}}
+    spec = {**WINDOW, 'parameters': {**WINDOW['parameters'], 'price': {'dims': ['snapshot'], 'missing': 0}}}
     spec['objective'] = {'sense': 'minimize', 'expression': 'sum(p * cost) + sum(price * charge)'}
     axis = sps.EachWindow('snapshot', horizon=horizon, lookahead=0, carry={'soc_initial': 'soc'})
     sources = {**span_sources(10), 'price': price, 'soc_initial': 0.0}

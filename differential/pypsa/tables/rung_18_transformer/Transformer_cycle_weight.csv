@@ -1,5 +1,5 @@
-period,transformer,cycle,value
-0,bc,0,-166.666666666667
-0,ca,0,-262.5
-0,ca,1,262.5
-0,ca2,1,-200.0
+cycle,period,transformer,value
+0,0,bc,-166.666666666667
+0,0,ca,-262.5
+1,0,ca,262.5
+1,0,ca2,-200.0

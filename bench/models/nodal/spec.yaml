@@ -27,7 +27,7 @@ dimensions:
 parameters:
   installed:            # capacity of `tech` at `node`; absent pairs are zero
     dims: [node, tech]
-    missing: neutral
+    missing: 0
   cost:
     dims: [tech]
   demand:

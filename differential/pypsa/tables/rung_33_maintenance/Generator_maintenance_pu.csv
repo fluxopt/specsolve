@@ -1,6 +1,6 @@
-scenario,generator,value
-base,coal,1.0
-base,east_peak,1.0
-base,gas,1.0
-base,hydro,1.0
-base,wind_ext,0.5
+generator,scenario,value
+coal,base,1.0
+east_peak,base,1.0
+gas,base,1.0
+hydro,base,1.0
+wind_ext,base,0.5
