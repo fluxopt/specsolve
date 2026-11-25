@@ -55,13 +55,24 @@ def port_sources(name: str) -> dict[str, Any]:
     """One JSON per port, filtered to what its model declares.
 
     The file keeps the upstream dump whole as provenance, and attaching refuses a
-    name the model does not declare.
+    name the model does not declare. JSON holds no datetime, so a column over a
+    `dtype: datetime` dimension is read from its ISO strings.
     """
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
-    tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     spec = PORTS_DIR / f'{name}.yaml'
     program = expanded(spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml', 'piecewise').program
-    return {k: v for k, v in tables.items() if k in attachable(program)}
+    timed = {d for d, dim in program.dimensions.items() if dim.dtype == 'datetime'}
+    timed_roles = {name: {r for r, d in rel.columns if d in timed} for name, rel in program.relations.items()}
+    tables = {}
+    for key, value in data.items():
+        if key not in attachable(program):
+            continue
+        if isinstance(value, dict):
+            value = pl.DataFrame(value)
+            columns = (timed & set(value.columns)) | timed_roles.get(key, set())
+            value = value.with_columns(pl.col(c).str.to_datetime() for c in columns if value.schema[c] == pl.String)
+        tables[key] = value
+    return tables
 
 
 def port_spec(name: str) -> Path:
