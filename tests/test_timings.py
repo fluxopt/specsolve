@@ -350,9 +350,6 @@ def test_a_refused_source_keeps_the_tidy_laps_it_reached():
     ], 'the rows up to the refused parameter, and none for it or after it'
 
 
-@pytest.mark.xfail(
-    strict=True, reason="a run's laps are summed from the end of the log, the whole life's from its start"
-)
 def test_a_runs_clocks_never_exceed_the_whole_life():
     """A result's row is its run's laps summed; its clocks never pass the model's, which sum every lap.
 

@@ -593,7 +593,7 @@ class _Laps:
 
     Each step, ``(phase, step, entry)``, is stored once and a lap holds its
     number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
-    Runs only grow along the log, so a run's laps are read back from its end.
+    Runs only grow along the log, so a run's laps are found from its end.
     """
 
     def __init__(self) -> None:
@@ -608,7 +608,11 @@ class _Laps:
         self._seconds.append(seconds)
 
     def clocks(self, run: int | None = None) -> dict[str, float]:
-        """Seconds per phase over every lap, or over *run*'s, every phase present."""
+        """Seconds per phase over every lap, or over *run*'s, every phase present.
+
+        Both sum in the order the laps ran: a run's laps are a stretch of the
+        log, so its sums never pass the whole life's, not even in the last place.
+        """
         phase_of = [phase for phase, _, _ in self._steps]
         clocks = dict.fromkeys(PHASES, 0.0)
         runs, codes, seconds = self._runs, self._codes, self._seconds
@@ -616,11 +620,12 @@ class _Laps:
             for code, took in zip(codes, seconds, strict=True):
                 clocks[phase_of[code]] += took
             return clocks
-        i = len(runs) - 1
-        while i >= 0 and runs[i] >= run:
+        first = len(runs)
+        while first > 0 and runs[first - 1] >= run:
+            first -= 1
+        for i in range(first, len(runs)):
             if runs[i] == run:
                 clocks[phase_of[codes[i]]] += seconds[i]
-            i -= 1
         return clocks
 
     def table(self) -> pl.DataFrame:
