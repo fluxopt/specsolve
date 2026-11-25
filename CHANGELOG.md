@@ -7,11 +7,37 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
-- fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
+- fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
+- fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
+- fix(sinks): HiGHS keeps coefficients down to 1e-12 and warns when it drops one ([#2226](https://github.com/fluxopt/specsolve/pull/2226))
+- feat!: specsolve requires mathspec 0.5.0a1, where a missing row reads as the value `missing:` names and a piecewise entry names its links ([#2199](https://github.com/fluxopt/specsolve/pull/2199))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
+
+## 0.13.0 (2026-11-25)
+
+**This release refuses some data that 0.12.x reads.**
+
+This release shows where a model spends its time. `model.timings()` logs each lap as one row, and the rows of a phase add up to its clock in `model.metrics()`. The how-to [Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/) shows how to read them. Labels of another type than their dimension's `dtype` are now refused at load.
+
+### What to change in a spec file or its data
+
+- Give each dimension's labels, and every column over it, the type its `dtype` declares, or declare the type they have. A dimension without a `dtype` is `str` ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+
+### What to change in Python code
+
+- Replace `metrics.since(earlier)` with one run of `model.timings()` ([#2207](https://github.com/fluxopt/specsolve/pull/2207)).
+
+The pull requests in this release:
+
+### Timings
+
+- feat(api): every lap of a model's life is a row in model.timings(), the last step of building it included ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 - feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
+
+### Data
+
+- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
 
 ## 0.12.0 (2026-11-23)
 

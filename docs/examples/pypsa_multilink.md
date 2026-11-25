@@ -48,10 +48,10 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 | Symbol | Meaning |
 |---|---|
 | $`\mathrm{gen}^{\mathrm{p,nom}}`$ | `gen_p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{B} \times \mathcal{L}`$, $`0`$ where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{L}`$ — the link's own capacity — a cap on what it draws at its input, p0 in PyPSA |
-| $`\mathrm{incidence}`$ | `incidence` over $`\mathcal{L} \times \mathcal{B}`$, `neutral` where the data has no row — each bus's share of the link's draw — minus one at the input and plus the efficiency at each output, with rows absent elsewhere; PyPSA's efficiency columns and the input's fixed minus one, tidied into rows |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{B}`$ — demand at each bus |
 
 #### Variables
 
@@ -85,7 +85,7 @@ PyPSA multi-link: one Link, one input bus, several output buses, each output der
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{l,b} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} \mathit{gen}_{g} + \sum_{l \in \mathcal{L}} \mathrm{incidence}_{b,l} \cdot p_{l} = \mathrm{load}_{b} \qquad \forall\, b \in \mathcal{B}
 ```
 
 </details>
@@ -134,7 +134,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one table per 
           efficiency at each output, with rows absent elsewhere; PyPSA's efficiency
           columns and the input's fixed minus one, tidied into rows
         dims: [link, bus]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus
         dims: [bus]

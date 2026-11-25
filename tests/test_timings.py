@@ -293,13 +293,13 @@ def test_a_tidy_logs_the_read_each_source_and_its_check_in_order():
         whole = model.metrics().tidy_seconds
     assert steps == [
         ('read', None),
-        ('dimension', 'generator'),
         ('dimension', 'bus'),
+        ('dimension', 'generator'),
         ('relation', 'gen_bus'),
-        ('parameter', 'p_max'),
         ('parameter', 'load'),
+        ('parameter', 'p_max'),
         ('check', None),
-    ], 'every step once, in the order the tidy takes them'
+    ], 'every step once, in the order the tidy takes them: each kind by name'
     assert tidy == pytest.approx(whole, rel=1e-12), 'and the tidy still adds up'
 
 
@@ -307,9 +307,9 @@ def test_a_tidy_logs_the_read_each_source_and_its_check_in_order():
     ('slowed', 'step', 'entry'),
     [
         pytest.param('_read_paths_at_once', 'read', None, id='reading-the-paths'),
-        pytest.param('_labels_table', 'dimension', 'generator', id='a-dimension-s-labels'),
+        pytest.param('_labels_table', 'dimension', 'bus', id='a-dimension-s-labels'),
         pytest.param('_read_relation', 'relation', 'gen_bus', id='a-relation'),
-        pytest.param('_checked_parameter', 'parameter', 'p_max', id='checking-a-parameter'),
+        pytest.param('_checked_parameter', 'parameter', 'load', id='checking-a-parameter'),
     ],
 )
 def test_a_slow_step_of_a_tidy_lands_in_its_own_row(monkeypatch, slowed, step, entry):
@@ -342,8 +342,8 @@ def test_an_update_logs_only_the_parameters_it_reads_again():
         second = _tidy_steps(model)[first:]
     assert second == [
         ('read', None),
-        ('dimension', 'generator'),
         ('dimension', 'bus'),
+        ('dimension', 'generator'),
         ('relation', 'gen_bus'),
         ('parameter', 'load'),
         ('check', None),
@@ -353,17 +353,38 @@ def test_an_update_logs_only_the_parameters_it_reads_again():
 def test_a_refused_source_keeps_the_tidy_laps_it_reached():
     """A parameter with a label its dimension lacks is refused at its check; the steps before it keep their rows.
 
-    The update replaces `p_max` too, so it is read again and checked before `load`.
+    The update replaces `p_max` alone, so `load` is kept from the build and has no row.
     """
     with sps.build(GROUPED, GROUPED_DATA) as model:
-        stray = pl.DataFrame({'bus': ['north', 'west'], 'value': [4.0, 6.0]})
+        stray = pl.DataFrame({'generator': ['g1', 'g3'], 'value': [10.0, 10.0]})
         with pytest.raises(sps.errors.DataError):
-            model.update({'p_max': GROUPED_DATA['p_max'], 'load': stray})
+            model.update({'p_max': stray})
         second = model.timings().filter(phase='tidy').select('step', 'entry').rows()[7:]
     assert second == [
         ('read', None),
-        ('dimension', 'generator'),
         ('dimension', 'bus'),
+        ('dimension', 'generator'),
         ('relation', 'gen_bus'),
-        ('parameter', 'p_max'),
-    ], 'the rows up to the refused parameter, and none for it or after it'
+    ], 'the rows up to the refused parameter, and none for it or for the kept load'
+
+
+@pytest.mark.parametrize(
+    'laps',
+    [
+        pytest.param({0: (0.3, 0.2, 0.1)}, id='one run'),
+        pytest.param({0: (0.3, 0.2, 0.1), 1: (0.1, 0.2, 0.3)}, id='two runs'),
+    ],
+)
+def test_a_runs_clocks_never_exceed_the_whole_life(laps):
+    """A result's row is its run's laps summed; its clocks never pass the model's, which are every run's.
+
+    Three laps of 0.3, 0.2 and 0.1 s summed from the last come to one unit in the
+    last place more than the same three summed in the order they ran, which is
+    how a run's row used to pass its model's.
+    """
+    log = engine._Laps()
+    for run, seconds in laps.items():
+        for took in seconds:
+            log.append(run, 'build', 'constraint', None, took)
+    whole = log.clocks()['build']
+    assert all(log.clocks(run)['build'] <= whole for run in laps), "each run's share is no more than the whole"

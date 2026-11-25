@@ -196,11 +196,13 @@ class Generator:
         for i in range(r.randint(1, 5)):
             dims = self._some_dims()
             dtype = r.choice(('float', 'float', 'float', 'int', 'bool'))
-            missing: str | float | bool = r.choice(('refused', 'refused', 'absent', 'neutral', 'value'))
-            if missing == 'value':
+            missing: str | float | bool = r.choice(('refused', 'refused', 'absent', 'zero', 'value'))
+            if missing == 'zero':
+                missing = {'float': 0.0, 'int': 0, 'bool': False}[dtype]
+            elif missing == 'value':
                 missing = {'float': r.choice((1.0, 0.0, 2.5)), 'int': r.choice((0, 1)), 'bool': r.random() < 0.5}[dtype]
             if dtype == 'bool' and missing == 'absent':
-                missing = 'neutral'
+                missing = False
             if not dims and missing != 'refused':
                 missing = 'refused'
             rows = {}
@@ -244,7 +246,7 @@ class Generator:
                 if mask is not None:
                     entry['where'] = mask
                     if r.random() < 0.3:
-                        entry['missing'] = 'neutral'
+                        entry['missing'] = 0
             if r.random() < 0.1:
                 entry['domain'] = 'integer'
             self.variables[f'v{i}'] = Variable(dims, entry)
