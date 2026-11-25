@@ -44,7 +44,7 @@ from bench.ab.compare import (
 )
 from bench.ab.grid import SHAPES, SIZES, cell, ids, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
-from bench.arms.specsolve import TIMED_THROUGH, _tables, checked_sources, unsupported
+from bench.arms.specsolve import TIMED_THROUGH, _laps, _tables, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
 from bench.conftest import (
     _holder_if_alive,
@@ -2174,6 +2174,39 @@ def test_the_specsolve_arm_splits_each_verb_by_the_engine_clock() -> None:
     assert all(0 <= window[phase] < getattr(whole, f'{phase}_seconds') for phase in ('attach', 'build')), (
         "a window's phases are its own, not the setup's build summed in"
     )
+
+
+@pytest.mark.parametrize('verb', ['emit', 'build', 'window'])
+def test_the_specsolve_arm_keeps_the_laps_its_phases_sum(verb: str) -> None:
+    """Every verb carries its laps, and they add up to its phases; a window's are only its own.
+
+    The engine's log holds every lap of the model's life, so a window that
+    copied it whole would carry the setup's build too.
+    """
+    module = ARMS['specsolve']
+    case = CASES['dispatch']
+    prepared = module.prepare('dispatch', '3xs', case.data(case.shape('3xs')), {})
+    if verb == 'emit':
+        counts = module.build_and_emit('lp', prepared)
+    elif verb == 'build':
+        counts = module.build_only(prepared)
+    else:
+        args, kwargs = module.window_setup('highs', prepared, prepared, 'values')
+        counts = module.window(*args, **kwargs)
+        assert len(counts['laps']) < args[0].timings().height, "a window's laps leave out the setup's"
+
+    summed: dict[str, float] = {}
+    for lap in counts['laps']:
+        summed[lap['phase']] = summed.get(lap['phase'], 0.0) + lap['seconds']
+    clocked = {phase: seconds for phase, seconds in counts['phases'].items() if seconds > 0}
+    assert summed == pytest.approx(clocked, rel=1e-9), 'the laps of each phase add up to its clock, to rounding'
+    assert {lap['entry'] for lap in counts['laps'] if lap['step'] == 'variable'}, 'a build lap names its entry'
+    assert json.loads(json.dumps(counts['laps'])) == counts['laps'], 'the laps come back whole from a result file'
+
+
+def test_the_specsolve_arm_reads_no_laps_off_a_checkout_without_a_lap_log() -> None:
+    """A checkout from before #2207 keeps no lap log, which `bench.ab` meets on an older base."""
+    assert _laps(SimpleNamespace(_engine=SimpleNamespace())) == [], 'an engine without a lap log has no laps'
 
 
 def test_the_long_table_carries_each_phase_as_its_own_metric() -> None:
