@@ -7,53 +7,21 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.13.0 (2026-11-25)
 
-**A model now says where its time went, lap by lap, down to the source, the
-entry and the solver step. Data whose labels are of another type than their
-dimension's declared `dtype`, which 0.12 read, is now refused at load.**
+**This release refuses some data that 0.12.x reads.**
 
-### Finding where the time goes
+This release shows where a model spends its time. `model.timings()` logs each lap of a model as one row, with its run, phase, step, entry and seconds. The rows of a phase add up to its clock in `model.metrics()`. So when a phase is slow, its rows name the cause: the source that `tidy` read, the variable or constraint that `build` built, or the step of the handoff, which has the same name on every solver. The `run` column separates the solves of an `update` loop. The new how-to [Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/) shows each of these.
 
-`model.timings()` logs every lap of a model's life, one row each: `run`,
-`phase`, `step`, `entry` and `seconds`. The rows add up to `model.metrics()`, so
-a slow phase can be read down to what in it was slow:
+This release also checks the type of each label at load. A dimension's labels, and every column over the dimension, must have the type that its `dtype` declares. A dimension without a `dtype` is `str`. Before, such labels loaded as they came, or failed later with a polars error.
 
-- **`tidy`**: the source, one row per dimension, relation and parameter
-  ([#2218](https://github.com/fluxopt/specsolve/pull/2218)).
-- **`build`**: the variable, set or constraint, one row per entry, with its own
-  seconds whatever order the entries build in ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211)).
-- **`handoff`**: the step, with the same names on every solver: `start`,
-  `check`, `instance` or `push`, `warm` ([#2212](https://github.com/fluxopt/specsolve/pull/2212)).
-- **`run`**: the solve, so the solves of an `update` loop compare side by side.
+### What to change in a spec file or its data
 
-```python
-model = sps.build('model.yaml', sources)
-model.solve()
-model.timings().filter(phase='build').sort('seconds', descending=True)
-```
+- Give each dimension's labels, and every column over the dimension, the type that its `dtype` declares, or declare the type that the labels have ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+- Declare `dtype: int` or `dtype: datetime` on a dimension whose labels are integers or datetimes. Without a `dtype`, such labels are refused ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+- Expect any width, encoding or unit within a type to load: `Int32` under `int`, `Categorical` under `str`, nanoseconds under `datetime`. A date under `datetime` reads as the start of its day, and a table with no rows takes the declared type ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
 
-The new how-to,
-[Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/),
-walks through each of these, says what a slow phase points to, and how to
-report one. It is split out of *Making a solve faster*.
+### What to change in Python code
 
-What changed around it:
-
-- `model.metrics()` is the log summed. A result's `metrics` is its run's laps,
-  frozen when it was handed back.
-- An archive is landed after its result is handed back, so the landing is in
-  that run of `model.timings()` and in `model.metrics()`, not in the result's
-  `metrics` or the archive's own row.
-
-### What to change in your data
-
-- Give each dimension's labels, and every column over the dimension, the type
-  its `dtype` declares, or declare the type the data holds. A dimension that
-  declares no `dtype` is `str`, so integer or datetime labels there are now
-  refused. The message names both types and the fix ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
-- Within a type, any width, encoding or unit is accepted: `Int32` under `int`,
-  `Categorical` under `str`, nanoseconds under `datetime`. A date under
-  `datetime` reads as the microsecond its day starts on, and a table with no
-  rows takes the declared type.
+- Replace `metrics.since(earlier)` with the rows of one run of `model.timings()`. A result's `metrics` holds its own run already ([#2207](https://github.com/fluxopt/specsolve/pull/2207)).
 
 The pull requests in this release:
 
