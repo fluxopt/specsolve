@@ -362,7 +362,7 @@ def test_a_region_narrows_what_a_summed_constant_side_owes():
 #: The whole cased quantity under the sum, rather than a sum inside a region:
 #: `bound` is cased over `(k, t)` and the row reads its total over `t`.
 SUMMED_CASES = {
-    'dimensions': {'k': {'dtype': 'str'}, 't': {'ordered': True}},
+    'dimensions': {'k': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
     'parameters': {'hi': {'dims': ['k', 't']}, 'lo': {'dims': ['k', 't']}},
     'variables': {'x': {'dims': ['k'], 'bounds': {'lower': 0, 'upper': 100}}},
     'expressions': {

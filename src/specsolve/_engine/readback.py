@@ -13,8 +13,8 @@ from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
 from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
-from specsolve._sinks.handoff import SENSE_CODES
 from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, seated
+from specsolve._sinks.tables import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from specsolve._engine.assembly import BuiltModel
     from specsolve._engine.attaching import AttachedSources
     from specsolve._engine.queries import QueryBuilder
-    from specsolve._sinks.handoff import Handoff
     from specsolve._sinks.solver import Basis, InfeasibleSubsystemIndices
+    from specsolve._sinks.tables import SinkTables
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -46,9 +46,9 @@ def row(model: BuiltModel, name: str, coordinate: Mapping[str, object]) -> Const
         raise KeyError(unknown_name_message('constraint', name, sorted(model.constraints)))
 
     at, ordered = _row_index(model, name, coordinate)
-    starts = model.handoff.row_starts
-    coefficients = model.handoff.matrix.slice(int(starts[at]), int(starts[at + 1] - starts[at]))
-    stated = model.handoff.rows.slice(at, 1)
+    starts = model.tables.row_starts
+    coefficients = model.tables.matrix.slice(int(starts[at]), int(starts[at + 1] - starts[at]))
+    stated = model.tables.rows.slice(at, 1)
     return ConstraintRow(
         name=name,
         coordinate=ordered,
@@ -62,12 +62,12 @@ def infeasible_subsystem(model: BuiltModel, found: InfeasibleSubsystemIndices) -
     """*found*'s solver indices as the entries and coordinates that built them.
 
     A row carries its sense and right-hand side, a bound its side and value,
-    read off the handoff the solver was given.
+    read off the sink tables the solver was given.
     """
     rows = pl.DataFrame({ROW: found.rows}).join(
-        model.handoff.rows.select(pl.col(ROW).cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on=ROW
+        model.tables.rows.select(pl.col(ROW).cast(pl.Int64), pl.col('sense').cast(pl.String), 'rhs'), on=ROW
     )
-    columns = model.handoff.cols
+    columns = model.tables.cols
     bounds = pl.concat(
         [
             pl.DataFrame({COL: at, VALUE: columns[column].gather(at)}).select(COL, pl.lit(side).alias('bound'), VALUE)
@@ -195,7 +195,7 @@ def laid_out(
     return _as_strings(held.valued(dims, values), attached, dims)
 
 
-def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Series:
+def reduced_costs(tables: SinkTables, primal: pl.Series, dual: pl.Series) -> pl.Series:
     """Each column's reduced cost: the objective's gradient less the rows' gradients weighted by *dual*.
 
     Computed here rather than asked of each solver, so it carries
@@ -209,14 +209,14 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     y = dual.to_numpy()
 
     def summed(cols: pl.Series, weights: np.ndarray) -> np.ndarray:
-        return np.bincount(cols.to_numpy(), weights=weights, minlength=handoff.column_count)
+        return np.bincount(cols.to_numpy(), weights=weights, minlength=tables.column_count)
 
     def index(column: pl.Series) -> np.ndarray:
         return column.to_numpy().astype(np.int64)
 
-    obj, quad, matrix, qmatrix = handoff.obj, handoff.quad, handoff.matrix, handoff.qmatrix
-    coefficient_rows = np.repeat(np.arange(handoff.row_count), np.diff(handoff.row_starts))
-    reduced = np.zeros(handoff.column_count, dtype=np.float64)
+    obj, quad, matrix, qmatrix = tables.obj, tables.quad, tables.matrix, tables.qmatrix
+    coefficient_rows = np.repeat(np.arange(tables.row_count), np.diff(tables.row_starts))
+    reduced = np.zeros(tables.column_count, dtype=np.float64)
     reduced += summed(obj[COL], obj[COEFF].to_numpy())
     reduced -= summed(matrix[COL], matrix[COEFF].to_numpy() * y[coefficient_rows])
     for table, weights in (
@@ -228,7 +228,7 @@ def reduced_costs(handoff: Handoff, primal: pl.Series, dual: pl.Series) -> pl.Se
     return pl.Series(VALUE, reduced, dtype=pl.Float64)
 
 
-def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
+def slacks(tables: SinkTables, activity: pl.Series) -> pl.Series:
     """Each row's distance to binding at *activity*: non-negative wherever the row holds.
 
     ``rhs - lhs`` for ``<=`` and ``lhs - rhs`` for ``>=``, so the value does
@@ -237,7 +237,7 @@ def slacks(handoff: Handoff, activity: pl.Series) -> pl.Series:
     """
     import numpy as np
 
-    rows = handoff.dense_rows(np.inf)
+    rows = tables.dense_rows(np.inf)
     lhs = activity.to_numpy()
     gap = rows.rhs - lhs
     slack = np.where(
@@ -400,14 +400,14 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     """
     import numpy as np
 
-    handoff = model.handoff
+    tables = model.tables
     status = pl.col(VALUE).cast(BASIS).to_physical()
-    placed_columns = np.full(handoff.column_count, AT_LOWER, dtype=np.int8)
+    placed_columns = np.full(tables.column_count, AT_LOWER, dtype=np.int8)
     placed = _place(placed_columns, model, model.variables, model.program.variables, columns, status)
-    placed_rows = np.full(handoff.row_count, BASIC, dtype=np.int8)
+    placed_rows = np.full(tables.row_count, BASIC, dtype=np.int8)
     placed += _place(placed_rows, model, model.constraints, model.program.constraints, rows, status)
     _refuse_nothing_placed(placed)
-    return seated(handoff, *_counted(placed_columns, placed_rows))
+    return seated(tables, *_counted(placed_columns, placed_rows))
 
 
 def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.ndarray:
@@ -421,7 +421,7 @@ def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.
     """
     import numpy as np
 
-    out = np.full(model.handoff.column_count, np.nan)
+    out = np.full(model.tables.column_count, np.nan)
     _refuse_nothing_placed(
         _place(out, model, model.variables, model.program.variables, values, pl.col(VALUE).cast(pl.Float64))
     )

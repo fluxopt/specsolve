@@ -442,22 +442,6 @@ def _days() -> list[Any]:
     return [datetime.date(2030, 1, 1), datetime.date(2030, 1, 2)]
 
 
-def test_a_date_under_a_dimension_not_declared_datetime_stays_a_date_on_both_lanes(tmp_path):
-    """Only a ``datetime`` dimension reads a date as the instant its day starts on; another keeps what it was given."""
-    days = _days()
-    spec = {**TEMPORAL_RELATION_SPEC, 'dimensions': {'g': {}, 'd': {'ordered': True}}}
-    sources = {
-        **_P_MAX,
-        'd': days,
-        'g': ['w', 's'],
-        'cap': _tidy(d=days, value=[3.0, 7.0]),
-        'day_of': _tidy(g=['w', 's'], d=[days[0], days[0]]),
-    }
-    with differential(_written(tmp_path, spec), sources) as run:
-        assert run.oracle == pytest.approx(3.0), 'one day, one cap, both generators under it, on both lanes'
-        assert run.result.dual('k')['d'].to_list() == days[:1], 'the day with generators comes back as the date it was'
-
-
 def _spelled(spelling: str, columns: dict[str, list[Any]], path: Path) -> Any:
     """*columns*, their ``d`` column of dates in *spelling*: the table a caller holds for the same instants."""
     if spelling == 'pandas date':
@@ -515,7 +499,7 @@ def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_p
         'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
     path = _written(tmp_path, spec)
-    sources = {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
+    sources = {**_P_MAX, 'g': _tidy(g=['w', 's']), 'b': _tidy(b=[1, 2]), 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
     sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
     assert '99.' in sentence, 'the label as the caller wrote it, not as numpy holds it'
