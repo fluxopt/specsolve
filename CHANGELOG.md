@@ -5,13 +5,34 @@ request renames that heading to the version and the day, such as
 `## 0.1.0 (2026-10-01)`, and edits the section into the release notes. Merging
 it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/blob/main/RELEASING.md)).
 
-## Upcoming version
+## 0.13.0 (2026-11-25)
 
-- feat(api): every lap of a model's life is a row in model.timings() ([#2207](https://github.com/fluxopt/specsolve/pull/2207))
-- fix(api): a model's timings hold the last step of building it ([#2211](https://github.com/fluxopt/specsolve/pull/2211))
+**This release refuses labels of another type than their dimension's declared
+`dtype`, so data that 0.12 read may now be refused at load.** A model's timings
+name each source it reads and each step of a solver handoff.
+
+### What to change in your data
+
+- Give each dimension's labels, and every column over the dimension, the type
+  its `dtype` declares, or declare the type the data holds. A dimension that
+  declares no `dtype` is `str`, so integer or datetime labels there are now
+  refused. The message names both types and the fix ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+- Within a type, any width, encoding or unit is accepted: `Int32` under `int`,
+  `Categorical` under `str`, nanoseconds under `datetime`. A date under
+  `datetime` reads as the microsecond its day starts on, and a table with no
+  rows takes the declared type.
+
+The pull requests in this release:
+
+### Data
+
+- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
+
+### Timings
+
+- feat(api): every lap of a model's life is a row in model.timings(), the last step of building it included ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 - feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
-- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
 
 ## 0.12.0 (2026-11-23)
 
