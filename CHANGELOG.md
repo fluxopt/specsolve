@@ -7,9 +7,42 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## 0.13.0 (2026-11-25)
 
-**This release refuses labels of another type than their dimension's declared
-`dtype`, so data that 0.12 read may now be refused at load.** A model's timings
-name each source it reads and each step of a solver handoff.
+**A model now says where its time went, lap by lap, down to the source, the
+entry and the solver step. Data whose labels are of another type than their
+dimension's declared `dtype`, which 0.12 read, is now refused at load.**
+
+### Finding where the time goes
+
+`model.timings()` logs every lap of a model's life, one row each: `run`,
+`phase`, `step`, `entry` and `seconds`. The rows add up to `model.metrics()`, so
+a slow phase can be read down to what in it was slow:
+
+- **`tidy`**: the source, one row per dimension, relation and parameter
+  ([#2218](https://github.com/fluxopt/specsolve/pull/2218)).
+- **`build`**: the variable, set or constraint, one row per entry, with its own
+  seconds whatever order the entries build in ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211)).
+- **`handoff`**: the step, with the same names on every solver: `start`,
+  `check`, `instance` or `push`, `warm` ([#2212](https://github.com/fluxopt/specsolve/pull/2212)).
+- **`run`**: the solve, so the solves of an `update` loop compare side by side.
+
+```python
+model = sps.build('model.yaml', sources)
+model.solve()
+model.timings().filter(phase='build').sort('seconds', descending=True)
+```
+
+The new how-to,
+[Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/),
+walks through each of these, says what a slow phase points to, and how to
+report one. It is split out of *Making a solve faster*.
+
+What changed around it:
+
+- `model.metrics()` is the log summed. A result's `metrics` is its run's laps,
+  frozen when it was handed back.
+- An archive is landed after its result is handed back, so the landing is in
+  that run of `model.timings()` and in `model.metrics()`, not in the result's
+  `metrics` or the archive's own row.
 
 ### What to change in your data
 
@@ -24,15 +57,15 @@ name each source it reads and each step of a solver handoff.
 
 The pull requests in this release:
 
-### Data
-
-- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
-
 ### Timings
 
 - feat(api): every lap of a model's life is a row in model.timings(), the last step of building it included ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211))
 - feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
 - feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
+
+### Data
+
+- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
 
 ## 0.12.0 (2026-11-23)
 
