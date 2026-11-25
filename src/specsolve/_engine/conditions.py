@@ -88,6 +88,11 @@ def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComp
     return carrier.filter(falsy_if_null(condition)).select(pl.len())
 
 
+def passes_without_a_row(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> bool:
+    """Whether *atom* holds where its parameter has no row: the parameter's missing value passes it."""
+    return not _false_without_a_row(program.Mask(atom), atom.name, scope)
+
+
 def counted_over_nothing(atom: program.CountComparison) -> bool:
     """Whether *atom* holds where the dimension it counts along has no label: its count is zero."""
     return pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
