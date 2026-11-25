@@ -36,7 +36,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 
 | In an expression | linopy or xarray |
 |---|---|
-| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: neutral` |
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: 0` |
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
@@ -52,7 +52,7 @@ Each row lives in `tests/linopy_lane/builder.py`.
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
-A missing row of a `missing: neutral` parameter is zero in a coefficient, an
+A missing row of a `missing: 0` parameter is zero in a coefficient, an
 error in `bounds:`, and false in a `where` operand
 (`tests/linopy_lane/absence.py`).
 
@@ -88,7 +88,7 @@ too. A MILP has no duals; those are the `·` rows.
 | [monthly_budget](../examples/monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](../examples/multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
-| [piecewise](../examples/piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
+| [piecewise](../examples/piecewise.md) | 3850.0 | 1e-09 | · | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
 | [piecewise_conversion](../examples/piecewise_conversion.md) | 5990.0 | 1e-06 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away |
 | `piecewise_lp` | 3850.0 | 1e-09 | **✔** | the same instance as piecewise, whose optimum and duals linopy 0.10.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim |
 | [piecewise_ragged](../examples/piecewise_ragged.md) | 426.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure |
@@ -186,7 +186,7 @@ construct, or every combination.
 | [telephone_routing](../examples/telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](../examples/transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [transport_modes](../examples/transport_modes.md) | **✔** 1715 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | **✓** |
+| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | **✓** |
 | [tsp_mtz](../examples/tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | **✓** |
 <!-- constructs:end -->
 

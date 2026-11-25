@@ -177,7 +177,7 @@ absence is pushed into the operand first
 | --- | --- | --- | --- |
 | `Constant` | a number | one-to-one | a one-row constant term |
 | `ParameterReference` | a declared name | one-to-one | its table as `(dims…, cval)` |
-| `VariableReference` | a declared name | one-to-one | `(dims…, col_index, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: neutral` |
+| `VariableReference` | a declared name | one-to-one | `(dims…, col_index, coeff=1)`, plus where it exists; at a read, its primal as a constant term with the same presence, a zero at every absent slot under `missing: 0` |
 | `Dual` | `dual(c)` | one-to-one | at a read only: the constraint's rows beside its share of the dual vector, a constant term present exactly where a row stands |
 | `Negate` | `-x` | one-to-one | the value column negated |
 | `Add` | `x + y`, `x - y` | one-to-one | the two lists of terms concatenated |

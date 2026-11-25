@@ -220,7 +220,7 @@ def test_two_columns_lower_to_one_node_and_not_to_a_composition():
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = schema_of(SPEC).program.constraints.values()
+    limit = schema_of(SPEC).program.constraints['technology_at_bus']
     assert isinstance(limit.lhs, Sum)
     assert isinstance(limit.lhs.operand, Join)
     assert limit.lhs.operand.operand == VariableReference('p', dims=('generator',))
