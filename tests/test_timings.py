@@ -348,3 +348,18 @@ def test_a_refused_source_keeps_the_tidy_laps_it_reached():
         ('relation', 'gen_bus'),
         ('parameter', 'load'),
     ], 'the rows up to the refused parameter, and none for it or after it'
+
+
+@pytest.mark.xfail(
+    strict=True, reason="a run's laps are summed from the end of the log, the whole life's from its start"
+)
+def test_a_runs_clocks_never_exceed_the_whole_life():
+    """A result's row is its run's laps summed; its clocks never pass the model's, which sum every lap.
+
+    Three laps of 0.3, 0.2 and 0.1 s summed in the other order come to one unit
+    in the last place more than the same three summed in the order they ran.
+    """
+    laps = engine._Laps()
+    for seconds in (0.3, 0.2, 0.1):
+        laps.append(0, 'build', 'constraint', None, seconds)
+    assert laps.clocks(0)['build'] <= laps.clocks()['build'], "a run's share is no more than the whole"
