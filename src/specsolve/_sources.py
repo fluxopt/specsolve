@@ -24,11 +24,10 @@ from specsolve._names import POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from mathspec.program import Dimension, Program, Relation
 
     from specsolve._inputs import Label, Source
+    from specsolve._records import Lap, Phase, Step
 
 
 def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
@@ -74,9 +73,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     return sources
 
 
-def tidied(
-    program: Program, data: Mapping[str, Source], lap: Callable[[str, str | None, str | None], None]
-) -> dict[str, pl.LazyFrame]:
+def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, which a build checks where it clocks the attach they share.
 
     *lap* ends a lap of ``tidy`` at each step, as [`_read`][] names them.
@@ -88,14 +85,12 @@ def tidied(
     return _read(program, data, lap)
 
 
-def _untimed(phase: str, step: str | None, entry: str | None) -> None:
+def _untimed(phase: Phase, step: Step | None, entry: str | None) -> None:
     """A lap no engine clocks: [`tidy_sources`][] read outside a model."""
 
 
 @in_memory()
-def _read(
-    program: Program, data: Mapping[str, Source], lap: Callable[[str, str | None, str | None], None]
-) -> dict[str, pl.LazyFrame]:
+def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
     """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
 
     [`validate_assumptions`][] runs
