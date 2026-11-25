@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- perf(data): a build reads its parameters as fast on polars 2.2.0 as on 2.0.0 ([#2232](https://github.com/fluxopt/specsolve/pull/2232))
+- perf(data): large models build up to a third faster on polars 2.2.0 ([#2232](https://github.com/fluxopt/specsolve/pull/2232))
 - fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
 - fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
 - fix(sinks): HiGHS keeps coefficients down to 1e-12 and warns when it drops one ([#2226](https://github.com/fluxopt/specsolve/pull/2226))
