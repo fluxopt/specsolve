@@ -43,8 +43,11 @@ jobs:
       - run: pixi run test -p tools.gapprobe
         env:
           GAPLOG: /tmp/gaps-default.jsonl
+          PYTHONPATH: ${{ github.workspace }}
         continue-on-error: true
       - name: the suite via pyarrow, probed, five times
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           for i in 1 2 3 4 5; do GAPLOG=/tmp/gaps-pyarrow.jsonl pixi run test-via-pyarrow -p tools.gapprobe || true; done
       - name: every call with more than 1 ms unclocked, then the largest gaps of all
