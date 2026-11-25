@@ -1,9 +1,11 @@
 """The phases a solve is clocked in add up to the call, and each step is clocked in the phase that names it.
 
 [`Metrics`][specsolve._records.Metrics] defines the phases. The model's own
-clocks are held to the wall time of a whole call; the archived row, written
-before the archive lands, to at most what the model kept. One test slows one
-step at a time and finds the delay in its own phase and nowhere else.
+clocks are held to the whole call, on the process's CPU time, so a runner that
+takes the CPU away between two laps is not read as a step left unclocked; the
+archived row, written before the archive lands, to at most what the model kept.
+One test slows one step at a time and finds the delay in its own phase and
+nowhere else.
 """
 
 from __future__ import annotations
@@ -32,8 +34,8 @@ DELAY = 10.0
 #: How long a caller waits between two calls, for real.
 WAIT = 0.1
 
-#: Wall time no phase holds. The laps tile each call, so what is left is the
-#: return from one call and the entry into the next: 50 to 110 µs (#2180).
+#: CPU time no phase holds. The laps tile each call, so what is left is the
+#: return from one call and the entry into the next: 50 to 110 µs of wall time (#2180).
 SLACK = 0.005
 
 
@@ -46,7 +48,7 @@ def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
 class Timed(NamedTuple):
     """One call, timed from outside and from inside."""
 
-    #: The wall time of the call.
+    #: The call's length on the clock the engine laps on.
     wall: float
     #: Seconds per phase as the model kept them, the archive's landing included.
     kept: dict[str, float]
@@ -56,7 +58,7 @@ class Timed(NamedTuple):
     def check(self) -> None:
         """The model's phases tile the call, and the row never holds more than the model kept."""
         kept = sum(self.kept.values())
-        assert kept <= self.wall, f'no step is clocked twice: {self.kept} sum past the wall time {self.wall}'
+        assert kept <= self.wall, f'no step is clocked twice: {self.kept} sum past the call, {self.wall}'
         assert self.wall - kept < SLACK, f'no step is left unclocked: {self.kept} sum short of {self.wall}'
         assert all(self.recorded[phase] <= self.kept[phase] for phase in PHASES), (
             f'the row is taken before the archive lands, so it holds no more than the model: {self.recorded}'
@@ -64,17 +66,18 @@ class Timed(NamedTuple):
 
 
 class Clock:
-    """``perf_counter`` plus what the slowed steps added, read by the engine and the test alike.
+    """This process's CPU time plus what the slowed steps added, read by the engine and the test alike.
 
     A step slowed on this clock costs no real time, so a phase the runner
-    slows for its own reasons cannot reach a slowed step's delay.
+    slows for its own reasons cannot reach a slowed step's delay. A pause off
+    the CPU adds nothing, and the work of every thread of the process counts.
     """
 
     def __init__(self) -> None:
         self.added = 0.0
 
     def __call__(self) -> float:
-        return time.perf_counter() + self.added
+        return time.process_time() + self.added
 
 
 @pytest.fixture
@@ -85,7 +88,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     return on
 
 
-def _timed(call: Callable[[], sps.types.Model], out: Path, clock: Callable[[], float] = time.perf_counter) -> Timed:
+def _timed(call: Callable[[], sps.types.Model], out: Path, clock: Clock) -> Timed:
     """*call* timed from outside on *clock*, and the seconds per phase the model kept and the archive at *out* recorded.
 
     The model *call* returns is closed after the clock stops: releasing it
@@ -131,19 +134,21 @@ def test_the_phases_are_the_metrics_clocks_in_the_order_they_run():
 @pytest.mark.parametrize('suffix', [pytest.param('.zip', id='a zip'), pytest.param('', id='a directory')])
 @pytest.mark.parametrize('with_assumption', [False, True], ids=['the build attaches', 'the assumptions attach'])
 def test_the_phases_add_up_to_a_build_solved_into_an_archive(
-    dispatch_yaml, dispatch_table_inputs, tmp_path, suffix, with_assumption
+    dispatch_yaml, dispatch_table_inputs, tmp_path, clock, suffix, with_assumption
 ):
     """From the spec as given to the archive on disk, every second is in one phase."""
     spec = _with_assumption(dispatch_yaml) if with_assumption else dispatch_yaml
     out = tmp_path / f'case{suffix}'
-    timed = _timed(_archived(spec, dispatch_table_inputs, out), out)
+    timed = _timed(_archived(spec, dispatch_table_inputs, out), out, clock)
 
     entered = {phase for phase, spent in timed.recorded.items() if spent > 0}
     assert entered == set(PHASES) - {'write'}, 'a solve into an archive enters every phase but writing a model file'
     timed.check()
 
 
-def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_yaml, dispatch_table_inputs, tmp_path):
+def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, clock
+):
     """The model's clocks accumulate over its life, and still account for all of it.
 
     The archive of the second solve records that answer's share: the update
@@ -161,7 +166,7 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(dispatch_
         model.solve(archive=out)
         return model
 
-    timed = _timed(call, out)
+    timed = _timed(call, out, clock)
 
     assert all(spent > 0 for spent in timed.kept.values()), f'this model entered every phase: {timed.kept}'
     entered = {phase for phase, spent in timed.recorded.items() if spent > 0}
@@ -303,7 +308,6 @@ def _spin(seconds: float) -> Callable[[], None]:
             lambda: time.sleep(4 * SLACK),
             False,
             id='a pause off the CPU',
-            marks=pytest.mark.xfail(strict=True, reason='the check reads wall time, which a pause fills'),
         ),
         pytest.param(_spin(4 * SLACK), True, id='work on the CPU'),
     ],
