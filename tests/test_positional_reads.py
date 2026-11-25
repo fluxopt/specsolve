@@ -39,7 +39,7 @@ SPEC = {
         'size': {'dims': ['i']},
         'kind': {'dims': ['j'], 'dtype': 'str'},
         'both': {'dims': ['j', 'i'], 'dtype': 'bool'},
-        'short': {'dims': ['i'], 'missing': 'neutral'},
+        'short': {'dims': ['i'], 'missing': 0},
         'far': {'dims': ['gapped'], 'dtype': 'bool'},
     },
     'variables': {

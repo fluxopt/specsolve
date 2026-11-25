@@ -33,7 +33,7 @@ SPEC = {
         'a': {'dims': ['i']},
         'b': {'dims': ['j', 'i']},
         'zero_at_one': {'dims': ['i']},
-        'short': {'dims': ['i'], 'missing': 'neutral'},
+        'short': {'dims': ['i'], 'missing': 0},
         'gone': {'dims': ['i'], 'missing': 'absent'},
         'on': {'dims': ['i'], 'dtype': 'bool'},
         'rare': {'dims': ['i', 'j'], 'dtype': 'bool'},
@@ -43,7 +43,7 @@ SPEC = {
         'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
         'y': {'dims': ['i', 'j'], 'bounds': {'lower': 0, 'upper': 10}},
         'narrowed': {'dims': ['i'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 10}},
-        'silent': {'dims': ['i'], 'where': 'on', 'missing': 'neutral', 'bounds': {'lower': 0, 'upper': 10}},
+        'silent': {'dims': ['i'], 'where': 'on', 'missing': 0, 'bounds': {'lower': 0, 'upper': 10}},
         'total': {'dims': [], 'bounds': {'lower': 0, 'upper': 10}},
         'late': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 10}},
     },
@@ -225,6 +225,7 @@ def _sided(spec: dict, sources: dict, path: Path, monkeypatch: pytest.MonkeyPatc
         pytest.param({'dims': ['i'], 'expression': 'x <= late'}, BY_POSITION, id='no-constant-term-at-all'),
         pytest.param({'dims': [], 'expression': 'total <= s'}, BY_POSITION, id='a-constraint-over-no-dimensions'),
         pytest.param({'dims': ['i'], 'expression': 'x <= gone'}, BY_JOIN, id='a-parameter-absent-at-a-coordinate'),
+        pytest.param({'dims': ['i'], 'expression': 'x <= short'}, BY_JOIN, id='a-parameter-short-of-a-row'),
         pytest.param({'dims': ['i'], 'expression': 'x <= 10 / a'}, BY_JOIN, id='a-quotient'),
         pytest.param({'dims': ['i'], 'expression': 'x <= sum(b, over=j)'}, BY_JOIN, id='a-sum'),
         pytest.param(
@@ -241,13 +242,6 @@ def test_a_right_hand_side_read_by_position_is_the_one_the_joins_build(
     assert text == _joined(spec, SOURCES, tmp_path / 'joined.lp', monkeypatch), (
         'reading the right-hand side by position changed the written model'
     )
-
-
-def test_a_right_hand_side_short_of_a_row_is_refused_as_before(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """`short` has a row at every second label, so it is not held by position and the rows pass still asks for the rest."""
-    spec = {**SPEC, 'constraints': {'row': {'dims': ['i'], 'expression': 'x <= short'}}}
-    with pytest.raises(DataError, match="constraint 'row'"):
-        _sided(spec, SOURCES, tmp_path / 'built.lp', monkeypatch)
 
 
 def test_a_table_whose_rows_are_out_of_order_is_read_at_the_right_coordinates(

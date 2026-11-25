@@ -29,7 +29,7 @@ from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.conditions import Carrier, falsy_if_null, narrowed, query_condition
 from specsolve._engine.dense import DenseTerm
 from specsolve._engine.relations import landed, mapping, walk_join
-from specsolve._engine.scope import UNIT, Scope
+from specsolve._engine.scope import UNIT, Scope, missing_value
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
 from specsolve._engine.terms import (
     PRESENT,
@@ -160,7 +160,10 @@ class QueryBuilder:
             if isinstance(e, program.ParameterReference):
                 alias = carrier.once(f'__bound {e.name}__', lambda f, a: attach_bound(f, a, e.name))
                 read = pl.col(alias).cast(pl.Float64)
-                return read.fill_null(open_side) if self.scope.absent(e.name) else read
+                if self.scope.absent(e.name):
+                    return read.fill_null(open_side)
+                fill = missing_value(self.scope.program, e.name)
+                return read if fill is None else read.fill_null(float(fill))
             msg = f"unsupported node {type(e).__name__} in bounds of variable '{variable}'"
             raise AssertionError(msg)
 
@@ -462,17 +465,19 @@ class QueryBuilder:
     def _solved_term(self, name: str) -> Term:
         """A variable at its primal — the constant term a read turns it into, carrying the presence its linear term would.
 
-        Under ``missing: neutral`` it is filled with zero over the full product,
-        because a nonlinear read such as ``0.5 ** x`` tells a zero from no row.
+        Under a numeric ``missing:`` it is filled with that number over the full product,
+        because a nonlinear read such as ``0.5 ** x`` tells a value from no row.
         """
         assert self.solution is not None
         held, entry = self.scope.variables[name], self.scope.program.variables[name]
         dims = entry.dims
         keys = dims or (UNIT,)
         rows = held.table.select(*keys).with_columns(held.share(self.solution.primal).alias(CONSTANT))
-        if entry.where is not None and entry.missing == 'neutral':
+        if entry.where is not None and not isinstance(entry.missing, str):
             everywhere = narrowed(self.scope, dims, None).select(*keys)
-            rows = join_on(everywhere, rows, keys, 'left').with_columns(pl.col(CONSTANT).fill_null(0.0))
+            rows = join_on(everywhere, rows, keys, 'left').with_columns(
+                pl.col(CONSTANT).fill_null(float(entry.missing))
+            )
         return Term(dims, rows.select(*dims, CONSTANT), 'constant', presences=self._variable_presences(name, dims))
 
     def _dual_term(self, name: str) -> Term:
@@ -630,7 +635,7 @@ class QueryBuilder:
         with no labels, a group its relation maps no label to, a window of
         width zero or over no row, and a label a ``cases:`` region leaves out
         all land nowhere. Asked of the term rather than the relation for that
-        last reason. A neutral parameter short of a label leaves the sum one
+        last reason. A `missing: 0` parameter short of a label leaves the sum one
         term fewer. Only for a constant term: a row with no terms is not built.
         """
         if p.kind != 'constant':

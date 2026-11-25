@@ -1,0 +1,933 @@
+version: 0
+description: The file states a plain `n.optimize()`, its multi-period class under the `multi_investment_periods`
+  keyword, and its stochastic class, which `n.set_scenarios(...)` sets. Every quantity chosen once the
+  future is known (second-stage) spans the futures dispatch is chosen in (`scenario`). Capacity is chosen
+  once, before the future is known, and paid at its expected cost in each investment `period` its build
+  year and lifetime span. Operation is the expectation over the scenarios' weights, with a share priced
+  at the worst-outcome mean cost (CVaR) only where a risk preference is set. A plain run's data has one
+  scenario, one period, unit weights, no outage and every `active` flag true, so the problem is the standard
+  one. On a security-constrained run, PyPSA copies each branch flow limit once per `outage`, and the outage
+  factors, `active` flags and scenario weights come from data prep.
+dimensions:
+  breakpoint: {dtype: int, ordered: true, description: 'the corners of a piecewise-linear curve, in order.
+      A curve runs over the breakpoints its data has rows for, so curves may differ in length'}
+  bus: {description: network nodes}
+  generator: {description: 'generating units, each on one bus'}
+  link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
+  link_output: {description: 'a link''s output ports, one label per port a link declares. The labels are
+      PyPSA''s `bus1`, `bus2`, … columns read long, data prep. A link of any number of output ports is
+      then one term in the balance'}
+  load: {description: 'demands, each on one bus'}
+  period: {dtype: int, ordered: true, description: investment periods. It is PyPSA's `investment_periods`}
+  process: {description: 'generalised multi-port converters, each with an internal power that every port
+      draws or delivers at its own rate'}
+  process_output: {description: 'a process''s ports, one label per port a process declares. The labels
+      are PyPSA''s `bus0`, `bus1`, …, each with a signed `rate`, data prep. A process of any number of
+      ports is then one term in the balance'}
+  scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
+  snapshot: {dtype: datetime, ordered: true, description: dispatch periods}
+relations:
+  Generator_bus: {key: generator, values: bus, description: the bus a generator sits on}
+  Generator_maintenance_cover:
+    key:
+      covered: snapshot
+      generator: generator
+      scenario: scenario
+      start: snapshot
+    missing: absent
+    description: the snapshots a maintenance event covers, by the snapshot it starts in, data prep. In
+      a scenario, they are the start and the snapshots after it, until their generator weightings reach
+      that scenario's `maintenance_duration`. A generator that is not maintainable has no rows
+  Link_bus0: {key: link, values: bus, description: the bus a link leaves}
+  Link_maintenance_cover:
+    key:
+      covered: snapshot
+      link: link
+      scenario: scenario
+      start: snapshot
+    missing: absent
+    description: the snapshots a maintenance event covers, by the snapshot it starts in, data prep. In
+      a scenario, they are the start and the snapshots after it, until their generator weightings reach
+      that scenario's `maintenance_duration`. A link that is not maintainable has no rows
+  Link_output_bus: {key: link_output, values: bus, description: 'the bus an output port delivers to. It
+      is PyPSA''s `bus1`, `bus2`, … columns. A link of three output ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Link_output_link: {key: link_output, values: link, description: the link an output port belongs to}
+  Load_bus: {key: load, values: bus, description: the bus a load sits on}
+  Process_maintenance_cover:
+    key:
+      covered: snapshot
+      process: process
+      scenario: scenario
+      start: snapshot
+    missing: absent
+    description: the snapshots a maintenance event covers, by the snapshot it starts in, data prep. In
+      a scenario, they are the start and the snapshots after it, until their generator weightings reach
+      that scenario's `maintenance_duration`. A process that is not maintainable has no rows
+  Process_output_bus: {key: process_output, values: bus, description: 'the bus a port draws from or delivers
+      to. It is PyPSA''s `bus0`, `bus1`, … columns. A process of three ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Process_output_process: {key: process_output, values: process, description: the process a port belongs
+      to}
+  snapshot_period: {key: snapshot, values: period, description: the investment period a snapshot falls
+      in}
+parameters:
+  Bus_attached:
+    dims: [bus, snapshot]
+    dtype: bool
+    description: whether a load, a unit, a port or a branch that is active in the snapshot's period is
+      attached to the bus, data prep. A bus nothing is attached to has no balance row
+  Generator_active:
+    dims: [generator, snapshot]
+    dtype: bool
+    description: whether a generator is active in a snapshot's period. It is PyPSA's `active`, from build
+      year and lifetime, data prep
+  Generator_active_asset:
+    dims: [generator]
+    dtype: bool
+    description: whether a generator is one of PyPSA's `active_assets`, by its `active` flag alone, without
+      build year and lifetime. A unit that is active in no snapshot of the horizon still counts. PyPSA
+      refuses one that differs by scenario (`constants.py:54`)
+  Generator_committable:
+    dims: [generator]
+    dtype: bool
+    description: whether output is gated by an on/off status decision
+  Generator_maintainable:
+    dims: [generator]
+    dtype: bool
+    description: 'whether a generator must be taken off for maintenance within the horizon: in any scenario,
+      as PyPSA takes the union over them (`components.py:1000-1003`)'
+  Generator_maintenance_events:
+    dims: [generator, scenario]
+    dtype: int
+    description: how many maintenance events occur within the horizon
+  Generator_maintenance_pu:
+    dims: [generator, scenario]
+    description: the share of the build a maintenance event takes off
+  Generator_marginal_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one unit of output
+  Generator_marginal_cost_curve_p:
+    dims: [breakpoint, generator]
+    missing: absent
+    description: 'the output at each breakpoint of a generator''s piecewise `marginal_cost` curve: PyPSA''s
+      `p_pu` breakpoints times `p_nom`, data prep. A generator with no curve has no rows'
+  Generator_marginal_cost_quadratic:
+    dims: [generator, scenario, snapshot]
+    description: cost of the square of one unit of output
+  Generator_modules_installed:
+    dims: [generator, scenario]
+    description: how many whole modules a committable build has in place, data prep. It is `Generator_p_nom
+      / Generator_p_nom_mod` where a fixed build is modular, and one where it is not. PyPSA refuses a
+      fixed modular build whose nominal power is not a whole number of modules
+  Generator_p_max_pu:
+    dims: [generator, scenario, snapshot]
+    description: 'most output, per unit of nominal power: an availability profile'
+  Generator_p_min_pu:
+    dims: [generator, scenario, snapshot]
+    description: least output, per unit of nominal power
+  Generator_p_nom:
+    dims: [generator, scenario]
+    description: nominal power
+  Generator_p_nom_extendable:
+    dims: [generator]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Generator_p_nom_max:
+    dims: [generator, scenario]
+    description: most nominal power an extendable generator may be built at
+  Generator_p_nom_mod:
+    dims: [generator]
+    missing: absent
+    description: the module size a build comes in whole numbers of. No value means the build is continuous
+  Generator_shut_down_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one stop in this snapshot
+  Generator_sign:
+    dims: [generator]
+    description: the sign output enters its bus's balance with. It is PyPSA's `sign`, `1` unless given,
+      `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Generator_stand_by_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one snapshot spent on
+  Generator_start_up_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one start in this snapshot
+  Generator_status_initial:
+    dims: [generator, scenario]
+    description: one where the unit was on before the first snapshot, zero where off. It is PyPSA's `up_time_before
+      > 0` for a committable unit, and one for a unit that is not, whose ramp rows PyPSA starts from on
+      (`constraints.py:323`), data prep. Under a rolling horizon, it is the status the previous window
+      solved, a fraction where unit commitment is linearised
+  Link_active:
+    dims: [link, snapshot]
+    dtype: bool
+    description: whether a link is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Link_committable:
+    dims: [link]
+    dtype: bool
+    description: whether flow is gated by an on/off status decision
+  Link_efficiency:
+    dims: [link_output, scenario, snapshot]
+    description: 'share of the flow that arrives at an output port, PyPSA''s `efficiency`, `efficiency2`,
+      … read long: negative where that port consumes rather than delivers. Read at the snapshot the flow
+      arrives, so a delayed port delivers at its arrival snapshot''s efficiency (`constraints.py:1575`)'
+  Link_maintainable:
+    dims: [link]
+    dtype: bool
+    description: 'whether a link must be taken off for maintenance within the horizon: in any scenario,
+      as PyPSA takes the union over them (`components.py:1000-1003`)'
+  Link_maintenance_events:
+    dims: [link, scenario]
+    dtype: int
+    description: how many maintenance events occur within the horizon
+  Link_maintenance_pu:
+    dims: [link, scenario]
+    description: the share of the build a maintenance event takes off
+  Link_marginal_cost:
+    dims: [link, scenario, snapshot]
+    description: cost of one unit of flow
+  Link_marginal_cost_quadratic:
+    dims: [link, scenario, snapshot]
+    description: cost of the square of one unit of flow
+  Link_modules_installed:
+    dims: [link, scenario]
+    description: how many whole modules a committable build has in place, data prep. It is `Link_p_nom
+      / Link_p_nom_mod` where a fixed build is modular, and one where it is not. PyPSA refuses a fixed
+      modular build whose nominal power is not a whole number of modules
+  Link_output_cyclic_delay:
+    dims: [link_output]
+    dtype: bool
+    description: whether a delayed port's flow wraps from the end of its investment period (PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …). Where it does not, the flow still in transit at each period's first snapshots
+      is lost. The flag is the same in every scenario, as the delay is
+  Link_output_delay:
+    dims: [link_output]
+    dtype: int
+    description: snapshots a port's delivery lags its link's flow (PyPSA's `delay`, `delay2`, … read long).
+      In data prep you divide it by the `snapshot_weightings.generators` value and round it up. It is
+      zero for a port that delivers at once. A port has the same delay in every scenario, because PyPSA
+      refuses a delay that differs by scenario (`constants.py:55`)
+  Link_p_max_pu:
+    dims: [link, scenario, snapshot]
+    description: most flow, per unit of nominal power
+  Link_p_min_pu:
+    dims: [link, scenario, snapshot]
+    description: 'least flow, per unit of nominal power: negative for a link that carries both ways'
+  Link_p_nom:
+    dims: [link, scenario]
+    description: nominal power
+  Link_p_nom_extendable:
+    dims: [link]
+    dtype: bool
+    description: whether the nominal power is a decision
+  Link_p_nom_max:
+    dims: [link, scenario]
+    description: most nominal power an extendable link may be built at
+  Link_p_nom_mod:
+    dims: [link]
+    missing: absent
+    description: the module size a build comes in whole numbers of. No value means the build is continuous
+  Link_shut_down_cost:
+    dims: [link, scenario, snapshot]
+    description: cost of one stop in this snapshot
+  Link_stand_by_cost:
+    dims: [link, scenario, snapshot]
+    description: cost of one snapshot spent on
+  Link_start_up_cost:
+    dims: [link, scenario, snapshot]
+    description: cost of one start in this snapshot
+  Link_status_initial:
+    dims: [link, scenario]
+    description: one where the link was on before the first snapshot, zero where off. It is PyPSA's `up_time_before
+      > 0` for a committable link, and one for a link that is not, whose ramp rows PyPSA starts from on
+      (`constraints.py:323`), data prep. Under a rolling horizon, it is the status the previous window
+      solved, a fraction where unit commitment is linearised
+  Load_active:
+    dims: [load]
+    dtype: bool
+    description: whether a load is active in the network, PyPSA's `active`. A load has no build year and
+      no lifetime, so the flag is the same in every snapshot. PyPSA refuses one that differs by scenario
+      (`constants.py:54`)
+  Load_p_set:
+    dims: [load, scenario, snapshot]
+    description: demand
+  Load_sign:
+    dims: [load]
+    description: the sign a load's demand enters its bus's balance with. It is PyPSA's `sign`, `-1` unless
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Process_active:
+    dims: [process, snapshot]
+    dtype: bool
+    description: whether a process is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Process_committable:
+    dims: [process]
+    dtype: bool
+    description: whether internal power is gated by an on/off status decision
+  Process_maintainable:
+    dims: [process]
+    dtype: bool
+    description: 'whether a process must be taken off for maintenance within the horizon: in any scenario,
+      as PyPSA takes the union over them (`components.py:1000-1003`)'
+  Process_maintenance_events:
+    dims: [process, scenario]
+    dtype: int
+    description: how many maintenance events occur within the horizon
+  Process_maintenance_pu:
+    dims: [process, scenario]
+    description: the share of the build a maintenance event takes off
+  Process_marginal_cost:
+    dims: [process, scenario, snapshot]
+    description: cost of one unit of internal power
+  Process_marginal_cost_quadratic:
+    dims: [process, scenario, snapshot]
+    description: cost of the square of one unit of internal power
+  Process_modules_installed:
+    dims: [process, scenario]
+    description: how many whole modules a committable build has in place, data prep. It is `Process_p_nom
+      / Process_p_nom_mod` where a fixed build is modular, and one where it is not. PyPSA refuses a fixed
+      modular build whose nominal power is not a whole number of modules
+  Process_output_cyclic_delay:
+    dims: [process_output]
+    dtype: bool
+    description: whether a delayed port's transfer wraps from the end of its investment period (PyPSA's
+      `cyclic_delay0`, `cyclic_delay1`, …). Where it does not, the energy still in transit at each period's
+      first snapshots is lost. The flag is the same in every scenario, as the delay is
+  Process_output_delay:
+    dims: [process_output]
+    dtype: int
+    description: snapshots a port's transfer lags its process's internal power (PyPSA's `delay0`, `delay1`,
+      … read long). In data prep you divide it by the `snapshot_weightings.generators` value and round
+      it up. It is zero for a port that transfers at once. A port has the same delay in every scenario,
+      as a link's port has
+  Process_p_max_pu:
+    dims: [process, scenario, snapshot]
+    description: most internal power, per unit of nominal power
+  Process_p_min_pu:
+    dims: [process, scenario, snapshot]
+    description: 'least internal power, per unit of nominal power: negative for a process that runs both
+      ways'
+  Process_p_nom_extendable:
+    dims: [process]
+    dtype: bool
+    description: whether the nominal internal power is a decision
+  Process_p_nom_max:
+    dims: [process, scenario]
+    description: most nominal power an extendable process may be built at
+  Process_p_nom_mod:
+    dims: [process]
+    missing: absent
+    description: the module size a build comes in whole numbers of. No value means the build is continuous
+  Process_rate:
+    dims: [process_output, scenario, snapshot]
+    description: the energy a port draws or delivers per unit of internal power (PyPSA's `rate0`, `rate1`,
+      … read long). It is negative where the port withdraws and positive where it injects. A link is a
+      process whose `bus0` rate is minus one and whose output rates are its efficiencies. The rate at
+      the snapshot the transfer arrives applies, so a delayed port transfers at its arrival snapshot's
+      rate (`constraints.py:1575`)
+  Process_shut_down_cost:
+    dims: [process, scenario, snapshot]
+    description: cost of one stop in this snapshot
+  Process_stand_by_cost:
+    dims: [process, scenario, snapshot]
+    description: cost of one snapshot spent on
+  Process_start_up_cost:
+    dims: [process, scenario, snapshot]
+    description: cost of one start in this snapshot
+  Process_status_initial:
+    dims: [process, scenario]
+    description: one where the process was on before the first snapshot, zero where off. It is PyPSA's
+      `up_time_before > 0` for a committable process, and one for a process that is not, whose ramp rows
+      PyPSA starts from on (`constraints.py:323`), data prep. Under a rolling horizon, it is the status
+      the previous window solved, a fraction where unit commitment is linearised
+  period_weight_objective:
+    dims: [period]
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs. PyPSA
+      reads it only under `multi_investment_periods`. Otherwise you feed one in data prep, whatever the
+      column contains (`optimize.py:231-233`, `:293-297`)
+  scenario_weight:
+    dims: [scenario]
+    description: PyPSA's `scenario_weightings.weight` — the probability of a future
+  snapshot_weightings_objective:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.objective` — hours a snapshot weighs in the cost
+variables:
+  Generator_maintenance:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_active
+    bounds: {lower: 0.0, upper: 1.0}
+    missing: 0.0
+    description: '`Generator-maintenance` — whether a maintainable generator is in maintenance: continuous,
+      and one exactly where an event covers the snapshot'
+  Generator_maintenance_start:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_active
+    domain: binary
+    missing: 0.0
+    description: '`Generator-maintenance_start` — whether a maintenance event starts in this snapshot'
+  Generator_maintenance_status:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_committed AND NOT (Generator_p_nom_extendable AND NOT
+      (Generator_p_nom_mod > 0))
+    bounds: {lower: 0.0}
+    missing: 0.0
+    description: '`Generator-maintenance_status` — the status while in maintenance, zero otherwise: the
+      product the `maint-status` rows linearise, so a unit in maintenance may also be off'
+  Generator_p:
+    dims: [generator, scenario, snapshot]
+    where: Generator_active
+    description: '`Generator-p` — output of a generator in a snapshot'
+  Generator_shut_down:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Generator-shut_down` — how much of a committable unit turns off this snapshot, capped
+      as the status is'
+  Generator_start_up:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Generator-start_up` — how much of a committable unit turns on this snapshot, capped
+      as the status is'
+  Generator_status:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Generator-status` — how much of a committable unit is on. It is an integer the rows
+      below cap at one, or at the module count where the build is modular'
+  Link_maintenance:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_active
+    bounds: {lower: 0.0, upper: 1.0}
+    missing: 0.0
+    description: '`Link-maintenance` — whether a maintainable link is in maintenance: continuous, and
+      one exactly where an event covers the snapshot'
+  Link_maintenance_start:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_active
+    domain: binary
+    missing: 0.0
+    description: '`Link-maintenance_start` — whether a maintenance event starts in this snapshot'
+  Link_maintenance_status:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_committed AND NOT (Link_p_nom_extendable AND NOT (Link_p_nom_mod
+      > 0))
+    bounds: {lower: 0.0}
+    missing: 0.0
+    description: '`Link-maintenance_status` — the status while in maintenance, zero otherwise: the product
+      the `maint-status` rows linearise, so a unit in maintenance may also be off'
+  Link_p:
+    dims: [link, scenario, snapshot]
+    where: Link_active
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end. A positive value
+      withdraws there and injects at every bus the link''s output ports deliver to'
+  Link_shut_down:
+    dims: [link, scenario, snapshot]
+    where: Link_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Link-shut_down` — how much of a committable link turns off this snapshot, capped as
+      the status is'
+  Link_start_up:
+    dims: [link, scenario, snapshot]
+    where: Link_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Link-start_up` — how much of a committable link turns on this snapshot, capped as the
+      status is'
+  Link_status:
+    dims: [link, scenario, snapshot]
+    where: Link_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Link-status` — how much of a committable link is on. It is an integer the rows below
+      cap at one, or at the module count where the build is modular'
+  Process_maintenance:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_active
+    bounds: {lower: 0.0, upper: 1.0}
+    missing: 0.0
+    description: '`Process-maintenance` — whether a maintainable process is in maintenance: continuous,
+      and one exactly where an event covers the snapshot'
+  Process_maintenance_start:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_active
+    domain: binary
+    missing: 0.0
+    description: '`Process-maintenance_start` — whether a maintenance event starts in this snapshot'
+  Process_maintenance_status:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_committed AND NOT (Process_p_nom_extendable AND NOT (Process_p_nom_mod
+      > 0))
+    bounds: {lower: 0.0}
+    missing: 0.0
+    description: '`Process-maintenance_status` — the status while in maintenance, zero otherwise: the
+      product the `maint-status` rows linearise, so a unit in maintenance may also be off'
+  Process_p:
+    dims: [process, scenario, snapshot]
+    where: Process_active
+    description: '`Process-p` — PyPSA''s internal power `p`. A positive value drives every port at its
+      own rate, withdrawing where the rate is negative and injecting where it is positive'
+  Process_shut_down:
+    dims: [process, scenario, snapshot]
+    where: Process_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Process-shut_down` — how much of a committable process turns off this snapshot, capped
+      as the status is'
+  Process_start_up:
+    dims: [process, scenario, snapshot]
+    where: Process_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Process-start_up` — how much of a committable process turns on this snapshot, capped
+      as the status is'
+  Process_status:
+    dims: [process, scenario, snapshot]
+    where: Process_committed
+    bounds: {lower: 0.0}
+    domain: integer
+    description: '`Process-status` — how much of a committable process is on. It is an integer the rows
+      below cap at one, or at the module count where the build is modular'
+  Generator_marginal_cost_piecewise:
+    dims: [generator, scenario, snapshot]
+    where: Generator_marginal_cost_curve AND Generator_active
+    description: '`Generator-marginal_cost_piecewise` — the running cost of a generator that pays along
+      a curve, held above the curve'
+constraints:
+  Bus_nodal_balance:
+    dims: [bus, scenario, snapshot]
+    where: Bus_attached
+    expression: Bus_injection == 0
+    description: '`Bus-nodal_balance` — what is generated at a bus meets the load there, less half of
+      every incident line''s and transformer''s loss. What is generated includes storage dispatch and
+      stores. It is net of what the links take away, plus what arrives over them after losses and any
+      delay at every port they deliver to. Each process port draws or delivers at its own rate, and each
+      passive branch carries its flow. PyPSA dissipates a branch''s loss half at either end. Each generator,
+      storage unit, store and load term enters with its component''s `sign` (`constraints.py:1480-1481`,
+      `:1592`), and an inactive load not at all. A bus nothing is attached to has no row. PyPSA refuses
+      one that carries load. The file states no assumption for it.'
+  Generator_com_mod_p_lower:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed AND Generator_p_nom_mod > 0
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom_mod * (Generator_status - Generator_maintenance_pu
+      * Generator_maintenance_status)
+    description: '`Generator-com-mod-p-lower` — a committed modular unit outputs at least its minimum
+      of one module, whether the build is fixed or a decision'
+  Generator_com_mod_p_upper:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed AND Generator_p_nom_mod > 0
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom_mod * (Generator_status - Generator_maintenance_pu
+      * Generator_maintenance_status)
+    description: '`Generator-com-mod-p-upper` — a committed modular unit outputs at most one module''s
+      share, whether the build is fixed or a decision'
+  Generator_com_transition_shut_down:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed
+    expression: Generator_shut_down >= Generator_previous_status - Generator_status
+    description: '`Generator-com-transition-shut-down` — turning off is a stop, counted against the state
+      the unit carried into the snapshot'
+  Generator_com_transition_start_up:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed
+    expression: Generator_start_up >= Generator_status - Generator_previous_status
+    description: '`Generator-com-transition-start-up` — turning on is a start, counted against the state
+      the unit carried into the snapshot'
+  Generator_fix_p_lower:
+    dims: [generator, scenario, snapshot]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p >= Generator_p_min_pu * Generator_p_nom * (1 - Generator_maintenance_pu *
+      Generator_maintenance)
+    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
+  Generator_fix_p_upper:
+    dims: [generator, scenario, snapshot]
+    where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
+    expression: Generator_p <= Generator_p_max_pu * Generator_p_nom * (1 - Generator_maintenance_pu *
+      Generator_maintenance)
+    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
+  Generator_maint_event_count:
+    dims: [generator, scenario]
+    where: Generator_maintainable
+    expression: sum(Generator_maintenance_start, over=snapshot) == Generator_maintenance_events
+    description: '`Generator-maint-event-count` — a maintainable generator holds its number of maintenance
+      events over the horizon'
+  Generator_maint_modstatus_lb:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_committed AND Generator_p_nom_mod > 0
+    expression: Generator_maintenance_status >= Generator_status - Generator_maintenance_modules * (1
+      - Generator_maintenance)
+    description: '`Generator-maint-modstatus-lb` — in maintenance, every module on is on in maintenance'
+  Generator_maint_modstatus_le_maint:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_committed AND Generator_p_nom_mod > 0
+    expression: Generator_maintenance_status <= Generator_maintenance_modules * Generator_maintenance
+    description: '`Generator-maint-modstatus-le-maint` — out of maintenance, no module is on in maintenance.
+      In it, at most its modules in maintenance'
+  Generator_maint_modstatus_le_status:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_committed AND Generator_p_nom_mod > 0
+    expression: Generator_maintenance_status <= Generator_status
+    description: '`Generator-maint-modstatus-le-status` — the modules on in maintenance are at most the
+      modules on'
+  Generator_maint_window:
+    dims: [generator, scenario, snapshot]
+    where: Generator_maintainable AND Generator_active
+    expression: Generator_maintenance == sum(Generator_maintenance_start, over=start, by=Generator_maintenance_cover[covered])
+    description: '`Generator-maint-window` — a generator is in maintenance exactly where an event it started
+      covers the snapshot. Two events do not overlap, since the maintenance status is at most one'
+  Generator_shut_down_p_fixed_upper:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed AND NOT (Generator_p_nom_extendable AND Generator_p_nom_mod > 0)
+    expression: Generator_shut_down <= Generator_modules_installed
+    description: '`Generator-shut_down-p-fixed-upper` — a stop is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Generator_start_up_p_fixed_upper:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed AND NOT (Generator_p_nom_extendable AND Generator_p_nom_mod > 0)
+    expression: Generator_start_up <= Generator_modules_installed
+    description: '`Generator-start_up-p-fixed-upper` — a start is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Generator_status_p_fixed_upper:
+    dims: [generator, scenario, snapshot]
+    where: Generator_committed AND NOT (Generator_p_nom_extendable AND Generator_p_nom_mod > 0)
+    expression: Generator_status <= Generator_modules_installed
+    description: '`Generator-status-p-fixed-upper` — a status is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Link_com_mod_p_lower:
+    dims: [link, scenario, snapshot]
+    where: Link_committed AND Link_p_nom_mod > 0
+    expression: Link_p >= Link_p_min_pu * Link_p_nom_mod * (Link_status - Link_maintenance_pu * Link_maintenance_status)
+    description: '`Link-com-mod-p-lower` — a committed modular link flows at least its minimum of one
+      module, whether the build is fixed or a decision'
+  Link_com_mod_p_upper:
+    dims: [link, scenario, snapshot]
+    where: Link_committed AND Link_p_nom_mod > 0
+    expression: Link_p <= Link_p_max_pu * Link_p_nom_mod * (Link_status - Link_maintenance_pu * Link_maintenance_status)
+    description: '`Link-com-mod-p-upper` — a committed modular link flows at most one module''s share,
+      whether the build is fixed or a decision'
+  Link_com_transition_shut_down:
+    dims: [link, scenario, snapshot]
+    where: Link_committed
+    expression: Link_shut_down >= Link_previous_status - Link_status
+    description: '`Link-com-transition-shut-down` — turning off is a stop, counted against the state the
+      link carried into the snapshot'
+  Link_com_transition_start_up:
+    dims: [link, scenario, snapshot]
+    where: Link_committed
+    expression: Link_start_up >= Link_status - Link_previous_status
+    description: '`Link-com-transition-start-up` — turning on is a start, counted against the state the
+      link carried into the snapshot'
+  Link_fix_p_lower:
+    dims: [link, scenario, snapshot]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p >= Link_p_min_pu * Link_p_nom * (1 - Link_maintenance_pu * Link_maintenance)
+    description: '`Link-fix-p-lower` — a fixed link carries at least its minimum, negative for the other
+      way'
+  Link_fix_p_upper:
+    dims: [link, scenario, snapshot]
+    where: not Link_p_nom_extendable AND not Link_committable AND Link_active
+    expression: Link_p <= Link_p_max_pu * Link_p_nom * (1 - Link_maintenance_pu * Link_maintenance)
+    description: '`Link-fix-p-upper` — a fixed link carries at most its nominal power'
+  Link_maint_event_count:
+    dims: [link, scenario]
+    where: Link_maintainable
+    expression: sum(Link_maintenance_start, over=snapshot) == Link_maintenance_events
+    description: '`Link-maint-event-count` — a maintainable link holds its number of maintenance events
+      over the horizon'
+  Link_maint_modstatus_lb:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_committed AND Link_p_nom_mod > 0
+    expression: Link_maintenance_status >= Link_status - Link_maintenance_modules * (1 - Link_maintenance)
+    description: '`Link-maint-modstatus-lb` — in maintenance, every module on is on in maintenance'
+  Link_maint_modstatus_le_maint:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_committed AND Link_p_nom_mod > 0
+    expression: Link_maintenance_status <= Link_maintenance_modules * Link_maintenance
+    description: '`Link-maint-modstatus-le-maint` — out of maintenance, no module is on in maintenance.
+      In it, at most its modules in maintenance'
+  Link_maint_modstatus_le_status:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_committed AND Link_p_nom_mod > 0
+    expression: Link_maintenance_status <= Link_status
+    description: '`Link-maint-modstatus-le-status` — the modules on in maintenance are at most the modules
+      on'
+  Link_maint_window:
+    dims: [link, scenario, snapshot]
+    where: Link_maintainable AND Link_active
+    expression: Link_maintenance == sum(Link_maintenance_start, over=start, by=Link_maintenance_cover[covered])
+    description: '`Link-maint-window` — a link is in maintenance exactly where an event it started covers
+      the snapshot. Two events do not overlap, since the maintenance status is at most one'
+  Link_shut_down_p_fixed_upper:
+    dims: [link, scenario, snapshot]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_shut_down <= Link_modules_installed
+    description: '`Link-shut_down-p-fixed-upper` — a stop is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Link_start_up_p_fixed_upper:
+    dims: [link, scenario, snapshot]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_start_up <= Link_modules_installed
+    description: '`Link-start_up-p-fixed-upper` — a start is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Link_status_p_fixed_upper:
+    dims: [link, scenario, snapshot]
+    where: Link_committed AND NOT (Link_p_nom_extendable AND Link_p_nom_mod > 0)
+    expression: Link_status <= Link_modules_installed
+    description: '`Link-status-p-fixed-upper` — a status is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Process_com_mod_p_lower:
+    dims: [process, scenario, snapshot]
+    where: Process_committed AND Process_p_nom_mod > 0
+    expression: Process_p >= Process_p_min_pu * Process_p_nom_mod * (Process_status - Process_maintenance_pu
+      * Process_maintenance_status)
+    description: '`Process-com-mod-p-lower` — a committed modular process runs at least its minimum of
+      one module, whether the build is fixed or a decision'
+  Process_com_mod_p_upper:
+    dims: [process, scenario, snapshot]
+    where: Process_committed AND Process_p_nom_mod > 0
+    expression: Process_p <= Process_p_max_pu * Process_p_nom_mod * (Process_status - Process_maintenance_pu
+      * Process_maintenance_status)
+    description: '`Process-com-mod-p-upper` — a committed modular process runs at most one module''s share,
+      whether the build is fixed or a decision'
+  Process_com_transition_shut_down:
+    dims: [process, scenario, snapshot]
+    where: Process_committed
+    expression: Process_shut_down >= Process_previous_status - Process_status
+    description: '`Process-com-transition-shut-down` — turning off is a stop, counted against the state
+      the process carried into the snapshot'
+  Process_com_transition_start_up:
+    dims: [process, scenario, snapshot]
+    where: Process_committed
+    expression: Process_start_up >= Process_status - Process_previous_status
+    description: '`Process-com-transition-start-up` — turning on is a start, counted against the state
+      the process carried into the snapshot'
+  Process_maint_event_count:
+    dims: [process, scenario]
+    where: Process_maintainable
+    expression: sum(Process_maintenance_start, over=snapshot) == Process_maintenance_events
+    description: '`Process-maint-event-count` — a maintainable process holds its number of maintenance
+      events over the horizon'
+  Process_maint_modstatus_lb:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_committed AND Process_p_nom_mod > 0
+    expression: Process_maintenance_status >= Process_status - Process_maintenance_modules * (1 - Process_maintenance)
+    description: '`Process-maint-modstatus-lb` — in maintenance, every module on is on in maintenance'
+  Process_maint_modstatus_le_maint:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_committed AND Process_p_nom_mod > 0
+    expression: Process_maintenance_status <= Process_maintenance_modules * Process_maintenance
+    description: '`Process-maint-modstatus-le-maint` — out of maintenance, no module is on in maintenance.
+      In it, at most its modules in maintenance'
+  Process_maint_modstatus_le_status:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_committed AND Process_p_nom_mod > 0
+    expression: Process_maintenance_status <= Process_status
+    description: '`Process-maint-modstatus-le-status` — the modules on in maintenance are at most the
+      modules on'
+  Process_maint_window:
+    dims: [process, scenario, snapshot]
+    where: Process_maintainable AND Process_active
+    expression: Process_maintenance == sum(Process_maintenance_start, over=start, by=Process_maintenance_cover[covered])
+    description: '`Process-maint-window` — a process is in maintenance exactly where an event it started
+      covers the snapshot. Two events do not overlap, since the maintenance status is at most one'
+  Process_shut_down_p_fixed_upper:
+    dims: [process, scenario, snapshot]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_shut_down <= Process_modules_installed
+    description: '`Process-shut_down-p-fixed-upper` — a stop is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Process_start_up_p_fixed_upper:
+    dims: [process, scenario, snapshot]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_start_up <= Process_modules_installed
+    description: '`Process-start_up-p-fixed-upper` — a start is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+  Process_status_p_fixed_upper:
+    dims: [process, scenario, snapshot]
+    where: Process_committed AND NOT (Process_p_nom_extendable AND Process_p_nom_mod > 0)
+    expression: Process_status <= Process_modules_installed
+    description: '`Process-status-p-fixed-upper` — a status is at most the modules in place, an explicit
+      row as PyPSA writes it. The bound is one where the build is not modular, and the fixed build''s
+      whole count of modules where it is'
+expressions:
+  Bus_injection:
+    dims: [bus, scenario, snapshot]
+    expression: ((Generator_injection + Link_injection) + Load_injection) + Process_injection
+    description: what every component puts into a bus, less what it takes out of it. PyPSA writes each
+      term into the balance, and a load on its right-hand side
+  Generator_commitment_opex: {expression: 'sum(sum(((Generator_status * Generator_stand_by_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((Generator_start_up
+      * Generator_start_up_cost) * at(period_weight_objective, by=snapshot_period[period]), over=generator),
+      over=snapshot) + sum(sum((Generator_shut_down * Generator_shut_down_cost) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+  Generator_maintenance_modules:
+    dims: [generator, scenario]
+    description: 'how many modules of a modular committable generator can be on in maintenance: its build
+      cap in modules where the build is extendable, and the modules installed where it is fixed (`constraints.py:588-594`)'
+    cases:
+      extendable: {when: Generator_p_nom_extendable, expression: Generator_p_nom_max / Generator_p_nom_mod}
+    otherwise: Generator_modules_installed
+  Generator_opex: {expression: 'sum(sum((Generator_running_cost * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p * Generator_p)
+      * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Generator_previous_status:
+    dims: [generator, scenario, snapshot]
+    description: the commitment state a generator carries into a snapshot. It is off at the first snapshot
+      it is active in past the first of the horizon. PyPSA reads a status it did not build as off there
+      (`constraints.py:391`). It is the state carried over otherwise
+    cases:
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Generator_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Generator_status_carried_over
+  Generator_running_cost:
+    dims: [generator, scenario, snapshot]
+    description: 'what a generator''s output costs in a snapshot: the value read off its piecewise curve
+      where it has one, and its linear `marginal_cost` otherwise. A curve replaces the linear cost, as
+      PyPSA drops the unit from that term (`optimize.py:333-348`)'
+    cases:
+      curve: {when: Generator_marginal_cost_curve, expression: Generator_marginal_cost_piecewise}
+    otherwise: Generator_p * Generator_marginal_cost
+  Generator_status_carried_over:
+    dims: [generator, scenario, snapshot]
+    description: 'the state a generator carries over into a snapshot: the state it brought into the horizon
+      at the first, the previous snapshot''s after that'
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
+    otherwise: shift(Generator_status, along=snapshot, offset=1)
+  Link_commitment_opex: {expression: 'sum(sum(((Link_status * Link_stand_by_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((Link_start_up
+      * Link_start_up_cost) * at(period_weight_objective, by=snapshot_period[period]), over=link), over=snapshot)
+      + sum(sum((Link_shut_down * Link_shut_down_cost) * at(period_weight_objective, by=snapshot_period[period]),
+      over=link), over=snapshot)'}
+  Link_injection: {expression: '-sum(Link_p, over=link, by=Link_bus0[bus]) + sum(Link_output_arrival,
+      over=link_output, by=Link_output_bus[bus])'}
+  Link_maintenance_modules:
+    dims: [link, scenario]
+    description: 'how many modules of a modular committable link can be on in maintenance: its build cap
+      in modules where the build is extendable, and the modules installed where it is fixed (`constraints.py:588-594`)'
+    cases:
+      extendable: {when: Link_p_nom_extendable, expression: Link_p_nom_max / Link_p_nom_mod}
+    otherwise: Link_modules_installed
+  Link_opex: {expression: 'sum(sum(((Link_p * Link_marginal_cost) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=link), over=snapshot) + sum(sum((((Link_p * Link_p) * Link_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=link),
+      over=snapshot)'}
+  Link_output_arrival:
+    dims: [link_output, scenario, snapshot]
+    description: what a link delivers to an output port at a snapshot. It is its flow delayed by the port's
+      `delay` within its investment period. It is multiplied by the port's efficiency at the snapshot
+      the flow arrives. Where the port is `cyclic_delay`, the delayed flow wraps from the period's end.
+      Where it is not, the flow still in transit at the period's first snapshots is lost. A port that
+      does not delay (`delay` zero) delivers its flow unshifted, cyclic or not
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot_period[period]) * Link_efficiency
+  Link_previous_status:
+    dims: [link, scenario, snapshot]
+    description: the commitment state a link carries into a snapshot. It is off at the first snapshot
+      it is active in past the first of the horizon. PyPSA reads a status it did not build as off there
+      (`constraints.py:391`). It is the state carried over otherwise
+    cases:
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Link_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Link_status_carried_over
+  Link_status_carried_over:
+    dims: [link, scenario, snapshot]
+    description: 'the state a link carries over into a snapshot: the state it brought into the horizon
+      at the first, the previous snapshot''s after that'
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Link_status_initial}
+    otherwise: shift(Link_status, along=snapshot, offset=1)
+  Load_demand:
+    dims: [load, scenario, snapshot]
+    description: what a load draws from its bus's balance. It is its demand times its sign where it is
+      active, and nothing where it is not. PyPSA drops an inactive load from the balance (`constraints.py:1591-1592`)
+    cases:
+      active: {when: Load_active, expression: Load_sign * Load_p_set}
+    otherwise: '0'
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+  Process_commitment_opex: {expression: 'sum(sum(((Process_status * Process_stand_by_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((Process_start_up
+      * Process_start_up_cost) * at(period_weight_objective, by=snapshot_period[period]), over=process),
+      over=snapshot) + sum(sum((Process_shut_down * Process_shut_down_cost) * at(period_weight_objective,
+      by=snapshot_period[period]), over=process), over=snapshot)'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Process_maintenance_modules:
+    dims: [process, scenario]
+    description: 'how many modules of a modular committable process can be on in maintenance: its build
+      cap in modules where the build is extendable, and the modules installed where it is fixed (`constraints.py:588-594`)'
+    cases:
+      extendable: {when: Process_p_nom_extendable, expression: Process_p_nom_max / Process_p_nom_mod}
+    otherwise: Process_modules_installed
+  Process_opex: {expression: 'sum(sum(((Process_p * Process_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=process), over=snapshot) + sum(sum((((Process_p
+      * Process_p) * Process_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=process), over=snapshot)'}
+  Process_output_arrival:
+    dims: [process_output, scenario, snapshot]
+    description: what a process transfers at a port at a snapshot. It is its internal power delayed by
+      the port's `delay` within its investment period. It is multiplied by the port's rate at the snapshot
+      the transfer arrives. Where the port is `cyclic_delay`, the delayed transfer wraps from the period's
+      end. Where it is not, the energy still in transit at the period's first snapshots is lost. A port
+      that does not delay (`delay` zero) transfers at once, cyclic or not
+    cases:
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          * Process_rate'}
+    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot_period[period]) * Process_rate
+  Process_previous_status:
+    dims: [process, scenario, snapshot]
+    description: the commitment state a process carries into a snapshot. It is off at the first snapshot
+      it is active in past the first of the horizon. PyPSA reads a status it did not build as off there
+      (`constraints.py:391`). It is the state carried over otherwise
+    cases:
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Process_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Process_status_carried_over
+  Process_status_carried_over:
+    dims: [process, scenario, snapshot]
+    description: 'the state a process carries over into a snapshot: the state it brought into the horizon
+      at the first, the previous snapshot''s after that'
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Process_status_initial}
+    otherwise: shift(Process_status, along=snapshot, offset=1)
+  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+  scenario_opex:
+    dims: [scenario]
+    expression: ((((Generator_opex + Generator_commitment_opex) + Link_opex) + Link_commitment_opex) +
+      Process_opex) + Process_commitment_opex
+    description: 'what a future costs to run: every operating term, weighted by the snapshot''s hours
+      and its period, before the scenario''s own weight. A start and a stop cost what they cost, unweighted,
+      as PyPSA adds them (`optimize.py:448-468`)'
+  total_cost:
+    dims: []
+    expression: risk_weighted_opex
+    description: what the system costs. Capacity counts once per active period at its expected cost over
+      the scenarios. Operation counts in expectation over the scenarios, and a share of it at the tail
+conditions:
+  Generator_committed: {condition: Generator_committable AND Generator_active, description: 'a committable
+      generator that is active in the snapshot''s period: every unit-commitment row''s set'}
+  Generator_marginal_cost_curve: {condition: 'count(Generator_marginal_cost_curve_p, over=breakpoint)
+      > 0 AND Generator_active_asset', description: 'a generator that pays along a piecewise `marginal_cost`
+      curve: one of PyPSA''s `active_assets` with curve data (`optimize.py:307`, `piecewise.py:230-257`)'}
+  Link_committed: {condition: Link_committable AND Link_active, description: 'a committable link that
+      is active in the snapshot''s period: every unit-commitment row''s set'}
+  Process_committed: {condition: Process_committable AND Process_active, description: 'a committable process
+      that is active in the snapshot''s period: every unit-commitment row''s set'}
+objective: {sense: minimize, expression: total_cost}

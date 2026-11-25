@@ -45,8 +45,8 @@ PRESENT = '__present__'
 class Presence:
     """Where the *variable* under a term exists, and the columns it is joined on.
 
-    Not which rows the term's table has: a neutral parameter's missing rows
-    are a zero coefficient, those a variable's condition leaves out are
+    Not which rows the term's table has: a `missing: 0` parameter's missing
+    rows are a zero coefficient, those a variable's condition leaves out are
     absence, and the table cannot tell them apart.
 
     ``joined_on`` is ``None`` where the table is joined on the term's own
@@ -296,7 +296,7 @@ def both_regions(a: program.Mask | None, b: program.Mask | None) -> program.Mask
 
 def region_over(region: program.Mask | None, dims: Sequence[str]) -> program.Mask | None:
     """*region* where a term over *dims* can still be cut to it, else ``None``."""
-    return region if region is not None and region.dims <= set(dims) else None
+    return region if region is not None and set(region.dims) <= set(dims) else None
 
 
 def negate(p: Term) -> Term:

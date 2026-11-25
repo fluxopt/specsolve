@@ -150,7 +150,7 @@ NODE_CAP_SPEC = {
 
 LABEL_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'cost': {'dims': ['f'], 'missing': 'neutral'}, 'cap': {'dims': ['f']}},
+    'parameters': {'cost': {'dims': ['f'], 'missing': 0}, 'cap': {'dims': ['f']}},
     'variables': {'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
     'constraints': {'k': {'dims': ['f'], 'expression': 'x <= cap'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x * cost)'},
@@ -376,27 +376,19 @@ class TestWhatBindRefusesAndWhatItTakes:
         with pytest.raises(DataError, match="no data provided for parameter 'cost'"):
             tidy_sources(dispatch_program(), sources)
 
-    def test_a_bound_parameter_short_of_a_coordinate_is_refused_with_the_count(self):
-        """The refusal nothing else in the suite reaches.
-
-        A bound whose *value* is null is refused at attach, and so is a
-        missing row of a parameter that does not declare `missing:`, so the
-        only way to a null bound is a `missing: neutral` parameter with no row
-        for a coordinate the variable has a column at. The count is asserted because it is what the message
-        exists to carry: it is read off the two bound columns before the table
-        that carries them is filtered, and a probe that looked at one of them
-        would report every model as sound.
-        """
+    def test_a_bound_parameter_short_of_a_coordinate_reads_its_declared_zero(self):
+        """`cap` is `missing: 0`, so `x` at `i=2`, where `cap` has no row, is held to 0."""
         spec = {
             'dimensions': {'i': {'dtype': 'int'}},
-            'parameters': {'cap': {'dims': ['i'], 'missing': 'neutral'}},
+            'parameters': {'cap': {'dims': ['i'], 'missing': 0}},
             'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
             'constraints': {'c': {'dims': ['i'], 'expression': 'x >= 0'}},
-            'objective': {'sense': 'minimize', 'expression': 'sum(x, over=i)'},
+            'objective': {'sense': 'maximize', 'expression': 'sum(x, over=i)'},
         }
         sources = {'i': [0, 1, 2], 'cap': pl.DataFrame({'i': [0, 1], 'value': [5.0, 6.0]})}
-        with pytest.raises(DataError, match="variable 'x': 1 rows have NULL bounds"):
-            sps.build(spec, sources)
+        assert sps.solve(spec, sources).objective == pytest.approx(11.0), (
+            'x runs to 5 and 6, and to 0 where cap has no row'
+        )
 
     @pytest.mark.parametrize('rows', [2, 0])
     def test_a_dimensionless_parameter_must_be_one_row(self, rows):
@@ -524,11 +516,12 @@ class TestTheIndexSpace:
     every objective assertion in this file and fail here.
     """
 
-    def test_a_narrowed_variable_is_indexed_in_dimension_order(self):
+    def test_a_narrowed_variable_is_indexed_row_major_over_its_dimensions_sorted_by_name(self):
         """A column index is the solver's own column, so its order is the contract.
 
         Column indices are contiguous ``0..n-1`` over the coordinates the condition leaves, assigned
-        row-major on the dimensions' positions. An off-by-one here is a different
+        row-major over the dimensions sorted by name, `node` slowest, each on its
+        labels' positions. An off-by-one here is a different
         model rather than a slower one, so it is asserted against the order spelled
         out by hand rather than against whatever the engine produced.
         """
@@ -573,8 +566,8 @@ class TestTheIndexSpace:
         zero = {('a', 'gas'), ('c', 'coal'), ('b', 'hydro')}
         expected = [
             (s, n, t)
-            for s in range(5)
             for n in ['a', 'b', 'c']
+            for s in range(5)
             for t in ['wind', 'gas', 'coal', 'hydro']
             if (n, t) not in zero
         ]
@@ -583,7 +576,9 @@ class TestTheIndexSpace:
             indexed = model._engine._model.variables['p'].table.collect()
 
         assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be contiguous and ascending'
-        assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected
+        assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected, (
+            'row-major over node, snapshot, tech, the dimensions sorted by name'
+        )
 
     def test_a_string_dimension_is_enum_encoded_up_to_the_read_back(self):
         """A string dimension is an ``Enum`` over its labels in label order for the
@@ -949,7 +944,7 @@ SPELLED_ZEROS_LABELS = {'i': [0, 1], 'j': [0, 1, 2, 3]}
 
 SPELLED_ZEROS_SPEC = {
     'dimensions': {'i': {'dtype': 'int'}, 'j': {'dtype': 'int'}},
-    'parameters': {'a': {'dims': ['i', 'j'], 'missing': 'neutral'}},
+    'parameters': {'a': {'dims': ['i', 'j'], 'missing': 0}},
     'variables': {'x': {'dims': ['j'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'c': {'dims': ['i'], 'expression': 'sum(a * x, over=j) >= 10'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x, over=j)'},
@@ -1175,7 +1170,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         """A cost of zero and no cost at all are the same instruction."""
         a = _spelled_zeros([[1.0, 1.0]])
         spec = override(SPELLED_ZEROS_SPEC, objective={'sense': 'minimize', 'expression': 'sum(x * cost)'})
-        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 'neutral'}}
+        spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 0}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
             tables = model._engine._model.tables
@@ -1545,8 +1540,8 @@ class TestThePositionalHandoff:
         assert _aligned_for(masked, shuffled, monkeypatch) == {'avail': False}
 
         holey = DENSE_BOUND_LABELS | {'avail': SHUFFLED_BOUND.head(5), 'cost': FLAT_COST}
-        neutral = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'neutral'})
-        assert _aligned_for(neutral, holey, monkeypatch) == {'avail': False}
+        sparse = override(DENSE_BOUND_SPEC, **{'parameters.avail.missing': 'absent'})
+        assert _aligned_for(sparse, holey, monkeypatch) == {'avail': False}
 
 
 def _constant_beside_a_term_sources(expression: str, *, over_the_dim: bool = False) -> dict:
