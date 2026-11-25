@@ -427,3 +427,27 @@ def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Pat
     assert (tmp_path / 'gated.lp').read_text() == (tmp_path / 'plain.lp').read_text(), (
         'a where that holds everywhere changed the written model'
     )
+
+
+@pytest.mark.xfail(strict=True, reason='settle reads a parameter without a row as false, whatever its missing value')
+@pytest.mark.parametrize(
+    ('where', 'rows'),
+    [
+        pytest.param('unset != 1', 6, id='a-parameter-without-a-row-whose-missing-value-passes'),
+        pytest.param('level < 1', 5, id='a-parameter-whose-rows-all-fail-and-whose-missing-value-passes'),
+    ],
+)
+def test_a_where_holds_where_its_parameter_has_no_row_and_the_missing_value_passes(where, rows):
+    """Fuzz seeds 441 and 884: `p != 1` under `missing: 0`, with no row of `p`, admits every coordinate.
+
+    The relational lane built none of them, as if a coordinate without a row
+    failed every condition on it.
+    """
+    spec = {
+        **TABLED_SPEC,
+        'parameters': {**EVERYWHERE_PARAMETERS, 'unset': {'dims': ['g', 't'], 'missing': 0.0}},
+        'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}},
+    }
+    sources = EVERYWHERE_SOURCES | {'unset': pl.DataFrame(schema={'g': pl.String, 't': pl.Int64, 'value': pl.Float64})}
+    with sps.build(spec, sources) as model:
+        assert model.metrics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
