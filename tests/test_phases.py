@@ -285,6 +285,50 @@ def test_a_slow_step_after_the_archive_lands_shows_in_the_models_archive_clock(
     timed.check()
 
 
+def _spin(seconds: float) -> Callable[[], None]:
+    """*seconds* of this process's CPU time, spent."""
+
+    def spend() -> None:
+        until = time.process_time() + seconds
+        while time.process_time() < until:
+            pass
+
+    return spend
+
+
+@pytest.mark.parametrize(
+    ('spend', 'unclocked'),
+    [
+        pytest.param(
+            lambda: time.sleep(4 * SLACK),
+            False,
+            id='a pause off the CPU',
+            marks=pytest.mark.xfail(strict=True, reason='the check reads wall time, which a pause fills'),
+        ),
+        pytest.param(_spin(4 * SLACK), True, id='work on the CPU'),
+    ],
+)
+def test_only_work_outside_every_lap_reads_as_unclocked(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock, spend, unclocked
+):
+    """A runner that takes the CPU away between two laps leaves no step unclocked; work the laps miss does.
+
+    Each is put after the solve's last lap, where #2227 found the runner
+    preempting the thread for 5 ms on CI.
+    """
+    real = engine.Engine.next_run
+
+    def after_the_last_lap(self: engine.Engine) -> None:
+        spend()
+        real(self)
+
+    monkeypatch.setattr(engine.Engine, 'next_run', after_the_last_lap)
+    out = tmp_path / 'case.zip'
+    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out), out, clock)
+    left = timed.wall - sum(timed.kept.values())
+    assert (left >= SLACK) is unclocked, f'{left * 1e3:.2f} ms is left outside every lap'
+
+
 def test_a_lap_takes_only_a_phase_a_metrics_column_carries():
     """A phase clocked under a name no `Metrics` column carries would be dropped from every archive."""
     assert get_args(Phase) == PHASES, 'the phases a lap is typed to take are the Metrics clocks, in order'
