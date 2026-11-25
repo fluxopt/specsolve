@@ -1,11 +1,9 @@
 """The phases a solve is clocked in add up to the call, and each step is clocked in the phase that names it.
 
 [`Metrics`][specsolve._records.Metrics] defines the phases. The model's own
-clocks are held to the whole call, on the process's CPU time, so a runner that
-takes the CPU away between two laps is not read as a step left unclocked; the
-archived row, written before the archive lands, to at most what the model kept.
-One test slows one step at a time and finds the delay in its own phase and
-nowhere else.
+clocks are held to the process's CPU time over a whole call; the archived row, written
+before the archive lands, to at most what the model kept. One test slows one
+step at a time and finds the delay in its own phase and nowhere else.
 """
 
 from __future__ import annotations
@@ -35,9 +33,7 @@ DELAY = 10.0
 WAIT = 0.1
 
 #: CPU time no phase holds. The laps tile each call, so what is left is the
-#: return from one call and the entry into the next, and what a test does
-#: between its calls is done before its clock starts: 0.11 ms a call at the
-#: median and 0.25 ms at most, under pyarrow too (#2230).
+#: return from one call and the entry into the next: 0.11 to 0.25 ms (#2230).
 SLACK = 0.001
 
 
@@ -50,7 +46,7 @@ def _with_assumption(dispatch_yaml: Path) -> dict[str, object]:
 class Timed(NamedTuple):
     """One call, timed from outside and from inside."""
 
-    #: The call's length on the clock the engine laps on.
+    #: The CPU time of the call.
     wall: float
     #: Seconds per phase as the model kept them, the archive's landing included.
     kept: dict[str, float]
@@ -60,7 +56,7 @@ class Timed(NamedTuple):
     def check(self) -> None:
         """The model's phases tile the call, and the row never holds more than the model kept."""
         kept = sum(self.kept.values())
-        assert kept <= self.wall, f'no step is clocked twice: {self.kept} sum past the call, {self.wall}'
+        assert kept <= self.wall, f'no step is clocked twice: {self.kept} sum past the CPU time {self.wall}'
         assert self.wall - kept < SLACK, f'no step is left unclocked: {self.kept} sum short of {self.wall}'
         assert all(self.recorded[phase] <= self.kept[phase] for phase in PHASES), (
             f'the row is taken before the archive lands, so it holds no more than the model: {self.recorded}'
@@ -68,11 +64,11 @@ class Timed(NamedTuple):
 
 
 class Clock:
-    """This process's CPU time plus what the slowed steps added, read by the engine and the test alike.
+    """``process_time`` plus what the slowed steps added, read by the engine and the test alike.
 
     A step slowed on this clock costs no real time, so a phase the runner
     slows for its own reasons cannot reach a slowed step's delay. A pause off
-    the CPU adds nothing, and the work of every thread of the process counts.
+    the CPU adds nothing.
     """
 
     def __init__(self) -> None:
@@ -292,47 +288,19 @@ def test_a_slow_step_after_the_archive_lands_shows_in_the_models_archive_clock(
     timed.check()
 
 
-def _spin(seconds: float) -> Callable[[], None]:
-    """*seconds* of this process's CPU time, spent."""
-
-    def spend() -> None:
-        until = time.process_time() + seconds
-        while time.process_time() < until:
-            pass
-
-    return spend
-
-
-@pytest.mark.parametrize(
-    ('spend', 'unclocked'),
-    [
-        pytest.param(
-            lambda: time.sleep(4 * SLACK),
-            False,
-            id='a pause off the CPU',
-        ),
-        pytest.param(_spin(4 * SLACK), True, id='work on the CPU'),
-    ],
-)
-def test_only_work_outside_every_lap_reads_as_unclocked(
-    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock, spend, unclocked
+def test_a_pause_off_the_cpu_leaves_no_step_unclocked(
+    dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock
 ):
-    """A runner that takes the CPU away between two laps leaves no step unclocked; work the laps miss does.
-
-    Each is put after the solve's last lap, where #2227 found the runner
-    preempting the thread for 5 ms on CI.
-    """
+    """A runner that takes the CPU away after the last lap, as #2227 found on CI, is no step the laps missed."""
     real = engine.Engine.next_run
 
-    def after_the_last_lap(self: engine.Engine) -> None:
-        spend()
+    def paused(self: engine.Engine) -> None:
+        time.sleep(4 * SLACK)
         real(self)
 
-    monkeypatch.setattr(engine.Engine, 'next_run', after_the_last_lap)
+    monkeypatch.setattr(engine.Engine, 'next_run', paused)
     out = tmp_path / 'case.zip'
-    timed = _timed(_archived(dispatch_yaml, dispatch_table_inputs, out), out, clock)
-    left = timed.wall - sum(timed.kept.values())
-    assert (left >= SLACK) is unclocked, f'{left * 1e3:.2f} ms is left outside every lap'
+    _timed(_archived(dispatch_yaml, dispatch_table_inputs, out), out, clock).check()
 
 
 def test_a_lap_takes_only_a_phase_a_metrics_column_carries():
