@@ -268,7 +268,6 @@ def test_a_slow_step_shows_in_its_own_phase(
     timed.check()
 
 
-@pytest.mark.xfail(strict=True, reason='the last archive lap comes before the sources are carried')
 def test_a_slow_step_after_the_archive_lands_shows_in_the_models_archive_clock(
     dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock
 ):
