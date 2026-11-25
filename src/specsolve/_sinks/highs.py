@@ -7,6 +7,8 @@ so importing this module stays free for callers that only write LP files.
 
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -28,7 +30,7 @@ from specsolve._sinks.solver import (
 )
 from specsolve._sinks.tables import SENSE_CODES
 from specsolve._status import SolveStatus
-from specsolve.errors import SpecsolveError
+from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -67,13 +69,18 @@ _CONDITION_OF_HIGHS_STATUS = {
 #: ``kIisModelStatusIrreducible``, by value: highspy does not bind the enum.
 _IIS_IRREDUCIBLE = 3
 
+#: The lowest ``small_matrix_value`` HiGHS accepts; its default is 1e-9.
+_SMALLEST_MATRIX_VALUE = 1e-12
+
 
 def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> tuple[Any, ColumnVectors, RowVectors]:
     """The populated `highspy.Highs`, and the column and row vectors it was loaded with.
 
     ``iis_strategy`` leads the caller's options: the default checks bounds
     alone, and on a conflict between rows it returns an empty subsystem with
-    no error.
+    no error. ``small_matrix_value`` leads them too, at the lowest value HiGHS
+    accepts: HiGHS drops a matrix or Hessian entry at or below it, which
+    ``sps.write`` keeps.
 
     The integrality vector spans every column even where none is integer: HiGHS
     reads an empty one as whatever the memory held (1.15.1).
@@ -96,8 +103,11 @@ def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> tupl
     h.setOptionValue('output_flag', False)
     strategy = highspy.IisStrategy
     h.setOptionValue('iis_strategy', int(strategy.kIisStrategyFromLp) | int(strategy.kIisStrategyIrreducible))
+    h.setOptionValue('small_matrix_value', _SMALLEST_MATRIX_VALUE)
     for option, value in (solver_options or {}).items():
         h.setOptionValue(option, value)
+    coefficients = tables.matrix[COEFF].to_numpy()
+    _warn_dropped(h, coefficients, coefficients, 'constraint')
 
     cols = tables.dense_columns(inf)
     rows = tables.dense_rows(inf)
@@ -160,6 +170,7 @@ def _pass_hessian(h: Any, tables: SinkTables) -> None:
     upper = tables.quad[COL_L].to_numpy().astype(np.int32, copy=False)
     diagonal = lower == upper
     values = np.where(diagonal, tables.quad[COEFF].to_numpy() * 2.0, tables.quad[COEFF].to_numpy())
+    _warn_dropped(h, values, tables.quad[COEFF].to_numpy(), 'quadratic objective')
 
     order = np.lexsort((lower, upper))
     starts = np.zeros(tables.column_count + 1, dtype=np.int32)
@@ -175,6 +186,30 @@ def _pass_hessian(h: Any, tables: SinkTables) -> None:
             values[order],
         ),
         'the quadratic objective',
+    )
+
+
+def _warn_dropped(h: Any, values: Any, coefficients: Any, what: str) -> None:
+    """Warn of the nonzero *values* at or below the ``small_matrix_value`` *h* holds, which HiGHS drops on loading.
+
+    *values* are what HiGHS compares, and *coefficients* the model's own,
+    which the message shows: a Hessian holds a diagonal twice.
+    """
+    import numpy as np
+
+    _, cut = h.getOptionValue('small_matrix_value')
+    magnitude = np.abs(values)
+    dropped = (magnitude > 0) & (magnitude <= cut)
+    if not dropped.any():
+        return
+    shown = np.abs(coefficients)[dropped]
+    warnings.warn(
+        f'HiGHS drops {int(dropped.sum())} {what} coefficient(s) with an absolute value in '
+        f'[{shown.min():.3g}, {shown.max():.3g}], at or below its small_matrix_value of {cut:g}, '
+        'and solves the model without them; sps.write keeps them. Rescale the model so its '
+        f'coefficients sit above {_SMALLEST_MATRIX_VALUE:g}, the lowest value HiGHS accepts, or solve with another solver.',
+        SpecsolveWarning,
+        skip_file_prefixes=(str(Path(__file__).parents[1]),),
     )
 
 
