@@ -43,6 +43,12 @@ spec declares `ordered: true`,
 each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
+**A column over a dimension holds labels of its labels' kind**: an integer of
+any width beside integer labels, a string beside string labels, a date or a
+datetime beside temporal ones. A column of another kind is refused, since its
+rows would match no label. A table with no rows has no label to misread, so its
+column is read in the labels' type.
+
 **A datetime label is held in microseconds**, in the time zone it arrives in.
 A column must be in the time zone of its dimension's labels. Under a `dtype: datetime`
 dimension, a date is the microsecond its day starts on.
@@ -90,6 +96,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | a datetime label finer than a microsecond | names a label, and the rounding |
 | a table missing a declared dimension column, or `value` | names the columns needed |
 | a label the dimension does not have | names the parameter and the strays |
+| a column over a dimension that holds another kind of label than its labels | names the source, the column and both types |
 | two rows for one coordinate | |
 | a relation with two values for one key | |
 | a dimension carrying relations, with no labels | |
@@ -109,6 +116,7 @@ An infinite bound never binds either. A reported quotient by zero is absent
 | What arrives | What happens |
 |---|---|
 | an undeclared column in a table | ignored |
+| a table with no rows whose column over a dimension is of another type | read in the labels' type |
 | a datetime label in nanoseconds or milliseconds | held in microseconds |
 | a pandas `datetime64[s]` column, which `pd.to_datetime` gives a date | held in microseconds |
 | a coordinate with no row, of a parameter declared `missing: absent`, `neutral` or a value | read as its `missing:` says ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)); `diagnostics().sparse_parameters` names the short parameters ([`Diagnostics`](api.md#specsolve.types.Diagnostics)) |

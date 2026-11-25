@@ -515,7 +515,7 @@ def test_a_stray_relation_value_reads_the_same_over_an_int_labelled_target(tmp_p
         'dimensions': {'g': {}, 'b': {'dtype': 'int'}},
     }
     path = _written(tmp_path, spec)
-    sources = {**_P_MAX, **_LABELS, 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
+    sources = {**_P_MAX, 'g': _tidy(g=['w', 's']), 'b': _tidy(b=[1, 2]), 'gen_bus': _tidy(g=['w', 's'], b=[1, 99])}
 
     sentence = both_lanes_refuse(path, sources, match=r'not .b. labels')
     assert '99.' in sentence, 'the label as the caller wrote it, not as numpy holds it'

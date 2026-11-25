@@ -81,7 +81,6 @@ def _ports(**replaced: object) -> dict[str, object]:
         ),
     ],
 )
-@pytest.mark.xfail(strict=True, reason='#2220: the mismatch escapes as a polars error')
 def test_a_label_column_of_another_type_than_its_labels_is_refused_by_name(spec, sources, owner):
     """The refusal names the source, the column, the type given and the labels' type, on both lanes."""
     sentence = both_lanes_refuse(spec, sources, match='holds')
@@ -99,7 +98,6 @@ def test_a_label_column_of_another_type_than_its_labels_is_refused_by_name(spec,
         ),
     ],
 )
-@pytest.mark.xfail(strict=True, reason='#2220: the mismatch escapes as a polars error')
 def test_an_empty_table_takes_its_labels_type(empty):
     """An empty table holds no label to misread, so its column is read in the labels' type and the model builds as without it."""
     with sps.build(
