@@ -110,7 +110,8 @@ longer matches `pyproject.toml` fails the check. After a change to the
 dependencies in `pyproject.toml`, run `pixi lock` and commit both files.
 
 An upgrade is a pull request of its own, and the diff of `pixi.lock` lists
-what moved:
+what moved. Once a quarter, the `pixi update` workflow opens one that moves
+every package to its newest release. Between those, upgrade by hand:
 
 ```bash
 pixi update polars   # one package
