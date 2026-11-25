@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from mathspec import program
 
 from specsolve._collect import collected_all, in_memory
-from specsolve._engine.conditions import counted_over_nothing, passing
+from specsolve._engine.conditions import counted_over_nothing, passes_without_a_row, passing
 from specsolve._engine.scope import Scope
 
 if TYPE_CHECKING:
@@ -38,9 +38,10 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     Each atom is read once over its parameter's own table, all in one batch
     and in memory: a model gates hundreds of entries on the same few
     flags, and reading a flag per entry over the product of its dimensions
-    was most of the cost of the entries that build nothing. A parameter
-    with no row, and a count along a dimension without a label, settle
-    without a query.
+    was most of the cost of the entries that build nothing. A coordinate
+    without a row of the parameter reads its missing value, which passes
+    the atom or fails it everywhere at once. A parameter with no row, and a
+    count along a dimension without a label, settle without a query.
     """
     entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
     masks = [e.where for e in entries if e.where is not None]
@@ -55,14 +56,17 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
             if scope.data.parameter_rows[atom.name]:
                 queried.append(atom)
             else:
-                out[atom] = False
+                out[atom] = passes_without_a_row(scope, atom)
     with in_memory():
         counts = collected_all(passing(scope, atom) for atom in queried)
     for atom, passed in zip(queried, counts, strict=True):
+        everywhere = math.prod(scope.data.cardinality[d] for d in atom.dims)
         count = passed.item()
+        if passes_without_a_row(scope, atom):
+            count += everywhere - scope.data.parameter_rows[atom.name]
         if not count:
             out[atom] = False
-        elif count == math.prod(scope.data.cardinality[d] for d in atom.dims):
+        elif count == everywhere:
             out[atom] = True
     return out
 
