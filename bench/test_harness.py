@@ -2559,17 +2559,24 @@ def test_two_different_models_fail_however_fast() -> None:
             lambda n: {**n, 'rhs': np.array([1e9, 4.76837158203125e-07])},
             True,
             id='a sum that cancels to zero, off by the last bits of its terms',
-            marks=pytest.mark.xfail(strict=True, reason='LAST_BITS is relative to each number alone'),
         ),
         pytest.param(
             lambda n: {**n, 'rhs': np.array([1e9, 1e-2])}, False, id='a number near zero moved past those last bits'
+        ),
+        pytest.param(
+            lambda n: {**n, 'cols.ub': np.array([np.inf, 2.0])}, False, id='a bound moved beside an infinite one'
         ),
     ],
 )
 def test_numbers_in_their_last_bits_are_one_model_and_anything_more_is_not(
     tmp_path: Path, change: Any, same: bool
 ) -> None:
-    numbers = {'cost': np.array([1.0, 2.5, 1e6]), 'rhs': np.array([1e9, 0.0]), 'rows.row': np.arange(3)}
+    numbers = {
+        'cost': np.array([1.0, 2.5, 1e6]),
+        'rhs': np.array([1e9, 0.0]),
+        'cols.ub': np.array([np.inf, 1.0]),
+        'rows.row': np.arange(3),
+    }
     np.savez(tmp_path / 'base.npz', **numbers)
     np.savez(tmp_path / 'head.npz', **change(numbers))
     assert same_model(tmp_path / 'base.npz', tmp_path / 'head.npz') is same
