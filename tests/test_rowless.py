@@ -223,7 +223,7 @@ def test_an_update_across_what_holds_no_row_is_the_model_a_fresh_build_gives(tmp
 #: nothing; each is over `g` alone, a sixth of the product an entry over
 #: `g` and `t` spans. `e` has no label, so a count along it is 0.
 TABLED_SPEC = {
-    'dimensions': {'g': {}, 't': {}, 'e': {}},
+    'dimensions': {'g': {}, 't': {'dtype': 'int'}, 'e': {}},
     'parameters': {
         'flag': {'dims': ['g'], 'dtype': 'bool', 'missing': 'absent'},
         'cap': {'dims': ['g']},
@@ -279,13 +279,13 @@ def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table
     built, real = [], indices.nothing
 
     def counted(scope, dims, index):
-        built.append((tuple(dims), index))
+        built.append((tuple(sorted(dims)), index))
         return real(scope, dims, index)
 
     monkeypatch.setattr(indices, 'nothing', counted)
     variables = {**TABLED_SPEC['variables'], 'y': {'dims': ['g', 'e'], 'bounds': {'lower': 0}}}
     constraints = {f'unlabelled_{i}': {'dims': ['g', 'e'], 'expression': 'y >= 0'} for i in range(3)}
     sps.build({**TABLED_SPEC, 'variables': variables, 'constraints': constraints}, TABLED_SOURCES).close()
-    assert built == [(('g', 'e'), COL), (('g', 'e'), ROW)], (
+    assert built == [(('e', 'g'), COL), (('e', 'g'), ROW)], (
         f'empty tables were built for {built}, where one per dimensions and index column is enough'
     )

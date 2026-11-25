@@ -1,6 +1,6 @@
 """Is the new code faster than the old? An A/B of two git refs over every cell of the grid.
 
-    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above]
+    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above pypsa]
         [--rounds 6] [--op build|solve] [--focus module:Class.method] [--memory] [-k <substring>] [--out ab.md]
         [--raw ab.parquet]
 
@@ -12,8 +12,8 @@ measurement is a fresh process that runs the operation once, and the verdict is
 on its peak resident memory. The first round also saves what each side
 produced: the built model's numbers, or a solve's status and objective. Where the two differ beyond
 the last bits, the cell *differs* and fails however fast it is. Where floats
-differ only within ``LAST_BITS``, the sums ran in another order: the cell keeps
-its verdict, marked *last bits*.
+differ only within ``LAST_BITS`` of themselves or of the largest number of their
+array, the sums ran in another order: the cell keeps its verdict, marked *last bits*.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
 is *faster* or *slower* where enough rounds agree, which takes at least six
@@ -58,7 +58,8 @@ ROOT = Path(__file__).resolve().parents[2]
 #: The two-sided significance of the sign test a verdict rests on.
 ALPHA = 0.05
 
-#: The relative difference within which two floats are one number summed in another order.
+#: The difference within which two floats are one number summed in another order, relative to the larger of the two or
+#: to the largest number of their array, whichever is greater.
 LAST_BITS = 1e-12
 
 #: The numbers about a whole cell that [`raw`][] keeps from each measurement, beside each phase's seconds.
@@ -277,11 +278,22 @@ def same_model(base: Path, head: Path) -> bool:
             if x.shape != y.shape:
                 return False
             if np.issubdtype(x.dtype, np.floating):
-                if not np.allclose(x, y, rtol=LAST_BITS, atol=0.0, equal_nan=True):
+                if not np.allclose(x, y, rtol=LAST_BITS, atol=LAST_BITS * _largest(x, y), equal_nan=True):
                     return False
             elif not np.array_equal(x, y):
                 return False
     return True
+
+
+def _largest(*arrays: np.ndarray) -> float:
+    """The largest finite magnitude in *arrays*, 0 where they hold none.
+
+    A sum that cancels to near zero is off by the last bits of its terms, not of
+    its result. The terms are not saved, so the largest number of the array
+    stands in for them.
+    """
+    finite = [np.abs(a[np.isfinite(a)]) for a in arrays]
+    return float(max((f.max() for f in finite if f.size), default=0.0))
 
 
 def _ask(
@@ -419,7 +431,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('base')
     parser.add_argument('head')
-    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=list(SIZES))
+    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=[*SIZES, 'pypsa'])
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')

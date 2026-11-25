@@ -60,7 +60,7 @@ class EvaluationContext:
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
-    #: How a ``missing: neutral`` parameter reads where the data has no row. A
+    #: How a ``missing: 0`` parameter reads where the data has no row. A
     #: coefficient is zero there, which is what the row multiplies by; the side
     #: of a where comparison is absent there, which is the false the language
     #: states for a comparison over a value that is not supplied.
