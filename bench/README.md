@@ -846,6 +846,12 @@ the grid, at each size of the run that is also one of their rungs: `s` or `l`. L
 models of `examples/ports` as `port-<name>`, at their published size: real
 formulations, as a check on a grid this harness chose.
 
+**`--sizes pypsa` adds PyPSA's own `carbon_management`** as
+`pypsa-carbon_management`: 2,131,927 columns, 4,418,981 rows and 9,787,131
+nonzeros, #2130's count. It is the spec and data PyPSA hands specsolve,
+captured once into `ab/carbon_management/`; `capture.py` there writes them
+again, and says which PyPSA it needs and what it changes to make them build.
+
 **A cell's verdict** is a two-sided sign test at 5% over its paired rounds.
 Six rounds is the least that can pass, and `compare` refuses fewer. Every
 timed build is warm, and the sides alternate ABBA.

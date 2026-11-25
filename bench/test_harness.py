@@ -42,7 +42,7 @@ from bench.ab.compare import (
     table,
     verdict,
 )
-from bench.ab.grid import SHAPES, spec, tables
+from bench.ab.grid import SHAPES, SIZES, cell, ids, spec, tables
 from bench.arms import ARMS, solved, unmeasurable
 from bench.arms.specsolve import TIMED_THROUGH, _tables, checked_sources, unsupported
 from bench.cases import CASES, Shape, _declaration_sweep, _declarations_spec, between_decades, rescaled, shortened
@@ -2329,6 +2329,20 @@ AB_ROOT = Path(__file__).resolve().parent.parent
 )
 def test_an_ab_verdict_is_a_two_sided_sign_test(ratios: list[float], expected: str) -> None:
     assert verdict(ratios) == expected
+
+
+def test_a_pypsa_model_is_a_cell_only_where_a_run_asks_for_it() -> None:
+    """A run over the grid's sizes, the default among them, does not wait on PyPSA's models."""
+    assert 'pypsa-carbon_management' in ids(['pypsa']), '--sizes pypsa runs it'
+    assert not [c for c in ids(list(SIZES)) if c.startswith('pypsa-')], 'and no grid size does'
+
+
+def test_the_captured_carbon_management_reads_as_its_spec_declares() -> None:
+    """Every source of the capture tidies, so a change to what loading refuses fails here rather than in an A/B."""
+    import specsolve as sps
+
+    captured = cell('pypsa-carbon_management')
+    assert len(sps.tidy(captured.spec, captured.sources)) == 369, 'one table per source PyPSA hands over'
 
 
 @pytest.mark.parametrize('name', list(SHAPES))
