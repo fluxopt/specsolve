@@ -275,9 +275,32 @@ PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if fi
 #: carries is refused by the type checker.
 Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
 
+#: What a lap did inside its phase: a step of ``tidy``, ``build`` or
+#: ``handoff``, as [`Model.timings`][specsolve._api.Model.timings] names them.
+#: A step is not checked against its phase.
+Step = Literal[
+    'read',
+    'dimension',
+    'relation',
+    'parameter',
+    'check',
+    'setup',
+    'variable',
+    'set',
+    'constraint',
+    'objective',
+    'matrix',
+    'tables',
+    'digest',
+    'start',
+    'push',
+    'instance',
+    'warm',
+]
+
 #: How a step ends a lap: ``(phase, step, entry)``, as
 #: [`Engine.lap`][specsolve._engine.engine.Engine.lap] takes them.
-Lap = Callable[[Phase, str | None, str | None], None]
+Lap = Callable[[Phase, Step | None, str | None], None]
 
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)

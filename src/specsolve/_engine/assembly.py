@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from polars._typing import MaintainOrderJoin
 
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._records import Lap
+    from specsolve._records import Lap, Step
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -182,7 +182,7 @@ class Assembly:
         return model
 
     def _timed(
-        self, step: str, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
+        self, step: Step, entry: str | None, build: Callable[_Args, _Built], *args: _Args.args, **kwargs: _Args.kwargs
     ) -> _Built:
         """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 

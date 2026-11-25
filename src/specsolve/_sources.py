@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from mathspec.program import Dimension, Program, Relation
 
     from specsolve._inputs import Label, Source
-    from specsolve._records import Lap, Phase
+    from specsolve._records import Lap, Phase, Step
 
 
 def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
@@ -85,7 +85,7 @@ def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, 
     return _read(program, data, lap)
 
 
-def _untimed(phase: Phase, step: str | None, entry: str | None) -> None:
+def _untimed(phase: Phase, step: Step | None, entry: str | None) -> None:
     """A lap no engine clocks: [`tidy_sources`][] read outside a model."""
 
 

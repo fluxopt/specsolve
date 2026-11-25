@@ -33,7 +33,7 @@ from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
-from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase
+from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase, Step
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -131,7 +131,7 @@ class Engine:
         """Begin a call: the next [`lap`][] measures from now."""
         self._mark = perf_counter()
 
-    def lap(self, phase: Phase, step: str | None = None, entry: str | None = None) -> None:
+    def lap(self, phase: Phase, step: Step | None = None, entry: str | None = None) -> None:
         """Log the wall time since the last lap, or since [`start`][], under *phase*.
 
         Each lap begins where the one before it ended, so the laps of a call
