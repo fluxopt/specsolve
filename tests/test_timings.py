@@ -350,13 +350,23 @@ def test_a_refused_source_keeps_the_tidy_laps_it_reached():
     ], 'the rows up to the refused parameter, and none for it or after it'
 
 
-def test_a_runs_clocks_never_exceed_the_whole_life():
-    """A result's row is its run's laps summed; its clocks never pass the model's, which sum every lap.
+@pytest.mark.parametrize(
+    'laps',
+    [
+        pytest.param({0: (0.3, 0.2, 0.1)}, id='one run'),
+        pytest.param({0: (0.3, 0.2, 0.1), 1: (0.1, 0.2, 0.3)}, id='two runs'),
+    ],
+)
+def test_a_runs_clocks_never_exceed_the_whole_life(laps):
+    """A result's row is its run's laps summed; its clocks never pass the model's, which are every run's.
 
-    Three laps of 0.3, 0.2 and 0.1 s summed in the other order come to one unit
-    in the last place more than the same three summed in the order they ran.
+    Three laps of 0.3, 0.2 and 0.1 s summed from the last come to one unit in the
+    last place more than the same three summed in the order they ran, which is
+    how a run's row used to pass its model's.
     """
-    laps = engine._Laps()
-    for seconds in (0.3, 0.2, 0.1):
-        laps.append(0, 'build', 'constraint', None, seconds)
-    assert laps.clocks(0)['build'] <= laps.clocks()['build'], "a run's share is no more than the whole"
+    log = engine._Laps()
+    for run, seconds in laps.items():
+        for took in seconds:
+            log.append(run, 'build', 'constraint', None, took)
+    whole = log.clocks()['build']
+    assert all(log.clocks(run)['build'] <= whole for run in laps), "each run's share is no more than the whole"

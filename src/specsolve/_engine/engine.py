@@ -10,6 +10,7 @@ The lane is described in docs/development/architecture.md.
 
 from __future__ import annotations
 
+import math
 import warnings
 from array import array
 from pathlib import Path
@@ -413,9 +414,8 @@ class Engine:
 
         The one place a [`Metrics`][] is built from the model: a result's, an
         archive's and a sweep slice's row is its run's. The clocks are the
-        log's laps summed by phase, so the runs add up to the whole life. A
-        run is read from the end of the log, so the current one costs its own
-        laps; an earlier one costs every lap after it.
+        log's laps summed by phase, and the whole life's are the runs' added
+        up, so no run's clock passes it.
         """
         clocks = self._log.clocks(run)
         solves, instances = (
@@ -593,7 +593,10 @@ class _Laps:
 
     Each step, ``(phase, step, entry)``, is stored once and a lap holds its
     number: 21.5 bytes a lap held, where a tuple of the five took 145 (#2207).
-    Runs only grow along the log, so a run's laps are found from its end.
+    Each run's seconds per phase are added up as its laps arrive, so a run's
+    clocks are read without the log, and the whole life's are the runs' summed
+    exactly and rounded once, so no run passes the whole, not even in the last
+    place.
     """
 
     def __init__(self) -> None:
@@ -601,32 +604,21 @@ class _Laps:
         self._runs = array('I')
         self._codes = array('I')
         self._seconds = array('d')
+        self._totals: list[dict[str, float]] = []
 
     def append(self, run: int, phase: str, step: str | None, entry: str | None, seconds: float) -> None:
         self._runs.append(run)
         self._codes.append(self._steps.setdefault((phase, step, entry), len(self._steps)))
         self._seconds.append(seconds)
+        while len(self._totals) <= run:
+            self._totals.append(dict.fromkeys(PHASES, 0.0))
+        self._totals[run][phase] += seconds
 
     def clocks(self, run: int | None = None) -> dict[str, float]:
-        """Seconds per phase over every lap, or over *run*'s, every phase present.
-
-        Both sum in the order the laps ran: a run's laps are a stretch of the
-        log, so its sums never pass the whole life's, not even in the last place.
-        """
-        phase_of = [phase for phase, _, _ in self._steps]
-        clocks = dict.fromkeys(PHASES, 0.0)
-        runs, codes, seconds = self._runs, self._codes, self._seconds
-        if run is None:
-            for code, took in zip(codes, seconds, strict=True):
-                clocks[phase_of[code]] += took
-            return clocks
-        first = len(runs)
-        while first > 0 and runs[first - 1] >= run:
-            first -= 1
-        for i in range(first, len(runs)):
-            if runs[i] == run:
-                clocks[phase_of[codes[i]]] += seconds[i]
-        return clocks
+        """Seconds per phase over every lap, or over *run*'s, every phase present."""
+        if run is not None:
+            return dict(self._totals[run])
+        return {phase: math.fsum(totals[phase] for totals in self._totals) for phase in PHASES}
 
     def table(self) -> pl.DataFrame:
         """Every lap as a row of [`TIMINGS_SCHEMA`][specsolve._records.TIMINGS_SCHEMA], in the order they ran."""
