@@ -1,6 +1,6 @@
 """Is the new code faster than the old? An A/B of two git refs over every cell of the grid.
 
-    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above]
+    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above pypsa]
         [--rounds 6] [--op build|solve] [--focus module:Class.method] [--memory] [-k <substring>] [--out ab.md]
         [--raw ab.parquet]
 
@@ -431,7 +431,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('base')
     parser.add_argument('head')
-    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=list(SIZES))
+    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=[*SIZES, 'pypsa'])
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')
