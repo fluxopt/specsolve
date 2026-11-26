@@ -26,6 +26,9 @@ concurrency:
   group: benchmark-box
   cancel-in-progress: false
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   provision:
     name: bring the box up
@@ -66,7 +69,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
@@ -197,7 +200,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-bench-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-bench-${{ runner.os }}-
       - run: pixi install -e bench
 
