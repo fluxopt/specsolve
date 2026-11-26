@@ -204,6 +204,14 @@ def test_a_mip_is_priced_once_its_decisions_are_fixed(lifecycle: tuple[dict[str,
     assert prices == pytest.approx([10.0, 10.0, 50.0, 10.0]), 'gas sets the price in snapshot 2, and wind elsewhere'
 
 
+def test_rounding_a_relaxed_commitment_brackets_the_mip(lifecycle: tuple[dict[str, Any], str]) -> None:
+    """The rounding section's claim: the relaxation and the rounded commitment bound the MIP, and here meet it."""
+    namespace, _ = lifecycle
+    lower, upper = namespace['relaxation'].objective, namespace['committed'].objective
+    assert (lower, upper) == pytest.approx((10875.0, 14000.0)), 'the page quotes the two bounds'
+    assert upper == pytest.approx(namespace['mip'].objective), 'the page says rounding found the MIP optimum'
+
+
 def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any], str]) -> None:
     namespace, _ = lifecycle
     assert namespace['with_ramp'] > namespace['without_ramp'], 'popping the key has to give the objective back'
