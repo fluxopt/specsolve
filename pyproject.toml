@@ -134,6 +134,17 @@ mathspec = "==0.5.0a1"
 pytest = "*"
 pytest-xdist = "*"
 
+[tool.pixi.feature.parity]
+platforms = ["linux-64"]
+
+# The PyPSA commit and mathspec release the corpus in `pypsa-parity.yml` was certified on.
+[tool.pixi.feature.parity.pypi-dependencies]
+pypsa = { git = "https://github.com/PyPSA/PyPSA", rev = "3625c8168b0b45a7936ddcb3a4da99dd608125ca" }
+mathspec = "==0.5.0a1"
+highspy = "==1.15.1"
+# Under pandas 3.1, PyPSA at that commit gives `Carrier-growth_limit` a third dimension, `name`.
+pandas = "<3.1"
+
 [tool.pixi.feature.pyodide.dependencies]
 python = "3.12.*"
 nodejs = "22.*"
@@ -143,6 +154,7 @@ pip = "*"
 default = ["dev"]
 docs = ["docs"]
 bench = ["dev", "bench"]
+parity = ["dev", "parity"]
 codspeed = ["codspeed"]
 floors = { features = ["floors"], no-default-feature = true }
 pyodide = { features = ["pyodide"], no-default-feature = true }
