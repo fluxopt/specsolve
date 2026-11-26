@@ -235,3 +235,15 @@ def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, A
     objectives = dict(namespace['both'].records.select('scenario', 'objective').iter_rows())
     assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
     assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'
+
+
+def test_each_scenario_draws_its_tables_from_their_pools(scenarios: tuple[dict[str, Any], str]) -> None:
+    """The pool section's claim: a scenario row picks one label of each pool, and the dear-gas cold one costs most."""
+    namespace, _ = scenarios
+    objectives = dict(namespace['pooled'].records.select('scenario', 'objective').iter_rows())
+    assert objectives == pytest.approx({'s1': 15000.0, 's2': 16530.0, 's3': 24540.0}), (
+        'one solve per row of draws, each with its own load and cost'
+    )
+    assert objectives['s2'] == pytest.approx(
+        dict(namespace['scenarios'].records.select('scenario', 'objective').iter_rows())['cold']
+    ), 'cold load with cheap gas is the cold scenario of the first section'
