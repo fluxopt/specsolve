@@ -20,6 +20,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   memory:
     name: Memory (heap)
@@ -40,7 +43,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-codspeed-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-codspeed-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-codspeed-${{ runner.os }}-
       - run: pixi install -e codspeed
 
@@ -74,7 +77,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-codspeed-macro-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-codspeed-macro-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-codspeed-macro-${{ runner.os }}-
       - run: pixi install -e codspeed
 
