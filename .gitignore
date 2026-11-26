@@ -17,7 +17,7 @@ htmlcov/
 venv/
 .idea/
 .pixi/
-pixi.lock
+uv.lock
 
 bench/.cache/
 .benchmarks/
