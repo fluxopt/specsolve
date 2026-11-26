@@ -104,9 +104,11 @@ one to chase a newer interpreter.
 
 ## Upgrading a dependency
 
-`pixi.lock` specifies the exact version of every package that CI, the
-benchmarks and `pixi run` install. CI sets `PIXI_LOCKED`, so a lock that no
-longer matches `pyproject.toml` fails the check. After a change to the
+`pixi.lock` specifies the exact version of every package that `pixi run`
+installs, in CI, in the benchmarks and in the PyPSA parity job. CI sets
+`PIXI_LOCKED`, so a lock that no longer matches `pyproject.toml` fails the
+check. The nightly mathspec canary is the exception: it runs against
+mathspec's `main` and resolves its dependencies with uv, with no lock. After a change to the
 dependencies in `pyproject.toml`, run `pixi lock` and commit both files.
 
 An upgrade is a pull request of its own, and the diff of `pixi.lock` lists

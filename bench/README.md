@@ -957,8 +957,9 @@ uv run --locked bench/reproduce.py
 
 **Why it exists.** `pixi.lock` pins the versions of the tree it is committed
 in, and the tree moves on after a run is published. This lock pins the run's
-own versions, specsolve's commit among them, so a published number can be
-taken again from any later checkout. Without it, "the versions that produced
+own versions, specsolve's commit among them, so a later checkout can install
+them again. The models, rungs and ladder selection still come from that
+checkout. Without it, "the versions that produced
 this number" existed only inside a results file, in a form nobody could
 install. `--locked` refuses
 to run if the resolution has drifted, `test_the_lock_pins_every_library...`
