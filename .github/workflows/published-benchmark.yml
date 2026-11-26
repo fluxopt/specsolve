@@ -63,7 +63,7 @@ jobs:
           persist-credentials: false
       # A warmed box carries a pixi binary that setup-pixi refuses to overwrite.
       - run: rm -f ~/.pixi/bin/pixi
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@v0.11.3
         with:
           run-install: false
       - uses: actions/cache@v6
@@ -194,7 +194,7 @@ jobs:
         with:
           fetch-depth: 0  # the base commit has to be reachable to read its committed results
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@v0.11.3
         with:
           run-install: false
       - uses: actions/cache@v6
