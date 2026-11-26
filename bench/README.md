@@ -955,10 +955,13 @@ freezes every version it runs on, git commits included:
 uv run --locked bench/reproduce.py
 ```
 
-**Why it exists.** `pixi.lock` is not committed, and specsolve itself installs
-from git.
-Before the lock, "the versions that produced this number" existed only inside a
-results file, after the fact, in a form nobody could install. `--locked` refuses
+**Why it exists.** `pixi.lock` pins the versions of the tree it is committed
+in, and the tree moves on after a run is published. This lock pins the run's
+own versions, specsolve's commit among them, so a later checkout can install
+them again. The models, rungs and ladder selection still come from that
+checkout. Without it, "the versions that produced
+this number" existed only inside a results file, in a form nobody could
+install. `--locked` refuses
 to run if the resolution has drifted, `test_the_lock_pins_every_library...`
 refuses a merge where an arm was added and the lock forgot it, and
 `test_the_lock_installs_what_the_published_numbers_were_taken_on` refuses one
