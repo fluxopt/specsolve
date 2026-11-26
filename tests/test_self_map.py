@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from tests.conftest import by_coord, override, raw_of
+from tests.conftest import override, primal_by_coordinate, raw_of
 from tests.differential import RTOL, differential
 from tests.oracle import pd
 
@@ -19,7 +19,7 @@ SPEC = """
 description: each snapshot priced at the snapshot that represents it
 
 dimensions:
-  snapshot: {dtype: int, description: a step of the horizon}
+  snapshot: {dtype: int, description: a step in time, ordered: true}
 
 relations:
   rep_of:
@@ -39,7 +39,7 @@ variables:
 constraints:
   capped:
     dims: [snapshot]
-    expression: p <= at(price, by=rep_of, over=rep, into=snapshot)
+    expression: p <= at(price, by=rep_of[rep])
     description: output stays under the price of the snapshot that represents this one
 
 objective:
@@ -63,12 +63,12 @@ def _inputs() -> dict[str, object]:
 
 
 def test_a_pullback_through_a_self_map_reads_the_representative():
-    """`at(price, by=rep_of, over=rep, into=snapshot)` is the price at the snapshot that stands for this one (#1652)."""
+    """`at(price, by=rep_of[rep])` is the price at the snapshot that stands for this one (#1652)."""
     with differential(SPEC, _inputs()) as run:
         assert run.oracle == pytest.approx(1 * 1.0 + 1 * 2.0 + 3 * 3.0, rel=RTOL), (
             'each snapshot capped at its representative price, both lanes agreeing'
         )
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert built[0] == pytest.approx(1.0), 'represented by itself, at price 1'
     assert built[1] == pytest.approx(1.0), "represented by snapshot 0, so capped at 0's price"
@@ -76,7 +76,7 @@ def test_a_pullback_through_a_self_map_reads_the_representative():
 
 
 def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
-    """`sum(p, by=rep_of, over=snapshot, into=rep)` adds each snapshot's output into its representative's row.
+    """`sum(p, over=snapshot, by=rep_of[rep])` adds each snapshot's output into its representative's row.
 
     The adjoint of the pullback above (#1652).
     """
@@ -86,7 +86,7 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
             'parameters.cap': {'dims': ['snapshot']},
             'constraints.capped': {
                 'dims': ['snapshot'],
-                'expression': 'sum(p, by=rep_of, over=snapshot, into=rep) <= cap',
+                'expression': 'sum(p, over=snapshot, by=rep_of[rep]) <= cap',
             },
         },
     )
@@ -96,14 +96,14 @@ def test_a_group_through_a_self_map_sums_the_snapshots_it_represents():
         assert run.oracle == pytest.approx(4 * 2.0 + 5 * 3.0, rel=RTOL), (
             'the pair sharing a representative fills the dearer of the two, and snapshot 2 fills its bound'
         )
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert built[1] == pytest.approx(4.0), "the whole of representative 0's cap, at the dearer price of the pair"
     assert built[2] == pytest.approx(5.0), 'its own group, held by its bound rather than by its cap'
 
 
 def test_a_where_reads_a_self_map_at_its_key():
-    """A self-map read as a mask compares at its key."""
+    """A self-map read as a condition compares at its key."""
     spec = override(
         raw_of(SPEC),
         **{
@@ -112,7 +112,7 @@ def test_a_where_reads_a_self_map_at_its_key():
         },
     )
     with differential(spec, _inputs()) as run:
-        built = by_coord(run.result, 'p', 'snapshot')
+        built = primal_by_coordinate(run.result, 'p', 'snapshot')
 
     assert sorted(built) == [0, 1], 'the two snapshots the map sends to 0'
 

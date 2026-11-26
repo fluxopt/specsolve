@@ -122,7 +122,7 @@ def test_the_generated_blocks_are_current(path: Path) -> None:
     """Every generated block on the page is current.
 
     The catalogue comes from the nav and each page's opening line, the
-    construct matrix from the resolved plan, and the reference table from
+    construct matrix from the resolved program, and the reference table from
     ``references.json``, the file ``test_ports.py`` asserts against.
     """
     page = path.read_text()
@@ -221,18 +221,18 @@ def _call_snippet(name: str) -> str:
     checks — a projection of `references.json`, and this is its one home. A
     model with a formulation is handed over written out.
     """
-    entry = constructs.REFERENCES[name]
+    recorded = constructs.REFERENCES[name]
     ports_yaml = constructs.ROOT / 'examples' / 'ports' / f'{name}.yaml'
     path = f'examples/ports/{name}.yaml' if ports_yaml.exists() else f'examples/{name}.yaml'
     written = to_spec(constructs.ROOT / path)
     handed = f"to_spec('{path}').expand()" if written.piecewise or written.sos else f"'{path}'"
     lines = [
-        '# sources: parameter name -> frame or parquet path',
-        f'with sps.solve({handed}, sources) as solution:',
-        f'    solution.objective  # {entry["objective"]!r}',
+        '# sources: parameter name -> table or parquet path',
+        f'with sps.solve({handed}, sources) as result:',
+        f'    result.objective  # {recorded["objective"]!r}',
     ]
-    if entry.get('duals'):
-        lines.append(f"    solution.dual('{next(iter(entry['duals']))}')")
+    if recorded.get('duals'):
+        lines.append(f"    result.dual('{next(iter(recorded['duals']))}')")
     return '\n'.join(lines) + '\n'
 
 
@@ -272,7 +272,7 @@ def test_no_tab_without_a_reference() -> None:
 #: run. `docs/run.md` links the language rather than teaching it, so it is
 #: not here.
 TEACHING_PAGES = (Path(__file__).resolve().parent.parent / 'README.md',)
-#: Both spellings of a declaration: a list item under `constraints:` and a
+#: Both spellings of an entry: a list item under `constraints:` and a
 #: mapping key under a named one.
 _TAUGHT_START = re.compile(r'^([ \t]*)(?:-\s*)?(?:expression|where):\s*\S')
 _QUOTED = ('expression', 'where')

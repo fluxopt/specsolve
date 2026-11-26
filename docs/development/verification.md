@@ -5,55 +5,56 @@ convincing. Each one catches what the one before cannot.
 
 | Check | It catches | Where |
 |---|---|---|
-| [The oracle](#the-oracle) | a build that differs from linopy's on the same file | `tests/linopy_lane/`, the differential tests |
-| [Published optima](#published-optima) | a misreading the oracle shares | `examples/ports/`, `references.json` |
+| [The linopy lane](#the-linopy-lane) | a build that differs from linopy's on the same file | `tests/linopy_lane/`, the differential tests |
+| [Published optima](#published-optima) | a misreading the linopy lane shares | `examples/ports/`, `references.json` |
 | [The PyPSA ladder](#the-pypsa-ladder) | a model that solves but is not PyPSA's | `differential/pypsa/`, [the ladder](../examples/pypsa_ladder.md) |
 | [Decomposition](#decomposition) | an algorithm outside the language that cannot be written over it | [`examples/benders/`](https://github.com/fluxopt/specsolve/blob/main/examples/benders/README.md) |
 
-## The oracle
+## The linopy lane
 
 The test suite builds every file twice: through the relational engine, and as
 a `linopy.Model` in `tests/linopy_lane/`. The differential tests compare the
-two. Both builds pass the same `inputs.lowered` gate and read data through
-`sources.tidy_sources`, so both refuse the same constructs and the same
+two. Both builds compile through `_inputs.as_program`, the one function every verb
+compiles a spec through, and read data through `_sources.tidy_sources`, so both refuse the same constructs and the same
 malformed sources ([#60](https://github.com/fluxopt/specsolve/issues/60)).
 
 **Where a concept is already linopy's, specsolve copies its name**: solve
 statuses, `is_ok`, the shape of a result. `tests/test_solve_status.py` checks
 that the copy still matches.
 
-### What a construct becomes in the oracle
+### What a construct becomes in the linopy lane
 
 Each row lives in `tests/linopy_lane/builder.py`.
 
-| Declaration | linopy |
+| Entry | linopy |
 |---|---|
 | `variables:` | `Model.add_variables(lower, upper, coords, name, mask, binary, integer)` |
 | `sos:` | `Model.add_sos_constraints(variable, sos_type, sos_dim)`, the block handed over rather than a formulation rebuilt |
-| `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per declaration |
-| `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dims it carries |
+| `constraints:` | `Model.add_constraints(lhs, sign, rhs, name, mask)`, one rule per entry |
+| `objective:` | `Model.add_objective(expr, sense)`, each additive term summed over the dimensions it carries |
 | `expressions:` | evaluated at the solution as xarray arithmetic, every variable its `.solution` and every `dual(c)` the constraint's `.dual`; an entry the math never reads is read at whatever degree it was written |
 
 | In an expression | linopy or xarray |
 |---|---|
-| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `absence: zero` |
+| `x` — a variable | `Model.variables['x']`, `.fillna(0)` under `missing: 0` |
 | `p` — a parameter | its `xr.DataArray`, `.fillna(0.0)` where it stands as a coefficient |
 | `+` `-` `*` `/` | the Python operators linopy overloads |
 | `sum(x, over=t)` | `.sum('t')` |
-| `sum(x, by=r, over=c, into=d)` | the column walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two columns groups onto both at once, and a key of several columns groups by the value and the rest of the key |
-| `at(p, by=r, over=c, into=d)` | `.sel({into: relation})`, xarray's vectorised selection; a read of two columns reads a tuple of labels at once |
+| `sum(x, over=c, by=r[d])` | the column walked to attached as a coordinate, then `.groupby()`, reindexed onto its dimension's declared labels; a walk to two columns groups onto both at once, and a key of several columns groups by the value and the rest of the key |
+| `at(p, by=r[c])` | `.sel({into: relation})`, xarray's vectorised selection; a read of two columns reads a tuple of labels at once |
 | `shift(x, along=t, offset=n)` | `.shift({t: n})`; `.roll({t: n})` under `edge: wrap`; a `.sel()` gather where the offset differs per entity or `by=` groups it |
 | `sum_back(x, along=t, window=w)` | a sum of `w` scalar gathers, each unreachable position contributing zero; under `by=` each gather reads inside the group, so the window stops at its edge |
 | `dual(c)` | `Model.constraints['c'].dual`, at a read only; the language keeps a dual out of the math, and a solve that stored none refuses the read |
 
 | A `where:` | linopy |
 |---|---|
-| on a declaration | the `mask=` argument; a mask that excludes nothing is passed as `None` |
+| on an entry | the `mask=` argument; a `where:` that leaves nothing absent is passed as `None` |
 | `defined(x)` | `Model.variables['x'].labels != -1`, linopy's own marker for an absent slot |
 | a comparison | the Python comparison operators element-wise, absence reading as false |
 
-A missing parameter row is zero in a coefficient, an error in `bounds:`, and
-false in a `where` operand (`tests/linopy_lane/absence.py`).
+A missing row of a `missing: 0` parameter is zero in a coefficient, an
+error in `bounds:`, and false in a `where` operand
+(`tests/linopy_lane/absence.py`).
 
 ### The same language, but not every build
 
@@ -63,15 +64,15 @@ Three files pass `check` and build on one side only.
   `linopy.Objective` has no slot for one (`osemosys_utopia`,
   [#894](https://github.com/fluxopt/specsolve/issues/894)).
 - **A relation that is not a single-valued map** builds only in specsolve,
-  because the oracle holds each relation as one dense array.
-- **An operator along a dimension a constant part does not carry**, such as
-  `sum(x * k + d, over=t)` with a scalar `d`, builds only in the oracle. The
+  because the linopy lane holds each relation as one dense array.
+- **An operator along a dimension a constant term does not carry**, such as
+  `sum(x * k + d, over=t)` with a scalar `d`, builds only in the linopy lane. The
   refusal says to declare the parameter over the dimension
   ([#1137](https://github.com/fluxopt/specsolve/issues/1137)).
 
 ## Published optima
 
-The oracle cannot catch a misreading both builds share. A published optimum
+The linopy lane cannot catch a misreading both builds share. A published optimum
 can. Each model in `examples/ports/` carries an optimum somebody else solved,
 in `references.json`, and `tests/test_ports.py` solves to it. A **✔** means the
 optimum did not come from specsolve; the reference column says where it did.
@@ -87,7 +88,7 @@ too. A MILP has no duals; those are the `·` rows.
 | [monthly_budget](../examples/monthly_budget.md) | 9500.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/monthly_budget.py — agreement, not a published figure |
 | [multi_period](../examples/multi_period.md) | 10020.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/multi_period.py — agreement, not a published figure |
 | [osemosys_utopia](../examples/osemosys_utopia.md) | 29446.86269 | 1e-09 | · | published by OSeMOSYS: asserted in OSeMOSYS_GNU_MathProg tests/test_gnu_mathprog.py as obj = 2.944686269e+04 for tests/utopia.txt, and reproduced here by running GLPK directly (glpsol 5.0, src/osemosys.txt) — an oracle outside Python entirely |
-| [piecewise](../examples/piecewise.md) | 3850.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
+| [piecewise](../examples/piecewise.md) | 3850.0 | 1e-09 | · | linopy 0.10.0, via examples/ports/references/linopy/piecewise.py — agreement, not a published figure |
 | [piecewise_conversion](../examples/piecewise_conversion.md) | 5990.0 | 1e-06 | · | linopy 0.10.0's own add_piecewise_formulation, via examples/ports/references/linopy/piecewise_conversion.py — agreement, not a published figure. There the arity is an argument list built per converter; here it is a constraint over flow. The looser rtol is this model and not the lane: its weights are continuous inside a segment, so a solver's feasibility tolerance on them reaches the objective — gurobi leaves 1e-7 of weight on a neighbouring breakpoint and lands 8e-9 away |
 | `piecewise_lp` | 3850.0 | 1e-09 | **✔** | the same instance as piecewise, whose optimum and duals linopy 0.10.0 fixes via examples/ports/references/linopy/piecewise.py — the two formulations agreeing is the claim |
 | [piecewise_ragged](../examples/piecewise_ragged.md) | 426.0 | 1e-09 | **✔** | linopy 0.10.0, via examples/ports/references/linopy/piecewise_ragged.py — agreement between two formulations of one convex curve (weights here, segment lines there), not a published figure |
@@ -185,7 +186,7 @@ construct, or every combination.
 | [telephone_routing](../examples/telephone_routing.md) | **✔** 380 | **✓** | **✓** | · | · | · | · | **✓** | · | · | **✓** |
 | [transport_dantzig](../examples/transport_dantzig.md) | **✔** 153.675 | **✓** | · | · | · | · | · | **✓** | · | · | · |
 | [transport_modes](../examples/transport_modes.md) | **✔** 1715 | **✓** | **✓** | · | · | · | · | **✓** | · | · | · |
-| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | **✓** | · | **✓** | **✓** | **✓** | · | **✓** |
+| [transport_pwl](../examples/transport_pwl.md) | **✔** 8.78685 | **✓** | · | · | · | · | **✓** | **✓** | **✓** | · | **✓** |
 | [tsp_mtz](../examples/tsp_mtz.md) | **✔** 2085 | **✓** | **✓** | · | · | · | **✓** | **✓** | · | · | **✓** |
 <!-- constructs:end -->
 
@@ -210,9 +211,9 @@ monolith.
 
 ## What a port could not say
 
-Each row is a verdict: macro, primitive, formulation, or refused.
+Each row is a verdict: macro, operator, formulation, or refused.
 
 | Port | What could not be said | Worked around by | Verdict |
 |---|---|---|---|
-| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **primitive**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
+| PyPSA transport model | a bound of `-rating` — PyPSA's `p_min_pu = -1` | shipping `neg_rating` as data | **operator**: bounds as expressions, [#31](https://github.com/fluxopt/specsolve/issues/31). A second model asking for it |
 | Travelling salesman | subtour cuts **generated lazily** inside branch-and-cut | [MTZ](../examples/tsp_mtz.md), O(n²) and static | **refused**: a solve loop is an algorithm, not a model |

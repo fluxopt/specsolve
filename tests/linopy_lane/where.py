@@ -1,17 +1,17 @@
-"""A ``where:`` predicate as a boolean array over the coordinates it masks.
+"""A ``where:`` condition as a boolean array over the coordinates it keeps.
 
-The other half of what a declaration says: ``builder.py`` builds the thing,
-this decides where it exists. A :class:`~mathspec.program.Predicate` in, one
+The other half of what an entry says: ``builder.py`` builds the thing,
+this decides where it exists. A :class:`~mathspec.program.Condition` in, one
 ``xr.DataArray`` of booleans out, and :func:`as_linopy_mask` puts it in the
 shape linopy's ``mask=`` takes. Both lanes read the same node kinds, and
-``relational/engine/predicates.py`` answers each with a polars
+``_engine/conditions.py`` answers each with a polars
 expression where this one answers with an array.
 """
 
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any, assert_never
 
@@ -19,8 +19,8 @@ import numpy as np
 import xarray as xr
 from mathspec import program
 
+from specsolve._messages import position_out_of_range_message, short_groups_message
 from specsolve.errors import DataError
-from specsolve.messages import position_out_of_range_message, short_groups_message
 from tests.linopy_lane import absence
 from tests.linopy_lane.operators import _grouped, operator_at
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 #: Where-comparison operators, evaluated element-wise on a DataArray.
-_PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
+_CONDITION_OPS: dict[str, Callable[[Any, Any], Any]] = {
     '==': operator.eq,
     '!=': operator.ne,
     '<': operator.lt,
@@ -44,10 +44,10 @@ _PREDICATE_OPS: dict[str, Callable[[Any, Any], Any]] = {
 
 @dataclass(frozen=True)
 class EvaluationContext:
-    """Everything evaluating a plan needs beyond the node: the data, the axes, the model, the relations, the program.
+    """Everything evaluating a program node needs beyond the node: the data, the axes, the model, the relations, the program.
 
     ``relations`` carries one array per value column, keyed by its relation's
-    name and its own, over the dimensions the key names — what a predicate on a
+    name and its own, over the dimensions the key names — what a condition on a
     relation and a grouped operator both read instead of the parameter dataset.
     """
 
@@ -56,21 +56,28 @@ class EvaluationContext:
     model: linopy.Model
     relations: Mapping[tuple[str, str], xr.DataArray]
     program: program.Program
-    #: Whether *model* is solved and the plan is read at its solution — a
+    #: Whether *model* is solved and the program is read at its solution — a
     #: variable is then its ``.solution`` and ``dual(c)`` the constraint's
     #: ``.dual`` — rather than built into it.
     solved: bool = False
-    #: How a parameter reads where the data has no row. A coefficient is zero
-    #: there, which is what the row multiplies by; the side of a where
-    #: comparison is absent there, which is the false the language states for
-    #: a comparison over a value that is not supplied.
+    #: How a ``missing: 0`` parameter reads where the data has no row. A
+    #: coefficient is zero there, which is what the row multiplies by; the side
+    #: of a where comparison is absent there, which is the false the language
+    #: states for a comparison over a value that is not supplied.
     absent_parameter: Callable[[Any], Any] = absence.coefficient
+    #: Where the data gave a row, for each numeric parameter a declared value
+    #: fills elsewhere (:func:`~tests.linopy_lane.loader.given_rows`).
+    given: Mapping[str, xr.DataArray] = field(default_factory=dict)
+
+    def absent(self, parameter: str) -> bool:
+        """Whether *parameter* declares ``missing: absent``, so a missing row stays NaN in every position."""
+        return self.program.parameters[parameter].missing == 'absent'
 
 
 def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.DataArray:
-    """Evaluate a lowered mask against a parameter dataset.
+    """Evaluate a compiled condition against a parameter dataset.
 
-    Always a boolean DataArray. The no-mask case comes back 0-dimensional, so
+    Always a boolean DataArray. The case with no condition comes back 0-dimensional, so
     callers combine with ``&``/``|`` without case analysis.
     """
     if mask is None:
@@ -79,11 +86,11 @@ def evaluate_where(mask: program.Mask | None, ctx: EvaluationContext) -> xr.Data
     return _eval_node(mask.root, ctx)
 
 
-def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
-    """One predicate node as a boolean DataArray.
+def _eval_node(node: program.Condition, ctx: EvaluationContext) -> xr.DataArray:
+    """One condition node as a boolean DataArray.
 
     Two absences read as exclusion rather than as an answer: a variable's
-    masked-out coordinate is absent (:func:`absence.present`), and a
+    coordinate outside its ``where:`` is absent (:func:`absence.present`), and a
     comparison over NaN comes back false.
 
     **A null relation value is excluded explicitly rather than by ``fillna``.**
@@ -93,14 +100,15 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
     """
     dataset, master_coords = ctx.dataset, ctx.master_coords
 
-    def evaluate(child: program.Predicate) -> xr.DataArray:
+    def evaluate(child: program.Condition) -> xr.DataArray:
         return _eval_node(child, ctx)
 
     if isinstance(node, program.BooleanLiteral):
         return xr.DataArray(node.value)
 
     if isinstance(node, program.ParameterDefined):
-        return _defined(dataset[node.name], ctx.program.parameters[node.name].dtype)
+        defined = _defined(dataset[node.name], ctx.program.parameters[node.name].dtype)
+        return defined & ctx.given[node.name] if node.name in ctx.given else defined
 
     if isinstance(node, program.VariableDefined):
         return absence.present(ctx.model, node.name)
@@ -115,50 +123,53 @@ def _eval_node(node: program.Predicate, ctx: EvaluationContext) -> xr.DataArray:
                 dims=[node.name],
             )
 
-        result = _PREDICATE_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value))
+        result = _CONDITION_OPS[node.op](arr, _as_the_axis_spells_it(arr, node.value)) & arr.notnull()
         return result.fillna(False).astype(bool)
 
     if isinstance(node, program.ExpressionComparison):
         left, right = (_value(side, ctx) for side in (node.left, node.right))
         defined = left.notnull() & right.notnull()
-        return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, program.CountComparison):
-        admitted = _along(evaluate(node.predicate.root), node.over, master_coords)
-        return _PREDICATE_OPS[node.op](admitted.sum(node.over), node.value).astype(bool)
+        admitted = _along(evaluate(node.condition.root), node.over, master_coords)
+        return _CONDITION_OPS[node.op](admitted.sum(node.over), node.value).astype(bool)
 
-    if isinstance(node, program.TranslatedPredicate):
+    if isinstance(node, program.TranslatedCondition):
         operand = _along(evaluate(node.operand.root), node.along, master_coords)
         return operand.shift({node.along: node.offset}, fill_value=False)
 
-    if isinstance(node, program.PulledBackPredicate):
-        return _pulled_back(node, ctx)
+    if isinstance(node, program.JoinedCondition):
+        return _joined(node, ctx)
 
     if isinstance(node, program.DimensionPosition):
         labels = master_coords[node.name]
         if node.partition is not None:
             by = node.partition.name
-            (column,) = node.partition.group
+            (column,) = node.partition.grouped
             arr = _group_offsets(node, by, bound_relation(by, column, ctx.relations), np.asarray(labels))
-            return (_PREDICATE_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
+            return (_CONDITION_OPS[node.op](arr, 0) & arr.notnull()).fillna(value=False).astype(bool)
         at = node.position + len(labels) if node.position < 0 else node.position
         if not 0 <= at < len(labels):
             raise DataError(position_out_of_range_message(node.name, node.op, node.position, at, len(labels)))
         arr = xr.DataArray(np.arange(len(labels)), coords={node.name: labels}, dims=[node.name])
-        return _PREDICATE_OPS[node.op](arr, at).astype(bool)
+        return _CONDITION_OPS[node.op](arr, at).astype(bool)
 
     if isinstance(node, program.RelationComparison):
         arr = bound_relation(node.name, node.column, ctx.relations)
-        return (_PREDICATE_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](arr, node.value) & arr.notnull()).fillna(value=False).astype(bool)
 
     if isinstance(node, program.RelationPairComparison):
         left = bound_relation(node.name, node.column, ctx.relations)
         right = bound_relation(node.other, node.other_column, ctx.relations)
         defined = left.notnull() & right.notnull()
-        return (_PREDICATE_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
+        return (_CONDITION_OPS[node.op](left, right) & defined).fillna(value=False).astype(bool)
 
     if isinstance(node, program.RelationDefined):
         return _relation_has_a_row(node, ctx)
+
+    if isinstance(node, program.ConditionReference):
+        return evaluate(node.body)
 
     if isinstance(node, program.Not):
         return ~evaluate(node.operand)
@@ -191,27 +202,28 @@ def _value(side: program.Expression, ctx: EvaluationContext) -> xr.DataArray:
     return value if isinstance(value, xr.DataArray) else xr.DataArray(value)
 
 
-def _pulled_back(node: program.PulledBackPredicate, ctx: EvaluationContext) -> xr.DataArray:
-    """Where the operand holds at the coarse coordinate the relation maps each fine one to.
+def _joined(node: program.JoinedCondition, ctx: EvaluationContext) -> xr.DataArray:
+    """Where the operand holds at the coordinate the relation's row reads, for each row of the relation.
 
-    The expression ``at`` answers, so the predicate is read through the relation
-    as an array is. A fine coordinate the relation has no row for reads the
-    absence ``at`` leaves there, which is false in a mask.
+    The expression ``at`` answers, so the condition is read through the relation
+    as an array is. A coordinate the relation has no row for reads the
+    absence ``at`` leaves there, which is false in a condition.
     """
     # in-function: the builder imports this module
     from tests.linopy_lane.builder import _walked_arrays
 
+    columns = node.columns
     operand = _eval_node(node.operand.root, ctx)
-    for dimension in node.direction.consumed_dims:
+    for dimension in columns.dropped_dims:
         operand = _along(operand, dimension, ctx.master_coords)
-    read = operator_at(operand, _walked_arrays(node, ctx), into=node.direction.consumed_dims)
+    read = operator_at(operand, _walked_arrays(columns, columns.dropped, ctx), into=columns.dropped_dims)
     return read.fillna(value=False).astype(bool)
 
 
 def _along(arr: xr.DataArray, dimension: str, master_coords: Mapping[str, pd.Index]) -> xr.DataArray:
     """*arr* carrying *dimension*, broadcast over its labels where it does not.
 
-    A predicate reading none of the dimension's own data answers the same at
+    A condition reading none of the dimension's own data answers the same at
     every coordinate of it, and counting or shifting along an axis the array
     has never seen would otherwise drop the reduction the node *is*.
     """
@@ -219,7 +231,7 @@ def _along(arr: xr.DataArray, dimension: str, master_coords: Mapping[str, pd.Ind
 
 
 def _defined(arr: xr.DataArray, dtype: str) -> xr.DataArray:
-    """What a bare parameter name in a ``where`` asks: the declaration picks the reading.
+    """What a bare parameter name in a ``where`` asks: the entry picks the reading.
 
     A ``bool`` is its own answer — a slot the data has no row for is false,
     the array having widened to float to hold the NaN — a ``str`` is defined
@@ -257,10 +269,17 @@ def _relation_has_a_row(node: program.RelationDefined, ctx: EvaluationContext) -
 
     The arrays are padded to the key's whole product, so a key the table leaves
     out is null in every column; a row it does hold carries at least one value,
-    a column left null in it being a value the model reads as absent.
+    a column left null in it being a value the model reads as absent. A bare
+    relation has no value column to ask, and arrives as its membership over
+    the key's roles instead, which the entry reads at its dimensions.
     """
-    columns = ctx.program.relations[node.name].values
-    return reduce(operator.or_, (bound_relation(node.name, column, ctx.relations).notnull() for column in columns))
+    relation = ctx.program.relations[node.name]
+    if not relation.values:
+        membership = bound_relation(node.name, '', ctx.relations)
+        return membership.rename({role: relation.dim(role) for role in relation.key if relation.dim(role) != role}) > 0
+    return reduce(
+        operator.or_, (bound_relation(node.name, column, ctx.relations).notnull() for column in relation.values)
+    )
 
 
 def unbound_relation_message(name: str) -> str:
@@ -277,7 +296,7 @@ def bound_relation(name: str, column: str, relations: Mapping[tuple[str, str], x
 
 
 def as_linopy_mask(mask: xr.DataArray) -> xr.DataArray | None:
-    """Convert an evaluated where mask to linopy's ``mask=`` argument.
+    """Convert an evaluated ``where:`` condition to linopy's ``mask=`` argument.
 
     linopy expects ``None`` for "no mask"; a 0-d True mask means exactly
     that. Everything else (including 0-d False) passes through.

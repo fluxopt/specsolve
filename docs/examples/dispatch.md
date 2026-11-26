@@ -6,11 +6,11 @@ Least-cost generation against a load profile — the smallest model that is stil
 
 ## The problem
 
-Pick an output $p_{s,g}$ for every generator in every snapshot, so that the
+Pick an output $p_{g,s}$ for every generator in every snapshot, so that the
 fleet meets the load exactly and costs as little as possible:
 
-$$\min \sum_{s,g} c_g \thinspace p_{s,g}
-\quad\text{s.t.}\quad \sum_g p_{s,g} = \ell_s ,\quad 0 \le p_{s,g} \le \bar p_g
+$$\min \sum_{s,g} c_g \thinspace p_{g,s}
+\quad\text{s.t.}\quad \sum_g p_{g,s} = \ell_s ,\quad 0 \le p_{g,s} \le \bar p_g
 \quad\text{where}\quad \bar p_g > 0$$
 
 ## The model
@@ -25,27 +25,35 @@ Least-cost dispatch of a generator fleet against an hourly load.
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units |
+| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
-| $`\ell`$ | `load` over $`\mathcal{S}`$ — demand to be met |
 | $`c`$ | `cost` over $`\mathcal{G}`$ — marginal cost |
+| $`\ell`$ | `load` over $`\mathcal{S}`$ — demand to be met |
+| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S}`$ — output of a generator in a snapshot |
+
+#### Variable domains
+
+**`p`**
+
+```math
+0 \le p_{g,s} \le \bar p_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S} \,:\, \bar p_{g} > 0
+```
 
 #### Objective
 
 ```math
-\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+\min \sum_{g \in \mathcal{G},\ s \in \mathcal{S}} p_{g,s} \cdot c_{g}
 ```
 
 #### Subject to
@@ -53,21 +61,13 @@ Least-cost dispatch of a generator fleet against an hourly load.
 **`power_balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{s,g} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
-```
-
-#### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G} \,:\, \bar p_{g} > 0
+\sum_{g \in \mathcal{G}} p_{g,s} = \ell_{s} \qquad \forall\, s \in \mathcal{S}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -78,6 +78,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units
 
@@ -108,15 +109,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     objective:
       sense: minimize
-      description: total cost of generation over the horizon
+      description: total cost of generation over every snapshot
       expression: sum(p * cost)
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/dispatch.yaml', sources) as solution:
-        solution.objective  # 10500.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/dispatch.yaml', sources) as result:
+        result.objective  # 10500.0
+        result.dual('power_balance')
     ```
 
 === "linopy"

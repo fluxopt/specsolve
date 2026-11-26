@@ -22,22 +22,22 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "mathspec>=0.2.1,<0.3",
+    "mathspec>=0.5.0a1,<0.6",
     "polars>=1.33.1",
     "numpy>=1.26",
-    # 1.13 is the first highspy with the bulk `changeRowsBounds`.
-    "highspy>=1.13",
+    # 1.13 is the first highspy with the bulk `changeRowsBounds`; 1.16.0 fails four tests of the suite.
+    "highspy>=1.13,!=1.16.0",
 ]
 
 [project.optional-dependencies]
 gurobi = [
-    # 11 is the release whose status codes the sink maps.
-    "gurobipy>=11",
+    # 11 is the release whose status codes the sink maps; 14 solves a nonconvex row under `QCPDual` without its prices.
+    "gurobipy>=11,<14",
     "scipy>=1.11",
 ]
 xpress = [
-    # 9.5 is the release that renamed the read-back to `getDuals` and `getSlacks`.
-    "xpress>=9.5",
+    # 9.8 is the first release whose problem has `chgObjSense`, which the sink calls with `ObjSense`.
+    "xpress>=9.8",
 ]
 
 [project.urls]
@@ -104,6 +104,10 @@ platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 # `choices` on a task argument arrived in 0.65.
 requires-pixi = ">=0.65"
 
+[tool.pixi.system-requirements]
+# Xpress 9.8, the floor of the `xpress` extra, ships its macOS arm64 libraries for macOS 14 and later.
+macos = "14.0"
+
 [tool.pixi.dependencies]
 python = "3.12.*"
 
@@ -126,7 +130,7 @@ specsolve = { path = "." }
 polars = "==1.33.1"
 numpy = "==1.26"
 highspy = "==1.13"
-mathspec = "==0.2.1"
+mathspec = "==0.5.0a1"
 pytest = "*"
 pytest-xdist = "*"
 
@@ -171,6 +175,15 @@ description = "Every expression to depth three, both lanes, solved and read at a
 args = [{ arg = "shard", default = "0/1" }]
 cmd = "pytest tests/test_expression_sweep.py tests/test_expression_at_a_point.py -q -n auto --sweep-depth 3 --sweep-shard {{ shard }}"
 
+[tool.pixi.tasks.fuzz]
+description = "Random models and their data on both lanes; fail where the findings differ from the baseline, seed by seed"
+cmd = "python -m tests.fuzz --seeds 0:1000 --baseline tests/fuzz/baseline.json"
+
+[tool.pixi.tasks.fuzz-fresh]
+description = "Seeds the baseline never ran; fail only on a kind of finding tests/fuzz/kinds.json does not name, and write each kind's reproduction"
+args = [{ arg = "seeds", default = "1000:4000" }]
+cmd = "python -m tests.fuzz --seeds {{ seeds }} --known tests/fuzz/kinds.json --out fuzz-findings"
+
 # `python -m` puts the project root on sys.path, which `tools.mdx_github_math` needs.
 [tool.pixi.feature.docs.tasks]
 docs = { cmd = "python -m zensical serve", description = "The site at 127.0.0.1:8000, live-reloading" }
@@ -179,17 +192,17 @@ docs-test = { cmd = "pytest tests/test_docs_math.py tests/test_docstring_links.p
 
 [tool.pixi.feature.bench.tasks]
 density = { cmd = "pytest bench --benchmark-memory --sizes d100 d50 d25 d08 --benchmark-json=bench/results/density.json", description = "The density sweep" }
-declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep, dense and masked" }
+declarations = { cmd = "pytest bench --benchmark-memory --sizes n002 n008 n032 n128 n008m n128m n008e --benchmark-json=bench/results/declarations.json", description = "The declaration-count sweep: dense, masked, and with declarations that hold no row" }
 report = { cmd = "python -m bench.report --write", description = "Write every table into its fence in docs/about/benchmarks.md. Drop --write to print instead" }
 plot = { cmd = "python -m bench.plot", description = "The chart page's rows" }
-ab = { cmd = "python -m bench.ab.compare", description = "A/B of two git refs over the grid in bench/ab: ab <base> <head> [--focus module:Class.method] [-k cell]" }
+ab = { cmd = "python -m bench.ab.compare", description = "A/B of two git refs over the grid in bench/ab: ab <base> <head> [--focus module:Class.method] [-k cell] [--out ab.md] [--raw ab.parquet]" }
 table = { cmd = "python -m bench.tidy bench/results", description = "Every measurement as one long CSV on stdout; --runs for the fingerprint" }
 
 [tool.pixi.feature.bench.tasks.ladder]
 description = "Every model the page publishes, in every library that can express it"
 args = [
     { arg = "cases", default = "dispatch nodal network sector" },
-    { arg = "sizes", default = "3xs 2xs xs s m l" },
+    { arg = "sizes", default = "3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l" },
     { arg = "sinks", default = "highs gurobi" },
     { arg = "arms", default = "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" },
     { arg = "out", default = "bench/results/latest.json" },
@@ -209,7 +222,7 @@ description = "One sink of the published ladder, a process per case and ladder"
 args = [{ arg = "sink" }, { arg = "cases", default = "dispatch nodal network sector" }]
 # `bash -c` because the pixi shell has no `for`.
 # `--builds` only on highs, because `test_rebuild` does not vary by sink.
-cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 2xs xs s m l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
+cmd = '''bash -c 'bash bench/memory-watchdog.sh & watchdog=$!; trap "kill $watchdog 2>/dev/null || true" EXIT; memory="${BENCH_MEMORY_BUDGET:-16}"; sizes="${BENCH_SIZES:-3xs 3xs5 2xs 2xs5 xs xs5 s s5 m m5 l}"; builds=0; lost=""; [ "{{ sink }}" = highs ] && builds=5; for case in {{ cases }}; do while read -r out rungs <&3; do pixi run -e bench ladder "$case" "$rungs" "{{ sink }}" "specsolve specsolve-in-memory linopy pyomo gurobipy-loop gurobipy-matrix highspy-matrix" "$out" "$builds" "$memory" || lost="$lost $out"; done 3< <(python -m bench.published "{{ sink }}" "$case" $sizes); done; [ -z "$lost" ] || { echo "files that did not finish:$lost"; exit 1; }' '''
 
 [tool.pixi.feature.bench.tasks.ladder-smoke]
 description = "One rung, to prove the machinery rather than to measure anything"
@@ -281,6 +294,7 @@ extend-fixable = ["B", "SIM", "RUF", "C4", "UP"]
 "differential/**/*.py" = ["T20", "D"]
 "tests/**/*.py" = ["D"]
 "tests/typeset/golden/__main__.py" = ["T20", "D"]
+"tests/fuzz/run.py" = ["T20", "D"]
 
 [tool.ruff.format]
 quote-style = "single"
@@ -301,7 +315,11 @@ testpaths = ["tests"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = ["benchmem: pytest-benchmem settings for a benchmark (bench/, needs --group bench)"]
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # Xpress 10 warns once per process on the bundled Community licence, which CI and this suite run on.
+    "ignore:Using the Community license in this session",
+]
 
 [tool.coverage.run]
 branch = true
@@ -342,6 +360,6 @@ matches = "tests/linopy_lane/**"
 errors = { explicit-any = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "src/specsolve/relational/sinks/solvers/**"
+matches = "src/specsolve/_sinks/**"
 errors = { explicit-any = false }
 

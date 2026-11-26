@@ -1,6 +1,6 @@
 """The solve outcome, and linopy as its oracle.
 
-`relational/status.py` copies linopy's status vocabulary spelling for
+`_status.py` copies linopy's status vocabulary spelling for
 spelling, and each solver sink copies linopy's own mapping for its solver.
 These tests import linopy and compare, so a divergence on either side fails
 here.
@@ -16,12 +16,12 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._records import Metrics, Record, _column_types
+from specsolve._sinks.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
+from specsolve._sinks.highs import _CONDITION_OF_HIGHS_STATUS
+from specsolve._sinks.xpress import _CONDITION_OF_SOL_STATUS
+from specsolve._status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 from specsolve.errors import NoSolutionError
-from specsolve.relational.answer_layout import Metrics, Record, _column_types
-from specsolve.relational.sinks.solvers.gurobi import _CONDITION_OF_GUROBI_STATUS, _LINOPY_DIVERGENCES
-from specsolve.relational.sinks.solvers.highs import _CONDITION_OF_HIGHS_STATUS
-from specsolve.relational.sinks.solvers.xpress import _CONDITION_OF_SOL_STATUS
-from specsolve.relational.status import STATUS_TO_TERMINATION_CONDITIONS, SolveStatus
 from tests.conftest import CASES
 
 # ---------------------------------------------------------------------------
@@ -57,14 +57,14 @@ def test_the_gurobi_mapping_matches_linopy_where_it_claims_to():
     for code, condition in theirs.items():
         if code in _LINOPY_DIVERGENCES:
             assert _CONDITION_OF_GUROBI_STATUS[code] != condition, (
-                f'linopy now agrees with us on status {code} — drop the entry from _LINOPY_DIVERGENCES'
+                f'linopy now agrees with us on status {code} — drop the key from _LINOPY_DIVERGENCES'
             )
         else:
             assert _CONDITION_OF_GUROBI_STATUS[code] == condition
 
 
 def test_the_xpress_mapping_matches_linopy():
-    """Copied entry for entry, with nothing claimed as an exception.
+    """Copied key for key, with nothing claimed as an exception.
 
     The map is keyed by ``SolStatus`` *value* here and by the enum member
     there, so a member renamed upstream fails here.
@@ -137,48 +137,53 @@ def test_ok_means_values_worth_reading_not_optimality():
 
 
 def test_an_infeasible_solve_reports_both_axes_and_a_nan_objective():
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.is_ok
-        assert solution.objective != solution.objective, 'nan, not 0.0'
+    with sps.solve(*CASES['INFEASIBLE']) as result:
+        assert result.status == 'warning'
+        assert result.termination_condition == 'infeasible'
+        assert not result.is_ok
+        assert result.objective != result.objective, 'nan, not 0.0'
 
 
 def test_reading_results_without_a_solution_raises():
     """HiGHS returns a full-length vector of zeros whatever the status, so
     handing it back would be indistinguishable from an answer."""
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
+    with sps.solve(*CASES['INFEASIBLE']) as result:
         with pytest.raises(NoSolutionError, match='infeasible'):
-            solution.primal('p')
+            result.primal('p')
         with pytest.raises(NoSolutionError, match='infeasible'):
-            solution.dual('meet')
+            result.dual('meet')
 
 
-def test_a_solve_that_left_no_values_writes_the_record_and_no_frames(tmp_path):
-    """An export of a run that did not solve is the record alone."""
-    with sps.solve(*CASES['INFEASIBLE']) as solution:
-        out = solution.save(tmp_path / 'infeasible')
-    assert sorted(entry.name for entry in out.iterdir()) == ['format.json', 'record.parquet', 'spec.yaml'], (
-        'the record, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
-    )
+def test_a_solve_that_left_no_values_archives_the_record_and_no_tables(tmp_path):
+    """The answer of a run that did not solve is the record alone."""
+    sps.solve(*CASES['INFEASIBLE'], archive=tmp_path / 'infeasible')
+    out = tmp_path / 'infeasible' / 'answer'
+    assert sorted(path.name for path in out.iterdir()) == [
+        'format.json',
+        'metrics.parquet',
+        'record.parquet',
+        'spec.yaml',
+    ], 'the record, its cost, the spec and the layout it is in; no values, so no primal/, dual/ or expression/'
     record = pl.read_parquet(out / 'record.parquet')
     assert record.row(0, named=True)['termination_condition'] == 'infeasible'
     assert record['objective'].to_list() == [None], 'no objective was reached, so the column holds none'
 
 
 @pytest.mark.parametrize('case', ['LP', 'MIP', 'INFEASIBLE'])
-def test_a_result_hands_back_the_row_its_save_writes(case, tmp_path):
-    """`result.record` is the record as a value, so reading it needs no save and no parquet.
+def test_a_result_hands_back_the_row_its_archive_writes(case, tmp_path):
+    """`result.record` is the record as a value, so reading it needs no archive and no parquet.
 
     The same row whichever side it is read from: the live result, the file
-    `save` wrote, and the result `load_result` reads back off that file.
+    the archive holds, and the result `read_archive` reads back off that file,
+    the archive adding only its run.
     """
-    with sps.solve(*CASES[case]) as solution:
-        record = solution.record
-        out = solution.save(tmp_path / case)
-    written = Record(**pl.read_parquet(out / 'record.parquet').row(0, named=True))
-    assert record == written, 'the property and the file are one row, not two readings of the solve'
-    assert sps.load_result(out).record == written, 'and a result read back hands back the row it was read from'
+    with sps.solve(*CASES[case], archive=tmp_path / case) as result:
+        record = result.record
+    written = Record(**pl.read_parquet(tmp_path / case / 'answer' / 'record.parquet').row(0, named=True))
+    assert record == written._replace(specsolve_run=None), 'the property and the file are one row'
+    assert sps.read_archive(tmp_path / case).record == written, (
+        'and a result read back hands back the row it was read from'
+    )
     assert (record.objective is None) == (not record.has_primal), 'null where nothing was reached, never nan'
 
 
@@ -189,10 +194,9 @@ def test_a_case_that_reached_no_objective_does_not_poison_the_others(tmp_path):
     among a hundred turns the mean of the hundred into nan.
     """
     for name, case in (('solved', 'LP'), ('unsolved', 'INFEASIBLE')):
-        with sps.solve(*CASES[case]) as solution:
-            solution.save(tmp_path / name)
+        sps.solve(*CASES[case], archive=tmp_path / name)
 
-    table = pl.read_parquet(tmp_path / '*' / 'record.parquet')
+    table = pl.read_parquet(tmp_path / '*' / 'answer' / 'record.parquet')
     assert table['objective'].null_count() == 1, 'one of the two cases reached no objective'
     assert table['objective'].is_nan().sum() == 0, 'and it is written as no value rather than as nan'
     assert table['objective'].mean() == table.filter('has_primal')['objective'].item(), (

@@ -1,6 +1,6 @@
 """``at()`` — the pullback, and the models that had no formulation without it.
 
-`sum` walks a relation from the fine dim into the coarse one; `at` walks it
+`sum` walks a relation from the fine dimension into the coarse one; `at` walks it
 back out. `examples/multi_period.yaml` is ragged — four snapshots in 2030
 against two in 2050 — and its capacity bound reads a per-period variable at
 every snapshot.
@@ -14,7 +14,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from tests.conftest import EXAMPLES_DIR, by_coord, relation
+from specsolve.errors import SpecsolveError
+from tests.conftest import EXAMPLES_DIR, primal_by_coordinate, relation
 
 MULTI_PERIOD = EXAMPLES_DIR / 'multi_period.yaml'
 PAGE = Path('docs/examples/multi_period.md')
@@ -74,7 +75,7 @@ COMPONENT_GATE = {
     'dimensions': {
         'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
     },
     'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
     'parameters': {'cost': {'dims': ['flow']}, 'oncost': {'dims': ['component']}},
@@ -85,7 +86,7 @@ COMPONENT_GATE = {
     'constraints': {
         'gate': {
             'dims': ['flow', 't'],
-            'expression': 'rate <= at(on, by=component_of, over=component, into=flow) * 10',
+            'expression': 'rate <= at(on, by=component_of[component]) * 10',
         },
         'need': {'dims': ['t'], 'expression': 'sum(rate, over=flow) >= 12'},
     },
@@ -106,8 +107,8 @@ def test_one_binary_gates_every_flow_of_its_component():
     }
     with sps.solve(COMPONENT_GATE, sources) as result:
         assert result.objective == pytest.approx(38.0)
-        running = by_coord(result, 'on', 'component', 't')
-        rates = by_coord(result, 'rate', 'flow', 't')
+        running = primal_by_coordinate(result, 'on', 'component', 't')
+        rates = primal_by_coordinate(result, 'rate', 'flow', 't')
 
     for t in (0, 1):
         for flow, component in zip(flows, ['c1', 'c1', 'c2'], strict=True):
@@ -118,9 +119,9 @@ def test_one_binary_gates_every_flow_of_its_component():
 
 
 def test_at_agrees_with_the_oracle_through_a_reduction():
-    """A pullback summed back over `flow` brings two copies of one label into a row, and they add.
+    """A pullback summed back over `flow` brings two copies of one column index into a row, and they add.
 
-    The oracle is imported in the body so the rest of the module runs on the
+    The linopy lane is imported in the body so the rest of the module runs on the
     bare install.
     """
     from tests.differential import differential
@@ -140,9 +141,9 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'constraints': {
             'draw': {
                 'dims': [],
-                'expression': 'sum(at(level, by=component_of, over=component, into=flow) * share, over=flow) >= 9',
+                'expression': 'sum(at(level, by=component_of[component]) * share, over=flow) >= 9',
             },
-            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of, over=component, into=flow)'},
+            'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'},
         },
         'objective': {'sense': 'minimize', 'expression': 'sum(level * 1.0) + sum(take * cost)'},
     }
@@ -151,12 +152,12 @@ def test_at_agrees_with_the_oracle_through_a_reduction():
         'cost': pd.Series([1.0, 2.0, 1.5], index=flows),
         'share': pd.Series([1.0, 2.0, 3.0], index=flows),
     }
-    index = {
+    structure = {
         'flow': pd.DataFrame({'flow': flows}),
         'component_of': relation('flow', 'component', flows, ['c1', 'c1', 'c2']),
         'component': pd.Index(components, name='component'),
     }
-    with differential(spec, data | index) as run:
+    with differential(spec, data | structure) as run:
         assert run.result.objective > 0
 
 
@@ -172,10 +173,14 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
     up_time = {'slow': 3, 'fast': 1}
     hours = list(range(6))
     spec = {
-        'dimensions': {'unit': {'dtype': 'str'}, 't': {'dtype': 'int'}, 'tf': {'dtype': 'int'}},
+        'dimensions': {
+            'unit': {'dtype': 'str'},
+            't': {'dtype': 'int', 'ordered': True},
+            'tf': {'dtype': 'int', 'ordered': True},
+        },
         'relations': {'same_moment': {'key': 'tf', 'values': 't'}},
         'parameters': {
-            'window': {'dims': ['unit', 't', 'tf']},
+            'window': {'dims': ['unit', 't', 'tf'], 'missing': 0},
             'load': {'dims': ['t']},
             'cap': {'dims': ['unit']},
             'run_cost': {'dims': ['unit']},
@@ -190,7 +195,7 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
             'a_start_turns_it_on': {
                 'dims': ['unit', 'tf'],
                 'expression': (
-                    'started >= at(on, by=same_moment, over=t, into=tf) - shift(at(on, by=same_moment, over=t, into=tf), along=tf, offset=1, edge=0)'
+                    'started >= at(on, by=same_moment[t]) - shift(at(on, by=same_moment[t]), along=tf, offset=1, edge=0)'
                 ),
             },
             'stays_up_its_own_time': {
@@ -223,11 +228,11 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
         'tf': pl.DataFrame({'tf': hours}),
         'same_moment': relation('tf', 't', hours, hours),
     }
-    with sps.solve(spec, sources) as solution:
-        assert solution.objective == pytest.approx(13.0), (
+    with sps.solve(spec, sources) as result:
+        assert result.objective == pytest.approx(13.0), (
             'the slow unit runs and is held up its own three hours; 11.0 would mean the window read nothing'
         )
-        on = solution.primal('on').filter(pl.col('value') > 0.5)
+        on = result.primal('on').filter(pl.col('value') > 0.5)
         assert on.height == 3, 'exactly the three snapshots its own minimum up time forces'
         assert set(on['unit']) == {'slow'}, 'and it is the slow unit that is held, not the fast one'
 
@@ -236,14 +241,12 @@ def test_a_window_whose_length_is_read_from_data_is_an_incidence_table():
 #: the row built, its right-hand side is zero.
 DANGLING = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}},
-    'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {
-        'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of, over=component, into=flow)'}
-    },
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=component_of[component])'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(take, over=flow) - 1000 * sum(level, over=component)'},
 }
 DANGLING_MAP = ['c1', 'c1', None]
@@ -286,20 +289,18 @@ def test_at_through_a_null_relation_agrees_between_lanes():
 
     with differential(DANGLING, _dangling_sources(), lp=True) as run:
         assert run.oracle == pytest.approx(10.0)
-        assert run.engine.diagnostics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
+        assert run.engine.metrics().rows == 2, 'the two flows that map somewhere have a row, and f3 has none'
 
 
 #: Two columns read at once, through a relation that leaves `f3` out.
 DANGLING_PAIR = {
     'dimensions': {'flow': {'dtype': 'str'}, 'component': {'dtype': 'str'}, 'kind': {'dtype': 'str'}},
-    'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind']}},
+    'relations': {'placed': {'key': 'flow', 'values': ['component', 'kind'], 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component', 'kind'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow'], 'bounds': {'lower': 0, 'upper': 10}},
     },
-    'constraints': {
-        'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=placed, over=[component, kind], into=flow)'}
-    },
+    'constraints': {'link': {'dims': ['flow'], 'expression': 'take <= at(level, by=placed[component, kind])'}},
     'objective': {
         'sense': 'maximize',
         'expression': 'sum(take, over=flow) - 1000 * sum(sum(level, over=component), over=kind)',
@@ -324,36 +325,36 @@ def test_at_through_a_pair_the_relation_leaves_out_takes_the_row_with_it():
         lp=True,
     ) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound, not by a row reading nothing'
-        assert run.engine.diagnostics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
+        assert run.engine.metrics().rows == 2, 'the two flows whose whole tuple maps have a row, and f3 has none'
 
 
-#: The same shape with a total relation; `level` is masked away at `c2`.
-MASKED = DANGLING | {
+#: The same shape with a total relation; `level` is absent at `c2`.
+NARROWED = DANGLING | {
     'parameters': {'usable': {'dims': ['component']}},
     'variables': DANGLING['variables'] | {'level': DANGLING['variables']['level'] | {'where': 'usable > 0'}},
 }
 
 
-def test_at_over_a_masked_variable_takes_the_row_with_it():
-    """A pullback carries the mask under it, not only the relation's own gaps (#968)."""
+def test_at_over_a_narrowed_variable_takes_the_row_with_it():
+    """A pullback carries the condition under it, not only the relation's own gaps (#968)."""
     from tests.differential import differential
     from tests.oracle import pd
 
     usable = pd.Series([1.0, 0.0], index=pd.Index(COMPONENTS, name='component'))
-    with differential(MASKED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
+    with differential(NARROWED, _dangling_sources(['c1', 'c1', 'c2'], usable=usable), lp=True) as run:
         assert run.oracle == pytest.approx(10.0), 'take[f3] is held by its own bound — 0.0 would mean a row bound it'
-        assert run.engine.diagnostics().rows == 2, 'only the flows whose component has a level are asserted'
+        assert run.engine.metrics().rows == 2, 'only the flows whose component has a level are asserted'
 
 
-#: A pullback's absence is keyed by the fine dim alone; `u` is a second dim the shift edge spans.
+#: A pullback's absence is keyed by the fine dimension alone; `u` is a second dimension the shift edge spans.
 DANGLING_SHIFTED = {
     'dimensions': {
         'flow': {'dtype': 'str'},
         'component': {'dtype': 'str'},
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
         'u': {'dtype': 'str'},
     },
-    'relations': {'component_of': {'key': 'flow', 'values': 'component'}},
+    'relations': {'component_of': {'key': 'flow', 'values': 'component', 'missing': 'absent'}},
     'variables': {
         'level': {'dims': ['component', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
         'take': {'dims': ['flow', 't', 'u'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -361,7 +362,7 @@ DANGLING_SHIFTED = {
     'constraints': {
         'link': {
             'dims': ['flow', 't', 'u'],
-            'expression': 'take <= shift(at(level, by=component_of, over=component, into=flow), along=t, offset=1, edge=0)',
+            'expression': 'take <= shift(at(level, by=component_of[component]), along=t, offset=1, edge=0)',
         }
     },
     'objective': {
@@ -375,7 +376,7 @@ DANGLING_SHIFTED = {
 
 
 def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
-    """The shift edge places itself over dims the pullback's presence omits.
+    """The shift edge places itself over dimensions the pullback's presence omits.
 
     An absence that arrived before the shift is not the edge, so it is not
     filled, and f3 keeps no row at either t (#987).
@@ -385,9 +386,53 @@ def test_a_pullbacks_absence_reaches_a_shift_that_spans_more_dims():
 
     extra = {'t': pd.Index([0, 1], name='t'), 'u': pd.Index(['a', 'b'], name='u')}
     with differential(DANGLING_SHIFTED, _dangling_sources(**extra), lp=True) as run:
-        assert run.engine.diagnostics().rows == 8, (
-            'the flows that map somewhere are asserted at both t, and f3 at neither'
-        )
+        assert run.engine.metrics().rows == 8, 'the flows that map somewhere are asserted at both t, and f3 at neither'
         assert run.oracle == pytest.approx(40.0), (
             "f3's four coordinates are held by their own bound alone, every other row by a level worth 1000"
         )
+
+
+def test_a_lookup_into_a_dimension_with_no_labels_reads_nothing_on_both_lanes():
+    """A dimension with no labels gives the lookup nothing to read, so every row that reads it is absent.
+
+    A network with no transformers reads its outage factors this way. The linopy lane
+    once indexed the dimension's first label to stand in for the null reads, and
+    raised where there is none.
+    """
+    from tests.differential import differential
+
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
+        'relations': {'on': {'key': 'g', 'values': 'k', 'missing': 'absent'}},
+        'parameters': {'cap': {'dims': ['k']}},
+        'variables': {'y': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 5}}},
+        'constraints': {'c': {'dims': ['g'], 'expression': 'y <= at(cap, by=on[k])'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(y)'},
+    }
+    sources = {
+        'g': ['a', 'b'],
+        'k': pl.DataFrame({'k': []}, schema={'k': pl.String}),
+        'on': pl.DataFrame({'g': [], 'k': []}, schema={'g': pl.String, 'k': pl.String}),
+        'cap': pl.DataFrame({'k': [], 'value': []}, schema={'k': pl.String, 'value': pl.Float64}),
+    }
+    with differential(spec, sources) as run:
+        assert run.oracle == pytest.approx(10.0), 'no row reads a cap, so each y runs to its bound of 5'
+
+
+def test_a_constant_without_the_looked_up_dimension_is_refused_by_name():
+    """A constant beside the variable carries no row of the dimension `at` reads.
+
+    The term is repeated along it before the lookup; a constant is not, so the
+    relational engine refuses it naming the operator, rather than failing an
+    internal check.
+    """
+    spec = {
+        'dimensions': {'h': {'dtype': 'str'}, 'k': {'dtype': 'str'}},
+        'relations': {'r': {'key': 'k', 'values': 'h'}},
+        'variables': {'x': {'dims': ['h'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'c': {'dims': ['k'], 'expression': 'at(x + 3, by=r[h]) <= 5'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    sources = {'h': ['h1'], 'k': ['k1', 'k2'], 'r': pl.DataFrame({'k': ['k1', 'k2'], 'h': ['h1', 'h1']})}
+    with pytest.raises(SpecsolveError, match=r"at\(by=\) acts along \['h'\].*specsolve cannot build that"):
+        sps.solve(spec, sources)

@@ -4,6 +4,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: generating units
 
@@ -34,5 +35,5 @@ constraints:
 
 objective:
   sense: minimize
-  description: total cost of generation over the horizon
+  description: total cost of generation over every snapshot
   expression: sum(p * cost)

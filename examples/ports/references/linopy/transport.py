@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the nodal balance. The YAML groups by relations it
-declared over the dimensions — ``sum(p, by=gen_bus, over=generator, into=bus)``
+declared over the dimensions — ``sum(p, over=generator, by=gen_bus[bus])``
 — where this script builds the bus x generator and bus x line incidence
 matrices and multiplies through them. Both say Kirchhoff's current law; one
 says it as a relation, the other as linear algebra.
@@ -34,7 +34,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'transport.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

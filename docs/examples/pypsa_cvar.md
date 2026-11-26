@@ -20,7 +20,7 @@ distribution is a quantile average and sounds nonlinear. It is an epigraph over
 a level `theta` the model is free to place. The objective's weight on it
 pulls it down onto the true value at risk.
 
-Two things the source settles. **The tail is the operating cost only**: capital
+Two things the source decides. **The tail is the operating cost only**: capital
 cost sits outside the blend, so `omega` prices what a future costs to *run*. And
 **`alpha` and `omega` are independent**: `alpha` says where the tail starts,
 `omega` how much of the objective it is.
@@ -37,38 +37,76 @@ PyPSA's CVaR risk preference on a stochastic network: the plan is chosen against
 
 | Symbol | Meaning |
 |---|---|
+| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 | $`\mathcal{S}`$ | index $`s`$ — `scenario` — the futures the fleet is built against, one of which will happen |
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the same in every future |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
-| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
 | $`\mathrm{alpha}`$ | `alpha` (scalar) — where the tail begins: the confidence level whose worst 1 - alpha of the probability mass the risk term averages over |
+| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
 | $`\mathrm{omega}`$ | `omega` (scalar) — how much of the objective is the tail rather than the expectation — 0 is the risk-neutral plan, 1 prices nothing but the worst futures |
+| $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot of a future |
 | $`\mathit{excess}`$ | `excess` over $`\mathcal{S}`$ — how far a future's operating cost runs past the level the tail begins at, and zero for the futures that do not reach it |
-| $`\mathit{tail\_start}`$ | `tail_start` (scalar) — the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S} \times \mathcal{T}`$ — output of a generator in a snapshot of a future |
+| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator — the first-stage decision, taken before anyone knows which future arrived |
 | $`\mathit{tail\_average}`$ | `tail_average` (scalar) — the average operating cost of the futures beyond that level |
+| $`\mathit{tail\_start}`$ | `tail_start` (scalar) — the level the tail begins at — the value at risk, which the epigraph rows pin to the alpha quantile of the operating cost rather than the model declaring it |
 
 #### Definitions
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{operating\_cost}`$ | `operating_cost` over $`\mathcal{S}`$ — what one future costs to run, over the whole horizon |
+| $`\mathit{operating\_cost}`$ | `operating_cost` over $`\mathcal{S}`$ — what one future costs to run, over every snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{probability}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p^{\mathrm{nom}}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Variable domains
+
+**`excess`**
+
+```math
+\mathit{excess}_{s} \ge 0 \qquad \forall\, s \in \mathcal{S}
+```
+
+**`p`**
+
+```math
+p_{g,s,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
+```
+
+**`p_nom`**
+
+```math
+p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
+```
+
+**`tail_average`**
+
+```math
+\mathit{tail\_average} \in \mathbb{R}
+```
+
+**`tail_start`**
+
+```math
+\mathit{tail\_start} \in \mathbb{R}
+```
+
+#### Definitions
+
+**`operating_cost`**
+
+```math
+\mathit{operating\_cost}_{s} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{g,s,t} \cdot \mathrm{opex}_{g} \qquad \forall\, s \in \mathcal{S}
+```
 
 #### Objective
 
@@ -78,22 +116,10 @@ Upright is what the data supplies — a parameter such as $`\mathrm{probability}
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`power_balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
-```
-
-**`tail_excess`**
-
-```math
-\mathit{excess}_{s} \ge \mathit{operating\_cost}_{s} - \mathit{tail\_start} \qquad \forall\, s \in \mathcal{S}
+\sum_{g \in \mathcal{G}} p_{g,s,t} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
 ```
 
 **`tail_definition`**
@@ -102,50 +128,22 @@ p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \m
 \left( 1 - \mathrm{alpha} \right) \cdot \left( \mathit{tail\_average} - \mathit{tail\_start} \right) \ge \sum_{s \in \mathcal{S}} \mathrm{probability}_{s} \cdot \mathit{excess}_{s}
 ```
 
-#### Definitions
-
-**`operating_cost`**
+**`tail_excess`**
 
 ```math
-\mathit{operating\_cost}_{s} = \sum_{t \in \mathcal{T}} \sum_{g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \qquad \forall\, s \in \mathcal{S}
+\mathit{excess}_{s} \ge \mathit{operating\_cost}_{s} - \mathit{tail\_start} \qquad \forall\, s \in \mathcal{S}
 ```
 
-#### Variable domains
-
-**`p_nom`**
+**`within_capacity`**
 
 ```math
-p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
-```
-
-**`p`**
-
-```math
-p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`excess`**
-
-```math
-\mathit{excess}_{s} \ge 0 \qquad \forall\, s \in \mathcal{S}
-```
-
-**`tail_start`**
-
-```math
-\mathit{tail\_start} \in \mathbb{R}
-```
-
-**`tail_average`**
-
-```math
-\mathit{tail\_average} \in \mathbb{R}
+p_{g,s,t} \le p^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -165,6 +163,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods, the same in every future
         dtype: int
+        ordered: true
       generator:
         description: generating units, each built once and run in every future
         dtype: str
@@ -177,7 +176,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: demand to be met, and the one thing that differs between futures
         dims: [scenario, snapshot]
       capex:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       opex:
         description: cost of one unit of output
@@ -225,7 +224,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     expressions:
       operating_cost:
-        description: what one future costs to run, over the whole horizon
+        description: what one future costs to run, over every snapshot
         expression: sum(sum(p * opex, over=generator), over=snapshot)
 
     constraints:
@@ -272,10 +271,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_cvar.yaml', sources) as solution:
-        solution.objective  # 35410.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_cvar.yaml', sources) as result:
+        result.objective  # 35410.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"

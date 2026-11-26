@@ -3,8 +3,8 @@ The whole architecture, one model, one stage at a time — run it and read.
 spec: examples/walkthrough/walkthrough.yaml
 
 [1] YAML text -> validated Spec  (mathspec.to_spec)
-    dimensions   snapshot, generator
-    parameters   p_max, load, cost
+    dimensions   generator, snapshot
+    parameters   cost, load, p_max
     variables    p
     constraints  power_balance
     expressions  total_supply    <- tier 2, still present
@@ -12,18 +12,18 @@ spec: examples/walkthrough/walkthrough.yaml
 
 [2] expand macros -> core AST  (Spec.program)
     written      'sum(weighted_sum(p, cost, over=generator))'
-    core AST     Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',))
+    core AST     Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=())
                  ^ the macro is gone: sum(p * cost, over=generator)
 
 [3] a spec -> the program both lanes build from  (Spec.program)
     Program(
-      p: VariableDeclaration(dims=('snapshot', 'generator'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0), upper=Parameter(name='p_max'), domain='continuous', absence='undefined', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
-      power_balance: ConstraintDeclaration(dims=('snapshot',), lhs=Named(name='total_supply', body=Sum(operand=Variable(name='p'), over=('generator',))), sense='==', rhs=Parameter(name='load'), where=None, description='the fleet meets the load exactly in every snapshot')
-      ObjectiveDeclaration(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=Variable(name='p'), right=Parameter(name='cost')), over=('generator',)), over=('snapshot',)), description='total cost of generation over the horizon')
+      p: Variable(dims=('generator', 'snapshot'), where=Mask(root=ParameterComparison(name='p_max', op='>', value=0.0, dims=('generator',))), lower=Constant(value=0.0, dims=()), upper=ParameterReference(name='p_max', dims=('generator',)), domain='continuous', missing='absent', description='output of a generator in a snapshot — the `where` drops the retired unit entirely, so the built model is smaller than the coordinate product')
+      power_balance: Constraint(dims=('snapshot',), lhs=ExpressionReference(name='total_supply', body=Sum(operand=VariableReference(name='p', dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), dims=('snapshot',)), sense='==', rhs=ParameterReference(name='load', dims=('snapshot',)), where=None, description='the fleet meets the load exactly in every snapshot')
+      Objective(sense='minimize', expression=Sum(operand=Sum(operand=Multiply(left=VariableReference(name='p', dims=('generator', 'snapshot')), right=ParameterReference(name='cost', dims=('generator',)), dims=('generator', 'snapshot')), over=(Axis(dimension='generator', column=None),), dims=('snapshot',)), over=(Axis(dimension='snapshot', column=None),), dims=()), description='total cost of generation over every snapshot')
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
-[4] plan + data -> the model frames  (relational/engine/engine.py)
+[4] plan + data -> the model tables  (_engine/engine.py)
     cols                   18 rows
     obj                     6 rows
     rows                    6 rows
@@ -36,47 +36,47 @@ spec: examples/walkthrough/walkthrough.yaml
     where "p_max > 0" is not a mask array — it is row absence:
     p has 18 rows, not 24: retired oil never becomes a column.
     shape: (4, 3)
-    ┌──────────┬───────────┬───────────┐
-    │ snapshot ┆ generator ┆ var_label │
-    │ ---      ┆ ---       ┆ ---       │
-    │ i64      ┆ enum      ┆ i64       │
-    ╞══════════╪═══════════╪═══════════╡
-    │ 0        ┆ wind      ┆ 0         │
-    │ 0        ┆ solar     ┆ 1         │
-    │ 0        ┆ gas       ┆ 2         │
-    │ 1        ┆ wind      ┆ 3         │
-    └──────────┴───────────┴───────────┘
+    ┌───────────┬──────────┬───────────────┐
+    │ generator ┆ snapshot ┆ specsolve_col │
+    │ ---       ┆ ---      ┆ ---           │
+    │ enum      ┆ i64      ┆ i64           │
+    ╞═══════════╪══════════╪═══════════════╡
+    │ wind      ┆ 0        ┆ 0             │
+    │ wind      ┆ 1        ┆ 1             │
+    │ wind      ┆ 2        ┆ 2             │
+    │ wind      ┆ 3        ┆ 3             │
+    └───────────┴──────────┴───────────────┘
 
-[5] sink: stream the frames to an LP file  (relational/sinks/writers/lp_file.py)
+[5] sink: stream the tables to an LP file  (_sinks/lp_file.py)
     min
     
     obj:
-    +50.0 x2
-    +50.0 x5
-    +50.0 x8
-    +50.0 x11
+    +50.0 x12
+    +50.0 x13
     +50.0 x14
+    +50.0 x15
+    +50.0 x16
     +50.0 x17
     
     s.t.
     ... (64 lines total)
 
-[6] sink: batches -> highspy -> solution frames  (relational/sinks/solvers/highs.py)
+[6] sink: batches -> highspy -> solution tables  (_sinks/highs.py)
     status     ok (optimal)
     objective  1,000.0
     shape: (6, 3)
-    ┌──────────┬───────────┬───────┐
-    │ snapshot ┆ generator ┆ value │
-    │ ---      ┆ ---       ┆ ---   │
-    │ i64      ┆ str       ┆ f64   │
-    ╞══════════╪═══════════╪═══════╡
-    │ 0        ┆ wind      ┆ 80.0  │
-    │ 0        ┆ solar     ┆ 0.0   │
-    │ 0        ┆ gas       ┆ 0.0   │
-    │ 1        ┆ wind      ┆ 60.0  │
-    │ 1        ┆ solar     ┆ 60.0  │
-    │ 1        ┆ gas       ┆ 0.0   │
-    └──────────┴───────────┴───────┘
+    ┌───────────┬──────────┬───────┐
+    │ generator ┆ snapshot ┆ value │
+    │ ---       ┆ ---      ┆ ---   │
+    │ str       ┆ i64      ┆ f64   │
+    ╞═══════════╪══════════╪═══════╡
+    │ wind      ┆ 0        ┆ 80.0  │
+    │ wind      ┆ 1        ┆ 60.0  │
+    │ wind      ┆ 2        ┆ 90.0  │
+    │ wind      ┆ 3        ┆ 100.0 │
+    │ wind      ┆ 4        ┆ 80.0  │
+    │ wind      ┆ 5        ┆ 100.0 │
+    └───────────┴──────────┴───────┘
     shape: (3, 2)
     ┌──────────┬───────┐
     │ snapshot ┆ value │
@@ -99,7 +99,7 @@ spec: examples/walkthrough/walkthrough.yaml
 
     variable x variable x variable — the ceiling is degree 2, not "nonlinear is fine":
     caught by check() as SchemaError
-      The objective: this product is degree 3. The language takes degree 2 and nothing above it.
-      Multiply by a parameter instead, or give the inner product a name — a variable constrained to equal it is degree 1 wherever it is used.
+      The objective: this product is degree 3, and the limit is degree 2.
+      Multiply by a parameter instead, or declare a variable constrained to equal the inner product.
 
 docs/development/architecture.md has the rules these stages enforce.

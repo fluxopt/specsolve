@@ -31,21 +31,23 @@ from typing import Any, NamedTuple, get_args
 
 import pytest
 import yaml
-from mathspec import Spec, to_spec
+from mathspec import to_spec
+from mathspec.spec import Spec
 
 import specsolve as sps
-from specsolve.api import Model
-from specsolve.relational.result import Result
+from specsolve._api import Model
+from specsolve._result import Result
 
 try:
     from tests import linopy_lane
 except ModuleNotFoundError:
-    linopy_lane = None  # bare install, no oracle
+    linopy_lane = None  # bare install, no linopy lane
 
 REPO = Path(__file__).resolve().parent.parent
 TRACKED = [
     'README.md',
     'docs/run.md',
+    'docs/howto/faster.md',
     'docs/howto/warm-start.md',
     'docs/howto/fix-relax-remove.md',
     'docs/howto/solvers.md',
@@ -80,7 +82,7 @@ def _unresolvable(code: str) -> set[str]:
     return {root for root in ROOT_NAMES - set(ROOTS) if f'{root}.' in code}
 
 
-_EXTRA = 'needs the linopy oracle to check {}'
+_EXTRA = 'needs the linopy lane to check {}'
 
 #: A fence may be ``` or ~~~, three or more, indented (inside a list item), and
 #: may carry an info string after the language (```python title="a.py").
@@ -265,7 +267,7 @@ def test_yaml_block_validates(block: Block) -> None:
             f'{block.where} does not validate:\n{exc}\n\n'
             'If the block is not meant to be a complete model — a section shown '
             'on its own still has to resolve its cross-references, so a lone '
-            '`parameters:` must declare the dims it names — annotate the fence '
+            '`parameters:` must declare the dimensions it names — annotate the fence '
             'instead:\n'
             '  <!-- doctest: wrap=<section> -->  a single entry of that section\n'
             '  <!-- doctest: skip -->            not a model, or wrong on purpose'
@@ -314,7 +316,7 @@ def test_every_block_is_covered() -> None:
 # module docstrings
 # --------------------------------------------------------------------------
 
-DOCSTRING_MODULES = ['src/specsolve/__init__.py', 'src/specsolve/api.py', 'tests/linopy_lane/__init__.py']
+DOCSTRING_MODULES = ['src/specsolve/__init__.py', 'src/specsolve/_api.py', 'tests/linopy_lane/__init__.py']
 
 
 def _docstring_examples(path: Path) -> list[str]:

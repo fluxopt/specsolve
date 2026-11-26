@@ -7,21 +7,218 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
-- docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
-- docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
+- fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
+- fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
+- fix(sinks): HiGHS keeps coefficients down to 1e-12 and warns when it drops one ([#2226](https://github.com/fluxopt/specsolve/pull/2226))
+- feat!: specsolve requires mathspec 0.5.0a1, where a missing row reads as the value `missing:` names and a piecewise entry names its links ([#2199](https://github.com/fluxopt/specsolve/pull/2199))
+- perf(data): a parameter given as a parquet file of ten million rows or more streams from a copy rather than being held, so a model that large builds in less memory ([#2018](https://github.com/fluxopt/specsolve/pull/2018))
+
+## 0.13.0 (2026-11-25)
+
+**This release refuses some data that 0.12.x reads.**
+
+This release shows where a model spends its time. `model.timings()` logs each lap as one row, and the rows of a phase add up to its clock in `model.metrics()`. The how-to [Finding where the time goes](https://specsolve.readthedocs.io/en/latest/howto/timings/) shows how to read them. Labels of another type than their dimension's `dtype` are now refused at load.
+
+### What to change in a spec file or its data
+
+- Give each dimension's labels, and every column over it, the type its `dtype` declares, or declare the type they have. A dimension without a `dtype` is `str` ([#2222](https://github.com/fluxopt/specsolve/pull/2222)).
+
+### What to change in Python code
+
+- Replace `metrics.since(earlier)` with one run of `model.timings()` ([#2207](https://github.com/fluxopt/specsolve/pull/2207)).
+
+The pull requests in this release:
+
+### Timings
+
+- feat(api): every lap of a model's life is a row in model.timings(), the last step of building it included ([#2207](https://github.com/fluxopt/specsolve/pull/2207), [#2211](https://github.com/fluxopt/specsolve/pull/2211))
+- feat(api): a handoff's laps name each step it takes, alike on every solver ([#2212](https://github.com/fluxopt/specsolve/pull/2212))
+- feat(api): tidy's laps name each source it reads and checks ([#2218](https://github.com/fluxopt/specsolve/pull/2218))
+
+### Data
+
+- fix(data)!: a dimension's labels, and every column over the dimension, of another type than its declared dtype are refused at load ([#2222](https://github.com/fluxopt/specsolve/pull/2222))
+
+## 0.12.0 (2026-11-23)
+
+**This release will not read archives written by 0.11, and code that saves, reads or sweeps answers needs changes.**
+
+This release makes the public API smaller and gives each concept one name. An
+answer is kept on disk only as an archive. A result says what each phase of its
+solve took. Messages, docs and code use the words the glossary defines. Spec
+files are unaffected.
+
+### What to change in Python code
+
+- Replace `result.save(path)` with `sps.solve(..., archive=path)`, and `load_result` or `scan_result` with `read_archive` or `scan_archive` ([#2192](https://github.com/fluxopt/specsolve/pull/2192)).
+- Replace `sweep.save`, `load_sweep`, `scan_sweep` and `solve_over(spill_to=)` with `solve_over(archive=)`. A sweep writes its archive slice by slice and resumes from it ([#2192](https://github.com/fluxopt/specsolve/pull/2192)).
+- Rename `load_archive` to `read_archive` and `load_inputs` to `read_inputs` ([#2179](https://github.com/fluxopt/specsolve/pull/2179)). Both readers return the `Result` or the `Sweep` itself, which carries `.spec` and `.sources` ([#2193](https://github.com/fluxopt/specsolve/pull/2193)).
+- Solve a 0.11 archive again. It is refused: this release reads answer layout 5 and inputs layout 3.
+- Read sizes, counts and clocks from `model.metrics()` or `result.metrics`. `model.diagnostics()` keeps only its tables. Rename `loads` to `solver_instances` ([#2180](https://github.com/fluxopt/specsolve/pull/2180), [#2188](https://github.com/fluxopt/specsolve/pull/2188)).
+- Rename `record_options=` to `also_record=`, and `model.check(sink)` to `model.check_sink(sink)` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)).
+- In `solve_over`, rename `axis=` to `over=`. Remove `key_name=`: the axis names its own key column. Remove `keep_windows=` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)) and `workers_share_fs=` ([#2191](https://github.com/fluxopt/specsolve/pull/2191)). Pass an axis, not slices written by hand ([#2102](https://github.com/fluxopt/specsolve/pull/2102)).
+- Rename `EachCoordinate` to `EachLabel` and `sweep.record` to `sweep.records` ([#2100](https://github.com/fluxopt/specsolve/pull/2100)). Pass `EachWindow(horizon=)` instead of `steps=` ([#2166](https://github.com/fluxopt/specsolve/pull/2166)). Call `build_slice` instead of `axis.slices` ([#2126](https://github.com/fluxopt/specsolve/pull/2126)).
+
+The pull requests in this release:
+
+### Archives
+
+- refactor(api): an answer is kept on disk only as an archive, which a sweep writes slice by slice, and read_archive returns the result or the sweep, which carries its spec and sources ([#2192](https://github.com/fluxopt/specsolve/pull/2192), [#2193](https://github.com/fluxopt/specsolve/pull/2193), [#2179](https://github.com/fluxopt/specsolve/pull/2179), [#2100](https://github.com/fluxopt/specsolve/pull/2100))
+
+### Metrics
+
+- feat(api): the metrics time every phase from the spec to the archive ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
+- feat(api): each result carries the metrics of the solve that produced it, and a model's own are model.metrics(), apart from its diagnostics ([#2188](https://github.com/fluxopt/specsolve/pull/2188))
+- refactor(api): diagnostics and metrics count the solver instances a model's solves took as solver_instances, which was loads ([#2180](https://github.com/fluxopt/specsolve/pull/2180))
+- docs: a model's columns, rows and nonzeros each say what they count ([#2183](https://github.com/fluxopt/specsolve/pull/2183))
+- docs: the benchmarks page shows how each of specsolve's phases grows along a model's size ladder ([#2185](https://github.com/fluxopt/specsolve/pull/2185))
+
+### Sweeps
+
+- refactor(sweep): a rolling horizon windows the model's own dimension, and the sweep API is renamed ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): EachCoordinate is EachLabel, solve_over takes its axis as over, and an axis names its own key column ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(api): sweep.record is sweep.records, model.check for a sink is model.check_sink, and record_options is also_record ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- refactor(sweep): EachWindow takes the labels each window keeps as horizon= rather than steps= ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
+- refactor(api): a sweep's workers read a path source themselves, so solve_over takes no shared_filesystem ([#2191](https://github.com/fluxopt/specsolve/pull/2191))
+- refactor(api): solve_over no longer takes slices written by hand ([#2102](https://github.com/fluxopt/specsolve/pull/2102))
+- feat(sweep): build_slice gives the model of one slice of a sweep, and axis.slices is gone ([#2126](https://github.com/fluxopt/specsolve/pull/2126))
+- fix(sweep): a window over a dimension that is not declared ordered is refused ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a start with a basis status that is none is refused before a slice is solved ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): a sweep is saved where Python has no time zone database, as in the browser ([#2100](https://github.com/fluxopt/specsolve/pull/2100))
+- fix(sweep): sources that type a sweep's column differently are refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
+- fix(sweep): a row with no label in the column a sweep cuts on is refused by name ([#2109](https://github.com/fluxopt/specsolve/pull/2109))
+- fix(sweep): an archived sweep keyed by datetimes in a time zone reads back ([#2114](https://github.com/fluxopt/specsolve/pull/2114))
+- fix(sweep): a sweep that solved and holds no frame of a kind no longer says its models did not solve ([#2118](https://github.com/fluxopt/specsolve/pull/2118))
+- fix(sweep): a sweep that cannot read an unnamed expression names the archive that can ([#2119](https://github.com/fluxopt/specsolve/pull/2119))
+- fix(sweep): a spilled sweep that stops before it ends keeps its reasons on resume ([#2121](https://github.com/fluxopt/specsolve/pull/2121))
+- fix(sweep): an archived sweep rebuilds each slice with the carry it was solved with ([#2124](https://github.com/fluxopt/specsolve/pull/2124))
+
+### Models
+
+- fix(engine): a quadratic row whose every term is zero is still built ([#2187](https://github.com/fluxopt/specsolve/pull/2187))
+- fix(engine): a dimension may be called row, coeff, cval or ord, as any other name ([#2170](https://github.com/fluxopt/specsolve/pull/2170))
+- perf(api): a build attaches its sources once, not again after reading the assumptions ([#2131](https://github.com/fluxopt/specsolve/pull/2131))
+- refactor: messages and docs use one word per meaning, as the glossary defines it ([#2166](https://github.com/fluxopt/specsolve/pull/2166))
+
+## 0.11.2 (2026-11-19)
+
+**Absent terms and amounts build the rows the language says, and piecewise
+cost curves build faster.** A `sum_back` window that reaches only absent terms
+now holds its row as 0, as `sum` does. A `shift` whose `missing: absent` offset
+has no row there builds no row, under any edge, and neither does a `sum_back`
+whose `missing: absent` width has no row there. A model that relied on one of
+the old readings builds different rows, though its file still loads.
+
+- fix(engine): a sum_back over only absent terms keeps its row as 0 ([#2095](https://github.com/fluxopt/specsolve/pull/2095))
+- fix(engine): a shift whose offset is absent builds no row ([#2096](https://github.com/fluxopt/specsolve/pull/2096))
+- fix(data): a divisor or an exponent that a case makes 0 is read as 0 ([#2097](https://github.com/fluxopt/specsolve/pull/2097))
+- perf(engine): a variable times a sum of parameters, as in a piecewise curve, builds about 40% faster ([#2091](https://github.com/fluxopt/specsolve/pull/2091))
+- docs(benchmarks): the published benchmarks are re-measured on 0.11.1 ([#2086](https://github.com/fluxopt/specsolve/pull/2086))
+
+## 0.11.1 (2026-11-16)
+
+**A model whose declarations mostly hold no row builds faster.** PyPSA's spec
+declares every component, and a network has rows for few of them; specsolve now
+skips those declarations rather than compiling each. specsolve no longer
+installs highspy 1.16.0, and the `gurobi` extra requires gurobipy below 14
+([#2082](https://github.com/fluxopt/specsolve/pull/2082)).
+
+- perf(engine): a model whose declarations mostly build nothing, such as PyPSA's, builds up to five times faster ([#2081](https://github.com/fluxopt/specsolve/pull/2081))
+- perf(engine): a condition that counts along a dimension without a label is decided without reading data ([#2083](https://github.com/fluxopt/specsolve/pull/2083))
+
+## 0.11.0 (2026-10-31)
+
+**specsolve moves to mathspec 0.4.0, and solves on Xpress 10.** A model file
+names its reusable conditions under `conditions:` rather than `masks:`. Models
+that crashed, were refused or were built unlike the file now build as written.
+This release breaks model files that 0.10.x reads.
+
+Breaks:
+
+- A model file is in the mathspec 0.4.0 language. `masks:` is now
+  `conditions:`, also under `given:`, and `where:` inside each entry is now
+  `condition:`. `<`, `<=`, `>` and `>=` on a `str` or `bool` value are refused
+  at load. The
+  [mathspec 0.4.0 notes](https://github.com/energy-models/mathspec/blob/main/CHANGELOG.md)
+  list every change to a file.
+- The `xpress` extra requires Xpress 9.8 or later.
+
+The language:
+
+- feat!: specsolve requires mathspec 0.4.0, where a file names a reusable condition under `conditions:` rather than `masks:` and an ordering comparison on a text label is refused at load ([#2065](https://github.com/fluxopt/specsolve/pull/2065))
+
+Fixes:
+
+- fix(engine): models that crashed, were refused or were built unlike the file now build as written ([#2051](https://github.com/fluxopt/specsolve/pull/2051))
+- fix(engine): a parameter filled with its declared value builds the same model every time ([#2053](https://github.com/fluxopt/specsolve/pull/2053))
+- fix(engine): a variable times a summed parameter, such as p * sum(load, over=snapshot), builds without running out of memory ([#2059](https://github.com/fluxopt/specsolve/pull/2059))
+- fix!: a model solves on Xpress 10, and the `xpress` extra requires Xpress 9.8 or later ([#2075](https://github.com/fluxopt/specsolve/pull/2075))
+
+## 0.10.0 (2026-10-19)
+
+**specsolve moves to mathspec 0.3.0.** A model file now says what a missing
+row of its data means, names the columns it reads from a relation, and declares
+which dimensions are ordered. This release breaks model files, archives and
+imports that 0.9.x reads.
+
+Breaks:
+
+- A model file is in the mathspec 0.3.0 language. A parameter or relation that
+  is short of a row is refused unless it declares `missing:`. A dimension that
+  `shift`, `sum_back`, a curve or a type-2 set steps along needs
+  `ordered: true`. A call names the columns of a relation:
+  `at(price, by=zone_of[zone])` replaces
+  `at(price, by=zone_of, over=zone, into=generator)`. The
+  [mathspec 0.3.0 notes](https://github.com/energy-models/mathspec/blob/main/CHANGELOG.md)
+  list every change to a file.
+- An archive written by 0.9.x is refused by name. Its files are plain: the
+  error says how to read the spec and the sources and solve again.
+- Only `specsolve`, `specsolve.types` and `specsolve.errors` are public. Every
+  other module starts with an underscore, so `specsolve.strategy` is now
+  `specsolve._strategy`. Import what you call from `specsolve`.
+
+The language:
+
+- feat!: specsolve requires mathspec 0.3.0, where a file says what a missing row means, a sum or a lookup names the columns of its relation, and a dimension declares whether its order counts ([#2047](https://github.com/fluxopt/specsolve/pull/2047))
+
+Fixes and speed:
+
+- fix(engine): the rows a restriction removed and the rows with no term are reported together ([#2029](https://github.com/fluxopt/specsolve/pull/2029))
+- fix(engine): a quadratic row keeps its own pair when a row before it has no term ([#2028](https://github.com/fluxopt/specsolve/pull/2028))
+- perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
+
+The Python API:
+
+- refactor(api)!: a module outside types and errors has a name that starts with an underscore ([#2055](https://github.com/fluxopt/specsolve/pull/2055))
+
+The benchmarks:
+
+- docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
+- docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
+- docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
+- docs: the network model caps pools of plants that a relation groups by bus and technology together ([#2025](https://github.com/fluxopt/specsolve/pull/2025))
+- docs: the published benchmarks add a model size at five times each tenfold step, and take fewer rounds where a build takes seconds ([#2032](https://github.com/fluxopt/specsolve/pull/2032))
+- docs: the published benchmarks are re-measured at the new model sizes, five times each tenfold step ([#2039](https://github.com/fluxopt/specsolve/pull/2039))
+- docs: the published benchmarks are re-measured with the network and sparse models, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005))
+- docs: the published benchmarks are re-measured with the sector-coupled model ([#2024](https://github.com/fluxopt/specsolve/pull/2024))
+- docs: the published benchmarks are re-measured with the network model's pooled plants ([#2031](https://github.com/fluxopt/specsolve/pull/2031))
+- docs(benchmarks): the matrix floor times only handing a finished matrix to the solver ([#2034](https://github.com/fluxopt/specsolve/pull/2034))
+- docs: the fresh-process table says it times a build handed to the solver, not a solve ([#2041](https://github.com/fluxopt/specsolve/pull/2041))
+- docs: the benchmarks page opens on its charts, counts sizes as the columns and rows that reach the solver, and tables what each model declares ([#2042](https://github.com/fluxopt/specsolve/pull/2042))
+- docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
 - docs: the benchmark charts zoom to a range of model sizes, on log and linear axes ([#1993](https://github.com/fluxopt/specsolve/pull/1993))
 - docs: the benchmark charts show each library relative to specsolve, and the spread of each point ([#1994](https://github.com/fluxopt/specsolve/pull/1994))
-- docs: the benchmarks publish a sparse model, where a technology exists only at the nodes it is installed at ([#1998](https://github.com/fluxopt/specsolve/pull/1998))
-- docs: the benchmarks publish a network model in place of the transport, storage and fleet models ([#2001](https://github.com/fluxopt/specsolve/pull/2001))
-- docs: the published benchmarks are re-measured with the network and sparse models, down to a few hundred variables ([#2005](https://github.com/fluxopt/specsolve/pull/2005))
+- docs: the benchmark charts share one pair of axes across every model, and a box dragged on any chart zooms all of them ([#2040](https://github.com/fluxopt/specsolve/pull/2040))
 - docs: the benchmark charts project a refused size as a range that opens from the last measured step, and no longer count a fixed cost again at each step ([#2007](https://github.com/fluxopt/specsolve/pull/2007))
-- docs: the benchmark page shows one solver at a time, HiGHS by default, and shades only the rival libraries in its tables ([#2008](https://github.com/fluxopt/specsolve/pull/2008))
+- docs: the relative view measures each library against specsolve under the same solver, and the specsolve legend line sits level with its name ([#2015](https://github.com/fluxopt/specsolve/pull/2015))
+- docs: the benchmark tables shade in specsolve's purple where it is faster ([#1996](https://github.com/fluxopt/specsolve/pull/1996))
+
+The site:
+
+- docs: the homepage leads with what specsolve does, and places mathspec as the language it is built on ([#2006](https://github.com/fluxopt/specsolve/pull/2006))
 - docs: the guide to faster solves says that a small model builds faster on one polars thread, and times it when the page is built ([#2016](https://github.com/fluxopt/specsolve/pull/2016))
 - docs: the guide to faster solves gives the gain from one polars thread as a rough estimate, and tells the reader to time their own model ([#2017](https://github.com/fluxopt/specsolve/pull/2017))
-- perf: a model whose sources are parquet paths reads them all at once, and a small model solves a tenth faster ([#2014](https://github.com/fluxopt/specsolve/pull/2014))
-- docs: the benchmarks publish a sector-coupled model, where each technology delivers heat, hydrogen or another carrier ([#2012](https://github.com/fluxopt/specsolve/pull/2012))
-- perf: a parameter given as a parquet file of ten million rows or more streams from a copy rather than being held, so a model that large builds in less memory ([#2018](https://github.com/fluxopt/specsolve/pull/2018))
+- docs: the changelog is listed under Reference rather than About ([#2052](https://github.com/fluxopt/specsolve/pull/2052))
 
 ## 0.9.0 (2026-10-12)
 

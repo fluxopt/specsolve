@@ -11,12 +11,18 @@
 # `p_max_pu`, so solar is zero at night and storage has a reason to cycle. It
 # has a row for every installed pair in every snapshot, and none elsewhere.
 #
-# A store starts empty, PyPSA's default, rather than wrapping around the
-# horizon: a cyclic store admits the same charging whichever way time runs, so
+# A store starts empty, PyPSA's default, rather than wrapping from the last
+# snapshot to the first: a cyclic store admits the same charging whichever way time runs, so
 # a model with its time index reversed would solve to the same objective.
+#
+# Every installed plant draws from one pool, a fuel contract or an emission
+# budget, and a pool caps what its plants generate in each snapshot. Pools are
+# drawn per plant, so `pool_of` is keyed by the (bus, tech) pair, and the cap
+# sums `p` over both of its sparse dimensions at once.
 dimensions:
   snapshot:
     dtype: int
+    ordered: true
   bus:
     dtype: str
   tech:
@@ -25,17 +31,22 @@ dimensions:
     dtype: str
   store:
     dtype: str
+  pool:
+    dtype: str
 
 relations:
   line_from: {key: line, values: bus}
   line_to: {key: line, values: bus}
   store_bus: {key: store, values: bus}
+  pool_of: {key: [bus, tech], values: pool, missing: absent}
 
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
     dims: [bus, tech]
+    missing: 0
   p_max:                # installed capacity times availability
     dims: [snapshot, bus, tech]
+    missing: absent
   cost:
     dims: [tech]
   cap:
@@ -50,6 +61,8 @@ parameters:
     dims: [store]
   load:
     dims: [snapshot, bus]
+  limit:                # what a pool's plants may generate together, per snapshot
+    dims: [pool]
 
 variables:
   p:
@@ -84,12 +97,15 @@ constraints:
     dims: [snapshot, bus]
     expression: >-
       sum(p, over=tech)
-      + sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
-      + sum(discharge, by=store_bus, over=store, into=bus) - sum(charge, by=store_bus, over=store, into=bus)
+      + sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
+      + sum(discharge, over=store, by=store_bus[bus]) - sum(charge, over=store, by=store_bus[bus])
       == load
   soc_balance:
     dims: [snapshot, store]
     expression: soc == shift(soc, along=snapshot, offset=1, edge=0) + charge * eta - discharge
+  pool_cap:
+    dims: [snapshot, pool]
+    expression: sum(p, over=[bus, tech], by=pool_of[pool]) <= limit
 
 objective:
   sense: minimize

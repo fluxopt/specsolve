@@ -1,6 +1,6 @@
 """The linopy lane: its verbs, its loader, its where evaluator, its notes.
 
-Everything here needs the oracle's linopy. The lane holds no state: one call,
+Everything here needs linopy. The lane holds no state: one call,
 one model, nothing retained, and nothing put on ``linopy.Model``.
 """
 
@@ -16,15 +16,16 @@ import polars as pl
 import pytest
 from mathspec import program
 
+import specsolve as sps
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from specsolve.sources import tidy_sources
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
 from tests.differential import differential
 from tests.oracle import builder, linopy, loader, pd, specsolve_linopy, where, xr
-from tests.piecewise_models import curve_frame
+from tests.piecewise_models import curve_table
 
 if TYPE_CHECKING:
-    from mathspec import Spec
+    from mathspec.spec import Spec
 
 
 @pytest.fixture
@@ -48,10 +49,10 @@ def test_a_side_the_program_leaves_open_builds_as_linopy_s_open_bound():
     """A program says an open side is `None`, and linopy takes an infinity there."""
     declared = program.Program(
         parameters={},
-        variables={'p': program.VariableDeclaration(('snapshot',), lower=None, upper=None)},
+        variables={'p': program.Variable(('snapshot',), lower=None, upper=None)},
         constraints={},
         objective=None,
-        dimensions={'snapshot': program.DimensionDeclaration()},
+        dimensions={'snapshot': program.Dimension(ordered=True)},
     )
     model = linopy.Model()
     builder.build_model(model, declared, xr.Dataset(), {'snapshot': pd.Index([0, 1], name='snapshot')}, {})
@@ -68,12 +69,12 @@ def test_nothing_is_patched_onto_linopy_model():
 
 
 def test_the_lane_takes_sources_as_the_one_type():
-    """The lane's two verbs annotate ``sources`` the way every door in ``api.py`` does."""
+    """The lane's two verbs annotate ``sources`` the way every verb in ``_api.py`` does."""
     from tests.test_architecture import sources_annotations
 
-    doors = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
-    assert sources_annotations(doors) == {'Mapping[str, Source]'}, (
-        f'both lane verbs take sources as Mapping[str, Source], and these do not: {sources_annotations(doors)}'
+    verbs = {'build': specsolve_linopy.build, 'evaluate': specsolve_linopy.evaluate}
+    assert sources_annotations(verbs) == {'Mapping[str, Source]'}, (
+        f'both lane verbs take sources as Mapping[str, Source], and these do not: {sources_annotations(verbs)}'
     )
 
 
@@ -92,13 +93,13 @@ def _schema(dims=None, params=None) -> Spec:
 
 
 def _program(schema: Spec):
-    """The plan the loader reads its declarations off, as a build makes one."""
+    """The program the loader reads its entries off, as a build makes one."""
 
     return schema.program
 
 
 def _master_coords(schema: Spec, sources=None) -> dict:
-    """The labels, through the front door both lanes enter by."""
+    """The labels, through `tidy_sources`, which both lanes read data through."""
     return loader.dimension_coords(_program(schema), tidy_sources(_program(schema), sources or {}))[0]
 
 
@@ -106,33 +107,33 @@ class TestMasterCoords:
     def test_labels_come_from_the_source_under_the_dimensions_own_key(self):
         assert list(_master_coords(_schema(dims={'x': {'dtype': 'int'}}), {'x': [10, 20]})['x']) == [10, 20]
 
-    def test_a_dimension_with_no_index_is_refused(self):
-        """The index is the authority, and both lanes refuse a dimension without one in the same sentence.
+    def test_a_dimension_with_no_labels_is_refused(self):
+        """The labels are the authority, and both lanes refuse a dimension without them in the same sentence.
 
         Labels read out of the parameters would *be* the definition, so a
         mistyped one could not be told from a new one.
         """
         schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
 
-        with pytest.raises(ValueError, match="dimension 'x' has no index"):
+        with pytest.raises(ValueError, match="dimension 'x' has no labels"):
             _master_coords(schema, {'a': {'wind': 1.0}})
 
     def test_the_labels_keep_the_order_they_arrived_in(self):
-        """A caller's index is read in its own order on both lanes.
+        """A caller's labels are read in their own order on both lanes.
 
-        The ordinals a translation moves by are positions in this list, so a
+        The positions a translation moves by are places in this list, so a
         sort here would move `shift` somewhere else than it moves relationally.
         """
-        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x']}})
+        schema = _schema(dims={'x': {}}, params={'a': {'dims': ['x'], 'missing': 0}})
         labels = _master_coords(schema, {'x': ['z', 'a', 'm'], 'a': {'z': 1.0}})['x']
 
         assert list(labels) == ['z', 'a', 'm'], 'source order, not sorted'
 
-    @pytest.mark.parametrize('index', ['pandas', 'polars', 'a bare list'])
-    def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, index):
+    @pytest.mark.parametrize('spelling', ['pandas', 'polars', 'a bare list'])
+    def test_a_temporal_axis_is_the_same_instant_whichever_library_brought_it(self, spelling):
         """`datetime.date` out of pandas and `datetime64` out of polars are one label.
 
-        They compare unequal, so the declaration makes the axis canonical past
+        They compare unequal, so the entry makes the axis canonical past
         the read and the source library stops being visible.
         """
         import datetime
@@ -143,11 +144,13 @@ class TestMasterCoords:
             'polars': pl.DataFrame({'t': days}),
             'a bare list': days,
         }
-        schema = _schema(dims={'t': {'dtype': 'datetime'}}, params={'a': {'dims': ['t']}})
+        schema = _schema(
+            dims={'t': {'dtype': 'datetime', 'ordered': True}}, params={'a': {'dims': ['t'], 'missing': 0}}
+        )
 
-        labels = _master_coords(schema, {'t': sources[index], 'a': {days[0]: 1.0}})['t']
+        labels = _master_coords(schema, {'t': sources[spelling], 'a': {days[0]: 1.0}})['t']
 
-        assert labels.dtype.kind == 'M', f'a {index} index reads as the instants it holds'
+        assert labels.dtype.kind == 'M', f'labels from {spelling} read as the instants they hold'
         assert list(labels) == list(pd.DatetimeIndex(days)), 'and as the same three of them'
 
 
@@ -171,7 +174,7 @@ class TestLoadParameters:
                 pd.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
                 {'x': 1},
                 20.0,
-                id='tidy-frame',
+                id='tidy-table',
             ),
             pytest.param([0, 1], [10.0, 20.0], {'x': 1}, 20.0, id='sequence'),
             pytest.param(
@@ -179,7 +182,7 @@ class TestLoadParameters:
                 pl.DataFrame({'x': [0, 1], 'value': [10.0, 20.0]}),
                 {'x': 1},
                 20.0,
-                id='a-polars-frame',
+                id='a-polars-table',
             ),
             pytest.param(
                 [0, 1],
@@ -245,8 +248,8 @@ class TestLoadParameters:
                 {'g': {'dtype': 'str'}},
                 {'p': {'dims': ['g']}},
                 {'g': ['a', 'b'], 'p': pd.Series([1.0], index=pd.Index(['z'], name='g'))},
-                'that are not coordinates',
-                id='unknown-coord',
+                'that are not labels',
+                id='unknown-coordinate',
             ),
         ],
     )
@@ -258,26 +261,26 @@ class TestLoadParameters:
 
 
 # ---------------------------------------------------------------------------
-# where.evaluate_where: the linopy reading of a lowered predicate
+# where.evaluate_where: the linopy reading of a compiled condition
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def gens():
-    """A dataset and its master coords, with one generator masked out by p_max."""
+    """A dataset and its master coords, with one generator left absent by p_max."""
     ds = xr.Dataset({'p_max': xr.DataArray([100, 0, 50], dims=['g'], coords={'g': ['wind', 'solar', 'gas']})})
     return ds, {'g': pd.Index(['wind', 'solar', 'gas'], name='g')}
 
 
-def _lowered(text, parameters=('p_max',), dimensions=('g',)):
-    """The program a model with predicate *text* lowers to, and that predicate.
+def _compiled(text, parameters=('p_max',), dimensions=('g',)):
+    """The program a model with condition *text* compiles to, and that condition.
 
     Through a whole model, because the resolver is the language's.
     """
     from mathspec import to_spec
 
     spec = {
-        'dimensions': {d: {'dtype': 'int' if d == 't' else 'str'} for d in dimensions},
+        'dimensions': {d: {'dtype': 'int', 'ordered': True} if d == 't' else {'dtype': 'str'} for d in dimensions},
         'parameters': {name: {'dims': list(dimensions)} for name in parameters},
         'variables': {'x': {'dims': list(dimensions), 'where': text, 'bounds': {'lower': 0, 'upper': 1}}},
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
@@ -291,25 +294,25 @@ def _context(program, dataset, master_coords):
 
 
 def test_no_where_is_a_scalar_true(gens):
-    program, _ = _lowered('p_max')
+    program, _ = _compiled('p_max')
     mask = where.evaluate_where(None, _context(program, *gens))
     assert mask.ndim == 0
     assert bool(mask) is True
 
 
 def test_a_bare_parameter_name_is_an_existence_check(gens):
-    program, node = _lowered('p_max')
+    program, node = _compiled('p_max')
     assert where.evaluate_where(node, _context(program, *gens)).all()
 
 
-def test_a_comparison_masks_per_coordinate(gens):
-    program, node = _lowered('p_max > 0')
+def test_a_comparison_is_decided_per_coordinate(gens):
+    program, node = _compiled('p_max > 0')
     mask = where.evaluate_where(node, _context(program, *gens))
     assert [bool(mask.sel(g=g)) for g in ('wind', 'solar', 'gas')] == [True, False, True]
 
 
-def test_a_dimension_comparison_masks_on_the_coordinate_itself():
-    program, node = _lowered('t > 0', parameters=(), dimensions=('t',))
+def test_a_dimension_comparison_is_decided_on_the_coordinate_itself():
+    program, node = _compiled('t > 0', parameters=(), dimensions=('t',))
     mask = where.evaluate_where(node, _context(program, xr.Dataset(), {'t': pd.Index([0, 1, 2], name='t')}))
     assert [bool(mask.sel(t=t)) for t in (0, 1, 2)] == [False, True, True]
 
@@ -317,7 +320,7 @@ def test_a_dimension_comparison_masks_on_the_coordinate_itself():
 def test_a_missing_parameter_is_a_load_error():
     """An undeclared name is a load error in both lanes, not a silently empty model."""
     with pytest.raises(LanguageError, match="'nonexistent' not found"):
-        _lowered('nonexistent')
+        _compiled('nonexistent')
 
 
 # ---------------------------------------------------------------------------
@@ -337,11 +340,12 @@ def _has_note(exc: BaseException, substring: str) -> bool:
     return any(substring in n for n in getattr(exc, '__notes__', []))
 
 
-#: A constant side the data does not cover, which only the *build* can see: the
-#: rows exist, the parameter has no row at one of them, and the fill would be
-#: the bound. The declaration it names is reached through `note()` rather than
-#: written into the message.
-_UNCOVERED_BOUND = "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+#: A parameter with no `missing:` that the data does not cover, which only the
+#: data can show: the refusal names the parameter, and the file is reached
+#: through `note()`.
+_UNCOVERED_PARAMETER = (
+    "parameters:\n  cap: {dims: [g]}\nconstraints:\n  c:\n    dims: [g]\n    expression: 'p <= cap'\n"
+)
 _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype='object'), dtype='float64')}
 
 
@@ -352,7 +356,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "    where: '<<<'\n",
             {},
             ValueError,
-            'Failed to parse where string',
+            'Cannot parse the condition',
             "Variable 'p'",
             id='malformed-where',
         ),
@@ -360,7 +364,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "constraints:\n  c:\n    dims: [g]\n    expression: 'p + 1'\n",
             {},
             ValueError,
-            'exactly one comparison',
+            'has no comparison operator',
             "Constraint 'c'",
             id='constraint-without-comparison',
         ),
@@ -368,7 +372,7 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             "objective:\n  expression: 'p == 1'\n",
             {},
             ValueError,
-            'must not contain a comparison',
+            'holds a comparison operator',
             'The objective',
             id='objective-with-comparison',
         ),
@@ -381,16 +385,16 @@ _NO_ROWS = {'g': ['a'], 'cap': pd.Series([], index=pd.Index([], name='g', dtype=
             id='a-comparison-with-no-variable-in-it',
         ),
         pytest.param(
-            _UNCOVERED_BOUND,
+            _UNCOVERED_PARAMETER,
             _NO_ROWS,
             DataError,
-            'fewer coordinates than the rows built here',
-            "while building constraint 'c'",
-            id='a-constant-side-the-data-misses-so-only-the-build-sees-it',
+            'has no row at g=a',
+            "parameter 'cap'",
+            id='a-parameter-the-data-misses-so-only-the-attach-sees-it',
         ),
     ],
 )
-def test_a_failure_names_the_declaration_and_the_file(yaml_file, tail, data, error, match, context):
+def test_a_failure_names_the_entry_and_the_file(yaml_file, tail, data, error, match, context):
     bad = yaml_file(textwrap.dedent(_MINIMAL).lstrip() + tail, 'bad.yaml')
 
     with pytest.raises(error, match=match) as ei:
@@ -416,7 +420,7 @@ def test_importing_the_lane_selects_the_v1_convention():
     assert out.stdout.strip() == 'v1', f'the lane must select v1 on import, got {out.stdout.strip()!r}'
 
 
-def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_path):
+def test_the_two_lanes_agree_about_a_narrowed_variable_without_the_harness(tmp_path):
     """Both lanes, driven from a subprocess with nothing but the package imported.
 
     Not a ``differential()`` case: that helper runs inside the suite, where the
@@ -427,7 +431,7 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
         textwrap.dedent("""
             dimensions: {f: {dtype: str}}
             parameters:
-              gate: {dims: [f], dtype: bool}
+              gate: {dims: [f], dtype: bool, missing: false}
               relmax: {dims: [f]}
             variables:
               x: {dims: [f], bounds: {lower: 0, upper: 100}}
@@ -459,7 +463,9 @@ def test_the_two_lanes_agree_about_a_masked_variable_without_the_harness(tmp_pat
     out = subprocess.run([sys.executable, '-c', probe], capture_output=True, text=True, check=True)
     linopy_lane, native = (float(v) for v in out.stdout.split())
     assert linopy_lane == pytest.approx(native), f'lanes disagree outside the harness: {linopy_lane} vs {native}'
-    assert native == pytest.approx(125.0), 'the masked row should be dropped, leaving x[b] at its bound'
+    assert native == pytest.approx(125.0), (
+        'the row the condition leaves out should be dropped, leaving x[b] at its bound'
+    )
 
 
 #: A scalar switch gates one variable; the other keeps the model non-empty
@@ -477,48 +483,46 @@ SCALAR_SWITCH = {
 
 @pytest.mark.parametrize(('on', 'expected'), [pytest.param(True, 6.0, id='on'), pytest.param(False, 4.0, id='off')])
 def test_a_where_on_a_scalar_bool_agrees_on_both_lanes(on, expected):
-    """A dims-less ``False`` is a false mask on both lanes, not a defined ``0.0``."""
+    """A ``False`` with no dimensions is a false condition on both lanes, not a defined ``0.0``."""
     with differential(SCALAR_SWITCH, {'i': [1, 2], 'on': on}) as agreed:
         assert agreed.oracle == pytest.approx(expected), 'x is built only where the switch is on'
 
 
+#: `x` is bounded above by `ub`, which has a row at `a` alone.
+_BOUND_SPEC = """
+    dimensions:
+      f: {dtype: str}
+    parameters:
+      ub: {dims: [f]}
+    variables:
+      x: {dims: [f], bounds: {lower: 0, upper: ub}}
+    constraints:
+      c:
+        dims: [f]
+        expression: x <= 100
+    objective:
+      sense: maximize
+      expression: sum(x)
+"""
+
+_BOUND_DATA = {'f': ['a', 'b'], 'ub': pd.Series([10.0], index=pd.Index(['a'], name='f'))}
+
+
 def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml_file):
-    """A bound the data does not cover is a ``DataError`` at build, as on the native lane (#313).
+    """A bound with no `missing:` that the data does not cover is a ``DataError`` at build, as on the native lane (#313)."""
+    with pytest.raises(DataError) as linopy_lane:
+        specsolve_linopy.build(yaml_file(_BOUND_SPEC), dict(_BOUND_DATA))
+    with pytest.raises(DataError) as native:
+        sps.build(yaml_file(_BOUND_SPEC), dict(_BOUND_DATA)).close()
+    assert str(linopy_lane.value) == str(native.value), 'one defect, one sentence'
+    assert "parameter 'ub' has no row at f=b" in str(native.value), 'the refusal names the parameter and the coordinate'
 
-    A coordinate the variable does not occupy needs no bound, so the gap is
-    refused and the masked one accepted.
-    """
-    spec = yaml_file("""
-        dimensions:
-          f: {dtype: str}
-        parameters:
-          ub: {dims: [f]}
-          live: {dims: [f], dtype: bool}
-        variables:
-          x: {dims: [f], bounds: {lower: 0, upper: ub}}
-        constraints:
-          c:
-            dims: [f]
-            expression: x <= 100
-        objective:
-          sense: maximize
-          expression: sum(x)
-        """)
-    data = {
-        'f': ['a', 'b'],
-        'ub': pd.Series([10.0], index=pd.Index(['a'], name='f')),
-        'live': pd.Series([True], index=pd.Index(['a'], name='f')),
-    }
 
-    with pytest.raises(DataError, match='NULL bounds'):
-        specsolve_linopy.build(spec, data)
-
-    masked = yaml_file(
-        spec.read_text().replace('{dims: [f], bounds:', '{dims: [f], where: live, bounds:'),
-        'masked.yaml',
-    )
-    built = specsolve_linopy.build(masked, data)
-    assert 'x' in built.variables
+def test_a_missing_zero_bound_reads_as_zero_on_both_lanes(yaml_file):
+    """`ub` is `missing: 0`, so `x` at `b` is held to 0 and only `a` runs, to 10."""
+    spec = yaml_file(_BOUND_SPEC.replace('ub: {dims: [f]}', 'ub: {dims: [f], missing: 0}'), 'zero.yaml')
+    with differential(spec, dict(_BOUND_DATA)) as run:
+        assert run.oracle == pytest.approx(10.0), 'b is bounded at 0, so the sum is a at 10'
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +531,7 @@ def test_a_missing_bound_is_refused_at_build_with_the_native_lane_s_message(yaml
 
 EXPRESSION_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
@@ -564,12 +568,12 @@ EXPRESSION_DATA = {
 }
 
 
-#: ``EXPRESSION_YAML`` with ``p`` masked out at the generator whose ``p_max`` is
-#: zero and declared ``absence: zero``, plus one entry only a nonlinear read can
+#: ``EXPRESSION_YAML`` with ``p`` absent at the generator whose ``p_max`` is
+#: zero and declared ``missing: 0``, plus one entry only a nonlinear read can
 #: tell apart from an affine one.
 ZERO_ABSENCE_YAML = EXPRESSION_YAML.replace(
     '    bounds: {lower: 0, upper: p_max}\n',
-    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    absence: zero\n',
+    '    bounds: {lower: 0, upper: p_max}\n    where: p_max > 0\n    missing: 0\n',
 ).replace(
     '  spend: sum(p * cost, over=generator)\n',
     '  spend: sum(p * cost, over=generator)\n  grown: sum(0.5 ** p, over=generator)\n',
@@ -579,7 +583,7 @@ ZERO_ABSENCE_DATA = {**EXPRESSION_DATA, 'p_max': pd.Series({'g1': 200.0, 'g2': 0
 
 
 def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_read(yaml_file):
-    """`absence: zero` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the masked generator on each."""
+    """`missing: 0` is a zero on both lanes, so `0.5 ** p` reads `0.5 ** 0`, which is 1, at the absent generator on each."""
     path = yaml_file(ZERO_ABSENCE_YAML, 'zero_absence.yaml')
     with differential(path, ZERO_ABSENCE_DATA) as run:
         tidy = run.result.evaluate('grown')
@@ -593,7 +597,7 @@ def test_the_two_lanes_agree_on_an_absent_slot_declared_zero_under_a_nonlinear_r
 
 
 def test_a_dual_on_a_solve_that_left_none_is_refused_on_this_lane_too(yaml_file):
-    """An integer variable makes duals undefined; linopy stores HiGHS's zeros for a MIP, so the read refuses by the declaration rather than reading a number that means nothing."""
+    """An integer variable makes duals undefined; linopy stores HiGHS's zeros for a MIP, so the read refuses on what the model declares rather than reading a number that means nothing."""
     path = yaml_file(
         EXPRESSION_YAML.replace(
             '    dims: [snapshot, generator]\n', '    dims: [snapshot, generator]\n    domain: integer\n'
@@ -634,19 +638,18 @@ def test_the_two_lanes_agree_on_a_named_expression(yaml_file, name):
         assert got == pytest.approx(want), f"the two lanes disagree about named expression '{name}'"
 
 
-#: A curve masked by ``points:``, so the expansion declares a parameter the file
-#: does not — ``cost_curve_points``, derived from ``bp_x``'s own rows. Ragged on
-#: purpose: hydro states two breakpoints where the axis has four.
-MASKED_CURVE_YAML = """
+#: A curve whose ``where:`` reads ``bp_x``, so each curve runs as far as ``bp_x``
+#: has rows. Ragged on purpose: hydro states two breakpoints where the axis has four.
+NARROWED_CURVE_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
-  bp: {dtype: int}
+  bp: {dtype: int, ordered: true}
 parameters:
   p_max: {dims: [generator]}
   load: {dims: [snapshot]}
-  bp_x: {dims: [generator, bp]}
-  bp_y: {dims: [generator, bp]}
+  bp_x: {dims: [generator, bp], missing: absent}
+  bp_y: {dims: [generator, bp], missing: absent}
 variables:
   p:
     dims: [snapshot, generator]
@@ -656,11 +659,12 @@ variables:
     bounds: {lower: 0}
 piecewise:
   cost_curve:
-    over: bp
-    points: bp_x
+    along: bp
+    dims: [snapshot, generator]
+    where: bp_x
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, ">="]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, ">="]
     method: convex
 expressions:
   spend: sum(op_cost, over=generator)
@@ -674,16 +678,16 @@ objective:
 """
 
 
-MASKED_CURVE_DATA = {
+NARROWED_CURVE_DATA = {
     'snapshot': [0],
     'generator': ['hydro', 'gas'],
     'bp': [0, 1, 2, 3],
     'p_max': pd.Series({'hydro': 40.0, 'gas': 80.0}),
     'load': pd.Series([50.0], index=pd.RangeIndex(1, name='snapshot')),
-    'bp_x': curve_frame(
+    'bp_x': curve_table(
         {('hydro', 0): 0.0, ('hydro', 1): 40.0, ('gas', 0): 0.0, ('gas', 1): 20.0, ('gas', 2): 50.0, ('gas', 3): 80.0}
     ),
-    'bp_y': curve_frame(
+    'bp_y': curve_table(
         {
             ('hydro', 0): 0.0,
             ('hydro', 1): 200.0,
@@ -696,21 +700,21 @@ MASKED_CURVE_DATA = {
 }
 
 
-def test_a_named_expression_reads_off_a_masked_curve(yaml_file):
-    """Both lanes value one named expression the same where a curve is masked.
+def test_a_named_expression_reads_off_a_narrowed_curve(yaml_file):
+    """Both lanes value one named expression the same where a curve is narrowed.
 
-    `points:` names a values parameter, and the mask is that parameter read as
-    a bare name in a `where` — true wherever it has a row. So the weights the
+    `where:` names a values parameter, read as a bare name in a condition —
+    true wherever it has a row. So the weights the
     expression sums over exist at some breakpoints and not others, and a lane
-    that read the unmasked product would answer a longer curve.
+    that read the full product would answer a longer curve.
     """
-    path = yaml_file(MASKED_CURVE_YAML, 'masked_curve.yaml')
-    with differential(path, MASKED_CURVE_DATA) as run:
+    path = yaml_file(NARROWED_CURVE_YAML, 'masked_curve.yaml')
+    with differential(path, NARROWED_CURVE_DATA) as run:
         tidy = run.result.evaluate('spend')
-        linopy_lane = specsolve_linopy.evaluate(run.model, expanded(path), 'spend', dict(MASKED_CURVE_DATA))
+        linopy_lane = specsolve_linopy.evaluate(run.model, expanded(path), 'spend', dict(NARROWED_CURVE_DATA))
         got = {int(k): v for k, v in zip(tidy['snapshot'], tidy['value'], strict=True)}
         want = {int(k): float(v) for k, v in linopy_lane.to_series().items()}
-        assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a masked curve'
+        assert got == pytest.approx(want), 'the two lanes disagree about a named expression over a narrowed curve'
 
 
 def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
@@ -728,23 +732,23 @@ def test_the_lane_values_an_expression_the_file_never_declared(yaml_file):
     )
 
 
-def test_the_lane_refuses_an_expression_against_a_lowered_program(yaml_file):
-    """A Program is what a model lowered to, and lowering does not run backwards."""
+def test_the_lane_refuses_an_expression_against_a_compiled_program(yaml_file):
+    """A Program is what a model compiles to, and compiling does not run backwards."""
     from mathspec import to_spec
 
     path = yaml_file(EXPRESSION_YAML, 'expressions.yaml')
     m = specsolve_linopy.build(path, dict(EXPRESSION_DATA))
     m.solve(solver_name='highs')
-    with pytest.raises(SpecsolveError, match='lowered Program'):
+    with pytest.raises(SpecsolveError, match='compiled Program'):
         specsolve_linopy.evaluate(m, to_spec(path).program, 'total_gen', dict(EXPRESSION_DATA))
 
 
-def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_frame_inputs, tmp_path):
-    """One `sources` mapping of polars frames and a parquet path reaches either lane unchanged (#60)."""
-    frames = dispatch_frame_inputs
+def test_one_set_of_tables_reaches_both_lanes(dispatch_yaml, dispatch_table_inputs, tmp_path):
+    """One `sources` mapping of polars tables and a parquet path reaches either lane unchanged (#60)."""
+    tables = dispatch_table_inputs
     path = tmp_path / 'load.parquet'
-    frames['load'].write_parquet(path)
-    sources = {**frames, 'load': path}
+    tables['load'].write_parquet(path)
+    sources = {**tables, 'load': path}
 
     with differential(dispatch_yaml, sources) as run:
         assert run.result.primal('p').height, 'the relational lane built no rows'
@@ -779,7 +783,7 @@ def test_the_lane_takes_a_model_the_same_three_ways_the_runner_does(tmp_path, as
 #: A shift over a variable-free expression: the vacated positions have no
 #: value, and inventing one silently pins a bound to zero.
 _BARE_SHIFT = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'eff': {'dims': ['t']}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 5}}},
     'constraints': {'c': {'dims': ['t'], 'expression': 'x <= shift(eff, along=t, offset=1)'}},
@@ -788,7 +792,7 @@ _BARE_SHIFT = {
 
 
 def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
-    """One gate, both lanes: the lowering pass's refusals fire on this lane too."""
+    """One `as_program`, both lanes: the compile step's refusals fire on this lane too."""
     import specsolve as sps
 
     with pytest.raises(LanguageError, match='vacated positions') as native:
@@ -803,7 +807,7 @@ def test_a_construct_the_streaming_lane_refuses_is_refused_here_too():
 #: in the objective, which linopy has no slot for. `osemosys_utopia` owes one
 #: as the fixed cost of capacity that already stood in 1990.
 OBJECTIVE_CONSTANT = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'standing': {'dims': []}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 1}}},
     'objective': {'sense': 'minimize', 'expression': 'sum(x) + standing'},
@@ -811,16 +815,16 @@ OBJECTIVE_CONSTANT = {
 
 
 def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
-    """The mirror of the test above: the streaming lane builds this one.
+    """The mirror of the test above: the relational lane builds this one.
 
-    The model is sayable, lowers and solves relationally, so the refusal says
+    The model is in the language, compiles and solves relationally, so the refusal says
     the wall is this lane's, which linopy's `Constant values in objective
     function not supported.` cannot say (#894).
     """
     import specsolve as sps
 
     assert sps.solve(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0}).objective == pytest.approx(5.0), (
-        'the streaming lane builds it, so the model is not the problem'
+        'the relational lane builds it, so the model is not the problem'
     )
     with pytest.raises(loader.OracleCannotBuildError) as refusal:
         specsolve_linopy.build(OBJECTIVE_CONSTANT, {'t': [0, 1], 'standing': 5.0})
@@ -831,7 +835,7 @@ def test_a_construct_this_lane_cannot_build_is_refused_in_its_own_words():
 
 
 #: The terms on the right of the comparison. The language puts them on neither
-#: side — `ConstraintDeclaration` says which side a consumer gathers them onto
+#: side — `ConstraintDeclaration` says which side a tool gathers them onto
 #: is its own arrangement — and linopy takes them only on the left.
 TERM_ON_THE_RIGHT = {
     'dimensions': {'g': {'dtype': 'str'}},
@@ -858,7 +862,7 @@ def test_a_constraint_carrying_its_terms_on_the_right_builds_on_both_lanes():
 
 
 def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
-    """The index is what says which labels exist, on either lane.
+    """A dimension's own key is what says which labels exist, on either lane.
 
     Neither `values:` nor a table under `g` says what it holds, so a mistyped
     label in `cost` would define a generator rather than fail. Both lanes
@@ -878,14 +882,14 @@ def test_a_file_that_declares_no_labels_at_all_is_refused_on_both_lanes():
         'cost': pd.Series({'wind': 3.0, 'gas': 1.0}).rename_axis('g'),
     }
 
-    with pytest.raises(DataError, match="dimension 'g' has no index") as native:
+    with pytest.raises(DataError, match="dimension 'g' has no labels") as native:
         sps.build(spec, sources).close()
-    with pytest.raises(DataError, match="dimension 'g' has no index") as linopy_lane:
+    with pytest.raises(DataError, match="dimension 'g' has no labels") as linopy_lane:
         specsolve_linopy.build(spec, sources)
     assert str(native.value) == str(linopy_lane.value), 'one refusal, one wording'
 
-    indexed = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
-    assert 'x' in specsolve_linopy.build(spec, indexed).variables
+    labelled = {**sources, 'g': pd.DataFrame({'g': ['wind', 'gas']})}
+    assert 'x' in specsolve_linopy.build(spec, labelled).variables
 
 
 def test_from_yaml_fails_before_data_validation(tmp_path):
@@ -918,5 +922,5 @@ def test_dispatch_yaml_agrees_variable_by_variable(dispatch_inputs):
         linopy_p = run.model.solution['p'].to_dataframe(name='value').reset_index()
         rel_p = run.result.to_pandas('p')
         merged = linopy_p.merge(rel_p, on=['snapshot', 'generator'], suffixes=('_linopy', '_rel'))
-        assert len(merged) == len(rel_p), 'nothing is masked here, so the rows align 1:1'
+        assert len(merged) == len(rel_p), 'nothing is absent here, so the rows align 1:1'
         assert np.allclose(merged['value_linopy'], merged['value_rel'], atol=1e-6)

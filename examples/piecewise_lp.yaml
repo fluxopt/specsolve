@@ -9,12 +9,14 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: dispatchable units
     dtype: str
   bp:
     description: breakpoints of the cost curve
     dtype: int
+    ordered: true
 
 parameters:
   p_max:
@@ -50,10 +52,11 @@ piecewise:
       lines the cost sits on, and the curvature has to match it: lines that
       envelope a convex curve would cut a concave one, and the solve comes back
       optimal either way
-    over: bp
+    along: bp
+    dims: [snapshot, generator]
     links:
-      - [p, bp_x]
-      - [op_cost, bp_y, ">="]
+      p: [p, bp_x]
+      op_cost: [op_cost, bp_y, ">="]
     method: lp
 
 constraints:

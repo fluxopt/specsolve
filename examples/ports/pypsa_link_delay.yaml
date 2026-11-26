@@ -10,6 +10,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -79,9 +80,9 @@ constraints:
       snapshot to have taken anything in.
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, by=link_to, over=link, into=bus)
-      - sum(g, by=link_from, over=link, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(shift(g, along=snapshot, offset=delay, edge=0) * efficiency, over=link, by=link_to[bus])
+      - sum(g, over=link, by=link_from[bus])
       == load
 
 objective:

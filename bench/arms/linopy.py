@@ -6,8 +6,8 @@ pandas.
 
 Four defaults are changed:
 
-- `set_names=False` on both solver hand-offs, because specsolve's sinks name
-  nothing; naming is 82% of linopy's HiGHS hand-off (0.11s against 0.02s at
+- `set_names=False` on both solver handoffs, because specsolve's sinks name
+  nothing; naming is 82% of linopy's HiGHS handoff (0.11s against 0.02s at
   200k variables) and 35% of its Gurobi one.
 - `progress=False` on the LP writer, whose tqdm bars cost ~7% of the write at
   10M variables and write to stderr.

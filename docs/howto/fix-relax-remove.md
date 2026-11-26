@@ -7,7 +7,7 @@ edit to the spec.
 | linopy | here | rebuild |
 |---|---|---|
 | `x.fix(v)` | both bounds read a parameter; write the same number into both | no, `update` |
-| `x.relax()` | `domain:` in the declaration | yes |
+| `x.relax()` | `domain:` in the entry | yes |
 | `remove_constraints` | drop the key from the spec | yes |
 
 The spec is `examples/dispatch.yaml`.
@@ -33,7 +33,7 @@ sources = {
 ## Fix a variable
 
 Give the variable two bound parameters, each total over its coordinates.
-Keep `p_max` as the `where` mask. Then write the pinned value into both bounds
+Keep `p_max` as the `where` condition. Then write the pinned value into both bounds
 with `update`:
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
@@ -52,8 +52,8 @@ unpinned = pinned.solve().objective
 hold = pl.when(pl.col('generator') == 'gas').then(60.0).otherwise(pl.col('value'))
 held = pinned.update({'p_lo': p_lo.with_columns(value=hold), 'p_hi': p_hi.with_columns(value=hold)}).solve().objective
 
-pinning = pinned.diagnostics()
-print(f'{pinning.loads} loads over {pinning.solves} solves — a pin moves bounds, not labels')
+pinning = pinned.metrics()
+print(f'{pinning.solver_instances} solver instance over {pinning.solves} solves — a pin moves bounds, not labels')
 print(pl.DataFrame({'gas': ['free to dispatch', 'held at 60'], 'objective': [unpinned, held]}))
 ```
 
@@ -99,7 +99,7 @@ units = {'generator': generators['generator'], 'snapshot': load['snapshot'], 'lo
 mip = sps.solve(UNITS, units)
 
 fixable = to_spec(UNITS).to_dict()
-fixable['parameters']['on_fixed'] = {'dims': ['snapshot', 'generator']}
+fixable['parameters']['on_fixed'] = {'dims': ['snapshot', 'generator'], 'missing': 'absent'}
 fixable['variables']['on'] |= {'domain': 'continuous', 'bounds': {'lower': 'on_fixed', 'upper': 'on_fixed'}}
 
 priced = sps.solve(fixable, units | {'on_fixed': mip.primal('on')})
@@ -117,6 +117,7 @@ keeping gas on.
 
 ```python exec="true" source="material-block" result="text" session="lifecycle"
 ramped = to_spec(MODEL).to_dict()
+ramped['dimensions']['snapshot']['ordered'] = True
 ramped['parameters']['ramp_max'] = {'dims': ['generator']}
 ramped['constraints']['ramp_up'] = {
     'dims': ['snapshot', 'generator'],
@@ -132,4 +133,5 @@ print(pl.DataFrame({'model': ['with ramp_up', 'ramp_up removed'], 'objective': [
 ```
 
 To switch rows off with data instead, put a `where` on the constraint. An
-`update` that changes the mask loads the model again.
+`update` that changes which coordinates the `where` keeps loads the model
+again.

@@ -15,22 +15,25 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 from dataclasses import asdict, dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import polars as pl
+from mathspec import to_spec
 
 from bench.cases import CASES, DEFAULT_CACHE
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 #: The labels of every dimension past the first; the first takes the size.
 OTHER_DIMS = {'node': 4, 'tech': 3}
 
 #: Total columns of the model at each size. ``below`` and ``above`` straddle 250,000 columns.
 SIZES = {'tiny': 24, 's': 24_000, 'below': 240_000, 'above': 260_000, 'l': 1_200_000}
+
+#: PyPSA's own models, each captured where PyPSA hands it to specsolve: ``--sizes pypsa`` runs them.
+PYPSA = ('carbon_management',)
 
 #: The ladder cases the grid is run beside, at each size of a run that is also a rung of theirs: ``s`` or ``l``.
 LADDER = ('dispatch', 'nodal', 'transport', 'storage', 'fleet', 'profiled')
@@ -60,7 +63,7 @@ class Shape:
     ] = 'none'
     #: The row order of every parameter table, against the order of its dimensions.
     order: Literal['sorted', 'shuffled', 'reversed'] = 'sorted'
-    #: The order of the first dimension's own labels, which sets its ordinals.
+    #: The order of the first dimension's own labels, which sets its positions.
     index: Literal['sorted', 'shuffled'] = 'sorted'
     #: The dtype of the first dimension's labels.
     labels: Literal['int', 'str'] = 'int'
@@ -134,7 +137,7 @@ SHAPES: dict[str, Shape] = {
 
 @dataclass(frozen=True)
 class Cell:
-    """One model at one size, named by its ``id``: ``grid-<shape>-<size>``, ``case-<case>-<size>`` or ``port-<name>``."""
+    """One model at one size, named by its ``id``: ``grid-<shape>-<size>``, ``case-<case>-<size>``, ``port-<name>`` or ``pypsa-<name>``."""
 
     id: str
     #: The spec, as ``sps.build`` takes it.
@@ -146,18 +149,21 @@ class Cell:
 
 
 def ids(sizes: list[str]) -> list[str]:
-    """Every cell's id: each grid shape at each of *sizes*, each ladder case at those of *sizes* it has, then every port.
+    """Every cell's id: each grid shape at each of *sizes*, each ladder case at those of *sizes* it has, every port, then PyPSA's models.
 
     A port is a referenced model of ``examples/ports`` at its published size,
-    and has no size of its own.
+    and has no size of its own. PyPSA's models are cells only where *sizes*
+    names ``pypsa``, so a run over the grid does not wait on them.
     """
     from tools.constructs import REFERENCES
 
     rungs = {name: {shape.label for shape in CASES[name].ladder} for name in LADDER}
+    grid = [size for size in sizes if size in SIZES]
     return (
-        [f'grid-{name}-{size}' for name in SHAPES for size in sizes]
-        + [f'case-{name}-{size}' for name in LADDER for size in sizes if size in rungs[name]]
+        [f'grid-{name}-{size}' for name in SHAPES for size in grid]
+        + [f'case-{name}-{size}' for name in LADDER for size in grid if size in rungs[name]]
         + [f'port-{name}' for name in sorted(REFERENCES)]
+        + [f'pypsa-{name}' for name in PYPSA if 'pypsa' in sizes]
     )
 
 
@@ -169,6 +175,8 @@ def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
         from tests.fixtures import expanded
 
         return Cell(cell_id, expanded(port_spec(rest)), port_sources(rest))
+    if kind == 'pypsa':
+        return _captured(cell_id, Path(__file__).parent / rest)
     name, size = rest.rsplit('-', 1)
     if kind == 'case':
         case = CASES[name]
@@ -179,11 +187,18 @@ def cell(cell_id: str, cache: Path = DEFAULT_CACHE / 'ab') -> Cell:
     stamp = key / '.complete'
     if not stamp.exists():
         key.mkdir(parents=True, exist_ok=True)
-        for source, frame in tables(shape, SIZES[size]).items():
-            frame.write_parquet(key / f'{source}.parquet')
+        for source, table in tables(shape, SIZES[size]).items():
+            table.write_parquet(key / f'{source}.parquet')
         stamp.write_text(repr(asdict(shape)))
     paths = {p.stem: str(p) for p in sorted(key.glob('*.parquet'))}
     return Cell(cell_id, spec(shape), paths, solvable=not shape.quadratic)
+
+
+def _captured(cell_id: str, folder: Path) -> Cell:
+    """A model as ``capture.py`` in *folder* wrote it, its curves expanded, since specsolve builds no ``piecewise:`` block."""
+    sources: dict[str, object] = {p.stem: str(p) for p in sorted((folder / 'sources').glob('*.parquet'))}
+    sources |= json.loads((folder / 'scalars.json').read_text())
+    return Cell(cell_id, to_spec(folder / 'spec.yaml').expand('piecewise'), sources)
 
 
 def _digest(shape: Shape) -> str:
@@ -219,7 +234,7 @@ def spec(shape: Shape) -> dict:
             parameters['built'] = {'dims': dims, 'dtype': 'bool'}
             variables['u']['where'] = 'built'
         elif shape.mask == 'variable-presence':
-            parameters['avail'] = {'dims': dims}
+            parameters['avail'] = {'dims': dims, 'missing': 'absent'}
             variables['u']['where'] = 'avail'
         if shape.domain == 'binary':
             variables['u'] = {k: v for k, v in variables['u'].items() if k != 'bounds'} | {'domain': 'binary'}
@@ -253,7 +268,7 @@ def spec(shape: Shape) -> dict:
         relations['region_of'] = {'key': 'snapshot', 'values': 'region'}
         constraints['regional'] = {
             'dims': ['region', *dims[1:]],
-            'expression': 'sum(p, by=region_of, over=snapshot, into=region) <= 1000000',
+            'expression': 'sum(p, over=snapshot, by=region_of[region]) <= 1000000',
         }
     if shape.gated and shape.terms > 1:
         cap = 'ub' if 'ub' in parameters else upper if upper is not None else 10
@@ -262,7 +277,11 @@ def spec(shape: Shape) -> dict:
         constraints['total'] = {'dims': dims[:-1], 'expression': f'sum(p, over={dims[-1]}) >= 0'}
 
     return {
-        'dimensions': {d: {'dtype': 'int' if d == 'snapshot' and shape.labels == 'int' else 'str'} for d in dims}
+        'dimensions': {
+            d: {'dtype': 'int' if d == 'snapshot' and shape.labels == 'int' else 'str'}
+            | ({'ordered': True} if d == 'snapshot' else {})
+            for d in dims
+        }
         | extra,
         'relations': relations,
         'parameters': parameters,
@@ -288,43 +307,43 @@ def tables(shape: Shape, columns: int) -> dict[str, pl.DataFrame]:
     product = _product(dims, index)
     n = product.height
 
-    def table(values: np.ndarray, frame: pl.DataFrame = product) -> pl.DataFrame:
-        out = frame.with_columns(value=pl.Series(values))
+    def table(values: np.ndarray, rows: pl.DataFrame = product) -> pl.DataFrame:
+        out = rows.with_columns(value=pl.Series(values))
         if shape.order == 'shuffled':
             return out.sample(fraction=1.0, shuffle=True, seed=7)
         if shape.order == 'reversed':
             return out.reverse()
         return out
 
-    frames = {d: pl.DataFrame({d: index[d]}) for d in dims}
-    frames['demand'] = table(rng.uniform(0.0, 1.0, n))
-    frames['cost'] = table(rng.uniform(1.0, 2.0, n))
+    sources = {d: pl.DataFrame({d: index[d]}) for d in dims}
+    sources['demand'] = table(rng.uniform(0.0, 1.0, n))
+    sources['cost'] = table(rng.uniform(1.0, 2.0, n))
     if shape.bounds == 'every':
-        frames['ub'] = table(rng.uniform(5.0, 10.0, n))
+        sources['ub'] = table(rng.uniform(5.0, 10.0, n))
     elif shape.bounds == 'first':
         firsts = pl.DataFrame({'snapshot': index['snapshot']})
-        frames['ub'] = table(rng.uniform(5.0, 10.0, firsts.height), firsts)
+        sources['ub'] = table(rng.uniform(5.0, 10.0, firsts.height), firsts)
     if shape.terms > 1 and shape.mask in ('variable-half', 'both'):
-        frames['built'] = table(rng.random(n) < 0.5)
+        sources['built'] = table(rng.random(n) < 0.5)
     if shape.terms > 1 and shape.mask == 'variable-presence':
-        frames['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
+        sources['avail'] = table(rng.uniform(1.0, 2.0, n)).filter(pl.Series(rng.random(n) < 0.3))
     if shape.mask == 'constraint-relation':
-        frames['status'] = pl.DataFrame({'status': ['active', 'idle']})
-        frames['status_of'] = pl.DataFrame(
+        sources['status'] = pl.DataFrame({'status': ['active', 'idle']})
+        sources['status_of'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'status': np.where(rng.random(n0) < 0.5, 'active', 'idle')}
         )
     if shape.grouped:
         regions = np.array([f'r{i:05d}' for i in range(max(1, n0 // 10))])
-        frames['region'] = pl.DataFrame({'region': regions})
-        frames['region_of'] = pl.DataFrame(
+        sources['region'] = pl.DataFrame({'region': regions})
+        sources['region_of'] = pl.DataFrame(
             {'snapshot': index['snapshot'], 'region': regions[rng.integers(0, regions.size, n0)]}
         )
-    return frames
+    return sources
 
 
 def _product(dims: list[str], index: dict[str, np.ndarray]) -> pl.DataFrame:
     """Every coordinate of *dims*, row-major in each dimension's own label order."""
-    frame = pl.DataFrame({dims[0]: index[dims[0]]})
+    table = pl.DataFrame({dims[0]: index[dims[0]]})
     for d in dims[1:]:
-        frame = frame.join(pl.DataFrame({d: index[d]}), how='cross')
-    return frame
+        table = table.join(pl.DataFrame({d: index[d]}), how='cross')
+    return table

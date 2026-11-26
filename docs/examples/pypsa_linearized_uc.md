@@ -24,101 +24,103 @@ PyPSA linearized unit commitment: commitment with the status continuous in \[0, 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each committed to some degree or not at all |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{p}^{\mathrm{min,pu}}`$ | `p_min_pu` over $`\mathcal{G}`$ — share of capacity a committed unit must produce at least |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$ — what bringing a unit up costs, once per start |
-| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$ — what taking a unit down costs, once per stop |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{min,pu}}`$ | `p_min_pu` over $`\mathcal{G}`$ — share of capacity a committed unit must produce at least |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{shut\_down\_cost}`$ | `shut_down_cost` over $`\mathcal{G}`$, $`0`$ where the data has no row — what taking a unit down costs, once per stop |
+| $`\mathrm{start\_up\_cost}`$ | `start_up_cost` over $`\mathcal{G}`$, $`0`$ where the data has no row — what bringing a unit up costs, once per start |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`\mathit{status}`$ | `status` over $`\mathcal{T} \times \mathcal{G}`$ — how far this unit is committed in this snapshot — one of the three declarations that separate this model from the integer one |
-| $`\mathit{start\_up}`$ | `start_up` over $`\mathcal{T} \times \mathcal{G}`$ — how much of this unit comes up entering this snapshot |
-| $`\mathit{shut\_down}`$ | `shut_down` over $`\mathcal{T} \times \mathcal{G}`$ — how much of this unit goes down entering this snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
+| $`\mathit{shut\_down}`$ | `shut_down` over $`\mathcal{G} \times \mathcal{T}`$ — how much of this unit goes down entering this snapshot |
+| $`\mathit{start\_up}`$ | `start_up` over $`\mathcal{G} \times \mathcal{T}`$ — how much of this unit comes up entering this snapshot |
+| $`\mathit{status}`$ | `status` over $`\mathcal{G} \times \mathcal{T}`$ — how far this unit is committed in this snapshot — one of the three declarations that separate this model from the integer one |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \boxminus_{v} k`$ denotes translation with $`v`$ standing where index $`t-k`$ leaves the dimension (`shift(edge=v)`), so the row at that boundary is built and carries $`v`$ rather than being dropped.
-
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{start\_up}_{t,g} \cdot \mathrm{start\_up\_cost}_{g} + \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathit{shut\_down}_{t,g} \cdot \mathrm{shut\_down\_cost}_{g}
-```
-
-#### Subject to
-
-**`power_balance`**
-
-```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
-```
-
-**`commitment_max`**
-
-```math
-p_{t,g} - \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \le 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`commitment_min`**
-
-```math
-p_{t,g} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`start_up`**
-
-```math
-\mathit{start\_up}_{t,g} - \mathit{status}_{t,g} + \mathit{status}_{t \boxminus_{0} 1,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`shut_down`**
-
-```math
-\mathit{shut\_down}_{t,g} + \mathit{status}_{t,g} - \mathit{status}_{t - 1,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
+| Symbol | Meaning |
+|---|---|
+| $`t \boxminus_{v} k`$ | `edge=v` — $`t-k`$, and $`v`$ past the edge |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`status`**
-
-```math
-0 \le \mathit{status}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`start_up`**
-
-```math
-0 \le \mathit{start\_up}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`shut_down`**
 
 ```math
-0 \le \mathit{shut\_down}_{t,g} \le 1 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le \mathit{shut\_down}_{g,t} \le 1 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`start_up`**
+
+```math
+0 \le \mathit{start\_up}_{g,t} \le 1 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`status`**
+
+```math
+0 \le \mathit{status}_{g,t} \le 1 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} + \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} \mathit{start\_up}_{g,t} \cdot \mathrm{start\_up\_cost}_{g} + \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} \mathit{shut\_down}_{g,t} \cdot \mathrm{shut\_down\_cost}_{g}
+```
+
+#### Subject to
+
+**`commitment_max`**
+
+```math
+p_{g,t} - \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{g,t} \le 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`commitment_min`**
+
+```math
+p_{g,t} - \mathrm{p}^{\mathrm{min,pu}}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \cdot \mathit{status}_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`power_balance`**
+
+```math
+\sum_{g \in \mathcal{G}} p_{g,t} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+```
+
+**`shut_down`**
+
+```math
+\mathit{shut\_down}_{g,t} + \mathit{status}_{g,t} - \mathit{status}_{g,t - 1} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`start_up`**
+
+```math
+\mathit{start\_up}_{g,t} - \mathit{status}_{g,t} + \mathit{status}_{g,t \boxminus_{0} 1} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -133,6 +135,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units, each committed to some degree or not at all
         dtype: str
@@ -150,9 +153,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       start_up_cost:
         description: what bringing a unit up costs, once per start
         dims: [generator]
+        missing: 0
       shut_down_cost:
         description: what taking a unit down costs, once per stop
         dims: [generator]
+        missing: 0
       load:
         description: demand to be met
         dims: [snapshot]
@@ -216,10 +221,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as solution:
-        solution.objective  # 5540.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_linearized_uc.yaml', sources) as result:
+        result.objective  # 5540.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"
@@ -234,7 +239,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
         Nothing here says the model is relaxed: ``committable=True`` is the same
         switch the integer model uses, and the mode is chosen at ``optimize`` time.
-        Both ``*_time_before`` are 0, so no status is pinned by a prior horizon.
+        Both ``*_time_before`` are 0, so no status is pinned from before the first snapshot.
         """
         n = pypsa.Network()
         n.set_snapshots(tables['snapshot']['snapshot'])
@@ -272,11 +277,11 @@ nothing else. Relaxing the status turns the model back into an LP, which is
 most of why the mode exists, so this port records a price vector too.
 
 **`base` carries unequal start-up and shut-down costs.** PyPSA tightens the
-relaxation with an extra dispatch-limit block wherever a generator's two costs
-match. That block reaches for the ramp-limit parameters, a second feature. So
+relaxation with an extra dispatch-limit constraint wherever a generator's two costs
+match. That constraint reaches for the ramp-limit parameters, a second feature. So
 `base` is left untightened, and PyPSA logs that it is proceeding without
 it. `peak` has two costs of zero, so PyPSA does emit the tightening there:
-four blocks of three rows this port does not hold. Each collapses to a row the
+four constraints of three rows this port does not hold. Each collapses to a row the
 port already has, because `p_min_pu` is 0 and there are no ramp limits:
 `p ≤ p_nom · status`, or that row differenced against the snapshot before. The
 objective and the price vector therefore agree to `rtol=1e-09`; the two are

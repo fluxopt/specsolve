@@ -44,26 +44,6 @@
 .bench .bench-seg button + button { border-left: 1px solid var(--hairline); }
 .bench .bench-seg button[aria-pressed="true"] { background: var(--fg); color: var(--surface); }
 .bench button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
-.bench .bench-range { position: relative; width: 17rem; max-width: 100%; height: 2.3rem; padding: 0 16px;
-  touch-action: none; cursor: crosshair; user-select: none; }
-.bench .bench-track { position: relative; height: 100%; }
-.bench .bench-track::before { content: ""; position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: var(--hairline); }
-.bench .bench-band { position: absolute; top: 7px; height: 8px; border-radius: 4px; background: var(--s1); opacity: .3; }
-.bench .bench-tick { position: absolute; top: 20px; transform: translateX(-50%); font-size: .6rem; color: var(--muted);
-  font-variant-numeric: tabular-nums; }
-.bench .bench-tick::before { content: ""; position: absolute; left: 50%; top: -6px; width: 1px; height: 4px; background: var(--hairline); }
-.bench .bench-tick.in { color: var(--fg); font-weight: 650; }
-.bench .bench-range input { position: absolute; left: 8px; right: 8px; top: 3px; width: calc(100% - 16px); height: 16px; margin: 0;
-  background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
-.bench .bench-range input::-webkit-slider-runnable-track { background: none; }
-.bench .bench-range input::-moz-range-track { background: none; }
-.bench .bench-range input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 16px; height: 16px;
-  border-radius: 50%; background: var(--surface); border: 2px solid var(--s1); cursor: grab; }
-.bench .bench-range input::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px; border-radius: 50%;
-  background: var(--surface); border: 2px solid var(--s1); cursor: grab; }
-.bench .bench-range input:focus-visible { outline: none; }
-.bench .bench-range input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--s1); outline-offset: 2px; }
-.bench .bench-range input:focus-visible::-moz-range-thumb { outline: 2px solid var(--s1); outline-offset: 2px; }
 .bench #bench-legend { display: flex; gap: .2rem .4rem; flex-wrap: wrap; font-size: .68rem; }
 .bench #bench-legend button { font: inherit; color: var(--fg2); background: none; border: 0; border-radius: 5px;
   display: inline-flex; align-items: center; gap: .4rem; padding: .1rem .3rem; cursor: pointer; }
@@ -73,9 +53,17 @@
 .bench .swatch.ours { width: 20px; height: 4px; }
 
 /* `minmax(0, 1fr)` rather than `1fr`: the zero lets a track be narrower than its content. */
-.bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .8rem; }
+.bench .bench-zoombar { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; margin-top: .6rem; }
+.bench .bench-zoombar button { font: inherit; font-size: .66rem; color: var(--fg2); background: var(--surface);
+  border: 1px solid var(--hairline); border-radius: 6px; padding: .25rem .6rem; cursor: pointer; }
+.bench .bench-zoombar button:disabled { opacity: .45; cursor: default; }
+.bench #bench-facets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: .6rem;
+  -webkit-user-select: none; user-select: none; }
 @media (max-width: 44.9375em) { .bench #bench-facets { grid-template-columns: minmax(0, 1fr); } }
 .bench .bench-panel { min-width: 0; color: var(--fg2); border: 1px solid var(--hairline); border-radius: 8px; padding: .5rem .6rem .2rem; }
+.bench .bench-panel > div:last-child { position: relative; cursor: crosshair; touch-action: pan-y; }
+.bench #bench-facets.zooming .ts-chart-tooltip { visibility: hidden; }
+.bench .bench-zoom { position: absolute; pointer-events: none; border: 1px solid var(--s1); background: var(--s1); opacity: .15; }
 .bench .bench-caption { font-size: .7rem; font-weight: 700; color: var(--fg); margin-bottom: .2rem; }
 
 .bench .bench-scale { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-top: 1rem; font-size: .62rem; color: var(--muted); }

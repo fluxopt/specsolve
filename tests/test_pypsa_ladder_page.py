@@ -59,7 +59,17 @@ def test_every_structure_difference_has_a_reason_and_is_on_the_index():
     stamped = json.loads((ladder.LADDER / 'references.json').read_text())
     reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
     index = ladder.INDEX.read_text()
+    known = yaml.safe_load((ladder.LADDER / 'known_failing.yaml').read_text()) or {}
     for stem in STEMS:
+        if stem in known:
+            unexplained = [
+                name
+                for kind in ('structure', 'duals')
+                for name, d in stamped[stem]['parity'][kind]['differences'].items()
+                if not d['reason']
+            ]
+            assert unexplained, f'{stem} matches now, so its line in known_failing.yaml goes — {known[stem]}'
+            continue
         for kind in ('structure', 'duals'):
             for name, d in stamped[stem]['parity'][kind]['differences'].items():
                 assert d['reason'] and reasons.get(name, {}).get(kind) == d['reason'], (
@@ -81,7 +91,7 @@ def test_every_rung_page_is_in_the_nav():
 
 
 def test_the_reasons_file_names_each_pypsa_name_once():
-    """A YAML loader keeps the last of two mappings for one key, so a second entry silently drops the first's reasons."""
+    """A YAML loader keeps the last of two mappings for one key, so a second key silently drops the first's reasons."""
     import re
 
     keys = re.findall(r'^([^\s#][^:\n]*):$', (ladder.LADDER / 'deviations.yaml').read_text(), flags=re.MULTILINE)
@@ -107,7 +117,7 @@ def test_every_negated_dual_is_checked_rather_than_excused():
     stamped = json.loads((ladder.LADDER / 'references.json').read_text())
     reasons = yaml.safe_load((ladder.LADDER / 'deviations.yaml').read_text()) or {}
     index = ladder.INDEX.read_text()
-    recorded = {name for name, entry in reasons.items() if 'negated' in entry}
+    recorded = {name for name, noted in reasons.items() if 'negated' in noted}
     assert not [n for n in recorded if 'duals' in reasons[n]], (
         'a name recorded as negated and also excused by a `duals:` reason, which would hide a difference'
     )
@@ -116,10 +126,10 @@ def test_every_negated_dual_is_checked_rather_than_excused():
         duals = stamped[stem]['parity']['duals']
         for name, reason in duals['negated'].items():
             assert reasons.get(name, {}).get('negated') == reason, f'{stem}: {name} negated for an unrecorded reason'
-            entry = duals['per_name'][name]
-            assert entry['matches'] and entry['max_abs_diff'] <= 1e-6, (
-                f"{stem}: {name} is recorded negated but its dual is not the negative of PyPSA's, "
-                f'off by {entry["max_abs_diff"]} at the tolerance the runner compares at'
+            compared = duals['per_name'][name]
+            assert compared['matches'] and not compared.get('outside'), (
+                f"{stem}: {name} is recorded negated but its dual is neither the negative of PyPSA's nor inside "
+                f"the range of duals PyPSA's model admits, off by {compared['max_abs_diff']}"
             )
             assert f'`{name}' in index and reason in index, f'{name} and why it is negated are not on the index'
             checked.add(name)
@@ -132,7 +142,7 @@ def test_every_negated_dual_is_checked_rather_than_excused():
 #: A file whose named expressions read one another, so the projection has to walk them and
 #: could reach for a set while doing it. `eta` reads `zeta`, so one pass is not enough.
 _ORDERING_FIXTURE = {
-    'dimensions': {'t': {'dtype': 'int'}, 'g': {}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
     'parameters': {n: {'dims': ['g']} for n in ('alpha', 'beta', 'gamma', 'delta', 'epsilon')},
     'variables': {'x': {'dims': ['t', 'g'], 'bounds': {'lower': 0}}},
     'expressions': {
@@ -184,7 +194,7 @@ def test_a_projection_orders_its_names_the_same_whatever_the_hash_seed(tmp_path)
 
 
 def _conjunct_stamps(marks: str) -> list[dict]:
-    """One stamp per rung, each recording what a block's single conjunct did there."""
+    """One stamp per rung, each recording what an entry's single conjunct did there."""
     return [{'conjuncts': {'block': mark}} for mark in marks]
 
 
@@ -195,13 +205,13 @@ def _conjunct_stamps(marks: str) -> list[dict]:
         pytest.param('ff', 'never true', id='no rung makes it true'),
         pytest.param('tt', 'never false', id='no rung makes it false'),
         pytest.param('tf', None, id='true on one rung and false on another'),
-        pytest.param('-t', 'never false', id='a rung that builds no frame says nothing'),
+        pytest.param('-t', 'never false', id='a rung that builds no row of the entry says nothing'),
     ],
 )
 def test_a_conjunct_no_rung_varies_is_reported(marks, expected):
-    """The half the block-level sweep cannot reach — mathspec#312.
+    """The half the entry-level sweep cannot reach — mathspec#312.
 
-    A mask of `a AND b` is exercised as a whole the moment `a` varies, so a `b`
+    A condition of `a AND b` is exercised as a whole the moment `a` varies, so a `b`
     true at every coordinate of every rung passes unnoticed and a regime it
     alone guards could be missing. ``tf`` is the case a per-rung check gets
     wrong: neither rung is partial, and the conjunct is exercised anyway

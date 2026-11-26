@@ -7,7 +7,7 @@ answers as one table. The reference is
 ## Put the scenarios in one table
 
 Give the table that differs a `scenario` column that the spec does not
-declare. [`EachCoordinate`](../reference/api.md#specsolve.EachCoordinate)
+declare. [`EachLabel`](../reference/api.md#specsolve.EachLabel)
 solves once for each label:
 
 ```python exec="true" source="material-block" result="text" session="scenarios"
@@ -30,8 +30,8 @@ loads = pl.concat(
         load.with_columns(scenario=pl.lit('cold'), value=1.3 * pl.col('value')),
     ]
 )
-scenarios = sps.solve_over('examples/dispatch.yaml', sources | {'load': loads}, sps.EachCoordinate('scenario'))
-print(scenarios.record.select('scenario', 'objective'))
+scenarios = sps.solve_over('examples/dispatch.yaml', sources | {'load': loads}, sps.EachLabel('scenario'))
+print(scenarios.records.select('scenario', 'objective'))
 ```
 
 A table without the column is the same in every scenario.
@@ -63,10 +63,8 @@ costs = pl.concat(
         ),
     ]
 )
-both = sps.solve_over(
-    'examples/dispatch.yaml', sources | {'load': loads, 'cost': costs}, sps.EachCoordinate('scenario')
-)
-print(both.record.select('scenario', 'objective'))
+both = sps.solve_over('examples/dispatch.yaml', sources | {'load': loads, 'cost': costs}, sps.EachLabel('scenario'))
+print(both.records.select('scenario', 'objective'))
 ```
 
 ## Solve them in parallel

@@ -4,6 +4,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: generating units
 
@@ -74,7 +75,7 @@ constraints:
   soc_first:
     description: the first snapshot starts from soc_initial
     dims: [snapshot]
-    where: "snapshot == 0"
+    where: "position(snapshot) == 0"
     expression: soc == soc_initial + 0.9 * charge - discharge
   soc_next:
     description: every other snapshot starts from the level the one before ended with

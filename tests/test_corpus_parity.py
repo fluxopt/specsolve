@@ -2,7 +2,7 @@
 
 ``test_ports.py`` asks whether the relational lane reaches a published
 optimum; this module asks whether the linopy lane builds the same model, and
-whether the written LP file re-solves to it. It needs the oracle, where
+whether the written LP file re-solves to it. It needs the linopy lane, where
 ``test_ports.py`` runs on the bare install.
 """
 
@@ -14,6 +14,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from specsolve._names import COEFF, ROW
 from tests.conftest import PORT_REFERENCES, PORTS_DIR, port_sources, port_spec
 from tests.differential import differential
 from tests.linopy_lane.loader import OracleCannotBuildError
@@ -50,11 +51,11 @@ def _same_matrix(name: str, run: Any) -> None:
     approximately, since the lanes reach a coefficient by a different order of
     operations.
     """
-    tables = run.engine._model.handoff
-    for constraint, block in run.engine._model.constraints.items():
-        if not block.height:
+    tables = run.engine._model.tables
+    for constraint, indexed in run.engine._model.constraints.items():
+        if not indexed.height:
             continue
-        got = _canonical(tables.matrix_block(block.start, block.start + block.height))
+        got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height))
         want = _linopy_matrix(run.model, constraint)
         assert [len(r) for r in got] == [len(r) for r in want], (
             f'{name}.{constraint}: the lanes wrote a different number of terms per row'
@@ -67,7 +68,7 @@ def _same_matrix(name: str, run: Any) -> None:
 
 def _canonical(matrix: pl.DataFrame) -> list[tuple[float, ...]]:
     """``(row, col, coeff)`` as a sorted multiset of sorted coefficient rows."""
-    rows = matrix.group_by('row').agg(pl.col('coeff').sort()).get_column('coeff').to_list()
+    rows = matrix.group_by(ROW).agg(pl.col(COEFF).sort()).get_column(COEFF).to_list()
     return sorted(tuple(r) for r in rows)
 
 
@@ -101,9 +102,9 @@ def _linopy_matches_the_recorded_duals(name: str, run: Any) -> None:
     _check_recorded_duals(name, PORT_REFERENCES[name], run)
 
 
-def _check_recorded_duals(name: str, entry: dict[str, Any], run: Any) -> None:
-    """*entry*'s recorded duals against the linopy lane, split out so a probe can pass a wrong one."""
-    recorded = entry.get('duals')
+def _check_recorded_duals(name: str, reference: dict[str, Any], run: Any) -> None:
+    """*reference*'s recorded duals against the linopy lane, split out so a probe can pass a wrong one."""
+    recorded = reference.get('duals')
     if not recorded:
         return
     for constraint, table in recorded.items():
@@ -112,8 +113,8 @@ def _check_recorded_duals(name: str, entry: dict[str, Any], run: Any) -> None:
         got = _tidy(run.model.constraints[constraint].dual, dims, want)
         want = want.with_columns(pl.col(d).cast(got.schema[d]) for d in dims).sort(dims)
         assert got[dims].equals(want[dims]), f'{name}.{constraint}: the linopy dual is keyed differently'
-        assert got['value'].to_list() == pytest.approx(want['value'].to_list(), rel=entry['rtol'], abs=1e-9), (
-            f'{name}.{constraint}: the linopy lane disagrees with {entry["provenance"]}'
+        assert got['value'].to_list() == pytest.approx(want['value'].to_list(), rel=reference['rtol'], abs=1e-9), (
+            f'{name}.{constraint}: the linopy lane disagrees with {reference["provenance"]}'
         )
 
 
@@ -123,16 +124,17 @@ def _tidy(dual: Any, dims: list[str], like: pl.DataFrame) -> pl.DataFrame:
         return pl.DataFrame({'value': [float(dual.values.reshape(-1)[0])]})
     series = dual.to_series().dropna()
     keys = list(series.index)
-    columns = {d: [k[i] if isinstance(k, tuple) else k for k in keys] for i, d in enumerate(dims)}
-    frame = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
-    return frame.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
+    names = list(series.index.names)
+    columns = {d: [k[names.index(d)] if isinstance(k, tuple) else k for k in keys] for d in dims}
+    table = pl.DataFrame({**columns, 'value': [float(v) for v in series.to_numpy()]})
+    return table.with_columns(pl.col(d).cast(like.schema[d]) for d in dims).sort(dims)
 
 
 def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
     """A recording one step from the truth is refused.
 
     ``monthly_budget``'s dual is a short vector with distinct values, so a
-    perturbed entry cannot coincide with another.
+    perturbed element cannot coincide with another.
     """
     name = 'monthly_budget'
     recorded = PORT_REFERENCES[name].get('duals')
@@ -140,10 +142,10 @@ def test_the_linopy_dual_check_would_notice_a_wrong_price() -> None:
 
     constraint, table = next(iter(recorded.items()))
     wrong = {**table, 'value': [v + 1.0 for v in table['value']]}
-    entry = {**PORT_REFERENCES[name], 'duals': {constraint: wrong}}
+    reference = {**PORT_REFERENCES[name], 'duals': {constraint: wrong}}
 
     with differential(port_spec(name), port_sources(name)) as run, pytest.raises(AssertionError, match=constraint):
-        _check_recorded_duals(name, entry, run)
+        _check_recorded_duals(name, reference, run)
 
 
 #: PyPSA's secant loss mode on ``pypsa_losses``' own network — its default, where

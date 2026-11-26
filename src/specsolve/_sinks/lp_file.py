@@ -1,0 +1,246 @@
+"""The ``lp_file`` sink: the model as LP text.
+
+Every section is a lazy table sunk straight into the open file, in index
+order, so a model writes the same bytes twice.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, get_args
+
+import polars as pl
+from mathspec import program
+
+from specsolve._collect import collected
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
+from specsolve._sinks.capabilities import Capabilities
+from specsolve._sinks.tables import SENSE_CODES
+from specsolve._sinks.text import append_lines, chunk_key, digits, number
+
+if TYPE_CHECKING:
+    from specsolve._sinks.tables import SinkTables
+
+
+#: Every construct the language can reach, quadratic rows included. A reader
+#: may still refuse a section: HiGHS's refuses two.
+LP_FILE_CAPABILITIES = Capabilities(
+    supports=frozenset(
+        {'integrality', 'sos', 'quadratic_objective', 'nonconvex_quadratic_objective', 'quadratic_constraint'}
+    )
+)
+
+
+#: The LP spelling of each [`SENSE_CODES`][] comparison.
+_LP_SENSE = {sense: '=' if sense == '==' else sense for sense in SENSE_CODES}
+
+#: The section each non-continuous domain is listed under; a new domain raises here at import.
+_LP_DOMAIN_SECTION = {
+    domain: {'binary': 'binary', 'integer': 'general'}[domain]
+    for domain in get_args(program.VariableDomain)
+    if domain != 'continuous'
+}
+
+#: Nonzeros per constraint chunk; it bounds the writer's peak memory, not its speed.
+EMIT_BUDGET = 2_000_000
+
+
+def write_lp_file(tables: SinkTables, path: str | Path) -> None:
+    """Write the model as LP text."""
+    path = Path(path)
+    objective = tables.obj.lazy().sort(COL).select(_term(pl.col(COEFF), pl.col(COL)))
+    bounds = (
+        tables.cols.lazy()
+        .with_row_index(COL)
+        .select(
+            pl.concat_str(
+                _bound(pl.col('lb'), '-infinity').alias('lb'),
+                pl.lit(' <= x').alias('open'),
+                digits(pl.col(COL)),
+                pl.lit(' <= ').alias('close'),
+                _bound(pl.col('ub'), '+infinity').alias('ub'),
+            )
+        )
+    )
+
+    with open(path, 'wb') as f:
+        f.write((b'max' if tables.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
+        if tables.objective_constant:
+            f.write(f'{tables.objective_constant:+.17g}\n'.encode())
+        append_lines(objective, f)
+        if tables.quad.height:
+            f.write(b'+ [\n')
+            append_lines(_quadratic_terms(tables), f)
+            f.write(b'] / 2\n')
+
+        f.write(b'\ns.t.\n\n')
+        for chunk in tables.row_chunks(EMIT_BUDGET):
+            append_lines(_constraint_lines(tables, chunk.lo, chunk.hi, tables.matrix_chunk(chunk.lo, chunk.hi)), f)
+        if tables.qmatrix.height:
+            append_lines(_quadratic_row_lines(tables), f)
+
+        f.write(b'\nbounds\n')
+        append_lines(bounds, f)
+
+        for domain, keyword in _LP_DOMAIN_SECTION.items():
+            chosen = tables.cols.lazy().with_row_index(COL).filter(pl.col('vtype') == domain)
+            if chosen.select(pl.len()).pipe(collected).item() == 0:
+                continue
+            f.write(f'\n{keyword}\n'.encode())
+            append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col(COL)))), f)
+
+        if tables.sos.height:
+            f.write(b'\nsos\n')
+            append_lines(_set_lines(tables), f)
+
+        f.write(b'\nend\n')
+
+
+def _quadratic_row_lines(tables: SinkTables) -> pl.LazyFrame:
+    """Every quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``, one sorted stream.
+
+    A line's key is ``(row, part, at)``: ``part`` orders header, linear terms,
+    bracket, pairs and footer within a row, and ``at`` orders lines within a
+    part — a term by its column, a pair by its place in ``qmatrix``, which
+    arrives ordered. Not doubled: the format divides only the objective's
+    bracket by two.
+    """
+    lo = tables.linear_row_count
+
+    def _keyed(table: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
+        return table.select(
+            pl.col(ROW).cast(pl.Int64),
+            pl.lit(part, dtype=pl.Int64).alias('part'),
+            at.cast(pl.Int64).alias('at'),
+            line.alias('line'),
+        )
+
+    rows = tables.rows.lazy().filter(pl.col(ROW) >= lo)
+    coefficients = tables.matrix_chunk(lo, tables.row_count).lazy()
+    pairs = tables.qmatrix.lazy().with_row_index('at')
+    zero = pl.lit(0)
+    return (
+        pl.concat(
+            [
+                _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col(ROW)), pl.lit(':'))),
+                _keyed(coefficients, 1, pl.col(COL), _term(pl.col(COEFF), pl.col(COL))),
+                _keyed(rows, 2, zero, pl.lit('+ [')),
+                _keyed(pairs, 3, pl.col('at'), _pair(pl.col(COEFF))),
+                _keyed(rows, 4, zero, pl.concat_str(pl.lit('] '), _footer())),
+            ]
+        )
+        .sort(ROW, 'part', 'at')
+        .select('line')
+    )
+
+
+def _quadratic_terms(tables: SinkTables) -> pl.LazyFrame:
+    """The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
+
+    The format divides the section by two, so every coefficient is doubled, on
+    the diagonal and off it alike. A pair arrives ordered, summed and
+    deduplicated, so nothing here sorts.
+    """
+    return tables.quad.lazy().select(_pair(pl.col(COEFF) * 2))
+
+
+def _pair(coeff: pl.Expr) -> pl.Expr:
+    """One quadratic pair as ``+2 x3 * x7``, or ``x3 ^ 2`` for a squared column: no parser accepts ``x3 * x3``."""
+    return pl.concat_str(
+        *_signed(coeff),
+        pl.lit(' x'),
+        digits(pl.col(COL_L)),
+        pl.when(pl.col(COL_L) == pl.col(COL_R))
+        .then(pl.lit(' ^ 2'))
+        .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col(COL_R)))),
+    )
+
+
+def _set_lines(tables: SinkTables) -> pl.LazyFrame:
+    """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line, in linopy's spelling.
+
+    ``maintain_order`` keeps a set's line the same bytes twice.
+    """
+    return (
+        tables.sos.lazy()
+        .group_by('set', maintain_order=True)
+        .agg(
+            pl.col('type').first(),
+            pl.concat_str(pl.lit('x'), digits(pl.col(COL)), pl.lit(':'), digits(pl.col('weight')))
+            .str.join(' ')
+            .alias('members'),
+        )
+        .select(
+            pl.concat_str(
+                pl.lit('s'),
+                digits(pl.col('set')),
+                pl.lit(': S'),
+                digits(pl.col('type')),
+                pl.lit(' :: '),
+                pl.col('members'),
+            )
+        )
+    )
+
+
+def _constraint_lines(tables: SinkTables, lo: int, hi: int, coefficients: pl.DataFrame) -> pl.LazyFrame:
+    """Every constraint line for rows ``[lo, hi)``, one sorted stream.
+
+    A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
+    term at its column index, sense — so one sort fixes both the row order and
+    the order within a row. The anti-join gives a termless row the ``+0 x0`` a
+    parser needs. The terms are sorted although they arrive sorted, so the union
+    sort merges runs rather than permuting them.
+    """
+    slots = tables.cols.height + 3
+
+    def _key(within: pl.Expr) -> pl.Expr:
+        return chunk_key(pl.col(ROW), lo, slots, within)
+
+    rows = tables.rows.lazy().filter(pl.col(ROW).is_between(lo, hi, closed='left'))
+    matrix = coefficients.lazy()
+    header = rows.select(
+        _key(pl.lit(0, dtype=pl.Int64)),
+        pl.concat_str(pl.lit('c').alias('c'), digits(pl.col(ROW)), pl.lit(':').alias('colon')).alias('line'),
+    )
+    placeholder = rows.join(matrix.select(ROW), on=ROW, how='anti').select(
+        _key(pl.lit(1, dtype=pl.Int64)),
+        pl.lit('+0 x0').alias('line'),
+    )
+    terms = matrix.sort(ROW, COL).select(
+        _key(pl.col(COL).cast(pl.Int64) + 2),
+        _term(pl.col(COEFF), pl.col(COL)).alias('line'),
+    )
+    footer = rows.select(_key(pl.lit(slots - 1, dtype=pl.Int64)), _footer().alias('line'))
+    return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')
+
+
+def _footer() -> pl.Expr:
+    """A row's comparison and right-hand side, ``>= 4``, off its ``sense`` and ``rhs`` columns."""
+    return pl.concat_str(
+        pl.col('sense').replace_strict(_LP_SENSE, return_dtype=pl.String),
+        pl.lit(' '),
+        number(pl.col('rhs')),
+    )
+
+
+def _term(coeff: pl.Expr, col: pl.Expr) -> pl.Expr:
+    """One ``+1.5 x7`` term."""
+    return pl.concat_str(*_signed(coeff), pl.lit(' x'), digits(col))
+
+
+def _signed(value: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
+    """A coefficient with its sign always explicit, as the LP format needs.
+
+    Zero is spelled out because ``-0.0`` takes the ``+`` arm while the cast
+    renders ``-0.0``, giving ``+-0.0``, which no LP parser accepts.
+    """
+    return (
+        pl.when(value >= 0).then(pl.lit('+')).otherwise(pl.lit('')).alias('sign'),
+        pl.when(value == 0).then(pl.lit('0.0')).otherwise(number(value)).alias('magnitude'),
+    )
+
+
+def _bound(value: pl.Expr, infinite: str) -> pl.Expr:
+    """A bound, with the LP format's own spelling for an unbounded one."""
+    return pl.when(value.is_infinite()).then(pl.lit(infinite)).otherwise(number(value))

@@ -22,11 +22,11 @@ from bench import cases as bench_cases
 #: What a collection is attributed to, as ``(module path, owner or None, name)``
 #: — a method on the class that owns it, or a module-level function.
 STEPS = (
-    ('specsolve.relational.engine.assembly', 'Assembly', '_build_variable'),
-    ('specsolve.relational.engine.assembly', 'Assembly', '_build_constraint'),
-    ('specsolve.relational.engine.assembly', 'Assembly', '_build_objective'),
-    ('specsolve.relational.engine.labels', None, 'frame'),
-    ('specsolve.relational.engine.attaching', None, 'attach'),
+    ('specsolve._engine.assembly', 'Assembly', '_build_variable'),
+    ('specsolve._engine.assembly', 'Assembly', '_build_constraint'),
+    ('specsolve._engine.assembly', 'Assembly', '_build_objective'),
+    ('specsolve._engine.indices', None, 'table'),
+    ('specsolve._engine.attaching', None, 'attach'),
 )
 
 
@@ -49,9 +49,9 @@ def _instrument(timings: dict[Any, list[float]], phase: dict[str, str]) -> None:
         finally:
             elapsed = time.perf_counter() - started
             key = (phase['now'], ' '.join(self.explain(optimized=False).split())[:88])
-            entry = timings.setdefault(key, [0.0, 0])
-            entry[0] += elapsed
-            entry[1] += 1
+            tally = timings.setdefault(key, [0.0, 0])
+            tally[0] += elapsed
+            tally[1] += 1
 
     pl.LazyFrame.collect = collect
 

@@ -1,11 +1,11 @@
-"""Guarded access to the linopy lane, used as the differential oracle.
+"""Guarded access to the linopy lane, which every build is checked against.
 
-Importing this module skips the importing test module when the oracle's
+Importing this module skips the importing test module when the linopy lane's
 dependencies (the ``dev`` group's linopy, and xarray and pandas) are absent.
 Import linopy, xarray and pandas through here, so import ordering cannot bypass
 the guard.
 
-The oracle is linopy's v1 convention only: legacy fills every absent slot with
+The linopy lane is linopy's v1 convention only: legacy fills every absent slot with
 0 (PyPSA/linopy#712). A linopy without it raises rather than skips.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-_REASON = 'needs the oracle (linopy from the dev group, xarray, pandas)'
+_REASON = 'needs the linopy lane (linopy from the dev group, xarray, pandas)'
 
 linopy = pytest.importorskip('linopy', reason=_REASON)
 xr = pytest.importorskip('xarray', reason=_REASON)
@@ -22,7 +22,7 @@ pd = pytest.importorskip('pandas', reason=_REASON)
 if 'semantics' not in getattr(linopy.options, '_defaults', {}):
     raise RuntimeError(
         f'linopy {linopy.__version__} has no options["semantics"], so it cannot speak the v1 '
-        f'arithmetic convention this package is written against. The oracle would silently '
+        f'arithmetic convention this package is written against. The linopy lane would silently '
         f'measure against the legacy convention instead. Install the pin in pyproject.toml '
         f'(the dev group: linopy 0.10.0) — `pixi install`.'
     )

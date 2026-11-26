@@ -53,12 +53,12 @@ Solve statuses take linopy's names: `status` and `termination_condition`, with
 
 - **The model is a file.** There is no Python API that builds math.
   `sps.check` validates the file with no data.
-- **Data is attached by name, and a missing row is a missing coordinate.**
+- **Data is attached by name, and the spec says what a missing row means.**
   A model holds only the rows that exist, which is what keeps a sparse model
   small.
 - **linopy is not a dependency.** Only the test suite uses it, to build every
   file a second time and compare
-  ([verification](../development/verification.md#the-oracle)).
+  ([verification](../development/verification.md#the-linopy-lane)).
 - **Some of linopy is not taken**: array operations such as `merge` and
   `reindex` are data preparation, and the solver layer is specsolve's own
   ([#106](https://github.com/fluxopt/specsolve/issues/106)).

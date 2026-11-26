@@ -6,7 +6,7 @@ A network: generators sit on buses, lines connect buses, and power balances at e
 
 ## The problem
 
-$$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{s,g} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{s,\ell} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{s,\ell} \quad=\quad d_{s,b}$$
+$$\sum_{g \thinspace:\thinspace \mathrm{bus}(g) = b} p_{g,s} \quad+\quad \sum_{\ell \thinspace:\thinspace \mathrm{to}(\ell) = b} f_{\ell,s} \quad-\quad \sum_{\ell \thinspace:\thinspace \mathrm{from}(\ell) = b} f_{\ell,s} \quad=\quad d_{b,s}$$
 
 Each sum runs over the generators or lines a relation sends to bus $b$.
 $\mathrm{bus}$, $\mathrm{to}$ and $\mathrm{from}$ are relations the dimensions
@@ -25,47 +25,47 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`\ell`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — transmission lines, each joining two buses |
+| $`\mathcal{S}`$ | index $`s`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
-| $`c`$ | `cost` over $`\mathcal{G}`$ — marginal cost |
 | $`\bar f`$ | `cap` over $`\mathcal{L}`$ — forward transmission limit |
+| $`c`$ | `cost` over $`\mathcal{G}`$ — marginal cost |
+| $`d`$ | `load` over $`\mathcal{B} \times \mathcal{S}`$ — demand at each bus |
 | $`\underline{f}`$ | `neg_cap` over $`\mathcal{L}`$ — reverse transmission limit |
-| $`d`$ | `load` over $`\mathcal{S} \times \mathcal{B}`$ — demand at each bus |
+| $`\bar p`$ | `p_max` over $`\mathcal{G}`$ — installed capacity |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{S} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus |
+| $`f`$ | `f` over $`\mathcal{L} \times \mathcal{S}`$ — flow on a line, signed towards its `line_to` bus |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S}`$ — output of a generator in a snapshot |
 
 #### Definitions
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{gen\_at\_bus}`$ | `gen_at_bus` over $`\mathcal{S} \times \mathcal{B}`$ — what the generators sitting on a bus produce there |
-| $`\mathit{net\_inflow}`$ | `net_inflow` over $`\mathcal{S} \times \mathcal{B}`$ — flow arriving at a bus minus flow leaving it, so a negative value is a net export |
+| $`\mathit{gen\_at\_bus}`$ | `gen_at_bus` over $`\mathcal{B} \times \mathcal{S}`$ — what the generators sitting on a bus produce there |
+| $`\mathit{net\_inflow}`$ | `net_inflow` over $`\mathcal{B} \times \mathcal{S}`$ — flow arriving at a bus minus flow leaving it, so a negative value is a net export |
 
-#### Objective
+#### Variable domains
+
+**`f`**
 
 ```math
-\min \sum_{s \in \mathcal{S},\ g \in \mathcal{G}} p_{s,g} \cdot c_{g}
+\underline{f}_{\ell} \le f_{\ell,s} \le \bar f_{\ell} \qquad \forall\, \ell \in \mathcal{L},\ s \in \mathcal{S}
 ```
 
-#### Subject to
-
-**`balance`**
+**`p`**
 
 ```math
-\mathit{gen\_at\_bus}_{s,b} + \mathit{net\_inflow}_{s,b} = d_{s,b} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+0 \le p_{g,s} \le \bar p_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S}
 ```
 
 #### Definitions
@@ -73,33 +73,33 @@ Least-cost dispatch over a network, where a generator sits on a bus, a line join
 **`gen_at_bus`**
 
 ```math
-\mathit{gen\_at\_bus}_{s,b} = \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{s,g} \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\mathit{gen\_at\_bus}_{b,s} = \sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,s} \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 **`net_inflow`**
 
 ```math
-\mathit{net\_inflow}_{s,b} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{s,\ell} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{s,\ell} \right) \qquad \forall\, s \in \mathcal{S},\ b \in \mathcal{B}
+\mathit{net\_inflow}_{b,s} = \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_to}(\ell) = b} f_{\ell,s} - \left( \sum_{\ell \in \mathcal{L} \,:\, \mathrm{line\_from}(\ell) = b} f_{\ell,s} \right) \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
-#### Variable domains
-
-**`p`**
+#### Objective
 
 ```math
-0 \le p_{s,g} \le \bar p_{g} \qquad \forall\, s \in \mathcal{S},\ g \in \mathcal{G}
+\min \sum_{g \in \mathcal{G},\ s \in \mathcal{S}} p_{g,s} \cdot c_{g}
 ```
 
-**`f`**
+#### Subject to
+
+**`balance`**
 
 ```math
-\underline{f}_{\ell} \le f_{s,\ell} \le \bar f_{\ell} \qquad \forall\, s \in \mathcal{S},\ \ell \in \mathcal{L}
+\mathit{gen\_at\_bus}_{b,s} + \mathit{net\_inflow}_{b,s} = d_{b,s} \qquad \forall\, b \in \mathcal{B},\ s \in \mathcal{S}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -113,6 +113,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       generator:
         description: generating units, each sitting on one bus
         dtype: str
@@ -170,10 +171,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     expressions:
       gen_at_bus:
-        expression: sum(p, by=gen_bus, over=generator, into=bus)
+        expression: sum(p, over=generator, by=gen_bus[bus])
         description: what the generators sitting on a bus produce there
       net_inflow:
-        expression: sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
+        expression: sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
         description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
     constraints:
@@ -189,10 +190,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/transport.yaml', sources) as solution:
-        solution.objective  # 4400.0
-        solution.dual('balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/transport.yaml', sources) as result:
+        result.objective  # 4400.0
+        result.dual('balance')
     ```
 
 === "linopy"

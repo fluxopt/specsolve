@@ -29,15 +29,15 @@ The file holds no numbers, only five parts:
   and the generators.
   [Dimensions →](https://mathspec.readthedocs.io/en/latest/reference/language/dimensions/)
 - **`parameters`** are the data you attach later.
-  [Parameters →](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#parameters)
+  [Parameters →](https://mathspec.readthedocs.io/en/latest/reference/language/parameters-variables-constraints/#parameters)
 - **`variables`** are what the solver decides: the output `p` of each
   generator in each snapshot.
-  [Variables →](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#variables)
+  [Variables →](https://mathspec.readthedocs.io/en/latest/reference/language/parameters-variables-constraints/#variables)
 - **`constraints`** are the rules: in each snapshot, the generators meet the
   load.
-  [Constraints →](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#constraints)
+  [Constraints →](https://mathspec.readthedocs.io/en/latest/reference/language/parameters-variables-constraints/#constraints)
 - **`objective`** is what the solver minimises: the cost of the output.
-  [Objective →](https://mathspec.readthedocs.io/en/latest/reference/language/declarations/#objective)
+  [Objective →](https://mathspec.readthedocs.io/en/latest/reference/language/parameters-variables-constraints/#objective)
 
 ## Check the file
 
@@ -55,14 +55,14 @@ The check passes, so the block prints nothing. Now change the line of
 how to fix it:
 
 ```text
-DimensionError: Constraint 'power_balance': the expression carries dims ['generator'] that are not in its dims: ['snapshot'] — every stray dim multiplies the rows this constraint builds; add it to dims: if that is intended, or sum it out.
+DimensionError: Constraint 'power_balance': the expression carries dims ['generator'] that are not in its dims: ['snapshot']. Add them to dims:, or sum them out.
 ```
 
 The `sum` over `generator` fits `p` to one row per snapshot. Put it back.
 
 ## Attach the data
 
-The numbers come in a `dict` called **`sources`**, one entry for each name
+The numbers come in a `dict` called **`sources`**, one key for each name
 the file declares. A parameter is a table with its dimensions and a `value`
 column. A dimension is a list of labels:
 

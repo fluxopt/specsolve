@@ -1,7 +1,7 @@
 """Every arm, and the four verbs the harness asks of one.
 
 An arm is one library's answer to the same question: same parquet, same model,
-same seam. Adding one is a module here and an entry in `ARMS`.
+same handoff. Adding one is a module here and a key in `ARMS`.
 
 Each arm module defines:
 
@@ -10,6 +10,16 @@ Each arm module defines:
     build_only(prepared) -> Counts
     objective(prepared) -> float
     written(prepared, path) -> None
+
+and, where the arm is a floor rather than a rival, both or neither of:
+
+    load_setup(sink, prepared) -> (args, kwargs)
+    load(*args, **kwargs) -> Counts
+
+A floor's ``prepare`` builds the finished arrays and writes them beside the
+parquet (`write_finished`). ``load_setup`` reads them back (`read_finished`),
+and `test_emit` times ``load`` in place of ``build_and_emit``: what handing a
+finished model to the solver costs, and nothing before it.
 
 and, where the library has a sweep verb:
 
@@ -34,7 +44,8 @@ one window that gets timed — the one *following* prepares. An arm whose
 scratch, and the harness holds it to the change the window made.
 
 ``Counts`` may carry ``phases``, the library's own seconds per phase of the
-call, which the harness records beside the wall time.
+call, and ``laps``, the rows those phases sum, which the harness records beside
+the wall time.
 
 ``Prepared`` is opaque to the harness. ``prepare`` runs before the clock, so
 work the harness rather than the library imposes is charged to nobody.
@@ -49,6 +60,7 @@ import is part of what an arm costs.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from bench.arms import gurobipy_loop, gurobipy_matrix, highspy_matrix, linopy, pyomo, specsolve, specsolve_in_memory
@@ -101,6 +113,40 @@ def unmeasurable(arm: str, case_name: str, sink: str) -> str | None:
         if formulation(case_name, dialect) is None:
             return f'{case_name} has no {dialect} formulation'
     return None
+
+
+def _finished_path(paths: Mapping[str, str], dialect: str) -> Path:
+    """Where a floor in *dialect* keeps its finished arrays: beside the parquet it was built from."""
+    return Path(next(iter(paths.values()))).with_name(f'{dialect}.npz')
+
+
+def write_finished(paths: Mapping[str, str], dialect: str, arrays: Any) -> None:
+    """Write *arrays*, a NamedTuple of numpy arrays, beside the parquet, replacing what was there.
+
+    Written whole on every `prepare` rather than kept, so a formulation that
+    changed can never be read back stale.
+    """
+    import numpy as np
+
+    path = _finished_path(paths, dialect)
+    partial = path.with_suffix('.partial.npz')
+    np.savez(partial, **arrays._asdict())
+    partial.replace(path)
+
+
+def read_finished(paths: Mapping[str, str], dialect: str, kind: Any) -> Any:
+    """The arrays `write_finished` wrote, as the NamedTuple *kind*, every page read into memory.
+
+    A floor's isolated pass then holds the interpreter, the arrays and the
+    solver's copy of them, and nothing the build left behind: no parquet read,
+    no formulation, no allocator holding their garbage. Read rather than
+    memory-mapped, so every array is resident when the solver takes it, as a
+    caller's would be.
+    """
+    import numpy as np
+
+    with np.load(_finished_path(paths, dialect)) as stored:
+        return kind(**{name: stored[name] for name in kind._fields})
 
 
 def solved(arm: str, case_name: str, size: str, paths: dict[str, str], options: Mapping[str, Any]) -> float:

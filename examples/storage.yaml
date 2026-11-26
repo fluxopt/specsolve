@@ -1,11 +1,12 @@
 description: >-
   Dispatch plus a battery whose state of charge is closed into a cycle: the
-  horizon ends where it began.
+  level ends where it began.
 
 dimensions:
   snapshot:
-    description: dispatch periods, cyclic at the horizon
+    description: dispatch periods, the last wrapping to the first
     dtype: int
+    ordered: true
   generator:
     description: generating units
     dtype: str
@@ -55,7 +56,7 @@ constraints:
   soc_balance:
     description: >-
       the level carried out of a snapshot is the one carried in plus what was
-      stored, minus what was taken — and it wraps at the horizon, so the first
+      stored, minus what was taken — and it wraps at the last snapshot, so the first
       snapshot inherits from the last
     dims: [snapshot]
     expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + charge * 0.9 - discharge

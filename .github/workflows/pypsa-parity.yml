@@ -22,12 +22,13 @@ jobs:
       - name: the language is mathspec at the release pyproject.toml floors
         id: pin
         run: echo "version=$(grep -o 'mathspec>=[^,"]*' pyproject.toml | cut -d= -f2)" >> "$GITHUB_OUTPUT"
-      # The corpus is the release the committed rungs were certified from. A later corpus
-      # adds rungs and data prep, so moving this tag is its own change, with the rungs it adds.
+      # The corpus is the release the committed rungs were certified from, and PyPSA is the
+      # commit that corpus pins. A later corpus adds rungs and data prep, so moving this tag
+      # is its own change, with the rungs it adds.
       - uses: actions/checkout@v7
         with:
           repository: energy-models/mathspec
-          ref: v0.2.1
+          ref: v0.5.0a1
           path: corpus
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:
@@ -38,7 +39,8 @@ jobs:
           --with-editable .
           --with "$(grep -o 'linopy==[^"]*' pyproject.toml)"
           --with "mathspec==${{ steps.pin.outputs.version }}"
-          --with "pypsa==1.3.0" --with "highspy==1.15.1" --with "polars>=2.0"
+          --with "pypsa @ git+https://github.com/PyPSA/PyPSA@3625c8168b0b45a7936ddcb3a4da99dd608125ca"
+          --with "highspy==1.15.1" --with "polars>=2.0"
           python differential/pypsa/parity.py corpus
       - name: the committed certificate, projections and tables are what this tree produces
         run: git diff --exit-code -- differential/pypsa && test -z "$(git status --porcelain differential/pypsa)"

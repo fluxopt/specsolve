@@ -1,7 +1,7 @@
 """A quadratic objective: the one position the language takes degree 2 in.
 
 The claim is not "it solves" but that **four spellings of one quadratic form
-agree**: the engine's one entry per unordered pair, a Hessian's halved form
+agree**: the engine's one coefficient per unordered pair, a Hessian's halved form
 with its doubled diagonal, the LP section's uniform doubling, and linopy's own
 `QuadraticExpression`. A conversion error in any of them still solves and
 answers something else, which is why nearly every test here is differential.
@@ -13,6 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COEFF, COL_L, COL_R
 from specsolve.errors import SpecsolveError
 from tests.differential import differential
 
@@ -50,7 +51,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
     be the one place no test could tell whether the contract held.
     """
     with sps.build(spec(expression), dict(sources or SOURCES)) as model:
-        return model._engine._model.handoff.quad
+        return model._engine._model.tables.quad
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
 
 
 #: Every form here is **convex**, and deliberately: HiGHS solves only convex
-#: QPs, so a pure cross term is refused by the oracle lane before it can
+#: QPs, so a pure cross term is refused by the linopy lane before it can
 #: disagree with anything.
 @pytest.mark.parametrize(
     'expression',
@@ -74,7 +75,7 @@ def quad_of(expression: str, sources=None) -> pl.DataFrame:
     ],
 )
 def test_both_lanes_and_the_lp_file_reach_one_optimum(expression):
-    """An off-diagonal Hessian entry that doubled, an LP coefficient that did
+    """An off-diagonal Hessian coefficient that doubled, an LP coefficient that did
     not, a pair counted twice — each still solves, and each moves the optimum."""
     with differential(spec(expression), SOURCES, lp=True):
         pass
@@ -134,13 +135,13 @@ def test_a_square_spreads_where_a_linear_cost_would_fill_the_cheapest_first():
 
 
 def test_a_pair_is_stored_once_whichever_order_it_was_written():
-    """``x·y`` and ``y·x`` are one entry of one matrix — two rows survive a
+    """``x·y`` and ``y·x`` are one coefficient of one matrix — two rows survive a
     symmetric Hessian and not the LP section, which would carry the term twice
     at half weight."""
     written = quad_of('sum(p * q, over=g)')
     reversed_ = quad_of('sum(q * p, over=g)')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
-    assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
+    assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
 
 def test_the_same_pair_twice_is_summed_rather_than_repeated():
@@ -149,24 +150,24 @@ def test_the_same_pair_twice_is_summed_rather_than_repeated():
     once = quad_of('sum(p * p, over=g)')
     twice = quad_of('sum(p * p + p * p, over=g)')
     assert twice.height == once.height, 'a repeated pair collapses to one row'
-    assert twice['coeff'].to_list() == pytest.approx([2 * c for c in once['coeff'].to_list()])
+    assert twice[COEFF].to_list() == pytest.approx([2 * c for c in once[COEFF].to_list()])
 
 
 def test_the_stream_leaves_sorted_whatever_order_the_terms_were_written_in():
-    """A contract, not tidiness. The stack is pieces in written order, so
+    """A contract, not tidiness. The stack is terms in written order, so
     naming the higher-numbered variable first is enough to arrive unsorted —
     and two builds disagreeing makes `structure` read a moved *coefficient* as
     a moved pattern, reloading on every update that touches a quadratic
     cost."""
     backwards = quad_of('sum(q * q, over=g) + sum(p * p, over=g)')
-    assert backwards['col_l'].to_list() == [0, 1, 2, 3], (
+    assert backwards[COL_L].to_list() == [0, 1, 2, 3], (
         'the quadratic stream leaves in (col_l, col_r) order however the expression was written'
     )
 
 
 def test_a_zero_quadratic_coefficient_states_nothing_and_is_dropped():
     """Same rule as the matrix: absence already says it, and a nonzero costs
-    the solver a Hessian entry to presolve away."""
+    the solver a Hessian coefficient to presolve away."""
     zeroed = {**SOURCES, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 3.0]})}
     assert quad_of('sum(p * p * weight, over=g)', zeroed).height == 1
 
@@ -187,7 +188,7 @@ def test_the_lp_section_doubles_every_coefficient(tmp_path):
 
 
 def test_a_quadratic_term_is_absent_where_either_factor_is():
-    """Masked on one factor only, which is what makes the presence a
+    """A `where:` on one factor only, which is what makes the presence a
     conjunction rather than a copy: the term vanishes where ``q`` does."""
     masked = spec('sum(p * p + p * q + q * q, over=g)')
     masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
@@ -195,22 +196,22 @@ def test_a_quadratic_term_is_absent_where_either_factor_is():
         pass
 
     with sps.build(masked, SOURCES) as model:
-        pairs = model._engine._model.handoff.quad
-        assert pairs.filter(pl.col('col_l') != pl.col('col_r')).height == 1, (
+        pairs = model._engine._model.tables.quad
+        assert pairs.filter(pl.col(COL_L) != pl.col(COL_R)).height == 1, (
             "the cross term exists only where 'q' does — one coordinate of two"
         )
 
 
 def test_absence_under_a_quadratic_term_reaches_its_siblings():
     """The conjunction where it is observable: a reduction sums where the whole
-    summand exists, so a coordinate at which ``q`` is absent contributes
+    term exists, so a coordinate at which ``q`` is absent contributes
     neither the product nor the lone ``p`` beside it. Carrying only the left
     factor's presence keeps that ``p`` — one term heavier, and it still
     solves."""
     masked = spec('sum(p * q + p, over=g)')
     masked['variables'] = {**SPEC['variables'], 'q': {**SPEC['variables']['q'], 'where': 'weight > 2'}}
     with sps.build(masked, SOURCES) as model:
-        objective = model._engine._model.handoff.obj
+        objective = model._engine._model.tables.obj
         assert objective.height == 1, (
             "the lone 'p' survives only where 'q' does — a quadratic term is absent wherever "
             'either of its factors is, and that absence reaches the terms summed beside it'
@@ -227,16 +228,16 @@ def test_a_pattern_that_moves_reloads_the_solver_rather_than_pushing():
         model.solve()
         model.update(zeroed)
         model.solve()
-        assert model.diagnostics().loads == 2, 'a pair that vanished is a model to load again'
+        assert model.metrics().solver_instances == 2, 'a pair that vanished is a model to load again'
 
 
 def test_a_shape_operator_moves_a_quadratic_term_like_any_other():
     """A rewrite moves rows between coordinates and never reads what they
     carry: ``shift`` over a product puts two labels through the remap a linear
-    piece goes through, and both lanes still agree."""
+    term goes through, and both lanes still agree."""
     cyclic = {
         'parameters': {'need': {'dims': []}},
-        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
+        'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
         'variables': {
             'p': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
             'q': {'dims': ['g', 't'], 'bounds': {'lower': 0, 'upper': 10}},
@@ -294,8 +295,8 @@ def test_a_moved_quadratic_coefficient_is_pushed_rather_than_reloaded():
         model.update(tighter)
         second = model.solve().objective
         assert second == pytest.approx(4 * first), 'four times the curvature at the same optimum'
-        assert model.diagnostics().loads == 1, (
+        assert model.metrics().solver_instances == 1, (
             'a coefficient that moved must not reload the solver — only the Hessian pattern is '
             'structure, and this one did not move'
         )
-        assert model.diagnostics().solves == 2
+        assert model.metrics().solves == 2

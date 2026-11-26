@@ -3,7 +3,7 @@ description: >-
   capacity that cannot serve the load is infeasible rather than expensive. This
   is the oracle the decomposition has to reach.
 dimensions:
-  snapshot: {dtype: int, description: "dispatch periods"}
+  snapshot: {dtype: int, description: "dispatch periods", ordered: true}
   generator: {dtype: str, description: "generating units"}
 parameters:
   invest: {dims: [generator], description: "cost of a unit of capacity"}

@@ -2,7 +2,7 @@
 
 The same YAML means the same thing on the linopy lane and on the streaming
 relational one (docs/development/architecture.md, hard rule 3). Importing this module
-is the oracle's guard: a bare install skips every module that uses it at
+is the linopy lane's guard: a bare install skips every module that uses it at
 collection.
 
 The engine stays open for the length of the ``with`` block, so per-variable
@@ -25,18 +25,18 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._engine.engine import Engine
+from specsolve._inputs import as_program
+from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
-from specsolve.inputs import lowered
-from specsolve.relational.engine.engine import Engine
-from specsolve.sources import tidy_sources
 from tests.conftest import schema_of, solve_written_file
 from tests.oracle import linopy, specsolve_linopy, xr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve.relational.answer_layout import Output
-    from specsolve.relational.engine.engine import Result
+    from specsolve._engine.engine import Result
+    from specsolve._outputs import Output
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9
@@ -97,9 +97,11 @@ def differential(
         m.solve(solver_name='highs', output_flag=False)
         oracle = float(m.objective.value)
         if not np.isfinite(oracle):
-            raise NoFiniteAnswerError('the linopy oracle is infeasible or unbounded — fix the data, not the tolerance')
+            raise NoFiniteAnswerError(
+                "the linopy lane's model is infeasible or unbounded — fix the data, not the tolerance"
+            )
 
-        program = lowered(model)
+        program = as_program(model)
         with Engine() as engine:
             engine.build(program, tidy_sources(program, dict(sources)))
             result = engine.solve(outputs=outputs)
@@ -107,7 +109,7 @@ def differential(
             assert result.objective == pytest.approx(oracle, rel=RTOL), (
                 f'the lanes disagree on the objective — relational {result.objective}, linopy {oracle}'
             )
-            _same_shape(engine.diagnostics(), m)
+            _same_shape(engine.metrics(), m)
 
             lp_path = None
             if lp:
@@ -129,8 +131,8 @@ def at_a_point(
     No solver runs. Each variable takes a seeded value at every coordinate it
     exists at, the linopy lane reads it as ``.solution`` and the relational
     lane through ``Model._evaluator``, so ``read(expression)`` values the
-    expression on both and returns the relational frame once the two are the
-    same frame: the same coordinates, the same values to ``RTOL``.
+    expression on both and returns the relational table once the two are the
+    same table: the same coordinates, the same values to ``RTOL``.
 
     That is the claim :func:`differential` cannot make. An objective only sees
     a row that binds, and a coefficient only a column that moves; a read at a
@@ -145,7 +147,7 @@ def at_a_point(
 
         def read(expression: str | Mapping[str, Any]) -> pl.DataFrame:
             ours = relational(expression)
-            theirs = _frame(specsolve_linopy.evaluate(m, model, expression, dict(sources)))
+            theirs = _table(specsolve_linopy.evaluate(m, model, expression, dict(sources)))
             assert by_coordinate(ours) == pytest.approx(by_coordinate(theirs), rel=RTOL), (
                 f'the lanes read `{expression}` differently at {_pointby_coordinate(point)} — '
                 f'relational {by_coordinate(ours)}, linopy {by_coordinate(theirs)}'
@@ -156,12 +158,12 @@ def at_a_point(
 
 
 def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
-    """Set a seeded value on every variable of *m* where it exists, and return the same point as frames.
+    """Set a seeded value on every variable of *m* where it exists, and return the same point as tables.
 
     A value on the quarter grid in ``[-2, 2]``, never zero: a failure prints
     short numbers, and a zero only arises where an expression makes one, which
-    is the case a quotient has to answer. The masked coordinates stay NaN, as a
-    solve leaves them, and have no row in the frame, as a saved solution has
+    is the case a quotient has to answer. The absent coordinates stay NaN, as a
+    solve leaves them, and have no row in the table, as a saved solution has
     none. Marking *m* solved is what lets the lane's ``.solution`` be read.
     """
     rng = np.random.default_rng(1203)
@@ -171,36 +173,36 @@ def _hold(m: linopy.Model) -> dict[str, pl.DataFrame]:
         values = rng.integers(1, 9, labels.shape) * rng.choice([-1, 1], labels.shape) / 4
         held = labels.copy(data=values).where(labels != -1)
         variable.solution = held
-        point[name] = _frame(held)
+        point[name] = _table(held)
     m.status = 'ok'
     m.termination_condition = 'optimal'
     return point
 
 
-def _frame(values: xr.DataArray) -> pl.DataFrame:
-    """A linopy-lane value as the relational lane's ``(dims…, value)`` frame, with no row where it is absent."""
+def _table(values: xr.DataArray) -> pl.DataFrame:
+    """A linopy-lane value as the relational lane's ``(dims…, value)`` table, with no row where it is absent."""
     if not values.dims:
         return pl.DataFrame({'value': [float(values)]}).filter(pl.col('value').is_not_nan())
     table = values.rename('value').to_dataframe().reset_index()[[*values.dims, 'value']]
     return pl.from_pandas(table).filter(pl.col('value').is_not_nan())
 
 
-def by_coordinate(frame: pl.DataFrame) -> dict[tuple[str, ...], float]:
-    """*frame*'s values keyed by coordinate, dims sorted by name and labels as text.
+def by_coordinate(table: pl.DataFrame) -> dict[tuple[str, ...], float]:
+    """*table*'s values keyed by coordinate, dimensions sorted by name and labels as text.
 
-    The lanes order a result's dims differently and type an ``int`` label
+    The lanes order a result's dimensions differently and type an ``int`` label
     differently, and neither is a difference in the value.
     """
-    dims = sorted(c for c in frame.columns if c != 'value')
-    return {tuple(str(label) for label in row[:-1]): row[-1] for row in frame.select(*dims, 'value').iter_rows()}
+    dims = sorted(c for c in table.columns if c != 'value')
+    return {tuple(str(label) for label in row[:-1]): row[-1] for row in table.select(*dims, 'value').iter_rows()}
 
 
 def _pointby_coordinate(point: Mapping[str, pl.DataFrame]) -> dict[str, dict[tuple[str, ...], float]]:
-    return {name: by_coordinate(frame) for name, frame in point.items()}
+    return {name: by_coordinate(table) for name, table in point.items()}
 
 
 def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, Any], match: str) -> str:
-    """Both doors refuse *sources* with one sentence, returned for the cases that pin more of it.
+    """Both lanes refuse *sources* with one sentence, returned for the cases that pin more of it.
 
     The two are built apart: a ``pytest.raises`` around :func:`differential`
     is satisfied by the linopy build alone.
@@ -214,16 +216,16 @@ def both_lanes_refuse(spec: str | Path | dict[str, Any], sources: Mapping[str, A
     return str(relational.value)
 
 
-def _same_shape(diagnostics: Any, linopy_lane: Any) -> None:
+def _same_shape(metrics: Any, linopy_lane: Any) -> None:
     """The two lanes built the same *model*, not merely the same answer.
 
     An objective and a re-solved LP file are invariant to a column pinned to
     ``[0, 0]`` or a row that always holds, so the counts are compared. Counts
     rather than sets: the two lanes name their columns differently.
     """
-    assert diagnostics.columns == linopy_lane.nvars, (
-        f'the lanes disagree on how many columns this model has — relational {diagnostics.columns}, linopy {linopy_lane.nvars}'
+    assert metrics.columns == linopy_lane.nvars, (
+        f'the lanes disagree on how many columns this model has — relational {metrics.columns}, linopy {linopy_lane.nvars}'
     )
-    assert diagnostics.rows == linopy_lane.ncons, (
-        f'the lanes disagree on how many rows this model has — relational {diagnostics.rows}, linopy {linopy_lane.ncons}'
+    assert metrics.rows == linopy_lane.ncons, (
+        f'the lanes disagree on how many rows this model has — relational {metrics.rows}, linopy {linopy_lane.ncons}'
     )

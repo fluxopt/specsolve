@@ -7,7 +7,7 @@ inheriting the fleet the last one left.
 
 One file, `pathway.yaml`, written for *a* period. The driver supplies which:
 
-    sps.solve_over(model, sources, sps.EachCoordinate('year', carry={'existing': 'total'}))
+    sps.solve_over(model, sources, sps.EachLabel('year', carry={'existing': 'total'}))
 
 The periods run in sorted order, which is the order the carry chains them in.
 `total` is over `(generator)` and so is `existing`, so the whole fleet vector
@@ -101,12 +101,12 @@ def main() -> None:
     sweep = sps.solve_over(
         MODEL,
         sources(),
-        sps.EachCoordinate('year', carry={'existing': 'total'}),
+        sps.EachLabel('year', carry={'existing': 'total'}),
     )
 
     print('myopic pathway — each period sees only itself, and inherits the last')
     print()
-    print(sweep.record.select('year', 'termination_condition', pl.col('objective').round(0)))
+    print(sweep.records.select('year', 'termination_condition', pl.col('objective').round(0)))
     print()
 
     fleet = sweep.primal('total').pivot('generator', index='year', values='value')
@@ -132,8 +132,8 @@ def _check_the_carry_moved_the_fleet(sweep: sps.types.Sweep) -> None:
     """
     totals, builds = sweep.primal('total'), sweep.primal('build')
 
-    def per_year(frame: pl.DataFrame, year: int) -> list[float]:
-        return frame.filter(pl.col('year') == year).sort('generator')['value'].to_list()
+    def per_year(table: pl.DataFrame, year: int) -> list[float]:
+        return table.filter(pl.col('year') == year).sort('generator')['value'].to_list()
 
     for earlier, later in itertools.pairwise(YEARS):
         ended = per_year(totals, earlier)

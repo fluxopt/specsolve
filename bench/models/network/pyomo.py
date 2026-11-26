@@ -3,8 +3,8 @@
 The index set of `p` is the installed (bus, tech) pairs, which is the YAML's
 `where: installed > 0`. What each bus sums over, its portfolio, the lines
 into and out of it and its stores, is plain dicts built inside the timed
-build. The first snapshot has no earlier state of charge, which is the YAML's
-`edge=0`.
+build, and so is what each pool sums over. The first snapshot has no earlier
+state of charge, which is the YAML's `edge=0`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def _grouped(keys: Any, values: Any) -> dict[Any, list[Any]]:
-    """``bus -> what sits on it`` — the adjacency a balance row sums over."""
+    """``bus -> what sits on it`` — the adjacency a balance or pool row sums over."""
     out: dict[Any, list[Any]] = collections.defaultdict(list)
     for key, value in zip(keys, values, strict=True):
         out[value].append(key)
@@ -49,6 +49,9 @@ def build(tables: Mapping[str, Any]) -> Any:
     into = _grouped(tables['line_to']['line'], tables['line_to']['bus'])
     out_of = _grouped(tables['line_from']['line'], tables['line_from']['bus'])
     stores_at = _grouped(tables['store_bus']['store'], tables['store_bus']['bus'])
+    pool_of = tables['pool_of']
+    members = _grouped(zip(pool_of['bus'], pool_of['tech'], strict=True), pool_of['pool'])
+    limit = _by_name(tables['limit'])
     snapshots = list(tables['snapshot']['snapshot'])
     previous = dict(zip(snapshots[1:], snapshots[:-1], strict=True))
 
@@ -58,6 +61,7 @@ def build(tables: Mapping[str, Any]) -> Any:
     m.pairs = pyo.Set(initialize=pairs, dimen=2, ordered=True)
     m.lines = pyo.Set(initialize=list(tables['line']['line']), ordered=True)
     m.stores = pyo.Set(initialize=list(tables['store']['store']), ordered=True)
+    m.pools = pyo.Set(initialize=list(tables['pool']['pool']), ordered=True)
     m.p = pyo.Var(m.snapshots, m.pairs, bounds=lambda _m, s, b, t: (0.0, p_max[s, b, t]))
     m.f = pyo.Var(m.snapshots, m.lines, bounds=lambda _m, _s, ln: (neg_cap[ln], cap[ln]))
     m.charge = pyo.Var(m.snapshots, m.stores, bounds=lambda _m, _s, st: (0.0, p_store[st]))
@@ -81,6 +85,11 @@ def build(tables: Mapping[str, Any]) -> Any:
             _m.soc[s, st]
             == (_m.soc[previous[s], st] if s in previous else 0) + _m.charge[s, st] * eta[st] - _m.discharge[s, st]
         ),
+    )
+    m.pool_cap = pyo.Constraint(
+        m.snapshots,
+        m.pools,
+        rule=lambda _m, s, pool: sum(_m.p[s, b, t] for b, t in members[pool]) <= limit[pool],
     )
     m.cost = pyo.Objective(
         expr=sum(cost[t] * m.p[s, b, t] for s in m.snapshots for b, t in m.pairs), sense=pyo.minimize

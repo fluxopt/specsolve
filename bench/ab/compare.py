@@ -1,18 +1,19 @@
 """Is the new code faster than the old? An A/B of two git refs over every cell of the grid.
 
-    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above]
+    pixi run -e bench python -m bench.ab.compare <base-ref> <head-ref> [--sizes tiny s below above pypsa]
         [--rounds 6] [--op build|solve] [--focus module:Class.method] [--memory] [-k <substring>] [--out ab.md]
+        [--raw ab.parquet]
 
 Each ref is checked out with ``git worktree add --detach``; nothing is
 installed. Each round starts one worker process per side, with that checkout's
 ``src`` first on ``PYTHONPATH``, and measures every cell in it, warm. The sides
 alternate ABBA so a drift in the machine falls on both. With ``--memory`` each
-measurement is a fresh process instead, and the verdict is on its peak
-resident memory. The first round also saves what each side produced: the built
-model's numbers, or a solve's status and objective. Where the two differ beyond
+measurement is a fresh process that runs the operation once, and the verdict is
+on its peak resident memory. The first round also saves what each side
+produced: the built model's numbers, or a solve's status and objective. Where the two differ beyond
 the last bits, the cell *differs* and fails however fast it is. Where floats
-differ only within ``LAST_BITS``, the sums ran in another order: the cell keeps
-its verdict, marked *last bits*.
+differ only within ``LAST_BITS`` of themselves or of the largest number of their
+array, the sums ran in another order: the cell keeps its verdict, marked *last bits*.
 
 A cell's verdict is a two-sided sign test at 5% over its paired rounds: head
 is *faster* or *slower* where enough rounds agree, which takes at least six
@@ -20,8 +21,9 @@ rounds, and *no change* otherwise. The change printed is the median of the
 paired ratios. The exit status is 1 where any cell is slower (or higher, with ``--memory``), differs or fails.
 
 The table goes to stdout and ``--out`` in markdown, ready for a PR's
-``<details>``. Measure on an idle machine: the load averages before and after
-are printed in its header.
+``<details>``. ``--raw`` writes every round's numbers as one long parquet
+table (`raw`), from which the medians are taken. Measure on an idle machine:
+the load averages before and after are printed in its header.
 """
 
 from __future__ import annotations
@@ -56,8 +58,25 @@ ROOT = Path(__file__).resolve().parents[2]
 #: The two-sided significance of the sign test a verdict rests on.
 ALPHA = 0.05
 
-#: The relative difference within which two floats are one number summed in another order.
+#: The difference within which two floats are one number summed in another order, relative to the larger of the two or
+#: to the largest number of their array, whichever is greater.
 LAST_BITS = 1e-12
+
+#: The numbers about a whole cell that [`raw`][] keeps from each measurement, beside each phase's seconds.
+RAW_METRICS = ('seconds', 'total_seconds', 'peak_mb', 'calls', 'columns', 'rows')
+
+#: The raw table's columns, so a run that measured nothing still writes a table that pools.
+RAW_SCHEMA = {
+    'base': pl.String,
+    'head': pl.String,
+    'op': pl.String,
+    'cell': pl.String,
+    'side': pl.String,
+    'round': pl.Int64,
+    'phase': pl.String,
+    'metric': pl.String,
+    'value': pl.Float64,
+}
 
 
 @dataclass
@@ -77,6 +96,21 @@ class Row:
     def ratios(self) -> list[float]:
         m = self.metric
         return [h[m] / b[m] for b, h in zip(self.base, self.head, strict=True) if b[m] > 0]
+
+    @property
+    def phases(self) -> list[str]:
+        """The phases either side clocked, in the order head ran them, then any only base has."""
+        seen = [*self.head[0].get('phases', {}), *self.base[0].get('phases', {})] if self.base and self.head else []
+        return list(dict.fromkeys(seen))
+
+    def phase_ratios(self, phase: str) -> list[float]:
+        """Head over base for *phase*, per paired round, where both sides clocked it above zero."""
+        pairs = zip(self.base, self.head, strict=True)
+        return [
+            h['phases'][phase] / b['phases'][phase]
+            for b, h in pairs
+            if b.get('phases', {}).get(phase, 0) > 0 and phase in h.get('phases', {})
+        ]
 
     @property
     def verdict(self) -> str:
@@ -135,10 +169,12 @@ def _git(*args: str) -> str:
 class Worker:
     """A worker process measuring cells against the ``specsolve`` in *tree*, until closed."""
 
-    def __init__(self, tree: Path, *, op: str, focus: str | None) -> None:
+    def __init__(self, tree: Path, *, op: str, focus: str | None, memory: bool = False) -> None:
         command = [sys.executable, '-m', 'bench.ab.worker', '--tree', str(tree), '--op', op]
         if focus:
             command += ['--focus', focus]
+        if memory:
+            command += ['--memory']
         env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(tree / 'src'), str(ROOT)])}
         self.stderr = tempfile.TemporaryFile(mode='w+')  # noqa: SIM115 — closed in close(), with the process
         self.process = subprocess.Popen(
@@ -190,7 +226,8 @@ def compare(
     Each round starts one fresh worker per side and runs every cell in it, so
     what a process brings to its timings falls in one round and the rounds stay
     independent, as the sign test needs. With *memory*, every measurement gets
-    a fresh process instead, and the verdict is on its peak resident memory.
+    a fresh process instead, which runs the cell once, and the verdict is on
+    its peak resident memory.
     """
     trees = {'base': base, 'head': head}
     rows = {c: Row(c, metric='peak_mb' if memory else 'seconds') for c in cells}
@@ -241,11 +278,22 @@ def same_model(base: Path, head: Path) -> bool:
             if x.shape != y.shape:
                 return False
             if np.issubdtype(x.dtype, np.floating):
-                if not np.allclose(x, y, rtol=LAST_BITS, atol=0.0, equal_nan=True):
+                if not np.allclose(x, y, rtol=LAST_BITS, atol=LAST_BITS * _largest(x, y), equal_nan=True):
                     return False
             elif not np.array_equal(x, y):
                 return False
     return True
+
+
+def _largest(*arrays: np.ndarray) -> float:
+    """The largest finite magnitude in *arrays*, 0 where they hold none.
+
+    A sum that cancels to near zero is off by the last bits of its terms, not of
+    its result. The terms are not saved, so the largest number of the array
+    stands in for them.
+    """
+    finite = [np.abs(a[np.isfinite(a)]) for a in arrays]
+    return float(max((f.max() for f in finite if f.size), default=0.0))
 
 
 def _ask(
@@ -259,10 +307,11 @@ def _ask(
 ) -> dict[str, Any]:
     """One measurement on *side*: in its worker for the round, or in a process of its own where there is none.
 
-    A worker that died on a cell is replaced, so the cells after it are still measured.
+    A process of its own is a memory run's, and runs the cell once. A worker
+    that died on a cell is replaced, so the cells after it are still measured.
     """
     if side not in workers:
-        own = Worker(trees[side], op=op, focus=focus)
+        own = Worker(trees[side], op=op, focus=focus, memory=True)
         try:
             return own.ask(cell_id, fingerprint=fingerprint)
         finally:
@@ -271,6 +320,24 @@ def _ask(
         workers[side].close()
         workers[side] = Worker(trees[side], op=op, focus=focus)
     return workers[side].ask(cell_id, fingerprint=fingerprint)
+
+
+def raw(rows: list[Row], *, base: str, head: str, op: str) -> pl.DataFrame:
+    """Every number each round measured, one row per number, long as `bench.tidy`'s table is.
+
+    The medians [`table`][] prints are taken from these, so pooling two runs of
+    one pair of commits is a concat. ``round`` pairs a base number with the head
+    number measured beside it. ``phase`` is empty for a number about the whole
+    cell. A number a measurement did not produce is an absent row, never a null.
+    """
+    out = []
+    for r in rows:
+        for side in ('base', 'head'):
+            for i, x in enumerate(getattr(r, side)):
+                key = {'base': base, 'head': head, 'op': op, 'cell': r.cell, 'side': side, 'round': i}
+                out += [{**key, 'phase': '', 'metric': m, 'value': x[m]} for m in RAW_METRICS if x.get(m) is not None]
+                out += [{**key, 'phase': p, 'metric': 'seconds', 'value': s} for p, s in x.get('phases', {}).items()]
+    return pl.DataFrame(out, schema=RAW_SCHEMA)
 
 
 def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = False) -> str:
@@ -299,22 +366,81 @@ def table(rows: list[Row], header: list[str], rounds: int, *, memory: bool = Fal
         + f'. With nothing changed, a cell reads {"lower or higher" if memory else "faster or slower"} {rate:.1%} of the time at {rounds} rounds: '
         f'about {rate * len(rows):.1f} of these {len(rows)}. Re-run a lone verdict with `-k` and more rounds.',
     ]
+    if not memory:
+        lines += phase_table(rows)
     return '\n'.join(lines)
+
+
+def phase_table(rows: list[Row]) -> list[str]:
+    """Each cell's seconds per phase on both sides, so a slower cell says which phase moved.
+
+    A phase one side never clocked, as a base older than a phase has none of
+    it, reads ``—`` there and takes no verdict. The verdicts here are for
+    reading: the exit status is the totals'.
+    """
+    measured = [r for r in rows if not r.error and r.phases]
+    if not measured:
+        return []
+    lines = [
+        '',
+        "Where the time went: each phase's median ms, its median paired ratio and its verdict, as above.",
+        '',
+        '| cell | phase | base ms | head ms | change | head lower in | verdict |',
+        '|---|---|--:|--:|--:|--:|---|',
+    ]
+    said: list[tuple[str, int]] = []
+    for r in measured:
+        for phase in r.phases:
+            base, head = _phase_median(r.base, phase), _phase_median(r.head, phase)
+            ratios = r.phase_ratios(phase)
+            if base is None or head is None or not ratios:
+                lines.append(f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | | | — |')
+                continue
+            said.append((verdict(ratios), len(ratios)))
+            lines.append(
+                f'| `{r.cell}` | {phase} | {_ms(base)} | {_ms(head)} | {statistics.median(ratios) - 1:+.1%} '
+                f'| {sum(x < 1 for x in ratios)}/{len(ratios)} | {said[-1][0]} |'
+            )
+    return lines + _chance_line(said)
+
+
+def _chance_line(said: list[tuple[str, int]]) -> list[str]:
+    """The phase verdicts counted, beside how many of them chance alone gives, so a lone verdict among hundreds is not read as a finding."""
+    if not said:
+        return []
+    counts = {v: sum(s == v for s, _ in said) for v in dict.fromkeys(s for s, _ in said)}
+    expected = sum(chance(n) for _, n in said)
+    return [
+        '',
+        ', '.join(f'{n} {v}' for v, n in counts.items())
+        + f'. With nothing changed, about {expected:.1f} of these {len(said)} phases read faster or slower.',
+    ]
+
+
+def _phase_median(runs: list[dict[str, Any]], phase: str) -> float | None:
+    """The median seconds *runs* spent in *phase*, or None where none of them clocked it."""
+    spent = [run['phases'][phase] for run in runs if phase in run.get('phases', {})]
+    return statistics.median(spent) if spent else None
+
+
+def _ms(seconds: float | None) -> str:
+    return '—' if seconds is None else f'{seconds * 1e3:.3g}'
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('base')
     parser.add_argument('head')
-    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=list(SIZES))
+    parser.add_argument('--sizes', nargs='+', default=['tiny', 's', 'below', 'above'], choices=[*SIZES, 'pypsa'])
     parser.add_argument('--rounds', type=int, default=6)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus', help='module:Qual.name of one function, to time it alone')
     parser.add_argument(
-        '--memory', action='store_true', help='the verdict on peak memory, a fresh process per measurement'
+        '--memory', action='store_true', help='the verdict on peak memory, a fresh process and one run per measurement'
     )
     parser.add_argument('-k', dest='select', help='only the cells whose id contains this')
-    parser.add_argument('--out', type=Path)
+    parser.add_argument('--out', type=Path, help='the report as markdown, for the PR')
+    parser.add_argument('--raw', type=Path, help="every round's numbers as one long parquet table")
     parser.add_argument('--i-know-another-is-running', dest='shared', action='store_true')
     args = parser.parse_args()
     if not chance(args.rounds):
@@ -346,7 +472,7 @@ def _run(args: argparse.Namespace) -> None:
     after = os.getloadavg()
 
     if args.memory:
-        counted = f'the peak resident memory of a fresh process that ran `sps.{args.op}` twice'
+        counted = f'the peak resident memory of a fresh process that ran `sps.{args.op}` once'
     elif args.focus:
         counted = f'`{args.focus}`, summed over its calls, warm, a fresh process per side per round'
     else:
@@ -362,6 +488,8 @@ def _run(args: argparse.Namespace) -> None:
     print(report)
     if args.out:
         args.out.write_text(report + '\n')
+    if args.raw:
+        raw(rows, base=base_sha, head=head_sha, op=args.op).write_parquet(args.raw)
     sys.exit(any(r.verdict in ('slower', 'higher', 'differs', 'error') for r in rows))
 
 

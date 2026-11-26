@@ -254,8 +254,8 @@ decomposed: 9600.00 in 2 steps
 monolithic: 9600.00
 difference: 0.0e+00
 cuts: 1 optimality, 1 feasibility
-the subproblem loaded the solver 1 time(s) in 2 solves
-the master loaded the solver 2 time(s) in 2 solves
+the subproblem took 1 solver instance(s) in 2 solves
+the master took 2 solver instance(s) in 2 solves
 ```
 
 One capacity is excluded as undispatchable, and the first optimality cut then
@@ -278,7 +278,7 @@ Missing is everything that makes a decomposition survive a real model: cut
 management as the master grows, stabilisation, multi-cut, tolerances that hold
 when duals are degenerate, and an answer for when convergence does not happen.
 [#596](https://github.com/fluxopt/specsolve/issues/596) asked whether specsolve
-should own that surface and answered no, so all of it stays the caller's. What a
+should own that loop and answered no, so all of it stays the caller's. What a
 caller still lacks *from specsolve* is collected in
 [#1677](https://github.com/fluxopt/specsolve/issues/1677). This page settles only
 that the *language* is not the obstacle.

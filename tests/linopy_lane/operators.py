@@ -1,10 +1,10 @@
 """Eager evaluation of the language's built-in operators, on xarray and linopy.
 
-Each entry point takes an operand that is already a value — an ``xr.DataArray``
+Each public function takes an operand that is already a value — an ``xr.DataArray``
 for a parameter, a linopy ``Variable`` or ``LinearExpression`` for anything
-carrying one — and returns the same. Nothing here reads the schema, the plan or
+carrying one — and returns the same. Nothing here reads the schema, the program or
 the model: ``builder.py`` evaluates the operands and the keywords, and calls in.
-Each entry point comes first and its own machinery after.
+Each public function comes first and its own machinery after.
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ import xarray as xr
 from tests.linopy_lane import absence
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Mapping
+    from collections.abc import Callable, Hashable, Mapping
 
     import pandas as pd
 
 
 def operator_sum(array: Any, over: str) -> Any:
-    """Sum *array* over dimension *over*, which lowering has checked it carries.
+    """Sum *array* over dimension *over*, which compiling has checked it carries.
 
     The one sum linopy cannot take — a term carrying a dimension the data left
     empty — is built directly (:func:`_empty_sum`).
@@ -39,7 +39,7 @@ def operator_sum(array: Any, over: str) -> Any:
 def _empty_sum(array: Any, over: str) -> Any:
     """*over* reduced while a dimension beside it is empty — the sum linopy refuses to take.
 
-    linopy's own ``sum`` stacks the summed dim into its term axis, and once any
+    linopy's own ``sum`` stacks the summed dimension into its term axis, and once any
     remaining dimension is zero-sized the reshape cannot infer the term count
     (``cannot reshape array of size 0``, PyPSA/linopy#906). Every coordinate of
     the result is empty, so it is built as the constant zero over the
@@ -66,16 +66,16 @@ def operator_grouped_sum(
 ) -> Any:
     """Sum *array* through a declared relation, producing dimensions *into*.
 
-    YAML: ``sum(p, by=gen_bus, over=generator, into=bus)``. *mappings* are the
+    YAML: ``sum(p, over=generator, by=gen_bus[bus])``. *mappings* are the
     walked columns' values as arrays over the dimensions the relation's key
     names — one dimension for a plain map, and one more per condition where the
     key is several columns. The walked dimension is summed out and *into* holds
-    the group labels, one dim per column walked to, so a walk to two columns is
+    the group labels, one dimension per column walked to, so a walk to two columns is
     one grouping onto their pair.
 
     A null value says the key belongs to no group, so its terms contribute
-    nowhere. linopy refuses to group by NaN at all, so the operand is masked
-    to absent at those keys and a declared label stands in for them — which is
+    nowhere. linopy refuses to group by NaN at all, so the operand is made
+    absent at those keys and a declared label stands in for them — which is
     what lets a key of several columns leave one combination out without
     dropping a whole label of any one dimension. A key missing *any* walked
     column belongs to no group.
@@ -86,7 +86,7 @@ def operator_grouped_sum(
     label array would otherwise collapse into.
 
     *labels* holds each group dimension's declared index, and the result is
-    reindexed onto them: a groupby yields only the labels some member actually
+    reindexed onto them: a groupby yields only the labels some key actually
     points at, in xarray's sort order, and linopy v1 aligns on membership *and*
     order. A map's values are validated against their target's labels when they
     are loaded, so this only ever adds a label, never drops a term.
@@ -112,7 +112,7 @@ def _into_nothing(
     joined: tuple[str, ...],
     labels: Mapping[str, pd.Index],
 ) -> Any:
-    """A grouped sum onto a dimension with no labels: zero over the dims kept, and none along the empty one.
+    """A grouped sum onto a dimension with no labels: zero over the dimensions kept, and none along the empty one.
 
     The fill a null group takes needs a label to stand in, and an empty
     dimension has none to offer.
@@ -133,16 +133,16 @@ def _into_nothing(
 def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...]) -> Any:
     """Read *array* through a declared relation — the adjoint of a group.
 
-    YAML: ``at(on, by=component, over=bus, into=line)``. *mappings* are the same
+    YAML: ``at(on, by=component[bus])``. *mappings* are the same
     arrays ``sum`` takes; grouping sums *along* them, this indexes *through*
-    them, so the operand must carry every dim in ``into`` and the result carries
-    the mappings' own dims. xarray's vectorised selection is the pullback exactly
+    them, so the operand must carry every dimension in ``into`` and the result carries
+    the mappings' own dimensions. xarray's vectorised selection is the pullback exactly
     — one ``into`` label read once per fine key pointing at it, pointwise
     along a condition the operand already carries.
 
     A null value reads nothing and its row is absent, the same reading
-    ``sum`` gives a null group. It cannot be selected, so a declared label
-    stands in for it and the result is masked back out at exactly those
+    ``sum`` gives a null group. It cannot be selected, so a declared label, or
+    one made up where the dimension has none, stands in for it and the result is made absent again at exactly those
     coordinates, which leaves them holding the operand's own **absence**
     rather than a zero: absence propagates and takes the row with it, where a
     zero would leave a row asserting ``x <= 0`` at a coordinate the model said
@@ -152,17 +152,36 @@ def operator_at(array: Any, mappings: tuple[Any, ...], *, into: tuple[str, ...])
     through a map onto the fine dimension's own dimension would otherwise
     leave as the labels it read: a self-map reads ``snapshot`` at
     ``snapshot``, and the row the value lands at is the one that read it, not
-    the one it read.
+    the one it read. **The labels it read are dropped**: a selection leaves
+    them behind as a coordinate over the fine dimension, and a term that
+    carries the read dimension, or a lag of the same read, then meets a
+    coordinate of the same name with other values.
     """
     mappings = _renamed(mappings, into)
     present = _present(mappings)
     fine = {str(d): mappings[0].coords[d] for d in mappings[0].dims}
+    read = [t for t in into if t not in fine]
     if bool(present.all()):
-        return array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine)
+        return _dropped(array.sel(dict(zip(into, mappings, strict=True))).assign_coords(fine), read)
 
+    for t in into:
+        if not array.sizes[t]:
+            array = array.reindex({t: [_STAND_IN]})
     stood_in = tuple(m.fillna(array.coords[t].to_numpy()[0]) for m, t in zip(mappings, into, strict=True))
-    picked = array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine)
+    picked = _dropped(array.sel(dict(zip(into, stood_in, strict=True))).assign_coords(fine), read)
     return picked.where(present)
+
+
+def _dropped(array: Any, names: list[str]) -> Any:
+    """*array* without the coordinates *names*, a ``Variable`` as an expression, which is what drops one."""
+    if not names:
+        return array
+    return (array.to_linexpr() if hasattr(array, 'to_linexpr') else array).drop_vars(names)
+
+
+#: The label a dimension with no labels takes for :func:`operator_at`, which reads it only at
+#: coordinates the result then leaves absent: with no label to read, every read is absent.
+_STAND_IN = '__no label__'
 
 
 @dataclass(frozen=True)
@@ -182,19 +201,22 @@ def operator_shift(array: Any, *, over: str, offset: Any, wrap: bool, fill: floa
     ``shift`` already answers.
 
     A DataArray shift always fills, absence not being representable in data, so
-    lowering refuses a bare shift over a variable-free operand and that branch
+    compiling refuses a bare shift over a variable-free operand and that branch
     is only reached under a numeric fill.
 
     *offset* arrives as an array where the model named a parameter — an offset
     that differs per entity, which is a gather rather than a shift
-    (:func:`_gather_by_offset`).
+    (:func:`_gather_by_offset`), and absent where it has no value
+    (:func:`_absent_where_unread`).
     """
     edge = _Edge(wrap, fill)
     if by is not None:
         groups = _grouped(over, np.asarray(array.indexes[over]), by)
-        return _gather_in_groups(array, over, _per_group(offset, by), groups=groups, edge=edge)
+        return _absent_where_unread(
+            _per_group(offset, by), lambda amount: _gather_in_groups(array, over, amount, groups=groups, edge=edge)
+        )
     if isinstance(offset, xr.DataArray) and offset.ndim:
-        return _gather_by_offset(array, over, offset, edge=edge)
+        return _absent_where_unread(offset, lambda amount: _gather_by_offset(array, over, amount, edge=edge))
     amount: dict[Hashable, int] = {over: int(offset)}
     if wrap:
         return array.roll(amount, roll_coords=False) if isinstance(array, xr.DataArray) else array.roll(amount)
@@ -213,18 +235,19 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
 
     Written as a sum of scalar gathers, one per position of the widest window
     the data asks for — a bound read from data, sound because it decides how
-    many *terms* are added rather than what the plan does.
+    many *terms* are added rather than what the program does.
 
-    A position the window cannot reach contributes a **zero**, never an
-    absence: absence propagates, so an unreachable lag would annihilate the
-    whole row, and a window at the first position is short, not empty. The
-    window that reaches **nothing** is the exception — a zero there would
-    build a row about constants alone — so the fill is paired with the
-    positions any lag actually reached, and a window that reached none keeps
-    no row. A width of zero everywhere is that window at every position.
+    A position the window cannot reach, or an absent slot it reaches,
+    contributes a **zero**, never an absence: a window is a sum, so an absent
+    term is one term fewer and a window at the first position is short,
+    not empty. A window that reaches nothing, a width of zero or only absent
+    slots, is an empty sum and reads zero; a row it leaves with no variable is
+    not built.
 
-    ``by=`` stops the window at each group's edge. A width declared over the
-    group's own dim is read through the relation first (:func:`_per_group`).
+    ``by=`` stops the window at each group's edge. A coordinate with no
+    window is absent: one the relation places in no group, or one a
+    ``missing: absent`` width arrives NaN at. A width declared over the
+    group's own dimension is read through the relation first (:func:`_per_group`).
     """
     within = _per_group(within, by) if by is not None else within
     asked = _widest(within)
@@ -232,19 +255,21 @@ def operator_sum_back(array: Any, *, over: str, within: Any, wrap: bool, by: Any
     probe = _Edge(wrap=wrap, fill=None)
     groups = _grouped(over, np.asarray(array.indexes[over]), by) if by is not None else None
     terms: list[Any] = []
-    reached: list[Any] = []
     for lag in range(widest):
         lagged = (
             _gather_in_groups(array, over, lag, groups=groups, edge=probe)
             if groups is not None
             else _gather_by_offset(array, over, lag, edge=probe)
         )
-        live, term = ~lagged.isnull(), absence.filled(lagged, 0.0)
+        term = absence.filled(lagged, 0.0)
         if isinstance(within, xr.DataArray):
-            live, term = live & (within > lag), term * (within > lag).astype(float)
+            term = term.where(within > lag, 0)
         terms.append(term)
-        reached.append(live)
-    return _merged(terms).where(reduce(operator.or_, reached))
+    merged = _merged(terms)
+    defined = groups.grouped if groups is not None else None
+    if isinstance(within, xr.DataArray):
+        defined = within.notnull() if defined is None else defined & within.notnull()
+    return merged if defined is None or bool(defined.all()) else merged.where(defined)
 
 
 def _widest(within: Any) -> int:
@@ -273,12 +298,12 @@ def _merged(terms: list[Any]) -> Any:
 
 
 def _renamed(mappings: tuple[Any, ...], into: tuple[str, ...]) -> tuple[Any, ...]:
-    """*mappings* renamed to the dims they target, so the group's own name is the dim that comes out."""
+    """*mappings* renamed to the dimensions they target, so the group's own name is the dimension that comes out."""
     return tuple(mapping.rename(target) for mapping, target in zip(mappings, into, strict=True))
 
 
 def _present(mappings: tuple[Any, ...]) -> Any:
-    """The members every mapping has a value for, as a boolean over their dim."""
+    """The labels every mapping has a value for, as a boolean over their dimension."""
     keep = mappings[0].notnull()
     for mapping in mappings[1:]:
         keep = keep & mapping.notnull()
@@ -288,10 +313,10 @@ def _present(mappings: tuple[Any, ...]) -> Any:
 def _reindexed(summed: Any, *, into: tuple[str, ...], labels: Mapping[str, pd.Index]) -> Any:
     """*summed* over exactly the declared labels, empty groups filled with an empty sum.
 
-    Reindexing onto a label no member reached creates an **absent** slot, and
-    the unstacked multi-key groupby invents the combinations no member lands on
+    Reindexing onto a label no key reached creates an **absent** slot, and
+    the unstacked multi-key groupby invents the combinations no key lands on
     the same way. Neither is an absence in this language: a group with no
-    members holds the empty sum, which is 0. ``fillna`` reaches the constant of
+    labels holds the empty sum, which is 0. ``fillna`` reaches the constant of
     a ``LinearExpression`` and the value of the ``DataArray`` a grouped
     parameter is, so one call serves both, and it comes after the reindex
     because the invented combinations sit at *present* labels.
@@ -304,9 +329,9 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
 
     A scalar shift is one call; a per-entity one is a **gather**: every output
     position reads a source position of its own, so the index is an array over
-    the offset's dims and *over* rather than a number.
+    the offset's dimensions and *over* rather than a number.
 
-    Selection is by *label* rather than by ordinal, because that is what linopy
+    Selection is by *label* rather than by position, because that is what linopy
     passes through to its own labels — which also keeps a non-integer axis (a
     datetime snapshot) working for free.
 
@@ -318,12 +343,12 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     """
     card = int(array.sizes[over])
     labels = np.asarray(array.indexes[over])
-    ordinal = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
-    source = (ordinal - offset).astype(int)
+    position = xr.DataArray(np.arange(card), coords={over: labels}, dims=[over])
+    source = (position - offset).astype(int)
 
-    def gathered(ordinals: Any) -> Any:
+    def gathered(positions: Any) -> Any:
         """Pick each position's source, then put the original labels back — the indexer carries no coordinate."""
-        picked = array.sel({over: _labelled(labels, ordinals, over)})
+        picked = array.sel({over: _labelled(labels, positions, over)})
         return picked.assign_coords({over: labels})
 
     if edge.wrap:
@@ -333,8 +358,20 @@ def _gather_by_offset(array: Any, over: str, offset: Any, *, edge: _Edge) -> Any
     return moved if edge.fill is None else absence.vacated(moved, array, over, ~inside, edge.fill)
 
 
+def _absent_where_unread(offset: Any, gather: Callable[[Any], Any]) -> Any:
+    """*gather* at *offset*, absent wherever *offset* is NaN — a ``missing: absent`` row — whatever the edge.
+
+    The gather takes a stand-in of 0 there and is emptied after, so no edge
+    fills the slot: a NaN in the arithmetic would read as off the axis, which a
+    fill writes.
+    """
+    if not isinstance(offset, xr.DataArray) or bool(offset.notnull().all()):
+        return gather(offset)
+    return gather(offset.fillna(0)).where(offset.notnull())
+
+
 def _per_group(offset: Any, groups: Any) -> Any:
-    """*offset* at every coordinate, where it is declared over the group's own dim.
+    """*offset* at every coordinate, where it is declared over the group's own dimension.
 
     One lag per group — a lead time that differs by period, which a
     ``(period, timestep)`` model writes as an offset over ``period`` because
@@ -342,16 +379,11 @@ def _per_group(offset: Any, groups: Any) -> Any:
     the lag a coordinate moves by is its group's, read through that relation:
     the pullback ``at()`` already is. Every other offset is returned as it
     came.
-
-    The group's label is dropped rather than ridden along: a pullback leaves
-    what it read through as a coordinate, and a constraint built from one is
-    then reported as carrying a dimension the language says a shift does not
-    have.
     """
     target = getattr(groups, 'name', None)
     if not isinstance(offset, xr.DataArray) or target not in offset.dims:
         return offset
-    return operator_at(offset, (groups,), into=(str(target),)).drop_vars(str(target))
+    return operator_at(offset, (groups,), into=(str(target),))
 
 
 @dataclass(frozen=True)
@@ -367,9 +399,9 @@ class _Groups:
         belongs: The group ordinal of each coordinate, 0 where it has none.
         within: Each coordinate's position inside its group.
         size: Each coordinate's group size, 1 where it has none.
-        roster: The label ordinal at each ``(group, position)``.
+        roster: The label position at each ``(group, position)``.
         names: Each group's key, by group ordinal.
-        counts: Each group's member count, by group ordinal.
+        counts: Each group's label count, by group ordinal.
     """
 
     labels: np.ndarray
@@ -429,14 +461,14 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: _Groups, ed
     """Translate *array* inside each group *groups* makes, not along the axis.
 
     The neighbour of a coordinate is the one *offset* back among the coordinates
-    sharing its group, so the gather is by a source ordinal computed per group:
+    sharing its group, so the gather is by a source position computed per group:
     a position past the group's start is vacated where the axis edge would
     vacate, and under *wrap* it comes round to that group's own last.
 
     *offset* is a number, or an array where the model named a parameter — per
-    entity, per group (:func:`_per_group`), or both — so the source ordinal is
-    computed from the within-group position rather than looked up member by
-    member, and carries the offset's own dims.
+    entity, per group (:func:`_per_group`), or both — so the source position is
+    computed from the within-group position rather than looked up label by
+    label, and carries the offset's own dimensions.
 
     A coordinate in no group reaches nothing — the null reading a partial
     relation gets everywhere else. That is not the same as reaching *off* a
@@ -449,7 +481,7 @@ def _gather_in_groups(array: Any, over: str, offset: Any, *, groups: _Groups, ed
     inside = groups.grouped & (reached >= 0) & (reached < groups.size)
 
     def peer(group: Any, position: Any) -> Any:
-        """The label ordinal sitting at *position* of the group at *group*."""
+        """The label position sitting at *position* of the group at *group*."""
         return groups.roster[group, position]
 
     source = xr.apply_ufunc(peer, groups.belongs, reached.where(inside, 0).astype(int))
@@ -472,12 +504,12 @@ def _off_the_axis(array: Any, over: str, offset: float) -> Any:
     return (source < 0) | (source >= len(labels))
 
 
-def _labelled(labels: Any, ordinals: Any, over: str) -> Any:
-    """*ordinals* as the coordinate labels they stand for, keeping their dims.
+def _labelled(labels: Any, positions: Any, over: str) -> Any:
+    """*positions* as the coordinate labels they stand for, keeping their dimensions.
 
     Carries no coordinates of its own: an indexer that keeps the axis's own
     coordinate asserts the values it holds *are* that axis, and after a gather
     they are not — which xarray reports as a size conflict rather than a
     mislabelling.
     """
-    return xr.DataArray(labels[ordinals.transpose(*ordinals.dims).values], dims=ordinals.dims)
+    return xr.DataArray(labels[positions.transpose(*positions.dims).values], dims=positions.dims)

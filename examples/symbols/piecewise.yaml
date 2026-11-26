@@ -9,7 +9,7 @@
 # Nothing here changes what the model means — no lane reads this file, and
 # piecewise.yaml renders without it. What the renderer derives on its own is
 # unambiguous but plain; this is where it gets to be conventional. Every
-# entry must name something the model declares, so a typo is an error rather
+# key must name something the model declares, so a typo is an error rather
 # than a symbol that silently never applies.
 
 notation: latex

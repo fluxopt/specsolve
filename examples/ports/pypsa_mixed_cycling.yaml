@@ -1,6 +1,6 @@
 description: >-
   PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
-  network runs both regimes at once: a unit that must end each horizon where it
+  network runs both regimes at once: a unit that must end the modelled period where it
   began, beside one handed a level it may simply spend. The two are one rule
   under complementary masks, and the seeded unit's boundary row is what a cyclic
   one does not have. Optimum 4800.0, from PyPSA itself.
@@ -9,6 +9,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -32,7 +33,7 @@ relations:
 parameters:
   cyclic:
     description: >-
-      whether a unit closes its own horizon. PyPSA's flag, and the one column
+      whether a unit ends the modelled period where it began. PyPSA's flag, and the one column
       that decides which of the two balance rules a unit obeys
     dims: [storage]
     dtype: bool
@@ -88,15 +89,15 @@ constraints:
     description: what is generated at a bus, plus what the stores give back, meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-      - sum(p_store, by=storage_bus, over=storage, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(p_dispatch, over=storage, by=storage_bus[bus])
+      - sum(p_store, over=storage, by=storage_bus[bus])
       == load
 
   energy_balance_cyclic:
     description: >-
-      a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-      from its last and it ends every horizon where it began
+      a cyclic unit's level wraps at the last snapshot, so its first snapshot inherits
+      from its last and it ends the modelled period where it began
     dims: [snapshot, storage]
     where: "cyclic"
     expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + p_store - p_dispatch

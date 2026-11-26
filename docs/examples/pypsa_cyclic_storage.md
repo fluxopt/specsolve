@@ -1,6 +1,6 @@
 # PyPSA LOPF — cyclic storage
 
-[Storage units](pypsa_storage.md) with the horizon closed on itself: the first snapshot's state of charge carries over from the *last*.
+[Storage units](pypsa_storage.md) with the snapshots closed into a cycle: the first snapshot's state of charge carries over from the *last*.
 
 > **✔ Verified against pypsa 1.2.4 (its own linopy 0.10.0)** — objective **17228.77962151063**, matched to `rtol=1e-09`.
 
@@ -19,12 +19,11 @@ and drops that row, `edge='wrap'` puts it onto the last.
 +    expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') * (1 - standing_loss) + ...
 ```
 
-`soc_initial` leaves the instance with it: a cyclic horizon has no seed to
-give. In PyPSA the same change is `cyclic_state_of_charge=True`.
+`soc_initial` leaves the instance with it: a cycle has no seed to give. In PyPSA the same change is `cyclic_state_of_charge=True`.
 
 Closing the loop costs money: **17228.78** against **15253.18** without it. The
-battery can no longer end the horizon empty, so it has to buy back what it
-spends.
+battery can no longer end the last snapshot empty, so it has to buy back what
+it spends.
 
 ## The model
 
@@ -38,87 +37,57 @@ PyPSA linear optimal power flow whose storage is closed into a cycle — the fir
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, cyclic at the horizon |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the last wrapping to the first |
 | $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
-| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
-| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
-| $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
-| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
-| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
-| $`\mathrm{efficiency\_store}`$ | `efficiency_store` over $`\mathcal{S}`$ — share of charging energy that reaches the store |
 | $`\mathrm{efficiency\_dispatch}`$ | `efficiency_dispatch` over $`\mathcal{S}`$ — share of stored energy that reaches the bus on the way out |
+| $`\mathrm{efficiency\_store}`$ | `efficiency_store` over $`\mathcal{S}`$ — share of charging energy that reaches the store |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
+| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
+| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
+| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — how much energy a storage unit holds when full |
 | $`\mathrm{standing\_loss}`$ | `standing_loss` over $`\mathcal{S}`$ — share of the carried-over level lost between snapshots |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — most a storage unit may charge or discharge in one snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a link, signed towards its `link_to` bus |
+| $`f`$ | `f` over $`\mathcal{L} \times \mathcal{T}`$ — flow on a link, signed towards its `link_to` bus |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
-
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
-```
-
-#### Subject to
-
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{t,l} \right) + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`ramp_up`**
-
-```math
-p_{t,g} - p_{t - 1,g} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`ramp_down`**
-
-```math
-p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`energy_balance`**
-
-```math
-\mathit{soc}_{t,s} = \mathit{soc}_{t \ominus 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) + p^{\mathrm{store}}_{t,s} \cdot \mathrm{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathrm{efficiency\_dispatch}_{s}} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
 
 **`f`**
 
 ```math
-\mathrm{neg\_rating}_{l} \le f_{t,l} \le \mathrm{rating}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{neg\_rating}_{l} \le f_{l,t} \le \mathrm{rating}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_dispatch`**
@@ -139,10 +108,42 @@ p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\math
 0 \le \mathit{soc}_{t,s} \le \mathrm{soc}^{\mathrm{max}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
+```
+
+#### Subject to
+
+**`energy_balance`**
+
+```math
+\mathit{soc}_{t,s} = \mathit{soc}_{t \ominus 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) + p^{\mathrm{store}}_{t,s} \cdot \mathrm{efficiency\_store}_{s} - \frac{p^{\mathrm{dispatch}}_{t,s}}{\mathrm{efficiency\_dispatch}_{s}} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{l,t} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{l,t} \right) + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`ramp_down`**
+
+```math
+p_{g,t - 1} - p_{g,t} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`ramp_up`**
+
+```math
+p_{g,t} - p_{g,t - 1} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -154,8 +155,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
     dimensions:
       snapshot:
-        description: dispatch periods, cyclic at the horizon
+        description: dispatch periods, the last wrapping to the first
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -264,11 +266,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           the stores, meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(f, by=link_to, over=link, into=bus)
-          - sum(f, by=link_from, over=link, into=bus)
-          + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-          - sum(p_store, by=storage_bus, over=storage, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(f, over=link, by=link_to[bus])
+          - sum(f, over=link, by=link_from[bus])
+          + sum(p_dispatch, over=storage, by=storage_bus[bus])
+          - sum(p_store, over=storage, by=storage_bus[bus])
           == load
 
       ramp_up:
@@ -282,7 +284,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       energy_balance:
         description: >-
           the level carried into a snapshot, decayed, plus what was stored and less
-          what was taken — and it wraps at the horizon, so the first snapshot
+          what was taken — and it wraps at the last snapshot, so the first snapshot
           inherits from the last
         dims: [snapshot, storage]
         expression: >-
@@ -297,10 +299,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_cyclic_storage.yaml', sources) as solution:
-        solution.objective  # 17228.77962151063
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_cyclic_storage.yaml', sources) as result:
+        result.objective  # 17228.77962151063
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

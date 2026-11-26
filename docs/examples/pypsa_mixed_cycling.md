@@ -1,7 +1,7 @@
 # pypsa_mixed_cycling
 
 PyPSA's `cyclic_state_of_charge` is a per-unit flag, so one network runs both
-regimes at once: a unit that must end each horizon where it began, beside one
+regimes at once: a unit that must end the modelled period where it began, beside one
 handed a level it may simply spend.
 
 ## The problem
@@ -9,7 +9,7 @@ handed a level it may simply spend.
 [Storage units](pypsa_storage.md) seeds every storage from
 `state_of_charge_initial`; [cyclic storage](pypsa_cyclic_storage.md) closes
 every storage on itself. A real PyPSA model has both in the same
-`StorageUnit` frame, because the flag is a column:
+`StorageUnit` table, because the flag is a column:
 
 ```python
 n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
@@ -17,10 +17,10 @@ n.add('StorageUnit', ..., cyclic_state_of_charge=[True, False])
 
 The two regimes are **one rule and a different predecessor**. A cyclic unit's
 first snapshot carries from its last. A seeded unit's first snapshot carries
-from a level in the data. Here that is three blocks under complementary masks,
-and the masks are the flag itself:
+from a level in the data. Here that is three constraints under complementary conditions,
+and the conditions are the flag itself:
 
-| Block | Where | What carries into the first snapshot |
+| Constraint | Where | What carries into the first snapshot |
 |---|---|---|
 | `energy_balance_cyclic` | `cyclic` | the unit's own last snapshot (`edge='wrap'`) |
 | `energy_balance_carry` | `NOT cyclic` | nothing — the vacated position is absent, so no row is built there |
@@ -38,82 +38,51 @@ writes the row instead.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end each horizon where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
+PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one network runs both regimes at once: a unit that must end the modelled period where it began, beside one handed a level it may simply spend. The two are one rule under complementary masks, and the seeded unit's boundary row is what a cyclic one does not have. Optimum 4800.0, from PyPSA itself.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{S}`$ | index $`s`$ — `storage` with $`\mathrm{storage\_bus}: \mathcal{S} \to \mathcal{B}`$ — storage units, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit closes its own horizon. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{cyclic}`$ | `cyclic` over $`\mathcal{S}`$ — whether a unit ends the modelled period where it began. PyPSA's flag, and the one column that decides which of the two balance rules a unit obeys |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand to be met at a bus |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of generation |
-| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — how fast a storage unit may charge or discharge |
-| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — most energy a storage unit may hold |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{soc}^{\mathrm{initial}}`$ | `soc_initial` over $`\mathcal{S}`$ — the level a seeded unit begins with. A cyclic unit has one in the data and never reads it — its own last snapshot is its opening level |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand to be met at a bus |
+| $`\mathrm{soc}^{\mathrm{max}}`$ | `soc_max` over $`\mathcal{S}`$ — most energy a storage unit may hold |
+| $`\mathrm{storage\_p\_nom}`$ | `storage_p_nom` over $`\mathcal{S}`$ — how fast a storage unit may charge or discharge |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{dispatch}}`$ | `p_dispatch` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit puts onto its bus |
 | $`p^{\mathrm{store}}`$ | `p_store` over $`\mathcal{T} \times \mathcal{S}`$ — power a storage unit takes off its bus |
 | $`\mathit{soc}`$ | `soc` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{cyclic}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
-
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
-```
-
-#### Subject to
-
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`energy_balance_cyclic`**
-
-```math
-\mathit{soc}_{t,s} = \mathit{soc}_{t \ominus 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{cyclic}_{s}
-```
-
-**`energy_balance_carry`**
-
-```math
-\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{cyclic}_{s}
-```
-
-**`energy_balance_seed`**
-
-```math
-\mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) = 0
-```
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_dispatch`**
@@ -134,17 +103,49 @@ $`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own ord
 0 \le \mathit{soc}_{t,s} \le \mathrm{soc}^{\mathrm{max}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 ```
 
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
+```
+
+#### Subject to
+
+**`energy_balance_carry`**
+
+```math
+\mathit{soc}_{t,s} = \mathit{soc}_{t - 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{cyclic}_{s}
+```
+
+**`energy_balance_cyclic`**
+
+```math
+\mathit{soc}_{t,s} = \mathit{soc}_{t \ominus 1,s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{cyclic}_{s}
+```
+
+**`energy_balance_seed`**
+
+```math
+\mathit{soc}_{t,s} = \mathrm{soc}^{\mathrm{initial}}_{s} + p^{\mathrm{store}}_{t,s} - p^{\mathrm{dispatch}}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \neg \mathrm{cyclic}_{s} \wedge \mathrm{pos}(t) = 0
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{dispatch}}_{t,s} - \left( \sum_{s \in \mathcal{S} \,:\, \mathrm{storage\_bus}(s) = b} p^{\mathrm{store}}_{t,s} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
       PyPSA's `cyclic_state_of_charge` is a column of the StorageUnit frame, so one
-      network runs both regimes at once: a unit that must end each horizon where it
+      network runs both regimes at once: a unit that must end the modelled period where it
       began, beside one handed a level it may simply spend. The two are one rule
       under complementary masks, and the seeded unit's boundary row is what a cyclic
       one does not have. Optimum 4800.0, from PyPSA itself.
@@ -153,6 +154,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -176,7 +178,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     parameters:
       cyclic:
         description: >-
-          whether a unit closes its own horizon. PyPSA's flag, and the one column
+          whether a unit ends the modelled period where it began. PyPSA's flag, and the one column
           that decides which of the two balance rules a unit obeys
         dims: [storage]
         dtype: bool
@@ -232,15 +234,15 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus, plus what the stores give back, meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_bus, over=generator, into=bus)
-          + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-          - sum(p_store, by=storage_bus, over=storage, into=bus)
+          sum(p, over=generator, by=gen_bus[bus])
+          + sum(p_dispatch, over=storage, by=storage_bus[bus])
+          - sum(p_store, over=storage, by=storage_bus[bus])
           == load
 
       energy_balance_cyclic:
         description: >-
-          a cyclic unit's level wraps at the horizon, so its first snapshot inherits
-          from its last and it ends every horizon where it began
+          a cyclic unit's level wraps at the last snapshot, so its first snapshot inherits
+          from its last and it ends the modelled period where it began
         dims: [snapshot, storage]
         where: "cyclic"
         expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap') + p_store - p_dispatch
@@ -268,10 +270,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_mixed_cycling.yaml', sources) as solution:
-        solution.objective  # 4800.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_mixed_cycling.yaml', sources) as result:
+        result.objective  # 4800.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -352,5 +354,5 @@ energy worth anything.
 
 *A data column choosing between two boundary regimes.* Neither storage model
 has that shape: the two differ by one deleted `where`, and each is uniform. It
-needs no language feature: three blocks, complementary masks, and the dropped
+needs no language feature: three constraints, complementary conditions, and the dropped
 row visible in `omissions`.

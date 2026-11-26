@@ -23,7 +23,7 @@ are round 0 and the minimum of the rest.
 ``cpu`` and ``cores`` name the machine, because the sinks measure in separate
 jobs (#1315) on a mixed runner pool.
 
-A library the time budget stopped leaves no benchmark entry, so its ceiling
+A library the time budget stopped leaves no benchmark record, so its ceiling
 comes back from a `.ceilings.json` sidecar as a `ceiling` record. The readers
 render an ``error`` record, but nothing produces one: under pytest a dead pass
 is an error, not a result.
@@ -118,6 +118,8 @@ def records(path: Path) -> Iterator[dict[str, Any]]:
         'machine': machine.get('machine'),
         'cpu': (machine.get('cpu') or {}).get('brand_raw') or machine.get('processor'),
         'cores': (machine.get('cpu') or {}).get('count'),
+        'clock_hz': ((machine.get('cpu') or {}).get('hz_actual') or [None])[0],
+        'host': machine.get('host') or {},
         'python': machine.get('python_version'),
         'versions': machine.get('versions', {}),
         'commits': {'specsolve': _commit(commit)},

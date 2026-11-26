@@ -17,7 +17,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError
-from tests.conftest import by_coord, override, raw_of
+from tests.conftest import override, primal_by_coordinate, raw_of
 from tests.differential import RTOL, differential
 from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.oracle import pd, specsolve_linopy
@@ -27,7 +27,7 @@ description: a zonal limit where a generator's zone changes by period
 
 dimensions:
   generator: {dtype: str, description: a generating unit}
-  period: {dtype: int, description: a planning period}
+  period: {dtype: int, description: a planning period, ordered: true}
   zone: {dtype: str, description: a bidding zone}
 
 relations:
@@ -35,6 +35,7 @@ relations:
     key: [generator, period]
     values: zone
     description: the zone a generator bids into in one period
+    missing: absent
 
 parameters:
   cost: {dims: [generator], description: marginal cost of a unit of output}
@@ -50,7 +51,7 @@ variables:
 constraints:
   zonal:
     dims: [period, zone]
-    expression: sum(p, by=zone_of, over=generator, into=zone) <= zone_cap
+    expression: sum(p, over=generator, by=zone_of[zone]) <= zone_cap
     description: a zone's output stays under its cap, period by period
   meet_demand:
     dims: [period]
@@ -106,7 +107,7 @@ def test_a_map_keyed_by_two_columns_groups_per_condition():
         assert run.oracle == pytest.approx(4 * 1.0 + 6 * 2.0 + 5 * 1.0, rel=RTOL), (
             'the hand-derived optimum, reached through the same map on both lanes and in the LP file'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(4.0), "zone n's cap binds in period 1"
     assert built[('g2', 1)] == pytest.approx(6.0), 'the rest of period 1 comes from the dearer generator'
@@ -127,7 +128,7 @@ def test_a_pair_the_map_leaves_out_is_in_no_group():
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 1.0, rel=RTOL), (
             'the unmapped pair costs the cheap generator nothing, and its mapped period is unchanged'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(10.0), 'in no zone in period 1, so no cap binds it'
     assert built[('g1', 2)] == pytest.approx(5.0), 'still mapped in period 2, where its zone caps the pair'
@@ -140,7 +141,7 @@ def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
         **{
             'constraints.zonal': {
                 'dims': ['generator', 'period'],
-                'expression': 'p <= at(zone_cap, by=zone_of, over=zone, into=generator)',
+                'expression': 'p <= at(zone_cap, by=zone_of[zone])',
             }
         },
     )
@@ -148,7 +149,7 @@ def test_a_pullback_reads_a_conditioned_map_at_the_row_it_stands_on():
         assert run.oracle == pytest.approx(4 * 1.0 + 6 * 2.0 + 5 * 1.0, rel=RTOL), (
             'each generator bounded by the cap of the zone its own pair reads'
         )
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert built[('g1', 1)] == pytest.approx(4.0), "read through its own pair, g1 takes zone n's cap"
     assert built[('g2', 1)] == pytest.approx(6.0), 'its pair reads zone s, whose cap is the larger one'
@@ -165,7 +166,7 @@ def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
 
     with differential(spec, sources) as run:
         assert run.oracle == pytest.approx(4.0, rel=RTOL), 'the one surviving pair serves its own period'
-        built = by_coord(run.result, 'p', 'generator', 'period')
+        built = primal_by_coordinate(run.result, 'p', 'generator', 'period')
 
     assert sorted(built) == [('g1', 1)], 'the one pair the map sends to zone n'
 
@@ -176,8 +177,8 @@ def test_a_where_reads_a_conditioned_map_at_both_key_dimensions():
 
 
 def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
-    """A model whose one constraint walks *relations*, both ends named where the declaration leaves a choice."""
-    declared = {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int'}}
+    """A model whose one constraint walks *relations*, both ends named where the entry leaves a choice."""
+    declared = {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}, 'period': {'dtype': 'int', 'ordered': True}}
     sides = [side for r in relations.values() for side in (r['key'], r.get('values', []))]
     over = [d for s in sides for d in (s.values() if isinstance(s, dict) else [s] if isinstance(s, str) else s)]
     used = {'generator', 'period', *dims, *over}
@@ -196,7 +197,7 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
     [
         pytest.param(
             {'season_of': {'key': ['generator', 'period'], 'values': 'bus'}},
-            'shift(p, along=period, offset=1, edge=0, by=season_of, within=bus) >= load',
+            'shift(p, along=period, offset=1, edge=0, within=season_of[bus]) >= load',
             ['generator', 'period'],
             r"a partition by 'season_of' groups by a map keyed by \['generator', 'period'\]",
             id='a-partition-by-a-conditioned-map',
@@ -206,7 +207,7 @@ def _shaped(relations: dict, expression: str, dims: list[str]) -> dict:
 def test_the_linopy_lane_refuses_a_shape_it_does_not_build_and_names_the_lane_that_does(
     relations: dict, expression: str, dims: list[str], match: str
 ) -> None:
-    """An `OracleCannotBuildError` at the lane's door, before any data is read, naming the relational lane."""
+    """An `OracleCannotBuildError` as the linopy lane starts, before any data is read, naming the relational lane."""
     spec = _shaped(relations, expression, dims)
     sps.check(spec)
     with pytest.raises(OracleCannotBuildError, match=match) as caught:
@@ -215,7 +216,7 @@ def test_the_linopy_lane_refuses_a_shape_it_does_not_build_and_names_the_lane_th
 
 
 # ---------------------------------------------------------------------------
-# the door
+# tidy_sources
 # ---------------------------------------------------------------------------
 
 

@@ -1,6 +1,11 @@
 # Glossary
 
-The one definition of each name this project uses.
+The one definition of each word specsolve uses, in its code, its messages and
+these pages. The language itself is
+[mathspec's](https://mathspec.readthedocs.io/en/latest/reference/language/);
+the words for it are defined here, and
+[the words this project does not use](#words-this-project-does-not-use) end
+the page.
 
 > A **spec** is what you write: the math, with no data. A **model** is a spec
 > with your data attached, a `Model` in Python. A **result** is one answer read
@@ -10,7 +15,7 @@ The one definition of each name this project uses.
 spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
  │       (+data)                     (one answer)
  └─────▶ check ──▶ Program
-                   (the plan, for reading)
+                   (the compiled spec, for reading)
 ```
 
 ## The chain
@@ -21,8 +26,8 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   [the language](https://mathspec.readthedocs.io/en/latest/reference/language/).
 
 **Program**
-: What [`check`](api.md#specsolve.check) returns: the spec as the plan a build
-  reads. No function takes one back, so keep the `Spec`.
+: What [`check`](api.md#specsolve.check) returns: what the spec compiles to,
+  and what a build reads. No function takes one back, so keep the `Spec`.
 
 **Model**
 : A spec with data attached: what [`build`](api.md) returns.
@@ -32,12 +37,77 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
   [`Result`](api.md#specsolve.types.Result). It owns its tables, so it outlives
   its model.
 
+**Solution**
+: The values a solve found: each variable's primal and each row's dual. A
+  `Result` holds one solution; a `Sweep` holds one per slice.
+
 **Answer**
 : What came back: a `Result` for one solve, a [`Sweep`](#sweeps) for a sweep.
 
 **Archive**
 : A spec, its data and its answer, written as one zip or directory by
-  `archive=` ([archiving](../howto/archiving.md)).
+  `archive=` ([archiving](../howto/archiving.md)). `read_archive` returns the
+  answer, which carries the spec and the data.
+
+## The language
+
+**Entry**
+: One named item of a spec, under one of its sections: a dimension, a
+  parameter, a variable, a constraint, a named expression.
+
+**Dimension**
+: A set of labels that entries are indexed over, such as `generator`.
+
+**Label**
+: One member of a dimension, such as `wind` in `generator`. A dimension's
+  labels arrive in `sources` under its name, in order, each once
+  ([where coordinates come from](data.md#where-coordinates-come-from)).
+
+**Coordinate**
+: One label from each of an entry's dimensions, written as a tuple, such as
+  `(wind, 2030-01-01 00:00)` for an entry over `generator` and `snapshot`. A
+  variable has one column, and a constraint one row, at each coordinate the
+  entry is built at. An entry over no dimensions has exactly one coordinate,
+  the empty one. xarray calls a dimension's labels its *coordinates*; here a
+  coordinate is one point, never a dimension's labels.
+
+**Parameter**
+: An entry the data fills: one number per coordinate of its dimensions.
+
+**Variable**
+: An entry the solver decides: one column of the model per coordinate.
+
+**Constraint**
+: An entry the solution must hold: one row of the model per coordinate.
+
+**Relation**
+: A named map between dimensions, such as the bus each generator sits on. Its
+  rows arrive with the data.
+
+**Condition**
+: A true-or-false expression, such as `p_max > 0`.
+
+**`where:`**
+: Narrows an entry to the coordinates where its condition is true, and
+  leaves the entry absent elsewhere
+  ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
+
+**Mask**
+: The condition of a `where:`, as it narrows an entry. A condition under
+  `when:` or `holds:` narrows no entry, so it is not a mask. In Python a mask
+  is a `program.Mask`.
+
+**Absent**
+: Holding no value at a coordinate. An absent value is not zero: a `where:`
+  leaves an entry absent, and so does a missing row under `missing: absent`.
+
+**Operator**
+: A construct built into the language, such as `sum`, `at` or `shift`. A file
+  cannot add one ([operators](https://mathspec.readthedocs.io/en/latest/reference/language/operators/)).
+
+**Compile**
+: To turn a spec into its program. Every function compiles the spec first, so
+  a spec the language refuses is refused before any data is read.
 
 ## The functions
 
@@ -52,10 +122,10 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 
 **update**
 : `model.update(sources)` puts new numbers on a built model in place. A change
-  that moves a mask builds again.
+  to a [structural parameter](#how-it-runs) builds again.
 
-**load** · **scan**
-: `load_…` reads a saved answer whole. `scan_…` reads each frame when asked,
+**`read_…`** · **`scan_…`**
+: `read_…` reads a saved answer whole. `scan_…` reads each table when asked,
   so the files must outlive the value
   ([reading one too big to hold](../howto/archiving.md#read-one-too-big-to-hold)).
 
@@ -65,34 +135,48 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : The data you attach: a `dict` from each declared name to a table, and from
   each dimension to its labels ([the data contract](data.md)).
 
-**Index**
-: A dimension's labels in order, each once
-  ([where coordinates come from](data.md#where-coordinates-come-from)).
-
-**Coordinate**
-: One point of a declaration's dimensions: one snapshot for one generator.
-
 **Table**
 : A polars `DataFrame` with one column per dimension and a `value` column, one
   row per coordinate.
 
-**Relation**
-: A named map between dimensions, such as the bus each generator sits on.
+**Dense**
+: Having a row, or a value, at every coordinate of its dimensions, as a
+  parameter's table can. A table that is not dense leaves the coordinates it
+  has no row for to `missing:`.
 
-**Mask**
-: The `where:` on a declaration. A coordinate it excludes has no row
-  ([absence](https://mathspec.readthedocs.io/en/latest/reference/language/absence/)).
+**Flag**
+: A parameter of `0` and `1` that a `where:` reads, such as `committable`, so
+  that the data switches entries on or off.
 
 ## How it runs
+
+**Engine**
+: Software that attaches data to a spec, builds the model and hands it to a
+  solver. specsolve is one.
 
 **attach**
 : Fitting sources onto a spec to make a [Model](#the-chain), in `build` and
   `update`.
 
+**Settled**
+: An atom of a `where:` that the data makes true at every coordinate, or at
+  none, such as a flag that is `1` everywhere. A build drops a settled atom, or
+  the entry it empties, without reading it per row.
+
+**Structural parameter**
+: A parameter that decides which rows and columns a model has, as one that a
+  `where:` or a `cases:` condition reads does. Changing one builds the
+  model again; any other parameter only gives numbers, which `update` puts in
+  place.
+
 **Sink**
 : Where a built model goes: a solver (`highs`, `gurobi`, `xpress`) or a file
-  writer (`.lp`, `.mps`). What a sink can take is its **capability**
-  ([what each sink takes](api.md#what-each-sink-takes)).
+  writer (`.lp`, `.mps`).
+
+**Capability**
+: One kind of model a sink takes, such as integer variables or a quadratic
+  constraint. A model that needs a capability its sink lacks is refused before
+  the solve ([what each sink takes](api.md#what-each-sink-takes)).
 
 **start**
 : What a solve begins from: `'previous'`, the default, or `None`. It never
@@ -108,10 +192,52 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : An axis, such as `EachWindow`, says how the sources split. A slice is one
   set of sources, solved as one model, and its key names it in every table.
 
+**Window** · **horizon** · **lookahead**
+: `EachWindow` cuts the windowed dimension into windows. A window's horizon is
+  the labels it keeps in the answer, its first `horizon=`. Its lookahead is
+  the `lookahead=` labels it solves beyond them and drops, which the next
+  window solves again. PyPSA's `horizon=` is `horizon + lookahead` here, and
+  its `overlap=` is `lookahead`.
+
+**horizon end**
+: The last label of a window's horizon. A carry reads the window's solution
+  there.
+
 **carry**
 : An axis's `carry={parameter: variable}` hands one slice's solution to the
-  next as data.
+  next as data: the value at a window's horizon end becomes the next window's
+  initial condition.
 
-**held** · **spilled**
-: A held sweep keeps its answers in memory. A spilled one writes them to
-  `spill_to=` ([spilling](sweeps.md#spilling-a-sweep-to-disk)).
+## Words this project does not use
+
+Each word on the left has a word above that means the same, or is vague.
+`tests/test_words.py` refuses it in code, messages and pages, and names the
+word to write. A plural is refused with its word.
+
+| Not | Write |
+| --- | --- |
+| `declaration` | entry |
+| `predicate` | condition |
+| `masked`, `masked out`, `unbuilt` | absent |
+| `unmasked` | with no condition |
+| `primitive` | operator |
+| `lowered`, `lowering`, `lowers` | compiled, compiling, compiles |
+| `summand` | a term of a sum |
+| `dim`, `dims` | dimension, dimensions; `dims:` is the key |
+| `frame` | table, for a polars table; its dimensions, for what an entry is indexed over |
+| `consumer` | a tool, or the code that reads it |
+| `bind data` | attach data |
+| `reject`, `rejected`, `error out` | refuse, refused |
+| `normal form` | the canonical form |
+| `streaming lane` | relational lane |
+| `refill` | splice, for new numbers put into a built model |
+| `sayable` | in the language |
+| `surface` | the public API |
+| `seam`, `tax`, `closure` | the plain thing |
+| `handover`, `owned` | horizon end, the window's horizon |
+| `matrix entry` | coefficient |
+| `door` | the function by name: `tidy_sources`, `as_program` |
+| `held sweep`, `spilled sweep` | a sweep in memory, an archived sweep |
+
+A dimension's labels are its labels, never its index: an index is a solver's
+position of a column or a row, or a pandas index.

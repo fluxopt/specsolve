@@ -103,8 +103,8 @@ def test_a_range_no_mutation_of_can_parse_is_refused(guarded: Path) -> None:
 
 
 def test_a_dirty_tree_stops_the_run_before_anything_is_written(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tool, 'dirty_paths', lambda: ['src/specsolve/api.py'])
-    assert tool.main(['src/specsolve/api.py:1']) == 2, (
+    monkeypatch.setattr(tool, 'dirty_paths', lambda: ['src/specsolve/_api.py'])
+    assert tool.main(['src/specsolve/_api.py:1']) == 2, (
         'an uncommitted change to a tracked file is refused, because checkout would destroy it'
     )
 
@@ -239,7 +239,7 @@ def test_the_command_only_asks_for_xdist_where_xdist_is_installed(monkeypatch: p
     A row built on that reads "pytest exited 4" and proves nothing.
     """
     monkeypatch.setattr(tool.importlib.util, 'find_spec', lambda name: None)
-    assert '-n' not in tool.command(['tests']), 'without xdist the flag is left off rather than sent and rejected'
+    assert '-n' not in tool.command(['tests']), 'without xdist the flag is left off rather than sent and refused'
 
     monkeypatch.setattr(tool.importlib.util, 'find_spec', lambda name: object())
     assert '-n' in tool.command(['tests']), 'and it is used where it is there, because the suite is minutes without it'

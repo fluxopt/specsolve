@@ -1,7 +1,7 @@
 """What the build reports about itself: omissions, clocks, magnitudes, sparsity.
 
 A row that lost every term is not built, and is reported; a range names the
-block that holds an outlier; a parameter short of its dimensions is reported
+constraint that holds an outlier; a parameter short of its dimensions is reported
 rather than judged.
 """
 
@@ -11,7 +11,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.sinks import SOLVERS, solver
+from specsolve._names import ROW
+from specsolve._sinks import SOLVERS, solver
 from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC
 from tests.differential import RTOL, differential
 
@@ -21,10 +22,10 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     """A row that lost every term is not a constraint, and the build says so.
 
     `where: "t > 0"` leaves `balance` at `t = 0` with nothing to sum, and the
-    labels close up around it, so every solver loads the narrower matrix.
+    row indices close up around it, so every solver loads the narrower matrix.
     """
     spec = {
-        'dimensions': {'t': {'dtype': 'int'}, 'g': {'dtype': 'str'}},
+        'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
         'parameters': {'load': {'dims': ['t']}},
         'variables': {'p': {'dims': ['t', 'g'], 'where': 't > 0', 'bounds': {'lower': 0, 'upper': 100}}},
         'constraints': {'balance': {'dims': ['t'], 'expression': 'sum(p, over=g) == load'}},
@@ -32,9 +33,9 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     }
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
     with sps.build(spec, data) as model:
-        tables = model._engine._model.handoff
-        occupied = sorted(set(tables.matrix_block(0, tables.row_count)['row'].to_list()))
-        assert occupied == [0, 1], 'the block closes up around the gap'
+        tables = model._engine._model.tables
+        occupied = sorted(set(tables.matrix_chunk(0, tables.row_count)[ROW].to_list()))
+        assert occupied == [0, 1], "the constraint's rows close up around the gap"
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
         with solver(solver_name)(tables) as sink:
             answer = sink.run(tables)
@@ -52,7 +53,7 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
     """A row deleted by absence travelling out of ``y`` is reported too (#944)."""
     spec = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g']}},
+        'parameters': {'cap': {'dims': ['g']}, 'extra': {'dims': ['g'], 'missing': 'absent'}},
         'variables': {
             'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 'cap'}},
             'y': {'dims': ['g'], 'where': 'extra', 'bounds': {'lower': 0, 'upper': 0}},
@@ -74,35 +75,63 @@ def test_a_row_a_propagated_absence_deleted_is_reported_too():
         )
 
 
+def test_rows_a_presence_removed_and_rows_with_no_terms_are_counted_together():
+    """A presence and a missing term can each remove a row of one constraint, and the report adds both.
+
+    ``p`` is absent at ``a``, so its presence removes that row. ``k`` has no
+    value at ``b``, so that row has no term. Only ``c`` is built. The count of
+    rows with no term used to replace the count the presence recorded.
+    """
+    spec = {
+        'dimensions': {'g': {'dtype': 'str'}},
+        'parameters': {'on': {'dims': ['g']}, 'k': {'dims': ['g'], 'missing': 0}},
+        'variables': {'p': {'dims': ['g'], 'where': 'on > 0', 'bounds': {'lower': 0, 'upper': 9}}},
+        'constraints': {'cap': {'dims': ['g'], 'expression': 'k * p <= 5'}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
+    }
+    data = {
+        'g': ['a', 'b', 'c'],
+        'on': pl.DataFrame({'g': ['a', 'b', 'c'], 'value': [0.0, 1.0, 1.0]}),
+        'k': pl.DataFrame({'g': ['a', 'c'], 'value': [1.0, 1.0]}),
+    }
+    with sps.build(spec, data) as model:
+        assert model.metrics().rows == 1, 'only the row at c has a term'
+        assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'cap', 'rows_not_built': 2}], (
+            'the row the presence removed and the row with no term are both counted'
+        )
+
+
+def _ran(metrics) -> set[str]:
+    return set(metrics.phases.filter(pl.col('seconds') > 0)['phase'])
+
+
 def test_diagnostics_say_where_the_time_went(tmp_path):
     """A run that is slower than it should be can say which phase the time went to.
 
-    `seconds` is advisory wall time, so nothing here asserts a magnitude.
+    The clocks are advisory wall time, so nothing here asserts a magnitude.
     """
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
-        built = model.diagnostics().seconds
-        assert set(built) == {'attach', 'build'}, (
-            'a model only built has spent time attaching sources and building frames, nowhere else'
+        built = model.metrics()
+        assert _ran(built) == {'load', 'tidy', 'attach', 'build'}, (
+            'a model only built has spent time loading the spec, reading and attaching sources and building '
+            'tables, nowhere else'
         )
-        assert all(seconds >= 0 for seconds in built.values()), 'a wall clock cannot run backwards'
+        assert built.phases['seconds'].min() >= 0, 'a wall clock cannot run backwards'
 
         model.solve()
         model.write(tmp_path / 'model.lp')
-        ran = model.diagnostics().seconds
-        assert set(ran) == {'attach', 'build', 'handoff', 'solve', 'write'}, (
-            'a solve adds the hand-off and the solver run, a write adds the file stream'
+        ran = model.metrics()
+        assert _ran(ran) == {'load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write'}, (
+            'a solve adds the handoff, the solver run and the readback, a write adds the file stream'
         )
-        assert all(seconds >= 0 for seconds in ran.values()), 'a wall clock cannot run backwards'
 
-        snapshot = dict(ran)
         model.solve()
-        assert model.diagnostics().seconds['solve'] >= ran['solve'], (
+        assert model.metrics().solve_seconds >= ran.solve_seconds, (
             'the clocks accumulate across solves, the way `solves` counts'
         )
-        assert ran == snapshot, 'a diagnostics snapshot is its own dict, not a view of the running clocks'
 
 
-#: Three blocks that differ only in scale. `badly_scaled` spans nine orders of
+#: Three constraints that differ only in scale. `badly_scaled` spans nine orders of
 #: magnitude, `signed` carries `ordinary`'s coefficients negated, and one cost
 #: is negative.
 SCALING = {
@@ -126,16 +155,16 @@ SCALING_SOURCES = {
 }
 
 
-def test_the_coefficient_range_names_the_block_that_holds_the_outlier():
-    """The spread of the matrix, per declaration, in magnitudes rather than signed extremes."""
+def test_the_coefficient_range_names_the_constraint_that_holds_the_outlier():
+    """The spread of the matrix, per entry, in magnitudes rather than signed extremes."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         spread = model.diagnostics().coefficient_range
 
     assert spread.to_dicts() == [
-        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
         {'constraint': 'badly_scaled', 'smallest': 1e-3, 'largest': 1e6},
+        {'constraint': 'ordinary', 'smallest': 1.0, 'largest': 4.0},
         {'constraint': 'signed', 'smallest': 1.0, 'largest': 4.0},
-    ], 'one row per block in build order, and `signed` is scaled exactly as `ordinary` is'
+    ], 'one row per constraint, sorted by name as the build takes them, and `signed` is scaled exactly as `ordinary` is'
 
     worst = spread.select((pl.col('largest') / pl.col('smallest')).max()).item()
     assert worst == pytest.approx(1e9), 'the conditioning number to compare against what the solver reports'
@@ -148,7 +177,7 @@ def test_the_objective_range_is_read_beside_the_matrix_and_not_in_it():
 
     assert seen.objective_range == (0.5, 2.0), 'the objective is read off `obj`, never off the matrix'
     assert 'objective' not in seen.coefficient_range.get_column('constraint').to_list(), (
-        'the objective is not a constraint block and does not appear as one'
+        'the objective is not a constraint and does not appear as one'
     )
 
 
@@ -177,12 +206,12 @@ BOUNDS_SOURCES = {
 
 
 def test_the_bound_range_names_the_variable_whose_bounds_are_the_outlier():
-    """The bound range, per declaration, on a model whose matrix is clean."""
+    """The bound range, per entry, on a model whose matrix is clean."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
     assert seen.bound_range.to_dicts() == [{'variable': 'capped', 'smallest': 50.0, 'largest': 1e9}], (
-        'one row per variable block that declared a finite bound, and `free` declared none'
+        'one row per variable that declared a finite bound, and `free` declared none'
     )
     assert seen.coefficient_range.get_column('largest').max() == 1.0, (
         'the matrix is clean, which is what makes the bound range the only place the fault shows'
@@ -197,15 +226,15 @@ def test_a_bound_of_zero_or_infinity_is_not_a_magnitude():
     assert reported == ['capped'], '`free` is lower: 0 with no upper, so it has no finite bound and no row'
 
 
-def test_the_rhs_range_is_read_per_block_like_the_coefficients():
-    """The fourth range a solver prints, and the last one answerable per declaration."""
+def test_the_rhs_range_is_read_per_constraint_like_the_coefficients():
+    """The fourth range a solver prints, and the last one answerable per entry."""
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics().rhs_range
 
     assert seen.to_dicts() == [
-        {'constraint': 'small_rhs', 'smallest': 1.0, 'largest': 1.0},
         {'constraint': 'large_rhs', 'smallest': 250000.0, 'largest': 250000.0},
-    ], 'one row per constraint block in build order, magnitudes like every other range'
+        {'constraint': 'small_rhs', 'smallest': 1.0, 'largest': 1.0},
+    ], 'one row per constraint, sorted by name as the build takes them, magnitudes like every other range'
 
 
 def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
@@ -213,12 +242,12 @@ def test_the_four_ranges_are_four_fields_because_they_have_four_repairs():
     with sps.build(BOUNDS, BOUNDS_SOURCES) as model:
         seen = model.diagnostics()
 
-    def ratio(frame):
-        return frame.select((pl.col('largest') / pl.col('smallest')).max()).item()
+    def ratio(table):
+        return table.select((pl.col('largest') / pl.col('smallest')).max()).item()
 
     assert ratio(seen.coefficient_range) == 1.0, 'every coefficient in this model is 1'
     assert ratio(seen.bound_range) == pytest.approx(2e7), 'the bounds are the fault, and only this field says so'
-    assert ratio(seen.rhs_range) == 1.0, 'each block has one right-hand side, so no block spreads'
+    assert ratio(seen.rhs_range) == 1.0, 'each constraint has one right-hand side, so none spreads'
     assert seen.objective_range == (1.0, 2.0), 'costs are a separate axis with a separate repair'
 
 
@@ -229,13 +258,13 @@ def test_a_model_with_no_objective_has_no_objective_range():
         seen = model.diagnostics()
 
     assert seen.objective_range is None, 'no objective is not an objective whose coefficients span nothing'
-    assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint block is there'
+    assert seen.coefficient_range.height == 3, 'the matrix is still reported — every constraint is there'
 
 
-#: A coefficient short of its dims, and a bound that is not.
+#: A coefficient short of its dimensions, and a bound that is not.
 SPARSE_SOURCE = {
-    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int'}},
-    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g']}},
+    'dimensions': {'g': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'p_max': {'dims': ['g']}, 'avail': {'dims': ['t', 'g'], 'missing': 0}},
     'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 'p_max'}}},
     'constraints': {'capped': {'dims': ['t', 'g'], 'expression': 'p * avail <= 1'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p)'},
@@ -256,7 +285,7 @@ def test_a_parameter_short_of_its_dims_is_reported_rather_than_judged():
         short = model.diagnostics().sparse_parameters
 
     assert short.to_dicts() == [{'parameter': 'avail', 'coordinates': 6, 'rows': 3, 'missing': 3}], (
-        'the complete parameter is not a row here — an empty frame is the useful answer for a dense model'
+        'the complete parameter is not a row here — an empty table is the useful answer for a dense model'
     )
 
 
@@ -270,7 +299,7 @@ def test_a_model_whose_parameters_all_span_their_dims_reports_none():
 
 
 def test_the_sparsity_report_survives_the_model_being_released():
-    """Summarised at attach, so it outlives the frames."""
+    """Summarised at attach, so it outlives the tables."""
     with sps.build(SPARSE_SOURCE, SPARSE_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()
@@ -289,33 +318,33 @@ UNDEFINED_DIVISOR = {
 }
 
 DENSE_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 5.0]})}
-HALF_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a'], 'value': [2.0]})}
+ZERO_IN_A_DIVISOR = {'f': ['a', 'b'], 'd': pl.DataFrame({'f': ['a', 'b'], 'value': [2.0, 0.0]})}
 
 
 def test_a_build_that_raises_reports_the_bind_it_got_through_and_no_size():
     """A build that raised reports no size, neither its own nor the previous build's.
 
-    What the attach measured is still true, and names the gap the build then
-    refused.
+    What the attach measured is still true, though the build then refused
+    the zero it divided by.
     """
     with sps.build(UNDEFINED_DIVISOR, DENSE_DIVISOR) as model:
-        built = model.diagnostics()
+        built = model.metrics()
         assert (built.columns, built.rows) == (2, 2), 'the model under test builds before it is asked not to'
 
-        with pytest.raises(sps.errors.DataError, match='used as a divisor'):
-            model.update(HALF_A_DIVISOR)
-        after = model.diagnostics()
+        with pytest.raises(sps.errors.DataError, match='not finite'):
+            model.update(ZERO_IN_A_DIVISOR)
+        after, size = model.diagnostics(), model.metrics()
 
-    assert (after.columns, after.rows, after.nonzeros) == (0, 0, 0), (
+    assert (size.columns, size.rows, size.nonzeros) == (0, 0, 0), (
         "a build that raised reported a size — a partial count, or the released build's"
     )
-    assert after.sparse_parameters.to_dicts() == [{'parameter': 'd', 'coordinates': 2, 'rows': 1, 'missing': 1}], (
-        'the attach that succeeded is still reported, and it names the gap the assembly then refused'
+    assert after.sparse_parameters.is_empty(), (
+        'the attach that succeeded is still the one reported: a divisor with a row at every coordinate'
     )
 
 
 def test_the_coefficient_range_survives_the_model_being_released():
-    """Read off each share as it is built, so it outlives the frames it came from."""
+    """Read off each share as it is built, so it outlives the tables it came from."""
     with sps.build(SCALING, SCALING_SOURCES) as model:
         held = model.diagnostics()
     released = model.diagnostics()

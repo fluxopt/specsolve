@@ -1,31 +1,9 @@
 # Benchmarks
 
-What it costs to build a model and hand it to a solver, in specsolve and in
-four other ways of writing the same model. No number includes solve time.
-Every rival model is hand-written in
-[`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models),
-and CI solves each against ours, so nothing here is fast because it built a
-different model.
-
-dispatch
-:   Meets a demand from a fleet of units: bounds and one balance. The shape an
-    array library is built for, so the comparison least in specsolve's favour.
-
-nodal
-:   Dispatch at nodes, where a technology exists only at the nodes it is
-    installed at: a quarter of the node and technology pairs have a variable.
-    The chart counts the variables that exist, not the pairs.
-
-network
-:   A small PyPSA dispatch model: buses joined by lines, a store at every bus
-    that carries its charge from each snapshot to the next, a technology
-    portfolio installed at some buses only, and solar and wind availability
-    per snapshot.
-
-sector
-:   `nodal`'s portfolio, where each technology delivers one of five carriers,
-    such as heat or hydrogen, at its own efficiency. A node has a balance only
-    for the carriers its technologies deliver.
+Time and memory to build each model and hand it to the solver, in specsolve and
+four other libraries. Nothing is solved, and CI checks that every library builds
+the same model
+([`bench/models/`](https://github.com/fluxopt/specsolve/blob/main/bench/models)).
 
 <div id="benchmark-charts" class="bench">
 <div class="bench-controls" role="group" aria-label="Controls for the charts and the table">
@@ -38,8 +16,6 @@ sector
 <span class="bench-seg" data-key="view"><button data-value="absolute" aria-pressed="true">measured</button><button data-value="relative" aria-pressed="false">÷ specsolve</button></span>
 <span class="bench-label">Axes</span>
 <span class="bench-seg" data-key="scale"><button data-value="log" aria-pressed="true">log–log</button><button data-value="linear" aria-pressed="false">linear–linear</button></span>
-<span class="bench-label">Variables</span>
-<div class="bench-range" role="group" aria-label="Range of model sizes shown"></div>
 </div>
 <div class="bench-row">
 <span class="bench-label">Libraries</span>
@@ -47,6 +23,7 @@ sector
 <span class="bench-hint">click to hide</span>
 </div>
 </div>
+<div class="bench-zoombar"><span class="bench-hint">drag on a chart to zoom every chart</span><button data-zoom-reset disabled>Reset zoom</button></div>
 <div id="bench-facets"></div>
 <div id="bench-scale" class="bench-scale"></div>
 <div class="bench-table"><table id="bench-heat" class="bench-heat"></table></div>
@@ -55,7 +32,7 @@ sector
   "data": "../benchmarks.json",
   "facet": ["model"],
   "filter": { "ladder": "length", "sink": "highs" },
-  "x": { "field": "variables", "label": "variables", "format": "count" },
+  "x": { "field": "variables", "label": "columns", "format": "count" },
   "metrics": {
     "wall": { "label": "wall time", "y": "wall_s", "band": ["wall_q1_s", "wall_q3_s"], "format": "seconds" },
     "peak": { "label": "peak RSS", "y": "peak_gb", "format": "gigabytes" }
@@ -76,58 +53,131 @@ sector
 
 ## Reading the charts
 
-Each panel is one model, and each line is one library. **Solver** chooses the
-solver that every panel and the table run through.
+One panel per model, one line per library. The x axis counts columns: the
+variables that reach the solver. **Solver** picks the solver for every panel
+and the table.
 
 - **specsolve is the thick violet line.**
-- **The grey line is the matrix floor**: a hand-written matrix handed straight
-  to the solver's bulk API. Its distance from specsolve is what the modelling
-  layer costs.
-- **The line is the median of nine rounds, and the whisker is the middle half.**
-  Overlapping whiskers are numbers this run cannot tell apart
+- **The grey line is the matrix floor**: a finished matrix handed to the solver
+  in one call, `passModel` for HiGHS and `loadModel` for Gurobi. Its gap to
+  specsolve is everything specsolve does before the solver holds the model.
+  Its memory includes its own copy of the arrays.
+- **A point is a median, and its whisker is the middle half of the rounds.**
+  Overlapping whiskers are a tie
   ([why the median](https://github.com/fluxopt/specsolve/blob/main/bench/README.md#why-the-median)).
-- **A shaded funnel is a projection** past the time or memory budget. It opens
-  from the last measured point. One edge carries the last step's cost per
-  variable forward, and the other keeps the last step's growth rate. A wide
-  funnel is a guess the measurements do not narrow.
-- **÷ specsolve divides each point by specsolve's at the same size**, so
-  specsolve is the line at 1× and a line above it is that many times slower or
-  larger. It applies to wall time and to peak RSS. Every panel shares one
-  window, 0× to 5× on linear axes and 0.1× to 50× on log axes, and a point
-  outside it is named with its ratio at the edge it crosses.
-- **Variables narrows every panel and the table to a range of model sizes**, on
-  either axes. Drag a handle, or drag along the axis to select a new range. Each
-  end is zero or a power of ten, and a rung counts at the nearest power. From
-  zero, a linear axis starts at zero; from a power of ten, it starts just below
-  the smallest size shown.
+- **A shaded funnel is a projection** past the 30 s or 16 GB budget. A wide
+  funnel is a guess.
+- **÷ specsolve puts specsolve at 1×**, so a line at 3× is three times slower
+  or larger. A point outside the window is named at the edge it crosses.
+- **Drag a box on any chart to zoom them all**, and the table with them. A drag
+  along one side zooms one axis. Double-click or **Reset zoom** to see
+  everything.
 - **The table divides by specsolve.** Purple is where specsolve is faster,
-  orange where the other library is, grey within ten per cent. The
-  specsolve-in-memory and matrix floor columns are not shaded: they are
-  references, not rivals. `>30 s` and `>16 GB` are sizes the harness refused.
+  orange where the other library is, and grey within 10%. `>30 s` and `>16 GB`
+  are sizes the budget refused.
 
-## A script that solves one model
+## The models
+
+Columns and rows count the variables and the constraints that reach the solver,
+one per value that exists. Every variable and constraint also runs over
+`snapshot`, and a model grows by its snapshots alone.
+
+<!-- bench:models -->
+
+| | dispatch | network | nodal | sector |
+| --- | --- | --- | --- | --- |
+| for | bounds and one balance: the shape an array library suits best | a small PyPSA model: lines, stores, solar and wind, and pooled caps | dispatch at nodes, where a technology exists only where it is installed | each technology delivers one of five carriers, such as heat or hydrogen |
+| variables | p[generator] | p[bus, tech], f[line], charge[store], discharge[store], soc[store] | p[node, tech] | p[node, tech] |
+| constraints | power_balance | balance[bus], soc_balance[store], pool_cap[pool] | balance[node] | balance[node, carrier] |
+| grouped sums | — | line → bus, store → bus, bus × tech → pool | — | — |
+| dimensions | generator 100 | bus 50, tech 12, line 100, store 50 | node 50, tech 12 | node 50, tech 12, carrier 5 |
+| density | 100% | 25% | 25% | 25% |
+| snapshots | 2–100k | 2–25k | 2–20k | 2–20k |
+| columns per snapshot | 100 | 400 | 150 | 150 |
+| rows per snapshot | 1 | 150 | 50 | 125 |
+| nonzeros per snapshot | 100 | 800 | 150 | 150 |
+
+<!-- bench:/models -->
+
+From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
+on HiGHS, except on `network`, the one model that sums through a grouping.
+There it is 2.5× at 1M columns, 1.80 GB against 0.72 GB, and the memory
+budget stops linopy at that size
+([#2086](https://github.com/fluxopt/specsolve/pull/2086)).
+
+## A script that builds one model
 
 The charts leave out what a script pays to start: the interpreter, the import
-and the first build. This table times a new process from launch to exit, on
-HiGHS.
+and the first build. This table times a new process from launch to exit. The
+process builds the model, hands it to HiGHS and exits, without a solve.
 
 <!-- bench:fresh -->
 
 <div class="bench"><div class="bench-table"><table class="bench-heat">
-<thead><tr><th>launch to exit</th><th>dispatch<br>10k variables</th><th>network<br>10k variables</th><th>nodal<br>3k variables</th></tr></thead>
+<thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.52 s</td><td class="own">0.48 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.025">0.47 s · 1.0x</td><td data-ratio="0.977">0.51 s · 1.0x</td><td data-ratio="0.958">0.46 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.117">0.97 s · 2.1x</td><td data-ratio="2.048">1.06 s · 2.0x</td><td data-ratio="1.926">0.93 s · 1.9x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.461">0.67 s · 1.5x</td><td data-ratio="1.676">0.87 s · 1.7x</td><td data-ratio="1.355">0.66 s · 1.4x</td></tr>
-<tr><td>highspy-matrix</td><td data-ratio="0.686">0.31 s · 0.7x</td><td data-ratio="0.616">0.32 s · 0.6x</td><td data-ratio="0.652">0.32 s · 0.7x</td></tr>
+<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.53 s</td><td class="own">0.45 s</td><td class="own">0.57 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="0.981">0.45 s · 1.0x</td><td data-ratio="0.984">0.52 s · 1.0x</td><td data-ratio="1.017">0.46 s · 1.0x</td><td data-ratio="1.036">0.59 s · 1.0x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.029">0.93 s · 2.0x</td><td data-ratio="2.514">1.32 s · 2.5x</td><td data-ratio="2.097">0.94 s · 2.1x</td><td data-ratio="2.121">1.21 s · 2.1x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.409">0.65 s · 1.4x</td><td data-ratio="1.988">1.05 s · 2.0x</td><td data-ratio="1.403">0.63 s · 1.4x</td><td data-ratio="1.600">0.91 s · 1.6x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
 
-A script that solves one small model with specsolve finishes in about half a
-second, about half of linopy's time
-([#2005](https://github.com/fluxopt/specsolve/pull/2005)).
+A script that builds one small model with specsolve and hands it to the solver
+finishes in about half a second, about half of linopy's time
+([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
+
+## Where specsolve's build spends its time
+
+Each table follows one model up its size ladder and splits specsolve's time
+into the [phases](../reference/api.md#specsolve.types.Metrics) its engine
+clocks. A phase that grows faster than the model is where a build slows down
+first. A phase a run did not clock reads `—`.
+
+<!-- bench:phases -->
+
+<details markdown="1">
+<summary><b>dispatch</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 200 columns | 1k columns | 5k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 0.764 ms | 0.758 ms | 0.649 ms | 0.627 ms | 0.721 ms | 0.809 ms | 0.714 ms | 0.805 ms | 0.921 ms | 0.798 ms |
+| build | 5.48 ms | 6.02 ms | 6.54 ms | 7.72 ms | 9.31 ms | 12.3 ms | 23.7 ms | 39.3 ms | 160 ms | 315 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>network</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 800 columns | 4k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 2.49 ms | 2.97 ms | 2.45 ms | 2.6 ms | 3.31 ms | 7.32 ms | 8.96 ms | 22.3 ms | 39.2 ms |
+| build | 20.2 ms | 21.2 ms | 21.1 ms | 25.1 ms | 31 ms | 94.8 ms | 140 ms | 584 ms | 1.25 s |
+
+</details>
+
+<details markdown="1">
+<summary><b>nodal</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 0.849 ms | 0.922 ms | 0.901 ms | 0.939 ms | 0.911 ms | 1.5 ms | 2.21 ms | 7.16 ms | 13.2 ms |
+| build | 5.98 ms | 6.61 ms | 7.26 ms | 9.71 ms | 9.57 ms | 17.1 ms | 22.8 ms | 84.4 ms | 160 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>sector</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| attach | 3.44 ms | 1.24 ms | 1.02 ms | 1.18 ms | 1.35 ms | 2.89 ms | 4.03 ms | 15.3 ms | 22.3 ms |
+| build | 14.4 ms | 9.16 ms | 9.52 ms | 13.4 ms | 16.6 ms | 44.8 ms | 91.9 ms | 472 ms | 952 ms |
+
+</details>
+
+<!-- bench:/phases -->
 
 ## Not measured yet
 
@@ -140,7 +190,10 @@ second, about half of linopy's time
 ## Method
 
 Each measurement runs in its own process, with import excluded and teardown
-included, on an idle machine. Peak memory is `ru_maxrss`.
+included, on an idle machine. A point is the median of nine rounds, or of five
+where a round takes over a second. Peak memory is `ru_maxrss`. A projection's
+two edges carry the last measured step forward, one at its cost per column and
+one at its growth rate.
 `uv run --locked bench/reproduce.py` runs it again with every version pinned,
 and [the harness](https://github.com/fluxopt/specsolve/blob/main/bench/README.md)
 has every flag and caveat, such as the allocator cost on polars' peak

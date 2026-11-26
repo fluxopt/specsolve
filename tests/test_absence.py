@@ -1,8 +1,8 @@
 """Absence: what a missing value does to a coefficient, a row and a bound.
 
 Absence is a state, not a zero (docs/reference/language/absence.md): a sparse
-coefficient is still a coefficient, a constant side with a hole is refused, an
-empty group is a zero, and a term whose variable is absent takes its row with
+coefficient is still a coefficient, a `missing: 0` row is 0 on a constant
+side too, an empty group is a zero, and a term whose variable is absent takes its row with
 it. Each pair that differs is checked side by side.
 """
 
@@ -12,20 +12,19 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.errors import DataError
-from tests.conftest import by_coord, override
+from tests.conftest import override, primal_by_coordinate
 from tests.differential import RTOL, both_lanes_refuse, differential
 from tests.oracle import pd
 
 #: `p` over (node, tech) times `produces` adds `carrier`, and the sum removes `tech`.
-BROADCAST_MASK_SPEC = {
+BROADCAST_CONDITION_SPEC = {
     'dimensions': {
         'node': {'dtype': 'str'},
         'tech': {'dtype': 'str'},
         'carrier': {'dtype': 'str'},
     },
     'parameters': {
-        'produces': {'dims': ['tech', 'carrier']},
+        'produces': {'dims': ['tech', 'carrier'], 'missing': 0},
         'demand': {'dims': ['node', 'carrier']},
         'cost': {'dims': ['tech']},
         'installed': {'dims': ['node', 'tech']},
@@ -41,14 +40,14 @@ BROADCAST_MASK_SPEC = {
 
 
 def _grid(dims, labels, values):
-    """The full product of *labels* as a tidy frame, one row per coordinate."""
-    frame = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
-    return frame.assign(value=values)
+    """The full product of *labels* as a tidy table, one row per coordinate."""
+    table = pd.MultiIndex.from_product(labels, names=dims).to_frame(index=False)
+    return table.assign(value=values)
 
 
 SPARSE_COEFFICIENT_SPEC = {
-    'dimensions': {'t': {'dtype': 'int'}},
-    'parameters': {'c': {'dims': ['t']}, 'w': {'dims': ['t']}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'c': {'dims': ['t'], 'missing': 0}, 'w': {'dims': ['t'], 'missing': 0}},
     'variables': {'x': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 10}}},
     'constraints': {'cap': {'dims': ['t'], 'expression': 'w * x <= c'}},
     'objective': {'sense': 'maximize', 'expression': 'sum(x, over=t)'},
@@ -68,38 +67,51 @@ def test_a_sparse_coefficient_is_still_a_zero_coefficient():
         )
 
 
-def test_a_sparse_constant_side_is_refused_on_both_lanes():
-    """The same omission on the constant side is a `DataError`, not a zero.
+@pytest.mark.parametrize(
+    ('expression', 'objective'),
+    [
+        pytest.param('w * x <= c', 0.0 + 4.0 + 5.0, id='at the row key'),
+        pytest.param('w * x <= c + sum(c, over=t)', 9.0 + 10.0 + 10.0, id='beside a sum of itself'),
+        pytest.param('w * x + c <= 8', 8.0 + 4.0 + 3.0, id='beside a variable term'),
+    ],
+)
+def test_a_missing_row_on_the_constant_side_reads_as_its_declared_zero(expression, objective):
+    """`missing: 0` gives `c` the value 0 at t=0 on a constant side too, on both lanes (#1465, #1521).
 
-    There the fill is the bound: `w * x <= c` with no `c` row would read `<= 0`.
+    `c` holds 4 and 5 and its sum is 9; `x` is capped at 10.
     """
-    with (
-        pytest.raises(DataError, match="parameter 'c' covers 1 fewer"),
-        differential(SPARSE_COEFFICIENT_SPEC, SPARSE_CONSTANT_DATA),
-    ):
-        pass
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': expression})
+    with differential(spec, SPARSE_CONSTANT_DATA) as run:
+        assert run.result.objective == pytest.approx(objective, rel=RTOL), (
+            f'{expression} reads c as 0 at t=0, so the optimum is {objective}'
+        )
+
+
+def test_a_constant_side_short_of_a_row_is_refused_where_missing_is_undeclared():
+    """Without `missing:`, the same data is refused at attach rather than read as anything."""
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'parameters.c': {'dims': ['t']}})
+    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' has no row at t=0")
 
 
 @pytest.mark.parametrize(
-    'constraint',
+    ('constraint', 'objective'),
     [
-        pytest.param({'dims': ['t'], 'expression': 'w * x <= c'}, id='at the row key'),
-        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, id='under a sum'),
-        pytest.param({'dims': ['t'], 'expression': 'w * x <= c + sum(c, over=t)'}, id='beside a sum of itself'),
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) <= sum(c, over=t)'}, 9.0, id='under-a-sum'),
+        pytest.param({'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 30'}, 21.0, id='beside-a-term'),
     ],
 )
-def test_the_same_hole_is_refused_however_far_it_stands_from_the_row(constraint):
-    """A reduction between the parameter and the row does not hide the hole (#1465)."""
-    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
+def test_a_missing_row_under_a_sum_adds_zero(constraint, objective):
+    """Inside a sum a missing row of a `missing: 0` parameter adds 0, so the row is built from the rows the data has.
 
-
-def test_a_where_is_the_escape_from_the_constant_side_check():
-    """Masking the coordinate answers the question, so it is not refused.
-
-    The check is keyed to the rows a declaration builds, not to the coordinate
-    product.
+    `c` holds 4 and 5, so its sum is 9 whichever side it stands on.
     """
+    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap': constraint})
+    with differential(spec, SPARSE_CONSTANT_DATA) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), f'the sum of c is 4 + 5, so {objective}'
+
+
+def test_a_where_on_the_constant_side_drops_the_row_its_missing_row_would_cap():
+    """`where: c` drops the row at t=0, so `x` runs to its bound there rather than to the 0 `c` reads as."""
     masked = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.where': 'c'})
     with differential(masked, SPARSE_CONSTANT_DATA) as run:
         assert run.result.objective == pytest.approx(10.0 + 4.0 + 5.0, rel=RTOL), (
@@ -107,27 +119,8 @@ def test_a_where_is_the_escape_from_the_constant_side_check():
         )
 
 
-def test_a_constant_piece_beside_a_term_is_refused_on_both_lanes():
-    """A parameter added beside a variable term is a constant piece, and is checked (#1521).
-
-    Filled, `w * x + c <= 100` would read `w * x <= 100` where the file says
-    `w * x <= 100 - c`.
-    """
-    spec = override(SPARSE_COEFFICIENT_SPEC, **{'constraints.cap.expression': 'w * x + c <= 100'})
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
-
-
-def test_a_constant_piece_beside_a_term_is_refused_through_a_reduction():
-    """The same piece under a sum, which would sum the gap away (#1521)."""
-    spec = override(
-        SPARSE_COEFFICIENT_SPEC,
-        **{'constraints.cap': {'dims': [], 'expression': 'sum(w * x, over=t) + sum(c, over=t) <= 100'}},
-    )
-    both_lanes_refuse(spec, SPARSE_CONSTANT_DATA, match="parameter 'c' covers 1 fewer")
-
-
-def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
-    """Beside a constant piece, a sparse coefficient is still a zero (#1521).
+def test_a_sparse_coefficient_beside_a_constant_term_is_still_a_zero():
+    """Beside a constant term, a sparse coefficient is still a zero (#1521).
 
     `w` stands with a variable, so its missing row is a zero; only `c` is owed
     its coordinates.
@@ -141,7 +134,7 @@ def test_a_sparse_coefficient_beside_a_constant_piece_is_still_a_zero():
 
 
 #: `south` is a load-only bus: both generators sit on `north`, so the group
-#: behind `south`'s constant side has no members at all.
+#: behind `south`'s constant side has no labels at all.
 GROUPED_CONSTANT_SPEC = {
     'dimensions': {'generator': {}, 'bus': {'dtype': 'str'}},
     'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
@@ -150,7 +143,7 @@ GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(imports, over=bus)'},
@@ -167,28 +160,28 @@ def _grouped_constant_sources(capacity=('g1', 'g2')):
 
 
 def test_an_empty_group_on_the_constant_side_is_a_zero_and_not_a_gap():
-    """A group with no members holds the empty sum, which is a value.
+    """A group with no labels holds the empty sum, which is a value.
 
-    `capacity` covers every generator it has, and a group with no members
+    `capacity` covers every generator it has, and a group with no labels
     contributes nothing.
     """
     with differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(), lp=True) as run:
         assert run.result.objective == pytest.approx(7.0, rel=RTOL), 'north imports up to 3 + 4, south up to nothing'
-        built = by_coord(run.result, 'imports', 'bus')
+        built = primal_by_coordinate(run.result, 'imports', 'bus')
 
     assert built['south'] == pytest.approx(0.0), "an empty group caps south's imports at the empty sum"
 
 
-#: The same with a dim the group does not consume, so the empty label pairs with every snapshot.
+#: The same with a dimension the group does not consume, so the empty label pairs with every snapshot.
 SPANNED_GROUPED_CONSTANT_SPEC = {
     **GROUPED_CONSTANT_SPEC,
-    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int'}},
+    'dimensions': {**GROUPED_CONSTANT_SPEC['dimensions'], 'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'capacity': {'dims': ['snapshot', 'generator']}},
     'variables': {'imports': {'dims': ['snapshot', 'bus'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
         'import_limit': {
             'dims': ['snapshot', 'bus'],
-            'expression': 'imports <= sum(capacity, by=gen_bus, over=generator, into=bus)',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_bus[bus])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=snapshot)'},
@@ -208,7 +201,7 @@ def test_an_empty_group_spanning_another_dim_is_zero_at_every_coordinate():
     }
     with differential(SPANNED_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(7.0 + 2.0, rel=RTOL), 'north takes both snapshots, south neither'
-        built = by_coord(run.result, 'imports', 'snapshot', 'bus')
+        built = primal_by_coordinate(run.result, 'imports', 'snapshot', 'bus')
 
     assert built[(0, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
     assert built[(1, 'south')] == pytest.approx(0.0), 'the empty group is zero at every snapshot'
@@ -223,7 +216,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
     'constraints': {
         'import_limit': {
             'dims': ['bus', 'technology'],
-            'expression': 'imports <= sum(capacity, by=gen_placement, over=generator, into=[bus, technology])',
+            'expression': 'imports <= sum(capacity, over=generator, by=gen_placement[bus, technology])',
         }
     },
     'objective': {'sense': 'maximize', 'expression': 'sum(sum(imports, over=bus), over=technology)'},
@@ -231,7 +224,7 @@ PLURAL_GROUPED_CONSTANT_SPEC = {
 
 
 def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
-    """A combination of two groups that no member sits at holds the empty sum."""
+    """A combination of two groups that no label sits at holds the empty sum."""
     sources = {
         'bus': ['north', 'south'],
         'technology': ['wind', 'solar'],
@@ -243,29 +236,30 @@ def test_an_empty_combination_of_two_groups_is_a_zero_and_not_a_gap():
     }
     with differential(PLURAL_GROUPED_CONSTANT_SPEC, sources, lp=True) as run:
         assert run.result.objective == pytest.approx(3.0 + 4.0, rel=RTOL), 'south holds nothing at either technology'
-        built = by_coord(run.result, 'imports', 'bus', 'technology')
+        built = primal_by_coordinate(run.result, 'imports', 'bus', 'technology')
 
     assert built[('south', 'wind')] == pytest.approx(0.0), 'no generator sits at (south, wind)'
     assert built[('south', 'solar')] == pytest.approx(0.0), 'no generator sits at (south, solar)'
     assert built[('north', 'solar')] == pytest.approx(4.0), 'one generator sits at (north, solar), and it is g2'
 
 
-def test_a_member_with_no_value_is_still_refused_through_a_group():
-    """A group short of a member's value keeps the refusal.
+def test_a_label_with_no_value_adds_zero_through_a_group():
+    """A group short of a label's value sums the labels it has, when the parameter is `missing: 0`.
 
-    Dropping `g2`'s row leaves `north`'s group with one member and a hole, not
-    with no members.
+    Dropping `g2`'s row leaves `north` with `g1`'s 3, and `south` holds the empty sum.
     """
-    with (
-        pytest.raises(DataError, match="parameter 'capacity' covers 1 fewer"),
-        differential(GROUPED_CONSTANT_SPEC, _grouped_constant_sources(capacity=('g1',))),
-    ):
-        pass
+    spec = override(GROUPED_CONSTANT_SPEC, **{'parameters.capacity.missing': 0})
+    with differential(spec, _grouped_constant_sources(capacity=('g1',))) as run:
+        assert run.oracle == pytest.approx(3.0, rel=RTOL), 'north imports up to 3 and south up to 0'
 
 
 ABSENT_VARIABLE_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -278,9 +272,9 @@ ABSENT_VARIABLE_SPEC = {
 def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
     """Absence propagates into the comparison; it does not zero the term.
 
-    With ``size`` masked out, ``x - relmax * size <= 0`` drops its row rather
+    With ``size`` absent, ``x - relmax * size <= 0`` drops its row rather
     than building ``x <= 0`` (linopy v1 §6, §12), so ``x`` at ``f=b`` is bounded
-    only by its own declaration.
+    only by its own entry.
     """
     data = {
         'f': ['a', 'b'],
@@ -289,15 +283,19 @@ def test_a_term_whose_variable_is_absent_drops_the_row_on_both_lanes():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(ABSENT_VARIABLE_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(100.0, rel=RTOL), 'unsized: the row is gone, so only the bound holds'
 
 
-#: One rule per block, so the two regimes are two named constraints.
+#: One rule per entry, so the two regimes are two named constraints.
 DEFINED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool'}, 'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {
+        'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False},
+        'relmax': {'dims': ['f']},
+        'cost': {'dims': ['f']},
+    },
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -322,14 +320,14 @@ def test_a_bare_variable_name_in_a_where_asks_whether_it_exists():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(DEFINED_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: the envelope binds'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'unsized: the complementary clause pins it'
 
 
 ABSENT_COEFFICIENT_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
-    'parameters': {'relmax': {'dims': ['f']}, 'cost': {'dims': ['f']}},
+    'parameters': {'relmax': {'dims': ['f'], 'missing': 0}, 'cost': {'dims': ['f']}},
     'variables': {
         'x': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 100}},
         'size': {'dims': ['f'], 'bounds': {'lower': 0, 'upper': 50}},
@@ -352,12 +350,12 @@ def test_a_sparse_coefficient_on_the_bound_side_still_pins_the_variable():
         'cost': pd.Series({'a': 1.0, 'b': 1.0}),
     }
     with differential(ABSENT_COEFFICIENT_SPEC, data, lp=True) as run:
-        x = by_coord(run.result, 'x', 'f')
+        x = primal_by_coordinate(run.result, 'x', 'f')
         assert x['a'] == pytest.approx(25.0, rel=RTOL), 'sized: x <= 0.5 * size, size <= 50'
         assert x['b'] == pytest.approx(0.0, abs=1e-9), 'the row survived the missing coefficient and pins x'
 
 
-SCALAR_MASKED_SPEC = {
+SCALAR_NARROWED_SPEC = {
     'dimensions': {'f': {'dtype': 'str'}},
     'parameters': {'cost': {'dims': ['f']}, 'budget': {'dims': []}},
     'variables': {
@@ -369,17 +367,17 @@ SCALAR_MASKED_SPEC = {
 }
 
 
-def test_a_masked_out_scalar_variable_drops_the_row_that_uses_it():
+def test_an_absent_scalar_variable_drops_the_row_that_uses_it():
     """Law 7 holds at no dimension either (#340), and on the bare install."""
     data = {'f': ['a', 'b'], 'cost': pl.DataFrame({'f': ['a', 'b'], 'value': [1.0, 2.0]}), 'budget': 120.0}
 
-    with sps.solve(SCALAR_MASKED_SPEC, data) as sol:
+    with sps.solve(SCALAR_NARROWED_SPEC, data) as sol:
         assert sol.dual('cap').height == 0, 'the row is gone, not slackened — a dropped row has no dual'
         assert sol.objective == pytest.approx(300.0), 'unbudgeted, both generators run flat out'
 
 
-def test_a_mask_survives_a_broadcast_into_a_reduction():
-    """A mask keeps its own dims through a product that widens them (#345)."""
+def test_a_condition_survives_a_broadcast_into_a_reduction():
+    """A condition keeps its own dimensions through a product that widens them (#345)."""
     data = {
         'node': ['n1', 'n2'],
         'tech': ['t1', 't2'],
@@ -391,5 +389,5 @@ def test_a_mask_survives_a_broadcast_into_a_reduction():
         'installed': _grid(['node', 'tech'], [['n1', 'n2'], ['t1', 't2']], [100.0] * 4),
     }
 
-    with differential(BROADCAST_MASK_SPEC, data) as run:
+    with differential(BROADCAST_CONDITION_SPEC, data) as run:
         assert run.result.objective == pytest.approx(100.0, rel=RTOL)

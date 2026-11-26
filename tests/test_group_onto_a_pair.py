@@ -1,19 +1,19 @@
-"""``sum(x, by=r, over=c, into=[l, m])``: one grouping onto a pair of dimensions.
+"""``sum(x, over=c, by=r[l, m])``: one grouping onto a pair of dimensions.
 
 The call walks to two columns of one relation and lands terms on a product of
 dimensions, as a capacity limit per location and technology asks (PyPSA's
 `tech_capacity_expansion_limit`). The lanes differ on the empty combination,
 which the linopy lane's unstack fills with ``const: nan``, and on label order,
-which a groupby sorts and the dim table keeps as declared.
+which a groupby sorts and the dimension table keeps as declared.
 """
 
 from __future__ import annotations
 
 import pytest
-from mathspec.program import GroupSum, Variable
+from mathspec.program import Join, Sum, VariableReference
 
 from specsolve.errors import SchemaError
-from tests.conftest import by_coord, override, raw_of, schema_of
+from tests.conftest import override, primal_by_coordinate, raw_of, schema_of
 from tests.differential import RTOL, differential
 from tests.oracle import operators, pd, xr
 
@@ -45,7 +45,7 @@ variables:
 constraints:
   technology_at_bus:
     dims: [bus, technology]
-    expression: sum(p, by=gen_placement, over=generator, into=[bus, technology]) <= limit
+    expression: sum(p, over=generator, by=gen_placement[bus, technology]) <= limit
     description: output of one technology at one bus stays under its limit
   meet_demand:
     dims: []
@@ -66,7 +66,7 @@ OF_TECH = ['wind', 'sun', 'wind', 'wind']
 
 
 def _inputs():
-    index = pd.DataFrame({'generator': GENERATORS})
+    labels = pd.DataFrame({'generator': GENERATORS})
     limits = pd.DataFrame(
         {
             'bus': ['a', 'a', 'b', 'b'],
@@ -75,10 +75,10 @@ def _inputs():
         }
     )
     return {
-        'cost': index.assign(value=[1.0, 2.0, 3.0, 4.0]).set_index('generator')['value'],
+        'cost': labels.assign(value=[1.0, 2.0, 3.0, 4.0]).set_index('generator')['value'],
         'limit': limits,
         'demand': 20.0,
-        'generator': index,
+        'generator': labels,
         'gen_placement': pd.DataFrame({'generator': GENERATORS, 'bus': OF_BUS, 'technology': OF_TECH}),
         'bus': pd.Index(['a', 'b'], name='bus'),
         'technology': pd.Index(['wind', 'sun'], name='technology'),
@@ -101,7 +101,7 @@ def test_grouping_onto_two_dimensions_agrees_across_the_lanes():
     sources = _inputs()
     with differential(SPEC, sources, lp=True) as run:
         assert run.oracle == pytest.approx(10 * 1.0 + 5 * 2.0 + 5 * 3.0, rel=RTOL)
-        built = by_coord(run.result, 'p', 'generator')
+        built = primal_by_coordinate(run.result, 'p', 'generator')
 
     assert built['g1'] == pytest.approx(10.0), '(a, wind) is the binding limit'
     assert built['g2'] == pytest.approx(5.0), '(a, sun) is the binding limit'
@@ -114,7 +114,7 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
 
     An empty group is a zero-length sum, so its row asks `0 <= 1` and binds
     nothing. Tightening that limit to zero must therefore change no answer,
-    which catches a lane that quietly summed the wrong members into it.
+    which catches a lane that quietly summed the wrong labels into it.
 
     A row left with no variables is not built on either lane;
     :func:`test_an_empty_combination_does_not_take_its_row_with_it` checks
@@ -131,7 +131,7 @@ def test_a_combination_no_member_lands_on_is_a_group_of_nothing():
 def test_an_empty_combination_does_not_take_its_row_with_it():
     """A row whose group is empty but whose *other* terms are not is still a row.
 
-    The linopy lane reaches the combinations no member lands on by unstacking,
+    The linopy lane reaches the combinations no label lands on by unstacking,
     which invents them carrying linopy's own ``_fill_value`` — ``const: nan``.
     Left there, that NaN does not stay in the empty sum: it propagates through
     the addition, and linopy drops the whole row, `headroom` with it, leaving
@@ -150,7 +150,7 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
                 'description': 'capacity left unused at one bus in one technology',
             },
             'constraints.technology_at_bus.expression': (
-                'sum(p, by=gen_placement, over=generator, into=[bus, technology]) + headroom <= limit'
+                'sum(p, over=generator, by=gen_placement[bus, technology]) + headroom <= limit'
             ),
             'objective.expression': 'sum(p * cost, over=generator) - sum(sum(headroom, over=bus), over=technology)',
         },
@@ -168,8 +168,8 @@ def test_an_empty_combination_does_not_take_its_row_with_it():
 def test_a_declared_order_the_groupby_would_not_pick():
     """The technologies are declared out of alphabetical order on purpose.
 
-    A groupby returns its groups sorted, the dim table keeps the declared
-    order, and v1 arithmetic refuses to combine a shared dim ordered two ways.
+    A groupby returns its groups sorted, the dimension table keeps the declared
+    order, and v1 arithmetic refuses to combine a shared dimension ordered two ways.
     So this model builds on both lanes only because the linopy lane puts its
     result back into declared order.
     """
@@ -210,25 +210,26 @@ def test_a_grouped_parameter_reads_zero_where_no_member_lands():
 
 
 # ---------------------------------------------------------------------------
-# lowering
+# compiling
 # ---------------------------------------------------------------------------
 
 
 def test_two_columns_lower_to_one_node_and_not_to_a_composition():
-    """One grouping, so one plan node: the coordinates ride one join.
+    """One grouping, so one program node: the coordinates ride one join.
 
     A composition would consume `generator` twice, and the second pass would
     have nothing left to group.
     """
-    (limit, _demand) = schema_of(SPEC).program.constraints.values()
-    assert isinstance(limit.lhs, GroupSum)
-    assert limit.lhs.operand == Variable('p')
-    direction = limit.lhs.direction
-    assert (direction.consumed_dims, direction.name, direction.produced_dims) == (
+    limit = schema_of(SPEC).program.constraints['technology_at_bus']
+    assert isinstance(limit.lhs, Sum)
+    assert isinstance(limit.lhs.operand, Join)
+    assert limit.lhs.operand.operand == VariableReference('p', dims=('generator',))
+    columns = limit.lhs.operand.columns
+    assert (columns.dropped_dims, columns.name, columns.added_dims) == (
         ('generator',),
         'gen_placement',
         ('bus', 'technology'),
-    ), 'one node carrying one direction, each column read paired with the dimension it lands on'
+    ), 'one join carrying one set of columns, each column read paired with the dimension it lands on'
 
 
 # ---------------------------------------------------------------------------
@@ -240,9 +241,7 @@ def test_a_call_walks_one_table_and_says_so():
     """A pair of dimensions comes from one relation's two columns, not from two relations."""
     patch = {
         'relations.gen_bus': {'key': 'generator', 'values': 'bus'},
-        'constraints.technology_at_bus.expression': (
-            'sum(p, by=[gen_placement, gen_bus], over=generator, into=[bus, technology]) <= limit'
-        ),
+        'constraints.technology_at_bus.expression': ('sum(p, over=generator, by=[gen_placement, gen_bus]) <= limit'),
     }
-    with pytest.raises(SchemaError, match=r'names 2 relations, and one call reads one table'):
+    with pytest.raises(SchemaError, match=r'takes columns of one relation'):
         schema_of(SPEC, **patch)

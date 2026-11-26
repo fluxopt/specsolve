@@ -5,7 +5,7 @@ them. Its projection keeps the constraints with rows built and the variables
 with columns built, drops from every kept expression the additive terms over
 variables the rung never builds or parameters and relations it never feeds —
 they contribute nothing — and keeps the parameters, relations and dimensions
-those blocks still name. The parity runner writes one per rung, solves it and
+those entries still name. The parity runner writes one per rung, solves it and
 holds it to PyPSA's objective.
 """
 
@@ -30,7 +30,7 @@ NAME = re.compile(r'\b[A-Za-z_][A-Za-z0-9_]*\b')
 
 
 def _relation_dims(relation: dict[str, Any]) -> set[str]:
-    """The dimensions a raw relation block names, in every spelling of a side."""
+    """The dimensions a raw relation entry names, in every spelling of a side."""
     sides = (relation['key'], relation.get('values', ()))
     return {d for side in sides for d in _side_dims(side)}
 
@@ -110,6 +110,7 @@ def _cut(expression: str, dead: set[str]) -> str | None:
 def _mentions(block: dict[str, Any]) -> set[str]:
     """Every declared name a block reads — through a ``cases:`` block's regions as well as its own keys."""
     found = names(str(block.get('expression', ''))) | names(str(block.get('where', '')))
+    found |= names(str(block.get('condition', '')))
     found |= names(' '.join(str(v) for v in (block.get('bounds') or {}).values()))
     if 'cases' in block:
         found |= names(str(block.get('otherwise', '')))
@@ -145,10 +146,11 @@ def _surviving(expressions: dict[str, Any], dead: set[str]) -> dict[str, dict[st
 def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     """The projection of *raw* (the file as a dict) onto what *parity* says the rung built.
 
-    A cased quantity is kept whole, because only its regions' masks may say
-    whether a region applies. Expressions keep the file's order, so the output
-    is stable across processes. A variable a kept quantity names is declared
-    as written, even where the rung builds no column for it.
+    A cased quantity is kept whole, because only its regions' conditions may say
+    whether a region applies. Expressions and named conditions keep the file's
+    order, so the output is stable across processes. A variable a kept
+    quantity or condition names is declared as written, even where the rung builds
+    no column for it.
     """
     variables = {n: v for n, v in raw['variables'].items() if parity['built_columns'].get(n)}
     fed = set(parity['attached_nonempty'])
@@ -171,15 +173,17 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     mentioned: set[str] = set()
     for block in (*constraints.values(), *variables.values(), objective):
         mentioned |= _mentions(block)
-    expressions: dict[str, Any] = {}
-    while reached := [n for n in survived if n in mentioned and n not in expressions]:
-        for name in reached:
-            expressions[name] = survived[name]
-            mentioned |= _mentions(survived[name])
-
-    variables |= {n: v for n, v in raw['variables'].items() if n in mentioned}
-    for block in variables.values():
-        mentioned |= _mentions(block)
+    conditions = raw.get('conditions', {})
+    kept: dict[str, dict[str, Any]] = {'expressions': {}, 'conditions': {}, 'variables': variables}
+    sources = {'expressions': survived, 'conditions': conditions, 'variables': raw['variables']}
+    while reached := [
+        (kind, n) for kind, held in sources.items() for n in held if n in mentioned and n not in kept[kind]
+    ]:
+        for kind, name in reached:
+            kept[kind][name] = sources[kind][name]
+            mentioned |= _mentions(sources[kind][name])
+    expressions = {n: block for n, block in survived.items() if n in kept['expressions']}
+    named_conditions = {n: block for n, block in conditions.items() if n in kept['conditions']}
     parameters = {n: p for n, p in raw['parameters'].items() if n in mentioned}
     relations = {n: lk for n, lk in raw.get('relations', {}).items() if n in mentioned}
     dims: set[str] = set()
@@ -199,6 +203,8 @@ def project(raw: dict[str, Any], parity: dict[str, Any]) -> dict[str, Any]:
     out['constraints'] = constraints
     if expressions:
         out['expressions'] = expressions
+    if named_conditions:
+        out['conditions'] = named_conditions
     out['objective'] = objective
     return out
 

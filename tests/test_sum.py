@@ -1,7 +1,7 @@
-"""``sum()`` naming no dim: every dim the operand carries.
+"""``sum()`` naming no dimension: every dimension the operand carries.
 
-The spelling writes down a reduction a declaration would otherwise imply
-(#1046). ``sum(x)`` and the nest that names each dim build one model, on both
+The spelling writes down a reduction an entry would otherwise imply
+(#1046). ``sum(x)`` and the nest that names each dimension build one model, on both
 lanes and through the LP file. The reduction sits in a **scalar constraint**,
 since an objective sums what is left over anyway and hides a bare sum.
 """
@@ -17,7 +17,7 @@ from tests.differential import differential
 SNAPSHOTS = [0, 1]
 GENERATORS = ['wind', 'gas']
 
-#: Bare and nested say the same reduction: the nest names the two dims the
+#: Bare and nested say the same reduction: the nest names the two dimensions the
 #: operand carries, in either order, and the bare form takes both unnamed.
 SPELLINGS = {
     'bare': 'sum(p * cost)',
@@ -31,7 +31,7 @@ def _spec(budget: str, *, where: str | None = None) -> dict:
     if where is not None:
         variable['where'] = where
     return {
-        'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
         'parameters': {
             'p_max': {'dims': ['generator']},
             'cost': {'dims': ['generator']},
@@ -78,7 +78,7 @@ def test_a_bare_sum_builds_what_the_nest_builds(spelling, tmp_path):
 def test_a_bare_sum_skips_the_slots_its_operand_does_not_reach():
     """A reduction reads absent slots as skipped, and the bare form is a reduction.
 
-    Gas is masked out of existence, so the budget row is wind's two summands
+    Gas is absent, so the budget row is wind's two terms
     and nothing standing in for a variable that is not there: 40 of wind at
     cost 1, which the budget of 60 does not bind.
     """

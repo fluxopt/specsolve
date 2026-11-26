@@ -21,7 +21,7 @@ Which parts of it the language can say:
 |---|---|
 | DFJ, subsets **written out** | **sayable** — the subsets go in as data, exactly as [KVL's cycle basis](pypsa_kvl.md) does. Verified on an 8-city instance: 246 subsets, one correct tour |
 | DFJ, subsets **generated lazily** | **outside** — solve, find violations, add rows, re-solve is an *algorithm*, not a model. Nothing declarative describes it |
-| MTZ | sayable, and what this port uses |
+| MTZ | in the language, and what this port uses |
 
 The refusal is only the second row. The first is not a language limit: it is 2ⁿ
 rows, which stops being practical somewhere around twenty cities. A
@@ -58,7 +58,7 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{distance}`$ | `distance` over $`\mathcal{F} \times \mathcal{T}`$ — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
+| $`\mathrm{distance}`$ | `distance` over $`\mathcal{F} \times \mathcal{T}`$, `absent` where the data has no row — distance along an arc, with no row on the diagonal — a city has no distance to itself, so no arc variable exists there |
 | $`\mathrm{n}`$ | `n` (scalar) — the number of cities, which is the big-M the ordering rows need |
 
 #### Variables
@@ -67,34 +67,6 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 |---|---|
 | $`\mathit{travel}`$ | `travel` over $`\mathcal{F} \times \mathcal{T}`$ — is this arc on the tour? |
 | $`u`$ | `u` over $`\mathcal{C}`$ — position of a city in the tour — continuous, because the formulation needs only that the positions be orderable |
-
-Upright is what the data supplies — a parameter such as $`\mathrm{distance}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{travel}`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
-#### Objective
-
-```math
-\min \sum_{f \in \mathcal{F},\ t \in \mathcal{T}} \mathit{travel}_{f,t} \cdot \mathrm{distance}_{f,t}
-```
-
-#### Subject to
-
-**`leave_each_city_once`**
-
-```math
-\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
-```
-
-**`enter_each_city_once`**
-
-```math
-\sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\, t \in \mathcal{T}
-```
-
-**`ordering`**
-
-```math
-\sum_{c \in \mathcal{C} \,:\, \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \,:\, \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}
-```
 
 #### Variable domains
 
@@ -108,6 +80,32 @@ Upright is what the data supplies — a parameter such as $`\mathrm{distance}`$,
 
 ```math
 1 \le u_{c} \le 17 \qquad \forall\, c \in \mathcal{C}
+```
+
+#### Objective
+
+```math
+\min \sum_{f \in \mathcal{F},\ t \in \mathcal{T}} \mathit{travel}_{f,t} \cdot \mathrm{distance}_{f,t}
+```
+
+#### Subject to
+
+**`enter_each_city_once`**
+
+```math
+\sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\, t \in \mathcal{T}
+```
+
+**`leave_each_city_once`**
+
+```math
+\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
+```
+
+**`ordering`**
+
+```math
+\sum_{c \in \mathcal{C} \,:\, \mathrm{as\_from}(c) = f} u_{c} - \left( \sum_{c \in \mathcal{C} \,:\, \mathrm{as\_to}(c) = t} u_{c} \right) + \mathrm{n} \cdot \mathit{travel}_{f,t} \le \mathrm{n} - 1 \qquad \forall\, f \in \mathcal{F},\ t \in \mathcal{T} \,:\, f \neq \text{'}\mathrm{c01}\text{'} \wedge t \neq \text{'}\mathrm{c01}\text{'}
 ```
 
 </details>
@@ -140,6 +138,7 @@ parameters:
       distance along an arc, with no row on the diagonal — a city has no
       distance to itself, so no arc variable exists there
     dims: [from_city, to_city]
+    missing: absent
   n:
     description: the number of cities, which is the big-M the ordering rows need
     dims: []
@@ -177,8 +176,8 @@ constraints:
     dims: [from_city, to_city]
     where: "from_city != c01 AND to_city != c01"
     expression: >-
-      sum(u, by=as_from, over=city, into=from_city)
-      - sum(u, by=as_to, over=city, into=to_city)
+      sum(u, over=city, by=as_from[from_city])
+      - sum(u, over=city, by=as_to[to_city])
       + n * travel
       <= n - 1
 
@@ -191,7 +190,7 @@ objective:
 **The tour position sits at both ends of one row.** MTZ needs `u`, the tour
 position, at *both ends of the same row*: `u_i − u_j`. A variable indexed by one
 dimension appears twice under two different roles, a self-join that looks like
-it should need a primitive.
+it should need an operator.
 
 It does not. Declare the identity map from `city` onto each end of the pair:
 
@@ -201,7 +200,7 @@ relations:
   as_to: {key: city, values: to_city}
 ```
 
-and `sum(u, by=as_from, over=city, into=from_city)` becomes a **relabel** rather than a reduction. Each
+and `sum(u, over=city, by=as_from[from_city])` becomes a **relabel** rather than a reduction. Each
 city keys one row and each `from_city` is named once, so nothing is added up:
 `u` moves from the `city` axis onto the `from_city` axis. Doing it twice with
 different relations puts the same variable at both ends of one row. A relation

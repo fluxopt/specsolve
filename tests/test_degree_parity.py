@@ -1,4 +1,4 @@
-"""Degree 1, checked against the oracle lane itself.
+"""Degree 1, checked against the linopy lane itself.
 
 The linopy lane refuses what the relational lane refuses, in the same words
 (hard rule 3). The rule lives in ``mathspec.degree``, and both lanes ask it.
@@ -14,7 +14,7 @@ from tests.conftest import dispatch_spec_path
 from tests.oracle import specsolve_linopy  # skips the module without the oracle
 
 
-#: One entry per way the degree rule can be broken at build time on both lanes.
+#: One case per way the degree rule can be broken at build time on both lanes.
 @pytest.mark.parametrize(
     ('patch', 'match'),
     [
@@ -30,7 +30,7 @@ from tests.oracle import specsolve_linopy  # skips the module without the oracle
         ),
         pytest.param(
             {'objective.expression': 'sum(p ** 2)'},
-            'over variables',
+            'has a variable in its base or exponent',
             id='a-power-over-a-variable',
         ),
     ],
@@ -38,7 +38,7 @@ from tests.oracle import specsolve_linopy  # skips the module without the oracle
 def test_both_lanes_refuse_the_same_expression(tmp_path, dispatch_spec_inputs, patch, match):
     """Not just "both raise": both say the same thing.
 
-    The relational lane prefixes the declaration it was lowering, so its
+    The relational lane prefixes the entry it was querying, so its
     message ends with the linopy one.
     """
     data = dispatch_spec_inputs

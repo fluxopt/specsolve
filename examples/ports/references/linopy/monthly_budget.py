@@ -11,7 +11,7 @@ A teaching model, so what verifies it is agreement with an independent
 formulation, not a published figure — see ``dispatch.py`` next door.
 
 The line worth comparing is the budget. The YAML groups by a relation over
-snapshot — ``sum(p, by=month_of, over=snapshot, into=month)`` —
+snapshot — ``sum(p, over=snapshot, by=month_of[month])`` —
 and linopy carries the same idea natively: ``p.groupby(month).sum()``, the
 way PyPSA's own optimization layer aggregates. The difference is where the
 calendar lives — a declared relation in the YAML, a data array the model
@@ -31,7 +31,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'monthly_budget.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

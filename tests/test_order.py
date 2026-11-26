@@ -20,7 +20,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational.engine import assembly
+from specsolve._engine import assembly
+from specsolve._names import COEFF, ROW
 from tests.conftest import expanded
 from tests.conftest import port_sources as sources
 
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 #: Ports whose model moves when the rows of a table are shuffled, and why.
 MOVES = {
     'osemosys_utopia': (
-        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1896)'
+        'a cost or a right-hand side summed over rows in no fixed order differs in its last bit (#1898)'
     ),
 }
 
@@ -53,19 +54,19 @@ def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
     no order contract.
     """
     with sps.build(expanded(port['spec']), given) as model:
-        handoff = model._engine._model.handoff
+        tables = model._engine._model.tables
         numbers = (
-            handoff.matrix['coeff'],
-            handoff.cols['lb'],
-            handoff.cols['ub'],
-            handoff.quad['coeff'],
-            handoff.rows['row'],
-            handoff.rows['rhs'],
+            tables.matrix[COEFF],
+            tables.cols['lb'],
+            tables.cols['ub'],
+            tables.quad[COEFF],
+            tables.rows[ROW],
+            tables.rows['rhs'],
         )
         return (
-            handoff.structure,
-            f'{handoff.objective_constant}'.encode(),
-            handoff._dense_cost().tobytes(),
+            tables.structure,
+            f'{tables.objective_constant}'.encode(),
+            tables._dense_cost().tobytes(),
             *(column.to_numpy().tobytes() for column in numbers),
         )
 
@@ -106,6 +107,35 @@ def test_shuffled_tables_build_the_same_model(port_that_holds: dict[str, Any], s
     )
 
 
+def test_a_parameter_filled_with_its_declared_value_builds_the_same_model() -> None:
+    """A parameter that declares a value for a missing row builds the same model at every build.
+
+    The rows that fill it came back from two joins in no fixed order, so a sum
+    over them added the same numbers in another order with several polars
+    threads, and the cost of an ``x`` differed in its last bit between builds.
+    """
+    rng = np.random.default_rng(0)
+    items, periods = 200, 50
+    spec = {
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'parameters': {'cost': {'dims': ['i', 't'], 'missing': 1}},
+        'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {'budget': {'dims': [], 'expression': 'sum(x) <= 10'}},
+        'objective': {'sense': 'minimize', 'expression': 'sum(cost * x)'},
+    }
+    rows = rng.random(items * periods) < 0.5
+    cost = pl.DataFrame(
+        {
+            'i': np.repeat(np.arange(items), periods)[rows],
+            't': np.tile(np.arange(periods), items)[rows],
+            'value': rng.uniform(0.0, 1e3, rows.sum()) * 10.0 ** rng.integers(-6, 6, rows.sum()),
+        }
+    )
+    given = {'i': list(range(items)), 't': list(range(periods)), 'cost': cost}
+    builds = {_built({'spec': spec}, given) for _ in range(5)}
+    assert len(builds) == 1, 'five builds from the same sources gave more than one model'
+
+
 def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
     """A coefficient summed over rows in another order differs in its last bit, which is no reason to load again.
 
@@ -116,7 +146,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
     rng = np.random.default_rng(0)
     items, periods = 2_000, 50
     spec = {
-        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int'}},
+        'dimensions': {'i': {'dtype': 'int'}, 't': {'dtype': 'int', 'ordered': True}},
         'parameters': {'cost': {'dims': ['i', 't']}},
         'variables': {'x': {'dims': ['i'], 'bounds': {'lower': 0, 'upper': 1}}},
         'constraints': {'budget': {'dims': [], 'expression': 'sum(cost * x) <= 1e6'}},
@@ -133,7 +163,7 @@ def test_the_same_numbers_in_another_row_order_keep_the_loaded_solver() -> None:
         model.solve()
         for seed in range(3):
             model.update({'cost': cost.sample(fraction=1.0, shuffle=True, seed=seed)}).solve()
-        assert model.diagnostics().loads == 1, 'the same numbers, shuffled, loaded the solver again'
+        assert model.metrics().solver_instances == 1, 'the same numbers, shuffled, loaded the solver again'
 
 
 def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -> None:
@@ -149,6 +179,6 @@ def test_a_coefficient_moved_by_one_part_in_a_billion_loads_the_solver_again() -
     with sps.build(spec, {'i': [0, 1, 2], 'cost': cost}) as model:
         model.solve()
         model.update({'cost': cost.with_columns(pl.col('value') * (1 + 1e-9))}).solve()
-        assert model.diagnostics().loads == 2, (
+        assert model.metrics().solver_instances == 2, (
             'a coefficient moved by 1e-9 relative kept a solver that holds the old one'
         )

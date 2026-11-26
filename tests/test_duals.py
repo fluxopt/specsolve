@@ -45,8 +45,8 @@ def test_dual_matches_the_linopy_lane(dispatch_yaml, dispatch_inputs):
         )
 
 
-def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
-    """Duals are a label join, so a masked row is absent — never a zero."""
+def test_dual_respects_the_where_condition(dispatch_yaml, dispatch_inputs):
+    """Duals are a label join, so a row a condition leaves out is absent — never a zero."""
     data = dispatch_inputs
     trimmed = dict(data, snapshot=data['snapshot'][:12], load=data['load'].iloc[:12])
 
@@ -59,7 +59,7 @@ def test_dual_respects_the_where_mask(dispatch_yaml, dispatch_inputs):
 def test_milp_refuses_duals_and_names_the_variable(commitment_inputs):
     """Integrality is decidable from the program, so the message says which.
 
-    A deliberate divergence from the oracle (#78): linopy returns zeros for
+    A deliberate divergence from the linopy lane (#78): linopy returns zeros for
     the duals of this model, a plausible number with no signal attached.
     """
     data = commitment_inputs
@@ -90,7 +90,7 @@ def test_infeasible_solve_refuses_duals(dispatch_yaml, dispatch_inputs):
 
 
 RAMP_BLOCK = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'lim': {'dims': ['t']}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0, 'upper': 100}}},
     'constraints': {
@@ -143,7 +143,7 @@ WRITTEN = [
 
 def _floor_model(row: str, sense: str) -> dict[str, object]:
     return {
-        'dimensions': {'snapshot': {'dtype': 'int'}},
+        'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
         'parameters': {'b': {'dims': ['snapshot']}},
         'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
         'constraints': {'floor': {'dims': ['snapshot'], 'expression': row}},

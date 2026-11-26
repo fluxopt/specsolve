@@ -1,7 +1,7 @@
 """Expansion means the same on both lanes.
 
 The rules for `macros:` and `expressions:` live with the language's own suite
-(#1150). Both constructs expand to core AST before dispatch, so one end-to-end
+(#1150). Both constructs expand into ordinary program nodes before dispatch, so one end-to-end
 case on which the lanes agree covers them.
 """
 
@@ -17,7 +17,7 @@ from tests.oracle import pd
 #: than imported: that suite travels with the language and this one does not.
 EXPANSION_YAML = """
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
@@ -56,7 +56,7 @@ def test_a_macro_and_a_named_expression_mean_the_same_on_both_lanes():
             index=pd.RangeIndex(n_s, name='snapshot'),
         ),
     }
-    index = {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': list(DISPATCH_GENERATORS)}
+    labels = {'snapshot': pd.RangeIndex(n_s, name='snapshot'), 'generator': list(DISPATCH_GENERATORS)}
 
-    with differential(EXPANSION_YAML, data | index):
+    with differential(EXPANSION_YAML, data | labels):
         pass  # agreement on the objective is the whole assertion

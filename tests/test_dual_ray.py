@@ -13,14 +13,14 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._sinks import SOLVERS
 from specsolve.errors import SpecsolveError
-from specsolve.relational.sinks import SOLVERS
 
 #: Two rows that cannot both hold, and no bound in the argument: ``p`` is held
 #: only by a lower bound of zero, which delivers nothing into the combination,
 #: so the certificate is the simple ``Σ weight * rhs > 0``.
 SHORT = {
-    'dimensions': {'snapshot': {'dtype': 'int'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}},
     'parameters': {'need': {'dims': ['snapshot']}, 'cap': {'dims': ['snapshot']}},
     'variables': {'p': {'dims': ['snapshot'], 'bounds': {'lower': 0}}},
     'constraints': {
@@ -84,7 +84,9 @@ def test_a_ray_spans_the_constraint_it_names(solver_name: str) -> None:
     """One weight per row, laid out over the constraint's own coordinates — ``dual``'s shape."""
     answer = certified(solver_name, ASKED[solver_name])
     ray = answer.dual_ray('demand')
-    assert ray.columns == ['snapshot', 'value'], 'a ray is tidy over the constraint dims, like every other reader'
+    assert ray.columns == ['snapshot', 'value'], (
+        'a ray is tidy over the dimensions of the constraint, like every other reader'
+    )
     assert ray['snapshot'].to_list() == [0, 1], 'rows come back in label order'
     answer.close()
 

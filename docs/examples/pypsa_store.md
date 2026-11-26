@@ -31,81 +31,39 @@ PyPSA's Store component: one signed power at the bus, no efficiencies and no pow
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{S}`$ | index $`s`$ — `store` with $`\mathrm{store\_bus}: \mathcal{S} \to \mathcal{B}`$ — energy stores, each sitting on one bus |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
-| $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the horizon |
+| $`\mathrm{e}^{\mathrm{capital,cost}}`$ | `e_capital_cost` over $`\mathcal{S}`$ — cost of holding one unit of energy capacity over the modelled period |
 | $`\mathrm{e}^{\mathrm{initial}}`$ | `e_initial` over $`\mathcal{S}`$ — energy in the store before the first snapshot |
+| $`\mathrm{e}^{\mathrm{nom,max}}`$ | `e_nom_max` over $`\mathcal{S}`$ — most energy capacity that may be built at a store |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
 | $`\mathrm{standing\_loss}`$ | `standing_loss` over $`\mathcal{S}`$ — share of the carried-over level lost between snapshots |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`\mathit{store\_p}`$ | `store_p` over $`\mathcal{T} \times \mathcal{S}`$ — power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
 | $`e`$ | `e` over $`\mathcal{T} \times \mathcal{S}`$ — energy in the store at the end of a snapshot |
 | $`e^{\mathrm{nom}}`$ | `e_nom` over $`\mathcal{S}`$ — energy capacity built at a store |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
+| $`\mathit{store\_p}`$ | `store_p` over $`\mathcal{T} \times \mathcal{S}`$ — power a store puts onto its bus, negative when it takes power off — unbounded, because a Store has no rating of its own |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{p}^{\mathrm{nom}}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`\mathrm{pos}(t)`$ denotes where index $`t`$ sits along its dimension's own order — the order `shift` steps along, not the order labels sort in — counted from $`0`$. The index itself stays the coordinate, so $`t`$ compares against labels and $`\mathrm{pos}(t)`$ against positions.
-
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot \mathrm{e}^{\mathrm{capital,cost}}_{s}
-```
-
-#### Subject to
-
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{s \in \mathcal{S} \,:\, \mathrm{store\_bus}(s) = b} \mathit{store\_p}_{t,s} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`within_capacity`**
-
-```math
-e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
-
-**`energy_balance_initial`**
-
-```math
-e_{t,s} = \mathrm{e}^{\mathrm{initial}}_{s} - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{pos}(t) = 0
-```
-
-**`energy_balance`**
-
-```math
-e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
+| Symbol | Meaning |
+|---|---|
+| $`\mathrm{pos}(t)`$ | `position()` — the position of $`t`$, counted from $`0`$; $`t`$ is the label |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
-**`store_p`**
-
-```math
-\mathit{store\_p}_{t,s} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
-```
 
 **`e`**
 
@@ -119,10 +77,54 @@ e_{t,s} \ge 0 \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
 0 \le e^{\mathrm{nom}}_{s} \le \mathrm{e}^{\mathrm{nom,max}}_{s} \qquad \forall\, s \in \mathcal{S}
 ```
 
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`store_p`**
+
+```math
+\mathit{store\_p}_{t,s} \in \mathbb{R} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+#### Objective
+
+```math
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} + \sum_{s \in \mathcal{S}} e^{\mathrm{nom}}_{s} \cdot \mathrm{e}^{\mathrm{capital,cost}}_{s}
+```
+
+#### Subject to
+
+**`energy_balance`**
+
+```math
+e_{t,s} = e_{t - 1,s} \cdot \left( 1 - \mathrm{standing\_loss}_{s} \right) - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
+**`energy_balance_initial`**
+
+```math
+e_{t,s} = \mathrm{e}^{\mathrm{initial}}_{s} - \mathit{store\_p}_{t,s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S} \,:\, \mathrm{pos}(t) = 0
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{s \in \mathcal{S} \,:\, \mathrm{store\_bus}(s) = b} \mathit{store\_p}_{t,s} = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+e_{t,s} \le e^{\mathrm{nom}}_{s} \qquad \forall\, t \in \mathcal{T},\ s \in \mathcal{S}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -138,6 +140,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -169,7 +172,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: most energy capacity that may be built at a store
         dims: [store]
       e_capital_cost:
-        description: cost of holding one unit of energy capacity over the horizon
+        description: cost of holding one unit of energy capacity over the modelled period
         dims: [store]
       e_initial:
         description: energy in the store before the first snapshot
@@ -209,7 +212,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       nodal_balance:
         description: what is generated at a bus, plus what the stores supply, meets the load there
         dims: [snapshot, bus]
-        expression: sum(p, by=gen_bus, over=generator, into=bus) + sum(store_p, by=store_bus, over=store, into=bus) == load
+        expression: sum(p, over=generator, by=gen_bus[bus]) + sum(store_p, over=store, by=store_bus[bus]) == load
 
       within_capacity:
         description: a store holds no more energy than the capacity built for it
@@ -239,10 +242,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_store.yaml', sources) as solution:
-        solution.objective  # 7005.5025000000005
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_store.yaml', sources) as result:
+        result.objective  # 7005.5025000000005
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -300,8 +303,8 @@ report a lower cost. The dual vector catches that where a single objective
 figure might not.
 
 **The initial level is not decayed, and the instance can tell.** PyPSA's first
-row is `e = e_initial - p`, so the 20 MWh in the tank before the horizon arrives
-whole. Decay it and the same instance costs **7074.30** against **7005.50**. A
+row is `e = e_initial - p`, so the 20 MWh in the tank before the first snapshot
+arrives whole. Decay it and the same instance costs **7074.30** against **7005.50**. A
 version with an empty tank reports 3116.36 either way, which is why the tank
 starts full.
 
@@ -314,4 +317,4 @@ not have.
 
 An energy recurrence over one signed variable, a capacity variable bounding a
 time-indexed variable (`e <= e_nom`, two decisions rather than a decision and a
-bound), and a `shift` across the horizon's opening boundary.
+bound), and a `shift` across the first snapshot's boundary.

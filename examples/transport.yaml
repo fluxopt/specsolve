@@ -7,6 +7,7 @@ dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   generator:
     description: generating units, each sitting on one bus
     dtype: str
@@ -64,10 +65,10 @@ variables:
 
 expressions:
   gen_at_bus:
-    expression: sum(p, by=gen_bus, over=generator, into=bus)
+    expression: sum(p, over=generator, by=gen_bus[bus])
     description: what the generators sitting on a bus produce there
   net_inflow:
-    expression: sum(f, by=line_to, over=line, into=bus) - sum(f, by=line_from, over=line, into=bus)
+    expression: sum(f, over=line, by=line_to[bus]) - sum(f, over=line, by=line_from[bus])
     description: flow arriving at a bus minus flow leaving it, so a negative value is a net export
 
 constraints:

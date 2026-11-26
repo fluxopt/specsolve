@@ -14,10 +14,10 @@ Example::
         ...
 """
 
-from mathspec import DimensionError, LanguageError, SchemaError
+from mathspec.errors import DimensionError, LanguageError, SchemaError
 
 # An alias, not a subclass, so ``except SpecsolveError`` catches a ``LanguageError``.
-from mathspec import MathSpecError as SpecsolveError
+from mathspec.errors import MathSpecError as SpecsolveError
 
 
 class SpecsolveWarning(UserWarning):
@@ -36,8 +36,8 @@ class LayoutError(SpecsolveError):
     """What is on disk is not a layout this package reads.
 
     The fix is which path was named, or re-solving a model whose layout has
-    moved since it was written. The layout is the one
-    [`save`][specsolve.relational.result.Result.save] stamps.
+    changed since it was written. The layout is the one an archive stamps in
+    its ``format.json``.
     """
 
 

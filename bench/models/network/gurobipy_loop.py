@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def _grouped(keys: Any, values: Any) -> dict[Any, list[Any]]:
-    """``bus -> what sits on it`` — the adjacency a balance row sums over."""
+    """``bus -> what sits on it`` — the adjacency a balance or pool row sums over."""
     out: dict[Any, list[Any]] = collections.defaultdict(list)
     for key, value in zip(keys, values, strict=True):
         out[value].append(key)
@@ -49,6 +49,9 @@ def build(env: Any, tables: Mapping[str, Any]) -> Any:
     into = _grouped(tables['line_to']['line'], tables['line_to']['bus'])
     out_of = _grouped(tables['line_from']['line'], tables['line_from']['bus'])
     stores_at = _grouped(tables['store_bus']['store'], tables['store_bus']['bus'])
+    pool_of = tables['pool_of']
+    members = _grouped(zip(pool_of['bus'], pool_of['tech'], strict=True), pool_of['pool'])
+    limit = _by_name(tables['limit'])
     snapshots = list(tables['snapshot']['snapshot'])
     previous = dict(zip(snapshots[1:], snapshots[:-1], strict=True))
     buses, lines, stores = list(tables['bus']['bus']), list(tables['line']['line']), list(tables['store']['store'])
@@ -73,4 +76,5 @@ def build(env: Any, tables: Mapping[str, Any]) -> Any:
         for s in snapshots
         for st in stores
     )
+    m.addConstrs(gp.quicksum(p[s, b, t] for b, t in members[pool]) <= limit[pool] for s in snapshots for pool in limit)
     return m

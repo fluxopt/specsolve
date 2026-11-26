@@ -1,12 +1,13 @@
 description: >-
   PyPSA linear optimal power flow with a storage unit carrying energy between
-  snapshots. Non-cyclic — the horizon starts at the initial
+  snapshots. Non-cyclic — the level starts at the initial
   state of charge and ends free. Optimum 15253.178322993519, from PyPSA itself.
 
 dimensions:
   snapshot:
     description: dispatch periods
     dtype: int
+    ordered: true
   bus:
     description: network nodes
     dtype: str
@@ -124,11 +125,11 @@ constraints:
       the stores, meets the load there
     dims: [snapshot, bus]
     expression: >-
-      sum(p, by=gen_bus, over=generator, into=bus)
-      + sum(f, by=link_to, over=link, into=bus)
-      - sum(f, by=link_from, over=link, into=bus)
-      + sum(p_dispatch, by=storage_bus, over=storage, into=bus)
-      - sum(p_store, by=storage_bus, over=storage, into=bus)
+      sum(p, over=generator, by=gen_bus[bus])
+      + sum(f, over=link, by=link_to[bus])
+      - sum(f, over=link, by=link_from[bus])
+      + sum(p_dispatch, over=storage, by=storage_bus[bus])
+      - sum(p_store, over=storage, by=storage_bus[bus])
       == load
 
   ramp_up:

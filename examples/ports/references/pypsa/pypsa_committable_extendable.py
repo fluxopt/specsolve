@@ -45,7 +45,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_committable_extenda
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 
@@ -90,10 +90,10 @@ def what_pypsa_relaxes() -> None:
     """What ``linearized_unit_commitment=True`` does to a committable extendable.
 
     PyPSA tightens its relaxation for units whose start-up and shut-down costs
-    match (``constraints.py:523``) — both are 0 here — and the block is built
+    match (``constraints.py:523``) — both are 0 here — and the constraint is built
     from ``nominal``, which for an extendable asset is the ``p_nom`` *column*,
     not the variable. That column is 0 for something not yet built, so every
-    coefficient in the block collapses and the rows read ``p <= 0``:
+    coefficient in the constraint collapses and the rows read ``p <= 0``:
 
         [1, flex]: +1 Generator-p[1, flex] - 0 Generator-status[1, flex] <= -0.0
 

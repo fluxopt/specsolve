@@ -38,9 +38,9 @@ which states the math and checks it before any data exists.
   reads it where it lies and solves the same question again, and a directory
   of runs reads as one set of tables.
   [Archiving a solve →](https://specsolve.readthedocs.io/en/latest/howto/archiving/)
-- **Fast from the first call.** A script that solves one small model finishes
-  in about half a second, under half of linopy's time
-  ([#1952](https://github.com/fluxopt/specsolve/pull/1952)). The solver stays
+- **Fast from the first call.** A script that builds one small model and hands
+  it to the solver finishes in about half a second, about half of linopy's time
+  ([#2031](https://github.com/fluxopt/specsolve/pull/2031)). The solver stays
   loaded: `update()` puts new numbers on it, and the next solve carries on from
   where the last one ended.
   [Benchmarks →](https://specsolve.readthedocs.io/en/latest/about/benchmarks/)
@@ -51,7 +51,7 @@ which states the math and checks it before any data exists.
 - **Sweeps and rolling horizons built in.** One call runs scenario sweeps,
   rolling horizons and myopic pathways over the same model. specsolve checks
   each window against how the model couples before it runs.
-  [A horizon too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
+  [A model too large for one solve →](https://specsolve.readthedocs.io/en/latest/sweep/)
 - **Validated against PyPSA.** PyPSA's model is one file here, grown rung by
   rung through storage, unit commitment, multi-period and stochastic runs. All
   58 rungs match PyPSA's objective, and 36 match its duals row for row.
@@ -65,7 +65,7 @@ which states the math and checks it before any data exists.
 ```yaml
 # dispatch.yaml
 dimensions:
-  snapshot: {dtype: int}
+  snapshot: {dtype: int, ordered: true}
   generator: {dtype: str}
 parameters:
   p_max: {dims: [generator]}
@@ -106,7 +106,7 @@ print(result.primal('p'))  # (3)!
 print(result.dual('power_balance'))
 
 base = sps.scan_archive('runs/base/')  # (4)!
-print(base.result.primal('p').group_by('generator').agg(pl.col('value').sum()))
+print(base.primal('p').group_by('generator').agg(pl.col('value').sum()))
 ```
 
 1. A source is any table: polars, pandas, pyarrow or DuckDB. It can also be a
@@ -139,9 +139,9 @@ specsolve, see
 
 ## Prior art
 
-The YAML surface comes from [Calliope](https://github.com/calliope-project/calliope),
+The YAML format comes from [Calliope](https://github.com/calliope-project/calliope),
 and [linopy](https://github.com/PyPSA/linopy) supplies the vocabulary, the
-oracle and every benchmark denominator.
+linopy lane every build is checked against, and every benchmark denominator.
 [Prior art and credit](https://specsolve.readthedocs.io/en/latest/about/prior-art/)
 says what came from each.
 
@@ -155,7 +155,7 @@ Alpha, pre-1.0.
 you depend on this, and read the
 [changelog](https://github.com/fluxopt/specsolve/blob/main/CHANGELOG.md) before
 upgrading. A retired spelling fails at load and names its rewrite. Real models
-round-trip through solve and are tested against linopy. The accepted surface
+round-trip through solve and are tested against linopy. The accepted format
 is not yet frozen.
 
 <!-- --8<-- [end:status] -->

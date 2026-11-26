@@ -12,11 +12,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml as pyyaml
-from mathspec import Spec, to_spec
+from mathspec import to_spec
+from mathspec.spec import Spec
 
 #: The math of ``examples/dispatch.yaml`` as a dict; vary it with :func:`override`.
 DISPATCH_SPEC: dict[str, Any] = {
-    'dimensions': {'snapshot': {'dtype': 'int'}, 'generator': {'dtype': 'str'}},
+    'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'generator': {'dtype': 'str'}},
     'parameters': {
         'p_max': {'dims': ['generator']},
         'cost': {'dims': ['generator']},

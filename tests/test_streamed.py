@@ -1,6 +1,6 @@
 """A parameter given as a large parquet path is streamed from a copy rather than held in memory.
 
-Every test lowers ``streamed.ROWS`` and ``streamed.BYTES`` to 0, so the dispatch example's files stream.
+Every test sets ``streamed.ROWS`` and ``streamed.BYTES`` to 0, so the dispatch example's files stream.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import streamed
+from specsolve import _streamed as streamed
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -22,10 +22,10 @@ PARAMETERS = {'p_max', 'cost', 'load'}
 
 
 @pytest.fixture
-def paths(dispatch_frame_inputs, tmp_path) -> dict[str, str]:
+def paths(dispatch_table_inputs, tmp_path) -> dict[str, str]:
     """The dispatch example's sources, each written to its own parquet file."""
     out = {}
-    for name, frame in dispatch_frame_inputs.items():
+    for name, frame in dispatch_table_inputs.items():
         frame.write_parquet(path := tmp_path / f'{name}.parquet')
         out[name] = str(path)
     return out
@@ -56,6 +56,21 @@ def test_a_streamed_parameter_builds_the_model_a_held_one_builds(dispatch_yaml, 
     assert _written(dispatch_yaml, paths, tmp_path / 'streamed.lp') == held
 
 
+def test_a_parameter_whose_labels_are_categorical_streams(dispatch_yaml, paths, tmp_path, monkeypatch):
+    """A writer's categorical label column holds the same strings as the labels, so it streams rather than being held."""
+    for name in PARAMETERS:
+        table = pl.read_parquet(paths[name])
+        labels = [c for c, dtype in table.schema.items() if dtype == pl.String]
+        table.with_columns(pl.col(labels).cast(pl.Categorical)).write_parquet(tmp_path / f'{name}.parquet')
+    categorical = {**paths, **{name: str(tmp_path / f'{name}.parquet') for name in PARAMETERS}}
+    held = _written(dispatch_yaml, paths, tmp_path / 'held.lp')
+    _stream_everything(monkeypatch)
+    with sps.build(dispatch_yaml, categorical) as model:
+        assert model._copies is not None
+        assert model._copies.names == PARAMETERS, 'every categorical parameter path streams at a threshold of zero rows'
+    assert _written(dispatch_yaml, categorical, tmp_path / 'streamed.lp') == held
+
+
 def test_a_small_parameter_is_held_in_memory(dispatch_yaml, paths):
     with sps.build(dispatch_yaml, paths) as model:
         assert model._copies is not None
@@ -64,28 +79,28 @@ def test_a_small_parameter_is_held_in_memory(dispatch_yaml, paths):
 
 @pytest.mark.usefixtures('stream_everything')
 def test_a_file_rewritten_after_the_build_reaches_neither_an_expression_nor_the_archive(
-    dispatch_yaml, dispatch_frame_inputs, paths, tmp_path
+    dispatch_yaml, dispatch_table_inputs, paths, tmp_path
 ):
     """The build streams from a copy, so the file the caller named is free to change."""
     with sps.build(dispatch_yaml, paths) as model:
-        dispatch_frame_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(paths['cost'])
+        dispatch_table_inputs['cost'].with_columns(pl.col('value') * 10).write_parquet(paths['cost'])
         with (
             model.solve(archive=tmp_path / 'archive') as after,
-            sps.solve(dispatch_yaml, dispatch_frame_inputs) as before,
+            sps.solve(dispatch_yaml, dispatch_table_inputs) as before,
         ):
             assert after.objective == pytest.approx(before.objective, rel=1e-9), 'the solve reads the build'
             assert after.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
                 before.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
             ), 'an expression reads the cost the build read'
     held = pl.read_parquet(tmp_path / 'archive' / 'sources' / 'cost.parquet')
-    assert held['value'].to_list() == dispatch_frame_inputs['cost']['value'].to_list(), (
+    assert held['value'].to_list() == dispatch_table_inputs['cost']['value'].to_list(), (
         'the archive holds the cost the build read'
     )
 
 
 @pytest.mark.usefixtures('stream_everything')
-def test_a_result_reads_a_streamed_parameter_after_its_model_closes(dispatch_yaml, dispatch_frame_inputs, paths):
-    with sps.solve(dispatch_yaml, paths) as result, sps.solve(dispatch_yaml, dispatch_frame_inputs) as held:
+def test_a_result_reads_a_streamed_parameter_after_its_model_closes(dispatch_yaml, dispatch_table_inputs, paths):
+    with sps.solve(dispatch_yaml, paths) as result, sps.solve(dispatch_yaml, dispatch_table_inputs) as held:
         assert result.evaluate('sum(p * cost)')['value'].sum() == pytest.approx(
             held.evaluate('sum(p * cost)')['value'].sum(), rel=1e-9
         ), 'the closed model left its result the copies to read'
@@ -139,25 +154,23 @@ TIMED = {
 
 def test_a_parameter_over_datetimes_is_read_as_a_held_one_is(tmp_path, monkeypatch):
     """The held reader puts a datetime label in microseconds; a file in nanoseconds must meet its index there."""
-    from mathspec import Spec
-
     times = pl.datetime_range(pl.datetime(2030, 1, 1), pl.datetime(2030, 1, 3), '1d', time_unit='ns', eager=True)
     pl.DataFrame({'t': times, 'value': [1.0, 2.0, 4.0]}).write_parquet(cap := tmp_path / 'cap.parquet')
     sources = {'t': pl.DataFrame({'t': times}), 'cap': str(cap)}
-    with sps.solve(Spec(**TIMED), sources) as held:
+    with sps.solve(TIMED, sources) as held:
         expected = held.objective
     _stream_everything(monkeypatch)
-    with sps.solve(Spec(**TIMED), sources) as streaming:
+    with sps.solve(TIMED, sources) as streaming:
         assert streaming.objective == pytest.approx(expected, rel=1e-12), 'every label met its index'
 
 
 @pytest.mark.usefixtures('polars_parquet')
-def test_a_parameter_given_as_a_glob_of_files_is_held(dispatch_yaml, dispatch_frame_inputs, tmp_path):
+def test_a_parameter_given_as_a_glob_of_files_is_held(dispatch_yaml, dispatch_table_inputs, tmp_path):
     """A glob names no one file to measure, so the build holds what it matches, as it did before."""
     (parts := tmp_path / 'load').mkdir()
-    load = dispatch_frame_inputs['load']
+    load = dispatch_table_inputs['load']
     load.head(2).write_parquet(parts / 'a.parquet')
     load.tail(load.height - 2).write_parquet(parts / 'b.parquet')
-    sources = {**dispatch_frame_inputs, 'load': str(parts / '*.parquet')}
-    with sps.solve(dispatch_yaml, sources) as globbed, sps.solve(dispatch_yaml, dispatch_frame_inputs) as held:
+    sources = {**dispatch_table_inputs, 'load': str(parts / '*.parquet')}
+    with sps.solve(dispatch_yaml, sources) as globbed, sps.solve(dispatch_yaml, dispatch_table_inputs) as held:
         assert globbed.objective == pytest.approx(held.objective, rel=1e-12), 'the glob reads the same load'

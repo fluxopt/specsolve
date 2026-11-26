@@ -1,13 +1,14 @@
 """A process that measures cells for one checkout, one request per line on stdin.
 
-    python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method]
+    python -m bench.ab.worker --tree <checkout> [--op solve] [--focus module:Class.method] [--memory]
 
 Each request is a JSON line ``{"cell": <id>, "fingerprint": <path or null>}``, and each
 answer one JSON line: the seconds, the peak resident memory of the process, the
 model's size and, where asked, a digest of what the build or the solve
 produced. The numbers behind the digest are saved at the path, so that two
 digests that differ can be compared number by number. The first request for a cell builds it once off the
-clock, so every timed build is a warm one.
+clock, so every timed build is a warm one. With ``--memory`` nothing runs off
+the clock, and the peak is that of a process asked once.
 
 Runs under whichever ``specsolve`` is first on ``PYTHONPATH``, which is how
 [`bench.ab.compare`][] points it at one checkout or the other, and refuses to
@@ -37,6 +38,7 @@ import numpy as np
 
 import specsolve as sps
 from bench.ab.grid import Cell, cell
+from bench.arms.specsolve import _tables
 
 
 def main() -> None:
@@ -44,6 +46,7 @@ def main() -> None:
     parser.add_argument('--tree', type=Path, required=True)
     parser.add_argument('--op', choices=('build', 'solve'), default='build')
     parser.add_argument('--focus')
+    parser.add_argument('--memory', action='store_true')
     args = parser.parse_args()
 
     loaded = Path(sps.__file__).resolve()
@@ -56,17 +59,24 @@ def main() -> None:
     for line in sys.stdin:
         request = json.loads(line)
         try:
-            record = _measure(cell(request['cell']), run, clock, warm, fingerprint=request['fingerprint'])
+            record = _measure(
+                cell(request['cell']), run, clock, warm, memory=args.memory, fingerprint=request['fingerprint']
+            )
         except Exception as e:  # one cell that fails must not end the run of every cell after it
             record = {'error': f'{type(e).__name__}: {e}'.splitlines()[0]}
         print(json.dumps(record), flush=True)
 
 
 def _measure(
-    target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, fingerprint: str | None
+    target: Cell, run: Any, clock: _Clock | None, warm: set[str], *, memory: bool, fingerprint: str | None
 ) -> dict[str, Any]:
-    """One timed run of *target*, after a run off the clock the first time this process sees it."""
-    if target.id not in warm:
+    """One timed run of *target*, after a run off the clock the first time this process sees it.
+
+    With *memory* there is no run off the clock. ``ru_maxrss`` never falls, so
+    the peak would be of both runs, and higher or lower with the moment the
+    first run's garbage was collected.
+    """
+    if not memory and target.id not in warm:
         run(target)
         warm.add(target.id)
     if clock:
@@ -79,6 +89,7 @@ def _measure(
         'calls': clock.calls if clock else None,
         'total_seconds': seconds,
         'peak_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
+        'phases': out.phases,
         **out.sizes,
         'fingerprint': _saved(out.numbers(), fingerprint) if fingerprint else None,
     }
@@ -119,17 +130,23 @@ class _Clock:
         self.calls = 0
 
 
+def _column(table: Any, name: str) -> Any:
+    """*name*, or its ``specsolve_`` spelling: a ref before the engine's columns took the prefix names them bare."""
+    return table[name if name in table.columns else f'specsolve_{name}']
+
+
 class _Built:
-    """A built model's size, and its numbers as its fingerprint."""
+    """A built model's size, the seconds its build spent in each phase, and its numbers as its fingerprint."""
 
     def __init__(self, model: sps.Model) -> None:
         self.model = model
-        diagnostics = model.diagnostics()
-        self.sizes = {'columns': diagnostics.columns, 'rows': diagnostics.rows}
+        metrics = model.metrics()
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
+        self.phases = _clocked(metrics)
 
     def numbers(self) -> dict[str, np.ndarray]:
         """The fields ``tests/test_order.py`` holds two builds of one model to."""
-        handoff = self.model._engine._model.handoff
+        tables = _tables(self.model)
         fields = (
             ('matrix', 'coeff'),
             ('cols', 'lb'),
@@ -139,19 +156,20 @@ class _Built:
             ('rows', 'rhs'),
         )
         return {
-            'structure': np.frombuffer(handoff.structure, dtype=np.uint8),
-            'objective_constant': np.array([handoff.objective_constant], dtype=np.float64),
-            'cost': handoff._dense_cost(),
-            **{f'{frame}.{column}': getattr(handoff, frame)[column].to_numpy() for frame, column in fields},
+            'structure': np.frombuffer(tables.structure, dtype=np.uint8),
+            'objective_constant': np.array([tables.objective_constant], dtype=np.float64),
+            'cost': tables._dense_cost(),
+            **{f'{table}.{column}': _column(getattr(tables, table), column).to_numpy() for table, column in fields},
         }
 
 
 class _Solved:
-    """A solve's status and objective as its fingerprint."""
+    """A solve's status and objective as its fingerprint, and its model's size and seconds in each phase."""
 
-    def __init__(self, result: sps.Result) -> None:
+    def __init__(self, result: sps.Result, metrics: Any) -> None:
         self.result = result
-        self.sizes = {'columns': None, 'rows': None}
+        self.sizes = {'columns': metrics.columns, 'rows': metrics.rows}
+        self.phases = _clocked(metrics)
 
     def numbers(self) -> dict[str, np.ndarray]:
         return {'status': np.array([self.result.status]), 'objective': np.array([self.result.objective])}
@@ -172,7 +190,14 @@ def _build(target: Cell) -> _Built:
 
 
 def _solve(target: Cell) -> _Solved:
-    return _Solved(sps.solve(target.spec, target.sources, 'highs'))
+    result = sps.solve(target.spec, target.sources, solver_name='highs')
+    assert result.metrics is not None, 'a solve hands back what it took'
+    return _Solved(result, result.metrics)
+
+
+def _clocked(metrics: Any) -> dict[str, float]:
+    """The seconds of each phase *metrics* entered; one it never entered is left out, as [`phase_table`][bench.ab.compare.phase_table] expects."""
+    return {phase: seconds for phase, seconds in metrics.phases.iter_rows() if seconds}
 
 
 if __name__ == '__main__':

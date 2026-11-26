@@ -1,0 +1,55 @@
+{
+ "201": [
+  "solve: the lanes build a different number of columns or rows"
+ ],
+ "208": [
+  "read: the lanes read an expression differently at one point"
+ ],
+ "211": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "308": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "349": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "400": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "424": [
+  "read: the lanes read an expression differently at one point"
+ ],
+ "490": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "546": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "555": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "589": [
+  "read: the lanes read an expression differently at one point"
+ ],
+ "628": [
+  "build: only the relational lane refuses: constraint _: parameter _ covers _ fewer coordinates than the rows built here. A missing row of a _ parameter is read as _, and on the constant side that zero is a bound rather than a"
+ ],
+ "73": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "730": [
+  "solve: the lanes build a different number of columns or rows"
+ ],
+ "789": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "856": [
+  "wording: the lanes refuse the data in different words"
+ ],
+ "889": [
+  "solve: the lanes build a different number of columns or rows",
+  "solve: the lanes reach different objectives",
+  "solve: the written LP file re-solves to a different objective"
+ ]
+}

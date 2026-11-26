@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 gurobipy = pytest.importorskip('gurobipy', reason='the gurobi sink needs the [gurobi] extra')
 
-from specsolve.relational.sinks import SOLVERS  # noqa: E402 — after the guard, or a bare install fails at import
-from specsolve.relational.sinks.capabilities import ALL_CAPABILITIES  # noqa: E402
+from specsolve._sinks import SOLVERS  # noqa: E402 — after the guard, or a bare install fails at import
+from specsolve._sinks.capabilities import ALL_CAPABILITIES  # noqa: E402
 
 TABLE = 'docs/about/benchmarks.md, "Sink capabilities"'
 
@@ -85,7 +85,7 @@ def test_gurobi_takes_a_quadratic_constraint(model):
     assert _solved(m) == pytest.approx(4.0, rel=ACCEPTED), f'{TABLE} says a quadratic constraint is native on Gurobi'
 
 
-def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model):
+def test_both_quadratic_parts_take_a_matrix_through_their_bulk_method(model):
     """`addSOS` has no bulk form; the quadratic parts do. Measured through the
     matrix APIs the table names, since those are what this package calls."""
     m = model()
@@ -94,7 +94,7 @@ def test_both_quadratic_parts_take_a_matrix_through_their_bulk_entry_point(model
     m.addMQConstr(np.array([[0.0, 1.0], [0.0, 0.0]]), None, gurobipy.GRB.GREATER_EQUAL, 4.0, columns, columns)
     m.setMObjective(np.eye(2), None, 0.0, columns, columns, sense=gurobipy.GRB.MINIMIZE)
     assert _solved(m) == pytest.approx(8.0, rel=ACCEPTED), (
-        f'{TABLE} names setMObjective and addMQConstr as the bulk quadratic entry points. Q = I '
+        f'{TABLE} names setMObjective and addMQConstr as the bulk quadratic methods. Q = I '
         f'over x0·x1 >= 4 minimises x0² + x1² at x = (2, 2), so 8.'
     )
 

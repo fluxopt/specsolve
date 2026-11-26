@@ -11,7 +11,7 @@ produces.
 The catalogue is read off ``mkdocs.yml``'s nav and each page's opening line.
 Constructs are read off the lowered plan, not the YAML text. References are read
 off ``examples/ports/references.json``, the file ``tests/test_ports.py`` asserts
-against; adding a port is a JSON entry and a regenerate.
+against; adding a port is a JSON record and a regenerate.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def constructs(spec: Path) -> set[str]:
     """The set of columns *spec* exercises.
 
     A bound counts only where it is not the open default. ``piecewise:`` is read
-    off the surface schema, because it lowers away into a lambda formulation.
+    off the spec as written, because expanding it writes a lambda formulation.
     """
     schema = to_spec(spec)
     lowered = schema.expand('piecewise').program
@@ -75,15 +75,14 @@ def constructs(spec: Path) -> set[str]:
 
     for node in nodes:
         if isinstance(node, program.Sum):
-            used.add('sum')
-        elif isinstance(node, program.GroupSum):
-            used.add('sum(by=)')
-        elif isinstance(node, program.Pullback):
+            grouped = isinstance(node.operand, program.Join) and node.operand.columns.axes
+            used.add('sum(by=)' if grouped else 'sum')
+        elif isinstance(node, program.Join) and not node.columns.axes:
             used.add('at()')
         elif isinstance(node, program.Translate):
             used.add("shift(edge='wrap')" if node.wrap else 'shift')
 
-    if any(isinstance(n, program.Predicate) for n in nodes):
+    if any(isinstance(n, program.Condition) for n in nodes):
         used.add('where')
     if lowered.footprint.domains - {'continuous'}:
         used.add('MILP')
@@ -96,7 +95,7 @@ def constructs(spec: Path) -> set[str]:
     return used
 
 
-def _bounded(v: program.VariableDeclaration) -> bool:
+def _bounded(v: program.Variable) -> bool:
     open_at = {float('-inf'): 'lower', float('inf'): 'upper'}
     for side in ('lower', 'upper'):
         bound = getattr(v, side)
@@ -117,27 +116,27 @@ def nav_groups() -> list[tuple[str, list[tuple[str, str]]]]:
 
     The groups under Examples come first, then PyPSA examples, which the nav
     files under Development. Each page is ``(label, name)``: the sidebar label
-    and the model's name, which is also its page and its YAML file. An entry
+    and the model's name, which is also its page and its YAML file. An item
     that is not a group is skipped.
     """
     nav = yaml.load(MKDOCS.read_text(), Loader=_NavLoader)['nav']
     section = [*_section(nav, 'Examples'), {'PyPSA examples': _section(nav, 'PyPSA examples')}]
     groups = []
-    for entry in section:
-        if not isinstance(entry, dict):
+    for item in section:
+        if not isinstance(item, dict):
             continue
-        ((title, target),) = entry.items()
+        ((title, target),) = item.items()
         if isinstance(target, list):
             groups.append((title, [(label, Path(path).stem) for page in target for label, path in page.items()]))
     return groups
 
 
-def _section(entries: list, title: str) -> list:
-    """The entries under the nav section called ``title``, at any depth."""
-    for entry in entries:
-        if not isinstance(entry, dict):
+def _section(items: list, title: str) -> list:
+    """The items under the nav section called ``title``, at any depth."""
+    for item in items:
+        if not isinstance(item, dict):
             continue
-        ((label, target),) = entry.items()
+        ((label, target),) = item.items()
         if label == title:
             return target
         if isinstance(target, list) and (found := _section(target, title)):
@@ -194,14 +193,14 @@ def references_table(gallery: str = '') -> str:
         '|---|---|---|---|---|',
     ]
     notes = []
-    for name, entry in sorted(REFERENCES.items()):
-        duals = '**✔**' if entry.get('duals') else '·'
-        mark = f'[^{name}]' if entry.get('corroborated_by') else ''
+    for name, reference in sorted(REFERENCES.items()):
+        duals = '**✔**' if reference.get('duals') else '·'
+        mark = f'[^{name}]' if reference.get('corroborated_by') else ''
         lines.append(
-            f'| {_named(name, gallery)} | {entry["objective"]!r} | {entry["rtol"]:g} | '
-            f'{duals} | {entry["provenance"]}{mark} |'
+            f'| {_named(name, gallery)} | {reference["objective"]!r} | {reference["rtol"]:g} | '
+            f'{duals} | {reference["provenance"]}{mark} |'
         )
-        if corroborated := entry.get('corroborated_by'):
+        if corroborated := reference.get('corroborated_by'):
             notes.append(f'[^{name}]: {corroborated}')
     return '\n'.join(lines) + ('\n\n' + '\n\n'.join(notes) if notes else '')
 

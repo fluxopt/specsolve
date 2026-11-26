@@ -1,10 +1,10 @@
 """`sector` as a linopy user writes it.
 
 `mask=` on `p` is the YAML's `where: installed > 0`, as `nodal`'s is. The
-`produces` table becomes a dense tech x carrier array with zeros where a
-technology does not deliver a carrier, so `(p * produces).sum('tech')` is the
-YAML's `sum(p * produces, over=tech)` on the full snapshot x node x tech x
-carrier product. The balance's `mask=` is the YAML's `where: demand`.
+`produces` table becomes a tech x carrier array with zeros where a technology
+does not deliver a carrier, and `p @ produces` is the YAML's
+`sum(p * produces, over=tech)`. The balance's `mask=` is the YAML's
+`where: demand`.
 
 The pivots of the tidy tables to dense arrays are inside `build`, so they are
 timed. Labels come from the dimension tables.
@@ -44,6 +44,6 @@ def build(tables: Mapping[str, Any]) -> Any:
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=capacity, coords=[snapshots, nodes, techs], mask=capacity > 0, name='p')
-    m.add_constraints((p.fillna(0) * produces).sum('tech') == demand.fillna(0.0), mask=demand.notnull(), name='balance')
+    m.add_constraints(p.fillna(0) @ produces == demand.fillna(0.0), mask=demand.notnull(), name='balance')
     m.add_objective((p.fillna(0) * cost).sum())
     return m

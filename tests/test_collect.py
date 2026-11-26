@@ -1,4 +1,4 @@
-"""How a frame is materialised: joins in the order specsolve wrote them, a coordinate product in label order."""
+"""How a table is materialised: joins in the order specsolve wrote them, a coordinate product in index order."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.relational import collect
-from specsolve.relational.collect import collected
-from specsolve.relational.engine import assembly
-from specsolve.relational.engine.scope import Scope, ordinal
+from specsolve import _collect as collect
+from specsolve._collect import collected
+from specsolve._engine import assembly
+from specsolve._engine.scope import Scope, position_column
+from specsolve._names import COL
 
 
 def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
@@ -20,17 +21,17 @@ def _shift_shaped(snapshots: int, stores: int) -> pl.LazyFrame:
             'store': [f's{k}' for _ in range(snapshots) for k in range(stores)],
         }
     )
-    ordinals = pl.DataFrame({'snapshot': range(snapshots), 'ord': range(snapshots)}).lazy()
+    positions = pl.DataFrame({'snapshot': range(snapshots), 'position': range(snapshots)}).lazy()
     moved = (
-        keys.with_row_index('var_label')
+        keys.with_row_index('col_index')
         .lazy()
-        .join(ordinals.rename({'ord': 'ord_in'}), on='snapshot')
-        .with_columns(((pl.col('ord_in') + 1) % snapshots).alias('ord_out'))
-        .drop('snapshot', 'ord_in')
-        .join(ordinals.rename({'ord': 'ord_out'}), on='ord_out')
-        .drop('ord_out')
+        .join(positions.rename({'position': 'position_in'}), on='snapshot')
+        .with_columns(((pl.col('position_in') + 1) % snapshots).alias('position_out'))
+        .drop('snapshot', 'position_in')
+        .join(positions.rename({'position': 'position_out'}), on='position_out')
+        .drop('position_out')
     )
-    return keys.with_row_index('row').lazy().join(moved, on=['snapshot', 'store']).select('row', 'var_label')
+    return keys.with_row_index('row').lazy().join(moved, on=['snapshot', 'store']).select('row', 'col_index')
 
 
 def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
@@ -55,10 +56,10 @@ def test_a_join_runs_in_the_order_it_was_written(monkeypatch):
     )
 
 
-def test_a_coordinate_product_arrives_in_label_order():
+def test_a_coordinate_product_arrives_in_index_order():
     """The streaming engine picks which side of a cross join it buffers, and the product's order with it.
 
-    A label is row-major over the declared ordinals, so a product out of that
+    A solver index is row-major over the positions, so a product out of that
     order has to be sorted before it is numbered.
     """
     spec = {
@@ -69,11 +70,11 @@ def test_a_coordinate_product_arrives_in_label_order():
     with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
         built = model._engine._model
         product = Scope(built.program, built.attached, built.variables).product(('a', 'b')).pipe(collected)
-    ordinals = product.select(ordinal('a'), ordinal('b')).rows()
-    assert ordinals == sorted(ordinals), 'row-major: `a` varies slowest'
+    positions = product.select(position_column('a'), position_column('b')).rows()
+    assert positions == sorted(positions), 'row-major: `a` varies slowest'
 
 
-def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_frame_inputs):
+def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch_table_inputs):
     """polars 2.0's streaming engine runs the bounds' ordered join 4.6 to 5.5 times slower than in memory (#1857).
 
     The limit is 0, so the rest of the build is left to polars: a small one is in memory throughout.
@@ -87,10 +88,8 @@ def test_the_bounds_are_collected_in_memory(monkeypatch, dispatch_yaml, dispatch
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(pl.LazyFrame, 'collect', recording)
-    sps.solve(dispatch_yaml, dispatch_frame_inputs)
-    assert engines[('var_label', 'lb', 'ub')] == {'in-memory'}, (
-        f'every bounds collect names the in-memory engine: {engines}'
-    )
+    sps.solve(dispatch_yaml, dispatch_table_inputs)
+    assert engines[(COL, 'lb', 'ub')] == {'in-memory'}, f'every bounds collect names the in-memory engine: {engines}'
 
 
 @pytest.fixture
@@ -112,24 +111,24 @@ def engines(monkeypatch) -> list[str]:
     return named
 
 
-def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_frame_inputs):
+def test_a_small_model_is_read_and_built_on_the_in_memory_engine(engines, dispatch_yaml, dispatch_table_inputs):
     """polars 2.0's streaming engine costs a fixed time per query, which is most of a small model's build."""
-    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    sps.build(dispatch_yaml, dispatch_table_inputs)
     assert engines, 'the build collected something'
     assert set(engines) == {'in-memory'}, (
         f'{engines.count("auto")} of {len(engines)} collects left the engine to polars'
     )
 
 
-def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_frame_inputs):
+def test_a_collect_after_a_build_is_left_to_polars_again(engines, dispatch_yaml, dispatch_table_inputs):
     """A block hands the engine back on exit, so the caller's own query after a small build is polars' choice."""
-    sps.build(dispatch_yaml, dispatch_frame_inputs)
+    sps.build(dispatch_yaml, dispatch_table_inputs)
     collected(pl.LazyFrame({'probe': [0]}))
     assert engines[-1] == 'auto', 'the query after the build still named the in-memory engine'
 
 
 def _build_wide() -> None:
-    """A constraint over dims no variable spans: four labels on each of two dims reach 8 columns and 16 rows."""
+    """A constraint over dimensions no variable spans: four labels on each of two dimensions reach 8 columns and 16 rows."""
     labels = ['p', 'q', 'r', 's']
     sps.build(
         {
@@ -156,16 +155,16 @@ def _build_wide() -> None:
     ],
 )
 def test_the_reach_against_the_limit_decides_the_build_engine(
-    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_frame_inputs
+    engines, monkeypatch, limit, spec, left_to_polars, dispatch_yaml, dispatch_table_inputs
 ):
     """Above `IN_MEMORY_REACH` the streaming engine keeps the build's peak down, so polars chooses; at it, memory.
 
-    A constraint over dims no variable spans counts too: its 16 rows reach past
+    A constraint over dimensions no variable spans counts too: its 16 rows reach past
     a limit of 15 where its 8 columns do not.
     """
     monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
     if spec == 'dispatch':
-        sps.build(dispatch_yaml, dispatch_frame_inputs)
+        sps.build(dispatch_yaml, dispatch_table_inputs)
     else:
         _build_wide()
     if left_to_polars:

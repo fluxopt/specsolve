@@ -1,13 +1,13 @@
-"""Model builder: logical plan + data → linopy Model.
+"""Model builder: program + data → linopy Model.
 
 **One section per kind of translation**, in the order a build performs them:
-the four declarations (``Variables``, ``Special-ordered sets``,
+the four kinds of entry (``Variables``, ``Special-ordered sets``,
 ``Constraints``, ``Objectives``) each ending in the ``model.add_*`` call they
-exist to make, then ``Plan evaluation`` for what an expression is worth.
+exist to make, then ``Program evaluation`` for what an expression is worth.
 
 Two questions a build asks are answered beside it: ``operators.py`` evaluates
-a built-in once its operands are values, and ``where.py`` turns a predicate
-into the boolean array a declaration is masked by. The positions an absent
+a built-in once its operands are values, and ``where.py`` turns a condition
+into the boolean array that narrows an entry. The positions an absent
 value is spelled differently in are ``absence.py``. *Which* linopy call each
 construct becomes is the table in ``docs/about/linopy.md``.
 """
@@ -17,19 +17,20 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, assert_never
 
 import numpy as np
 import xarray as xr
 from mathspec import program
 
+from specsolve._messages import negative_window_message, non_finite_message
+from specsolve._sinks.capabilities import Capabilities, Capability, spelled
 from specsolve.errors import DataError, SpecsolveError
-from specsolve.messages import null_bounds_message
-from specsolve.relational.sinks.capabilities import Capabilities, Capability, spelled
 from tests.linopy_lane import absence
 from tests.linopy_lane._notes import note
-from tests.linopy_lane.coverage import check_constant_side_covers, check_divisors_cover, gaps_under
-from tests.linopy_lane.loader import OracleCannotBuildError, read_column
+from tests.linopy_lane.coverage import check_constant_side_covers, check_divisors_cover
+from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.linopy_lane.operators import (
     operator_at,
     operator_grouped_sum,
@@ -40,6 +41,8 @@ from tests.linopy_lane.operators import (
 from tests.linopy_lane.where import EvaluationContext, as_linopy_mask, bound_relation, evaluate_where
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     import linopy
     import pandas as pd
 
@@ -52,15 +55,18 @@ def build_model(
     dataset: xr.Dataset,
     master_coords: dict[str, pd.Index],
     relations: dict[tuple[str, str], xr.DataArray],
+    given: Mapping[str, xr.DataArray] | None = None,
 ) -> None:
-    """Populate a linopy Model from a lowered program and loaded parameters.
+    """Populate a linopy Model from a compiled program and loaded parameters.
 
     This mutates *model* in-place, adding variables, constraints and the
     objective as declared in *program*. Nothing is re-checked here: a program
     is trusted by construction, loading having decided every rule the
-    language can decide without data.
+    language can decide without data. *given* is
+    :func:`~tests.linopy_lane.loader.given_rows`' answer, for a bare name in a
+    ``where``.
     """
-    ctx = EvaluationContext(dataset, master_coords, model, relations, program)
+    ctx = EvaluationContext(dataset, master_coords, model, relations, program, given=given or {})
     _build_variables(ctx)
     _build_sos(ctx)
     _build_constraints(ctx)
@@ -77,12 +83,12 @@ def _build_variables(ctx: EvaluationContext) -> None:
         with note(f"while building variable '{name}'"):
             coords = {d: ctx.master_coords[d] for d in vdef.dims}
             mask = evaluate_where(vdef.where, ctx)
-
-            _check_bounds_are_defined(name, vdef, ctx.dataset, mask)
-
+            lower, upper = _bound(vdef.lower, ctx, -math.inf), _bound(vdef.upper, ctx, math.inf)
+            if vdef.domain != 'continuous':
+                lower, upper = _whole(lower, np.ceil), _whole(upper, np.floor)
             ctx.model.add_variables(
-                lower=_bound(vdef.lower, ctx.dataset, -math.inf),
-                upper=_bound(vdef.upper, ctx.dataset, math.inf),
+                lower=lower,
+                upper=upper,
                 coords=coords,
                 name=name,
                 mask=as_linopy_mask(mask),
@@ -91,32 +97,34 @@ def _build_variables(ctx: EvaluationContext) -> None:
             )
 
 
-def _check_bounds_are_defined(name: str, vdef: program.VariableDeclaration, dataset: xr.Dataset, mask: Any) -> None:
-    """Refuse a bound with no value at build, before the NaN reaches linopy's IO layer.
-
-    Checked against the variable's own mask: a coordinate the variable does not
-    occupy needs no bound.
-    """
-    stated = [side for side in (vdef.lower, vdef.upper) if side is not None]
-    missing = sum(gaps_under(dataset[name], mask) for name in sorted(program.parameters_of(*stated)))
-    if missing:
-        raise DataError(null_bounds_message(name, missing))
-
-
-def _bound(bound: program.Expression | None, dataset: xr.Dataset, open_side: float) -> Any:
+def _bound(bound: program.Expression | None, ctx: EvaluationContext, open_side: float) -> Any:
     """A bound as linopy takes it: the literal, the named parameter's array, or *open_side* where it is open.
 
-    A gap is not filled here: absence's zero is a coefficient and never a
-    bound, so a gap survives to :func:`_check_bounds_are_defined`.
+    A gap is open under ``missing: absent``; under a value it reads as that value.
     """
     if bound is None:
         return open_side
     if isinstance(bound, program.Constant):
         return bound.value
-    if isinstance(bound, program.Parameter):
-        return dataset[bound.name]
-    msg = f'bounds accept a number or a parameter, and lowering builds nothing else — got {type(bound).__name__}'
+    if isinstance(bound, program.ParameterReference):
+        values = ctx.dataset[bound.name]
+        return values.fillna(open_side) if ctx.absent(bound.name) else values
+    msg = f'bounds accept a number or a parameter, and compiling admits nothing else — got {type(bound).__name__}'
     raise AssertionError(msg)
+
+
+def _whole(bound: Any, inward: Callable[[Any], Any]) -> Any:
+    """An integer variable's bound as the whole number it admits: the nearest within 1e-6, else rounded *inward*.
+
+    linopy hands HiGHS a fractional bound on an integer column as it is, and
+    HiGHS answers it with a value that is not whole.
+    """
+    nearest = np.round(bound)
+    with np.errstate(invalid='ignore'):  # an open side is infinite, and inf - inf is NaN, which is not close
+        close = abs(bound - nearest) <= 1e-6
+    if isinstance(bound, xr.DataArray):
+        return nearest.where(close, inward(bound))
+    return nearest if close else inward(bound)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +189,7 @@ def _build_constraints(ctx: EvaluationContext) -> None:
             mask = evaluate_where(row.where, ctx)
             context = f"constraint '{name}'"
 
-            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx))
+            check_divisors_cover(context, (row.lhs, row.rhs), ctx, mask, lambda node: _eval(node, ctx), terms=False)
             check_constant_side_covers(context, row, ctx, mask)
 
             if mask is not None and not bool(np.asarray(mask).any()):
@@ -192,7 +200,59 @@ def _build_constraints(ctx: EvaluationContext) -> None:
                 continue
 
             term, other, sense = _sides(lhs, rhs, row.sense)
+            if (gap := absence.holes(other)) is not None:
+                mask, other = mask & ~gap, other.fillna(0.0)
+                if not bool(np.asarray(mask).any()):
+                    continue
+            term, other = _refuse_a_coefficient_that_is_not_finite(context, row, term, other, mask)
             ctx.model.add_constraints(term, _SIGN_MAP[sense], other, name=name, mask=as_linopy_mask(mask))
+
+
+def _refuse_a_coefficient_that_is_not_finite(
+    context: str, row: program.Constraint, term: Any, other: Any, mask: Any
+) -> tuple[Any, Any]:
+    """Refuse a quotient by zero that reaches a row the build keeps, and clear one that reaches none.
+
+    A zero under a term is asked of the row rather than of the divisor's own
+    coordinates: a ``where``, a condition on the dividend, a shift and a sum with
+    no terms each decide whether the quotient lands in a row, and the built
+    row is where all four have answered. Asked only of a row that divides, so
+    an infinite limit on a side with no divisor stays the limit that never
+    binds. linopy refuses an infinity even in a row it then leaves out, so what
+    reaches no row is cleared: a coefficient to zero, a constant to absent.
+
+    Raises:
+        DataError: A coefficient, or a term's constant, that is not finite in
+            a row the build keeps.
+    """
+    from linopy.constants import TERM_DIM
+
+    divisors = program.parameters_of(
+        *(node.divisor for node in program.walk(row.lhs, row.rhs) if isinstance(node, program.Divide))
+    )
+    if not divisors:
+        return term, other
+    whole = (term - other).data
+    kept = mask & whole.const.notnull() & (whole.vars != -1).any(TERM_DIM)
+    sides = [side.to_linexpr() if hasattr(side, 'to_linexpr') else side for side in (term, other)]
+    terms = [side for side in sides if hasattr(side, 'nterm')]
+    coefficients = sum(int(((s.vars != -1) & ~np.isfinite(s.coeffs) & kept).sum()) for s in terms)
+    constants = sum(int((np.isinf(s.const) & kept).sum()) for s in terms)
+    if coefficients or constants:
+        raise DataError(f'{context}: {non_finite_message(", ".join(sorted(divisors)), coefficients or constants)}')
+    return tuple(_cleared(side, ~kept) for side in sides)
+
+
+def _cleared(side: Any, unbuilt: xr.DataArray) -> Any:
+    """*side* with every value that is not finite at an *unbuilt* row made one linopy takes."""
+    if hasattr(side, 'nterm'):
+        data = side.data
+        coeffs = data.coeffs.where(~(unbuilt & (data.vars != -1) & ~np.isfinite(data.coeffs)), 0.0)
+        const = data.const.where(~(unbuilt & np.isinf(data.const)))
+        return type(side)(data.assign(coeffs=coeffs, const=const), side.model)
+    if isinstance(side, xr.DataArray):
+        return side.where(~(unbuilt & np.isinf(side)), 0.0)
+    return side
 
 
 def _linear_where_squares_vanish(side: Any, context: str) -> Any:
@@ -249,7 +309,7 @@ def _term_free(side: Any) -> bool:
 
     A bare ``Variable`` is a term; a ``LinearExpression`` over an empty axis has
     a term dimension of length zero; anything else is data. Both sides
-    term-free is a constraint the *data* emptied — a dimension with no members
+    term-free is a constraint the *data* emptied — a dimension with no labels
     reduces away to a number — which the absence rules say is not a row. An
     expression naming no variable to begin with is refused at load.
     """
@@ -266,9 +326,9 @@ def _term_free(side: Any) -> bool:
 def _build_objective(ctx: EvaluationContext) -> None:
     """Build the declared objective, if any, onto the model.
 
-    An objective has no ``where``, so its divisor check runs with no row mask.
+    An objective has no ``where``, so its divisor check runs with no row condition.
     The expression is scalar by the time it gets here, the language having
-    refused one carrying dims, so it is evaluated like any other; linopy's
+    refused one carrying dimensions, so it is evaluated like any other; linopy's
     ``*`` answers a product of two variables with a ``QuadraticExpression`` on
     its own.
     """
@@ -276,7 +336,7 @@ def _build_objective(ctx: EvaluationContext) -> None:
     if odef is None:
         return
     with note('while building the objective'):
-        check_divisors_cover('the objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
+        check_divisors_cover('objective', (odef.expression,), ctx, None, lambda node: _eval(node, ctx))
 
         expr = _eval(odef.expression, ctx)
         _refuse_an_objective_constant(expr)
@@ -292,7 +352,7 @@ _LINOPY_SENSE: dict[program.ObjectiveSense, str] = {'minimize': 'min', 'maximize
 OBJECTIVE_CONSTANT_IS_A_LANE_GAP = (
     "the objective carries a constant term, and this lane cannot build one: linopy's objective "
     'takes no constant. The relational lane builds it and returns the right number, so the spec '
-    'is sayable and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
+    'is in the language and only this lane is short: run it with `specsolve.solve` / `specsolve.build`. '
     'Dropping the constant here is refused deliberately — it would answer a different model.'
 )
 
@@ -305,12 +365,12 @@ def _refuse_an_objective_constant(expr: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Plan evaluation
+# Program evaluation
 # ---------------------------------------------------------------------------
 
 
 def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
-    """One plan node as a linopy term, an array, or a number.
+    """One program node as a linopy term, an array, or a number.
 
     One node kind per branch: a variable is its linopy term, a parameter its
     filled array, arithmetic the Python operator linopy overloads, and an
@@ -319,69 +379,68 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
     if isinstance(node, program.Constant):
         return node.value
 
-    if isinstance(node, program.Variable):
-        variable, declared = ctx.model.variables[node.name], ctx.program.variables[node.name].absence
+    if isinstance(node, program.VariableReference):
+        variable, declared = ctx.model.variables[node.name], ctx.program.variables[node.name].missing
         return absence.variable_value(variable, declared) if ctx.solved else absence.variable_term(variable, declared)
 
     if isinstance(node, program.Dual):
         assert ctx.solved, 'a dual reached a build — the language keeps one out of the math'
         return _dual(node.constraint, ctx)
 
-    if isinstance(node, program.Parameter):
-        return ctx.absent_parameter(ctx.dataset[node.name])
+    if isinstance(node, program.ParameterReference):
+        values = ctx.dataset[node.name]
+        return values if ctx.absent(node.name) else ctx.absent_parameter(values)
 
     if isinstance(node, program.Negate):
         return -_eval(node.operand, ctx)
 
     if isinstance(node, program.Add):
-        return _eval(node.left, ctx) + _eval(node.right, ctx)
+        return absence.combined(operator.add, _eval(node.left, ctx), _eval(node.right, ctx))
 
     if isinstance(node, program.Multiply):
-        return _eval(node.left, ctx) * _eval(node.right, ctx)
+        left, right = _eval(node.left, ctx), _eval(node.right, ctx)
+        return _unsupplied_left_out(absence.combined(_times, left, right), node, (left, right), ctx)
 
     if isinstance(node, program.Divide):
-        divisor = _eval(node.divisor, ctx)
-        return _eval(node.numerator, ctx) / (absence.divisor(divisor) if ctx.solved else divisor)
+        numerator, divisor = _eval(node.numerator, ctx), _eval(node.divisor, ctx)
+        if ctx.solved:
+            return absence.combined(operator.truediv, numerator, absence.divisor(divisor), neutral=1.0)
+        return absence.quotient(numerator, divisor)
 
     if isinstance(node, program.Power):
-        return _eval(node.base, ctx) ** _eval(node.exponent, ctx)
+        return absence.power(_eval(node.base, ctx), _eval(node.exponent, ctx))
+
+    if isinstance(node, program.Sum) and isinstance(node.operand, program.Join) and node.operand.columns.axes:
+        return _grouped_sum(_eval(node.operand.operand, ctx), node.operand.columns, ctx)
 
     if isinstance(node, program.Sum):
         summed = _eval(node.operand, ctx)
-        for dimension in node.over:
-            summed = operator_sum(summed, dimension)
+        for axis in node.over:
+            summed = operator_sum(summed, axis.dimension)
         return summed
 
-    if isinstance(node, program.GroupSum) and not node.direction.relation.values:
-        return _member_sum(_eval(node.operand, ctx), node, ctx)
-
-    if isinstance(node, program.GroupSum):
-        return operator_grouped_sum(
-            _eval(node.operand, ctx),
-            _walked_arrays(node, ctx),
-            into=node.direction.produced_dims,
-            joined=node.direction.joined_dims,
-            labels=ctx.master_coords,
-        )
-
-    if isinstance(node, program.Pullback):
-        return operator_at(_eval(node.operand, ctx), _walked_arrays(node, ctx), into=node.direction.consumed_dims)
+    if isinstance(node, program.Join):
+        columns = node.columns
+        read = _walked_arrays(columns, columns.dropped, ctx)
+        return operator_at(_eval(node.operand, ctx), read, into=columns.dropped_dims)
 
     if isinstance(node, program.Translate):
         return operator_shift(
             _eval(node.operand, ctx),
             over=node.along,
-            offset=_amount(node.offset, ctx),
+            offset=_kept_absent(node.offset, ctx),
             wrap=node.wrap,
             fill=node.fill,
             by=_partition(node, ctx),
         )
 
     if isinstance(node, program.WindowSum):
+        if isinstance(node.width, str):
+            _refuse_a_negative_window(node.width, ctx)
         return operator_sum_back(
             _eval(node.operand, ctx),
             over=node.along,
-            within=_amount(node.width, ctx),
+            within=_kept_absent(node.width, ctx),
             wrap=node.wrap,
             by=_partition(node, ctx),
         )
@@ -389,10 +448,62 @@ def _eval(node: program.Expression, ctx: EvaluationContext) -> Any:
     if isinstance(node, program.Cases):
         return _cases(node, ctx)
 
-    if isinstance(node, program.Named):
+    if isinstance(node, program.ExpressionReference):
         return _eval(node.body, ctx)
 
     assert_never(node)
+
+
+def _times(left: Any, right: Any) -> Any:
+    """``left * right``, the factor with more terms first.
+
+    linopy multiplies an expression by a factor of one term at most, and
+    refuses a wider one even where the other factor has a single term — a
+    ``cases:`` block, an addition or a sum each makes one — so the order is
+    what lets the product be taken.
+    """
+    if _terms(right) > _terms(left):
+        return right * left
+    return left * right
+
+
+def _unsupplied_left_out(product: Any, node: program.Multiply, sides: tuple[Any, Any], ctx: EvaluationContext) -> Any:
+    """*product* contributing nothing where its value factor is zero only because a ``neutral`` parameter has no row.
+
+    A missing ``neutral`` row leaves no term to multiply, so a row it leaves
+    with none is not built (the absence page), while a zero the data gave is a
+    term whose row stands. Filled with zero, the two read alike, so the factor
+    is evaluated again with the missing rows kept NaN to tell them apart. A
+    slot already absent stays absent.
+    """
+    if not _terms(product):
+        return product
+    for operand, value in zip((node.left, node.right), sides, strict=True):
+        if _terms(value) or not isinstance(value, xr.DataArray) or not _reads_a_neutral_parameter(operand, ctx):
+            continue
+        raw = _eval(operand, replace(ctx, absent_parameter=lambda arr: arr))
+        unsupplied = raw.isnull() & (value == 0) & ~product.isnull()
+        if bool(unsupplied.any()):
+            product = product.where(~unsupplied, 0)
+    return product
+
+
+def _zero(missing: object) -> bool:
+    return not isinstance(missing, str) and missing == 0
+
+
+def _reads_a_neutral_parameter(node: program.Expression, ctx: EvaluationContext) -> bool:
+    return any(
+        isinstance(n, program.ParameterReference) and _zero(ctx.program.parameters[n.name].missing)
+        for n in program.walk(node)
+    )
+
+
+def _terms(side: Any) -> int:
+    """How many terms *side* holds: a variable one, a value none."""
+    if hasattr(side, 'to_linexpr'):
+        return 1
+    return getattr(side, 'nterm', 0)
 
 
 def _dual(name: str, ctx: EvaluationContext) -> xr.DataArray:
@@ -443,7 +554,7 @@ def _cases(node: program.Cases, ctx: EvaluationContext) -> Any:
     added gives every coordinate exactly one region's value.
     """
     filled = (_in_region(_eval(region.value, ctx), evaluate_where(region.when, ctx)) for region in node.regions)
-    return functools.reduce(operator.add, filled)
+    return functools.reduce(functools.partial(absence.combined, operator.add), filled)
 
 
 def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
@@ -455,40 +566,97 @@ def _amount(amount: int | str, ctx: EvaluationContext) -> Any:
     return absence.coefficient(ctx.dataset[amount]) if isinstance(amount, str) else amount
 
 
-def _member_sum(operand: Any, node: program.GroupSum, ctx: EvaluationContext) -> Any:
-    """``sum(x, by=relation, over=a, into=b)`` over a bare relation: every row of it carries its ``a`` term to its ``b``.
+def _kept_absent(amount: int | str, ctx: EvaluationContext) -> Any:
+    """An amount as :func:`_amount` reads it, a ``missing: absent`` row kept NaN for the operator to carry."""
+    return ctx.dataset[amount] if isinstance(amount, str) and ctx.absent(amount) else _amount(amount, ctx)
 
-    The operand's dims become the relation's roles, so two roles over one
-    dimension stay apart; the membership array multiplies in, the consumed
-    roles sum out, and the produced roles take their dimensions back.
+
+def _refuse_a_negative_window(name: str, ctx: EvaluationContext) -> None:
+    """A width below zero counts no positions, so the data is refused, as the other lane refuses it."""
+    widths = np.asarray(ctx.dataset[name], dtype=float).ravel()
+    negative = sorted({int(w) for w in widths[widths < 0]})
+    if negative:
+        raise DataError(negative_window_message(name, negative))
+
+
+def _grouped_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:
+    """``sum(x, over=a, by=relation[b])``: the join and the sum over the axes it opens, as one grouping.
+
+    Where the call sums key columns away and groups by value columns, the
+    relation is a map read at its key, and a ``groupby`` on the value arrays
+    is the whole of it; every other shape is a membership sum
+    (:func:`_member_sum`).
     """
-    direction = node.direction
-    membership = bound_relation(direction.name, '', ctx.relations)
-    entering = {direction.dim(r): r for r in (*direction.consumed, *direction.joined) if direction.dim(r) != r}
-    leaving = {r: direction.dim(r) for r in (*direction.produced, *direction.joined) if direction.dim(r) != r}
-    summed = operand.rename(entering) * membership
-    for role in direction.consumed:
+    relation = columns.relation
+    if relation.values and set(columns.dropped) <= set(relation.key) and set(columns.added) <= set(relation.values):
+        return operator_grouped_sum(
+            operand,
+            _walked_arrays(columns, columns.added, ctx),
+            into=columns.added_dims,
+            joined=tuple(columns.dim(role) for role in columns.kept),
+            labels=ctx.master_coords,
+        )
+    return _member_sum(operand, columns, ctx)
+
+
+def _member_sum(operand: Any, columns: program.JoinColumns, ctx: EvaluationContext) -> Any:
+    """A sum through the rows of a relation: every row carries its dropped columns' term to its added ones.
+
+    The operand's dimensions become the relation's roles, so two roles over one
+    dimension stay apart; the membership array multiplies in, a pair it does
+    not relate leaves no term rather than a zero one, the dropped roles sum
+    out, and the added roles take their dimensions back.
+
+    Raises:
+        OracleCannotBuildError: The call joins on or groups by a value
+            column while not reading the relation as a map at its key.
+    """
+    relation = columns.relation
+    if valued := [role for role in (*columns.dropped, *columns.added) if role in relation.values]:
+        raise OracleCannotBuildError(
+            f"the linopy lane sums through the rows of '{columns.name}' over its key columns alone, and this "
+            f'sum reads its value columns {valued} as well. The language accepts it and the relational lane '
+            f'builds it, so this is a limit of the lane rather than of the spec.'
+        )
+    entering = {columns.dim(r): r for r in columns.joined if columns.dim(r) != r}
+    leaving = {r: columns.dim(r) for r in columns.grouped if columns.dim(r) != r}
+    membership = _membership(columns, ctx)
+    summed = (operand.rename(entering) * membership).where(membership != 0, 0)
+    for role in columns.dropped:
         summed = operator_sum(summed, role)
     return summed.rename(leaving)
 
 
-def _walked_arrays(
-    node: program.GroupSum | program.Pullback | program.PulledBackPredicate, ctx: EvaluationContext
-) -> tuple[Any, ...]:
-    """The relation's read columns as arrays over the dimensions its key names, in the order the direction writes them."""
-    return tuple(bound_relation(node.direction.name, column, ctx.relations) for column in read_column(node))
+def _membership(columns: program.JoinColumns, ctx: EvaluationContext) -> xr.DataArray:
+    """One where the relation has a row and zero elsewhere, over its key's roles.
+
+    A bare relation arrives as that array; a keyed one has a row wherever one
+    of its value columns holds a value at the key.
+    """
+    relation = columns.relation
+    if not relation.values:
+        return bound_relation(columns.name, '', ctx.relations)
+    held = functools.reduce(
+        operator.or_, (bound_relation(columns.name, v, ctx.relations).notnull() for v in relation.values)
+    )
+    return held.rename({relation.dim(r): r for r in relation.key if relation.dim(r) != r}).astype(float)
+
+
+def _walked_arrays(columns: program.JoinColumns, roles: tuple[str, ...], ctx: EvaluationContext) -> tuple[Any, ...]:
+    """The relation's value columns *roles* as arrays over the dimensions its key names, in the order given."""
+    return tuple(bound_relation(columns.name, role, ctx.relations) for role in roles)
 
 
 def _partition(node: program.Translate | program.WindowSum, ctx: EvaluationContext) -> Any:
     """The relation a windowed operator may not reach across, as its values.
 
     **Named for the dimension its values are labels of**, not for itself: an
-    amount declared over the group's own dim is read through this array by
+    amount declared over the group's own dimension is read through this array by
     :func:`~tests.linopy_lane.operators._per_group`, which pairs the two by that
     name.
     """
     if node.partition is None:
         return None
-    (column,) = node.partition.group
+    (column,) = node.partition.grouped
     array = bound_relation(node.partition.name, column, ctx.relations)
     return array.rename(node.partition.dim(column))

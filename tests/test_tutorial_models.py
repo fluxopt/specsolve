@@ -51,9 +51,9 @@ def one_day() -> pl.DataFrame:
 
 
 def three_days() -> pl.DataFrame:
-    """``load.csv`` three times over, on an ``hour`` column, which the window renumbers into ``snapshot``."""
+    """``load.csv`` three times over."""
     day = one_day()['value'].to_list()
-    return pl.DataFrame({'hour': range(3 * len(day)), 'value': 3 * day})
+    return pl.DataFrame({'snapshot': range(3 * len(day)), 'value': 3 * day})
 
 
 @pytest.mark.parametrize(
@@ -98,16 +98,16 @@ def schedule_cost(sweep: sps.types.Sweep) -> float:
 
 def test_a_rolling_horizon_pays_for_what_its_windows_cannot_see() -> None:
     """Three-hour windows over a four-hour day: lookahead lets a window keep charge for the next one."""
-    load = three_days()
-    full = sps.solve(SPECS['storage'], sources('storage', load.rename({'hour': 'snapshot'})) | {'snapshot': range(12)})
+    span = sources('storage', three_days()) | {'snapshot': range(12)}
+    full = sps.solve(SPECS['storage'], span)
     costs = []
     for lookahead in (0, 1, 3):
         sweep = sps.solve_over(
             SPECS['storage'],
-            sources('storage', load),
-            sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
+            span,
+            sps.EachWindow('snapshot', horizon=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
         )
-        assert sweep.primal('soc')['hour'].to_list() == list(range(12)), 'the windows cover every hour exactly once'
+        assert sweep.primal('soc')['snapshot'].to_list() == list(range(12)), 'the windows cover every hour exactly once'
         costs.append(schedule_cost(sweep))
     assert costs[0] > costs[1] > costs[2], f'each hour of lookahead has to buy something: {costs}'
     assert costs[2] == pytest.approx(full.objective), 'three hours of lookahead see as far as full foresight'

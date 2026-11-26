@@ -1,6 +1,6 @@
 # seasons
 
-A store that cycles inside each season rather than across the horizon, with seasons of different lengths.
+A store that cycles inside each season rather than across the modelled period, with seasons of different lengths.
 
 ## The problem
 
@@ -12,14 +12,14 @@ soc == shift(soc, along=snapshot, offset=1, edge='wrap') + inflow - release
 ```
 
 On this instance that links snapshot 7 to snapshot 1 and makes the whole
-horizon one cycle: winter opens holding what summer left, and sells it at
+modelled period one cycle: winter opens holding what summer left, and sells it at
 winter's best price. That is a different model. It solves, and its objective
 is *higher*.
 
 The cycle a multi-period model means is per period, and `by=` says which:
 
 ```yaml
-soc == shift(soc, along=snapshot, offset=1, edge='wrap', by=season_of, within=season) + inflow - release
+soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=season_of[season]) + inflow - release
 ```
 
 $$\mathit{soc}_{t} = \mathit{soc}_{t \ominus_{\mathrm{season\_of}(t)} 1} + \mathit{inflow}_{t} - \mathit{release}_{t}$$
@@ -34,14 +34,14 @@ four snapshots and summer three here, and nothing in the file says so.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-A store that cycles inside each season rather than across the horizon, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next.
+A store that cycles inside each season rather than across the modelled period, with seasons of different lengths — one balance row says it, because the wrap is the season's own and no level is carried from one season into the next.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
 | $`\mathcal{S}`$ | index $`s`$ — `season` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — the blocks the store cycles over |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` with $`\mathrm{season\_of}: \mathcal{T} \to \mathcal{S}`$ — dispatch periods in order |
 
 #### Parameters
 
@@ -54,14 +54,29 @@ A store that cycles inside each season rather than across the horizon, with seas
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathit{soc}`$ | `soc` over $`\mathcal{T}`$ — energy held at the end of a snapshot |
 | $`\mathit{release}`$ | `release` over $`\mathcal{T}`$ — energy released in a snapshot |
+| $`\mathit{soc}`$ | `soc` over $`\mathcal{T}`$ — energy held at the end of a snapshot |
 
-Upright is what the data supplies — a parameter such as $`\mathrm{inflow}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`\mathit{soc}`$. An index is italic too, being what a quantifier chooses, and a set is script.
+#### Notation
 
-$`t \ominus k`$ denotes cyclic translation: index $`t-k`$ taken modulo the size of the dimension (`roll`). Plain $`t-k`$ (`shift`) has no wraparound — terms translated past the edge are simply absent.
+| Symbol | Meaning |
+|---|---|
+| $`t \ominus k`$ | `edge='wrap'` — $`t-k`$, cyclic |
+| $`t \ominus^{\mathrm{relation}(t)} k`$ | `within=relation[...]` — $`t-k`$ inside the group of $`t`$ |
 
-$`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the group a relation puts $`t`$ in (`shift(by=relation)`), so a term never crosses out of its own group.
+#### Variable domains
+
+**`release`**
+
+```math
+\mathit{release}_{t} \ge 0 \qquad \forall\, t \in \mathcal{T}
+```
+
+**`soc`**
+
+```math
+0 \le \mathit{soc}_{t} \le 60 \qquad \forall\, t \in \mathcal{T}
+```
 
 #### Objective
 
@@ -77,30 +92,16 @@ $`t \ominus^{\mathrm{relation}(t)} k`$ denotes a translation counted inside the 
 \mathit{soc}_{t} = \mathit{soc}_{t \ominus^{\mathrm{season\_of}(t)} 1} + \mathrm{inflow}_{t} - \mathit{release}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
-#### Variable domains
-
-**`soc`**
-
-```math
-0 \le \mathit{soc}_{t} \le 60 \qquad \forall\, t \in \mathcal{T}
-```
-
-**`release`**
-
-```math
-\mathit{release}_{t} \ge 0 \qquad \forall\, t \in \mathcal{T}
-```
-
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
-      A store that cycles inside each season rather than across the horizon, with
+      A store that cycles inside each season rather than across the modelled period, with
       seasons of different lengths — one balance row says it, because the wrap is
       the season's own and no level is carried from one season into the next.
 
@@ -108,9 +109,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods in order
         dtype: int
+        ordered: true
       season:
         description: the blocks the store cycles over
         dtype: str
+        ordered: true
 
     relations:
       season_of:
@@ -146,7 +149,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           season's first snapshot carries from that season's own last — so each
           season ends where it began and hands the next one nothing
         dims: [snapshot]
-        expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', by=season_of, within=season) + inflow - release
+        expression: soc == shift(soc, along=snapshot, offset=1, edge='wrap', within=season_of[season]) + inflow - release
 
     objective:
       sense: maximize
@@ -155,10 +158,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/seasons.yaml', sources) as solution:
-        solution.objective  # 74.0
-        solution.primal('soc')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/seasons.yaml', sources) as result:
+        result.objective  # 74.0
+        result.primal('soc')
     ```
 
 ## What the answer looks like
@@ -185,7 +188,7 @@ the boundary.
 
 ## The grouping is data
 
-`season_of` is a table passed beside the snapshot index, so the same file
+`season_of` is a table passed beside the snapshot labels, so the same file
 expresses maintenance campaigns, representative days, market quarters or
 contract windows. Move two snapshots between seasons by editing that table and
 no clause changes:

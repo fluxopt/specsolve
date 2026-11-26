@@ -13,7 +13,7 @@ and run out of band — PyPSA is not a dependency of this project.
 It reads the same instance the port attaches and builds the network with PyPSA's
 own objects. Nothing here imports specsolve.
 
-**The MILP entry in the corpus.** ``committable=True`` gives each generator a
+**The MILP model in the corpus.** ``committable=True`` gives each generator a
 binary ``status`` per snapshot, plus binary ``start_up`` and ``shut_down``. One
 bus, no network.
 
@@ -33,7 +33,7 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_unit_commitment.jso
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

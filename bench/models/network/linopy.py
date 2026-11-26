@@ -2,10 +2,15 @@
 
 `mask=` is the YAML's `where: installed > 0`, as a bus x tech plane linopy
 broadcasts along the snapshot axis. The joins the YAML declares as relations
-are dense bus x line and bus x store incidence matrices, built inside the
-timed build as `transport`'s are. `shift(...).fillna(0)` gives the first
-snapshot an empty store, which is the YAML's `edge=0`, and `p.fillna(0)` makes
-an absent pair contribute zero, as in `nodal`.
+are `groupby(...).sum()` into buses, as `transport`'s are.
+`shift(...).fillna(0)` gives the first snapshot an empty store, which is the
+YAML's `edge=0`, and `p.fillna(0)` makes an absent pair contribute zero, as in
+`nodal`.
+
+`pool_of` is pivoted to a bus x tech array of pool labels, as `installed` is,
+and `p.groupby(pool).sum()` is the YAML's
+`sum(p, over=[bus, tech], by=pool_of[pool])`. linopy refuses a NaN label,
+so a pair with no plant is labelled `''` and that group is dropped.
 """
 
 from __future__ import annotations
@@ -45,16 +50,15 @@ def build(tables: Mapping[str, Any]) -> Any:
     e_max = tables['e_max'].set_index('store')['value'].reindex(stores)
     p_store = tables['p_store'].set_index('store')['value'].reindex(stores)
     eta = tables['eta'].set_index('store')['value'].reindex(stores)
+    pool = xr.DataArray(
+        tables['pool_of'].pivot(index='bus', columns='tech', values='pool').reindex(index=buses, columns=techs),
+        name='pool',
+    ).fillna('')
+    limit = tables['limit'].set_index('pool')['value']
 
-    flow_in = pd.DataFrame(0.0, index=buses, columns=lines)
-    for line, src, dst in zip(
-        tables['line_from']['line'], tables['line_from']['bus'], tables['line_to']['bus'], strict=True
-    ):
-        flow_in.loc[dst, line] += 1.0
-        flow_in.loc[src, line] -= 1.0
-    store_at = pd.DataFrame(0.0, index=buses, columns=stores)
-    for store, bus in zip(tables['store_bus']['store'], tables['store_bus']['bus'], strict=True):
-        store_at.loc[bus, store] = 1.0
+    def into_bus(x: Any, relation: str, key: str) -> Any:
+        by = xr.DataArray(tables[relation].set_index(key)['bus'].reindex(x.indexes[key]), name='bus')
+        return x.groupby(by).sum().reindex(bus=buses).fillna(0)
 
     m = linopy.Model()
     p = m.add_variables(lower=0, upper=p_max, coords=[snapshots, buses, techs], mask=capacity > 0, name='p')
@@ -65,11 +69,15 @@ def build(tables: Mapping[str, Any]) -> Any:
 
     m.add_constraints(
         p.fillna(0).sum('tech')
-        + (f * xr.DataArray(flow_in)).sum('line')
-        + ((discharge - charge) * xr.DataArray(store_at)).sum('store')
+        + into_bus(f, 'line_to', 'line')
+        - into_bus(f, 'line_from', 'line')
+        + into_bus(discharge - charge, 'store_bus', 'store')
         == load,
         name='balance',
     )
     m.add_constraints(soc - soc.shift(snapshot=1).fillna(0) - charge * eta + discharge == 0, name='soc_balance')
+    pooled = p.fillna(0).groupby(pool).sum()
+    pooled = pooled.sel(pool=pooled.indexes['pool'][pooled.indexes['pool'] != ''])
+    m.add_constraints(pooled <= limit.reindex(pooled.indexes['pool']), name='pool_cap')
     m.add_objective((p.fillna(0) * cost).sum())
     return m

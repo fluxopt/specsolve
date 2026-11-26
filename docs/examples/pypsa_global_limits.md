@@ -14,8 +14,8 @@ group, against a bound only some rows carry**.
 
 | PyPSA | what it selects | the port's row |
 |---|---|---|
-| `operational_limit` | generators burning a carrier | `sum(sum(p, by=gen_placement, over=generator, into=carrier), over=snapshot) <= energy_cap` |
-| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom, by=gen_placement, over=generator, into=[bus, carrier]) <= bus_capacity_cap` |
+| `operational_limit` | generators burning a carrier | `sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap` |
+| per-`(bus, carrier)` capacity cap | that carrier's capacity at one bus | `sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap` |
 | `transmission_volume_expansion_limit` | extendable links, weighted by length | `sum(link_p_nom * link_length, over=link) <= volume_cap` |
 | `transmission_expansion_cost_limit` | the same links, weighted by money | `sum(link_p_nom * link_capital_cost, over=link) <= expansion_cost_cap` |
 
@@ -31,106 +31,42 @@ PyPSA's global constraints: four limits over four different selected sets — th
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{C}`$ | index $`c`$ — `carrier` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C}`$ — what a generator burns, and what a global limit selects on |
 | $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{gen\_placement}: \mathcal{E} \to \mathcal{B} \times \mathcal{C}`$ — generating units, each sitting on a bus and burning a carrier |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
-| $`\mathrm{p}^{\mathrm{max,pu}}`$ | `p_max_pu` over $`\mathcal{T} \times \mathcal{E}`$ — share of built capacity a generator can produce in a snapshot |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
+| $`\mathrm{bus\_capacity\_cap}`$ | `bus_capacity_cap` over $`\mathcal{B} \times \mathcal{C}`$, `absent` where the data has no row — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
+| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$, `absent` where the data has no row — energy a carrier may deliver over every snapshot, for the carriers that have such a limit |
+| $`\mathrm{expansion\_cost\_cap}`$ | `expansion_cost_cap` (scalar) — money the whole network may spend building links |
 | $`\mathrm{gen\_capital\_cost}`$ | `gen_capital_cost` over $`\mathcal{E}`$ — annualised cost of a unit of generator capacity |
 | $`\mathrm{link\_capital\_cost}`$ | `link_capital_cost` over $`\mathcal{L}`$ — annualised cost of a unit of link capacity |
 | $`\mathrm{link\_length}`$ | `link_length` over $`\mathcal{L}`$ — how far a link reaches — what turns built capacity into a volume |
-| $`\mathrm{energy\_cap}`$ | `energy_cap` over $`\mathcal{C}`$ — energy a carrier may deliver over the whole horizon, for the carriers that have such a limit |
-| $`\mathrm{bus\_capacity\_cap}`$ | `bus_capacity_cap` over $`\mathcal{B} \times \mathcal{C}`$ — capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA writes the carrier into a column name (`nom_max_wind`), so the pair is the limit's own key |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{max,pu}}`$ | `p_max_pu` over $`\mathcal{E} \times \mathcal{T}`$ — share of built capacity a generator can produce in a snapshot |
 | $`\mathrm{volume\_cap}`$ | `volume_cap` (scalar) — capacity times length the whole network may build |
-| $`\mathrm{expansion\_cost\_cap}`$ | `expansion_cost_cap` (scalar) — money the whole network may spend building links |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{E}`$ — output of a generator in a snapshot |
-| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E}`$ — capacity built at a generator |
-| $`g`$ | `g` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a link, towards the bus it delivers at |
+| $`g`$ | `g` over $`\mathcal{L} \times \mathcal{T}`$ — flow on a link, towards the bus it delivers at |
 | $`\mathit{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{L}`$ — capacity built on a link |
-
-Upright is what the data supplies — a parameter such as $`\mathrm{load}`$, a coordinate map, a label — and italic is what the solver chooses, such as $`p`$. An index is italic too, being what a quantifier chooses, and a set is script.
-
-#### Objective
-
-```math
-\min \sum_{t \in \mathcal{T},\ e \in \mathcal{E}} p_{t,e} \cdot \mathrm{marginal\_cost}_{e} + \sum_{e \in \mathcal{E}} p^{\mathrm{nom}}_{e} \cdot \mathrm{gen\_capital\_cost}_{e} + \sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_capital\_cost}_{l}
-```
-
-#### Subject to
-
-**`within_capacity`**
-
-```math
-p_{t,e} \le p^{\mathrm{nom}}_{e} \cdot \mathrm{p}^{\mathrm{max,pu}}_{t,e} \qquad \forall\, t \in \mathcal{T},\ e \in \mathcal{E}
-```
-
-**`within_link_capacity`**
-
-```math
-g_{t,l} \le \mathit{link\_p\_nom}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
-```
-
-**`nodal_balance`**
-
-```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`carrier_energy`**
-
-```math
-\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.carrier}(e) = c} p_{t,e} \le \mathrm{energy\_cap}_{c} \qquad \forall\, c \in \mathcal{C} \,:\, \mathrm{energy\_cap}_{c} \text{ is defined}
-```
-
-**`carrier_capacity_at_bus`**
-
-```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b \wedge \mathrm{gen\_placement.carrier}(e) = c} p^{\mathrm{nom}}_{e} \le \mathrm{bus\_capacity\_cap}_{b,c} \qquad \forall\, b \in \mathcal{B},\ c \in \mathcal{C} \,:\, \mathrm{bus\_capacity\_cap}_{b,c} \text{ is defined}
-```
-
-**`transmission_volume`**
-
-```math
-\sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_length}_{l} \le \mathrm{volume\_cap}
-```
-
-**`transmission_cost`**
-
-```math
-\sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_capital\_cost}_{l} \le \mathrm{expansion\_cost\_cap}
-```
+| $`p`$ | `p` over $`\mathcal{E} \times \mathcal{T}`$ — output of a generator in a snapshot |
+| $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E}`$ — capacity built at a generator |
 
 #### Variable domains
-
-**`p`**
-
-```math
-p_{t,e} \ge 0 \qquad \forall\, t \in \mathcal{T},\ e \in \mathcal{E}
-```
-
-**`p_nom`**
-
-```math
-p^{\mathrm{nom}}_{e} \ge 0 \qquad \forall\, e \in \mathcal{E}
-```
 
 **`g`**
 
 ```math
-g_{t,l} \ge 0 \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+g_{l,t} \ge 0 \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
 ```
 
 **`link_p_nom`**
@@ -139,10 +75,72 @@ g_{t,l} \ge 0 \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
 \mathit{link\_p\_nom}_{l} \ge 0 \qquad \forall\, l \in \mathcal{L}
 ```
 
+**`p`**
+
+```math
+p_{e,t} \ge 0 \qquad \forall\, e \in \mathcal{E},\ t \in \mathcal{T}
+```
+
+**`p_nom`**
+
+```math
+p^{\mathrm{nom}}_{e} \ge 0 \qquad \forall\, e \in \mathcal{E}
+```
+
+#### Objective
+
+```math
+\min \sum_{e \in \mathcal{E},\ t \in \mathcal{T}} p_{e,t} \cdot \mathrm{marginal\_cost}_{e} + \sum_{e \in \mathcal{E}} p^{\mathrm{nom}}_{e} \cdot \mathrm{gen\_capital\_cost}_{e} + \sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_capital\_cost}_{l}
+```
+
+#### Subject to
+
+**`carrier_capacity_at_bus`**
+
+```math
+\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b \wedge \mathrm{gen\_placement.carrier}(e) = c} p^{\mathrm{nom}}_{e} \le \mathrm{bus\_capacity\_cap}_{b,c} \qquad \forall\, b \in \mathcal{B},\ c \in \mathcal{C} \,:\, \mathrm{bus\_capacity\_cap}_{b,c} \text{ is defined}
+```
+
+**`carrier_energy`**
+
+```math
+\sum_{t \in \mathcal{T}} \sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.carrier}(e) = c} p_{e,t} \le \mathrm{energy\_cap}_{c} \qquad \forall\, c \in \mathcal{C} \,:\, \mathrm{energy\_cap}_{c} \text{ is defined}
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_placement.bus}(e) = b} p_{e,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{l,t} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{l,t} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`transmission_cost`**
+
+```math
+\sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_capital\_cost}_{l} \le \mathrm{expansion\_cost\_cap}
+```
+
+**`transmission_volume`**
+
+```math
+\sum_{l \in \mathcal{L}} \mathit{link\_p\_nom}_{l} \cdot \mathrm{link\_length}_{l} \le \mathrm{volume\_cap}
+```
+
+**`within_capacity`**
+
+```math
+p_{e,t} \le p^{\mathrm{nom}}_{e} \cdot \mathrm{p}^{\mathrm{max,pu}}_{e,t} \qquad \forall\, e \in \mathcal{E},\ t \in \mathcal{T}
+```
+
+**`within_link_capacity`**
+
+```math
+g_{l,t} \le \mathit{link\_p\_nom}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -158,6 +156,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       snapshot:
         description: dispatch periods
         dtype: int
+        ordered: true
       bus:
         description: network nodes
         dtype: str
@@ -206,15 +205,17 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dims: [link]
       energy_cap:
         description: >-
-          energy a carrier may deliver over the whole horizon, for the carriers that
+          energy a carrier may deliver over every snapshot, for the carriers that
           have such a limit
         dims: [carrier]
+        missing: absent
       bus_capacity_cap:
         description: >-
           capacity of one carrier a bus may hold, for the pairs that cap it — PyPSA
           writes the carrier into a column name (`nom_max_wind`), so the pair is the
           limit's own key
         dims: [bus, carrier]
+        missing: absent
       volume_cap:
         description: capacity times length the whole network may build
         dims: []
@@ -258,18 +259,18 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: what is generated at a bus plus what arrives over the links meets the load there
         dims: [snapshot, bus]
         expression: >-
-          sum(p, by=gen_placement, over=generator, into=bus)
-          + sum(g, by=link_to, over=link, into=bus) - sum(g, by=link_from, over=link, into=bus)
+          sum(p, over=generator, by=gen_placement[bus])
+          + sum(g, over=link, by=link_to[bus]) - sum(g, over=link, by=link_from[bus])
           == load
 
       carrier_energy:
         description: >-
-          a carrier with an energy limit delivers no more than it over the horizon —
+          a carrier with an energy limit delivers no more than it over every snapshot —
           the generators are grouped onto the carrier they burn, which is the
           selection PyPSA makes by querying its own table
         dims: [carrier]
         where: energy_cap
-        expression: sum(sum(p, by=gen_placement, over=generator, into=carrier), over=snapshot) <= energy_cap
+        expression: sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot) <= energy_cap
 
       carrier_capacity_at_bus:
         description: >-
@@ -278,7 +279,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           so no selector column and no mask stand between the two
         dims: [bus, carrier]
         where: bus_capacity_cap
-        expression: sum(p_nom, by=gen_placement, over=generator, into=[bus, carrier]) <= bus_capacity_cap
+        expression: sum(p_nom, over=generator, by=gen_placement[bus, carrier]) <= bus_capacity_cap
 
       transmission_volume:
         description: >-
@@ -304,10 +305,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as solution:
-        solution.objective  # 127211.66666666666
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_global_limits.yaml', sources) as result:
+        result.objective  # 127211.66666666666
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -415,7 +416,7 @@ itself, where a period exists to name.
 
 ## What it exercises
 
-A reduction over two dimensions at once (`sum(sum(p, by=gen_placement, over=generator, into=carrier), over=snapshot)`),
-one grouping landing on a pair of dimensions (`sum(p_nom, by=gen_placement, over=generator, into=[bus, carrier])`),
+A reduction over two dimensions at once (`sum(sum(p, over=generator, by=gen_placement[carrier]), over=snapshot)`),
+one grouping landing on a pair of dimensions (`sum(p_nom, over=generator, by=gen_placement[bus, carrier])`),
 and two scalar-bounded sums over one set with different weights. No construct
 here is new, for five constraints PyPSA implements in five functions.

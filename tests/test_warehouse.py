@@ -19,7 +19,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve.archive_layout import _with_run
+from specsolve._archive_layout import _with_run
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -32,7 +32,7 @@ PAGE = Path(__file__).resolve().parent.parent / 'docs' / 'howto' / 'warehouse.md
 #: connected to two buses counts at both.
 SPEC: dict[str, Any] = {
     'dimensions': {
-        't': {'dtype': 'int'},
+        't': {'dtype': 'int', 'ordered': True},
         'generator': {'dtype': 'str'},
         'bus': {'dtype': 'str'},
         'line': {'dtype': 'str'},
@@ -41,7 +41,7 @@ SPEC: dict[str, Any] = {
     'relations': {
         'sited': {'key': 'generator', 'values': 'bus'},
         'zone_of': {'key': ['generator', 't'], 'values': 'zone'},
-        'connection': {'key': ['generator', 'bus']},
+        'connection': {'key': ['generator', 'bus'], 'missing': 'absent'},
         'ends': {'key': 'line', 'values': {'bus0': 'bus', 'bus1': 'bus'}},
     },
     'parameters': {
@@ -57,12 +57,12 @@ SPEC: dict[str, Any] = {
     'constraints': {
         'balance': {
             'dims': ['t', 'bus'],
-            'expression': 'sum(p, by=sited, over=generator, into=bus)'
-            ' + sum(f, by=ends, over=line, into=bus1) - sum(f, by=ends, over=line, into=bus0) == load',
+            'expression': 'sum(p, over=generator, by=sited[bus])'
+            ' + sum(f, over=line, by=ends[bus1]) - sum(f, over=line, by=ends[bus0]) == load',
         },
-        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, by=zone_of, over=generator, into=zone) <= zone_cap'},
+        'zonal': {'dims': ['t', 'zone'], 'expression': 'sum(p, over=generator, by=zone_of[zone]) <= zone_cap'},
     },
-    'expressions': {'reach': {'dims': ['t', 'bus'], 'expression': 'sum(p, by=connection, over=generator, into=bus)'}},
+    'expressions': {'reach': {'dims': ['t', 'bus'], 'expression': 'sum(p, over=generator, by=connection[bus])'}},
     'objective': {'sense': 'minimize', 'expression': 'sum(p * cost)'},
 }
 
@@ -70,8 +70,8 @@ GENERATORS = ['wind', 'gas', 'coal']
 BUSES = ['north', 'south']
 
 
-def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str, object]:
-    """``SPEC``'s data over *periods* steps of *time*, the load scaled by *scale*.
+def _sources(periods: int = 4, scale: float = 1.0) -> dict[str, object]:
+    """``SPEC``'s data over *periods* steps, the load scaled by *scale*.
 
     ``wind`` is sited at ``north`` and connected to both buses; ``coal``
     changes zone every step.
@@ -86,7 +86,7 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
         'zone_of': pl.DataFrame(
             {
                 'generator': GENERATORS * periods,
-                time: [step for step in steps for _ in GENERATORS],
+                't': [step for step in steps for _ in GENERATORS],
                 'zone': [zone for step in steps for zone in ('z1', 'z2', 'z1' if step % 2 else 'z2')],
             }
         ),
@@ -96,15 +96,14 @@ def _sources(time: str = 't', periods: int = 4, scale: float = 1.0) -> dict[str,
         'cost': pl.DataFrame({'generator': GENERATORS, 'value': [0.0, 50.0, 30.0]}),
         'load': pl.DataFrame(
             {
-                time: [step for step in steps for _ in BUSES],
+                't': [step for step in steps for _ in BUSES],
                 'bus': BUSES * periods,
                 'value': [scale * (10.0 + step) for step in steps for _ in BUSES],
             }
         ),
         'zone_cap': pl.DataFrame({'zone': ['z1', 'z2'], 'value': [100.0, 100.0]}),
     }
-    if time == 't':
-        sources['t'] = list(steps)
+    sources['t'] = list(steps)
     return sources
 
 
@@ -123,11 +122,11 @@ GIVEN = {
     'sources': _sources(),
     'peak': _sources(scale=1.5),
     'by_scenario': _by_scenario(),
-    'by_snapshot': _sources('snapshot', periods=8),
+    'longer': _sources(periods=8),
 }
 
 #: The run names the page writes, in the order a sorted glob returns them.
-RUNS = ['base', 'peak', 'rolling', 'rolling-kept', 'scenarios']
+RUNS = ['base', 'peak', 'rolling', 'scenarios']
 
 #: A fence the page shows and the suite does not run, with the reason on the
 #: line before it.
@@ -178,7 +177,7 @@ def runs(page: tuple[Path, dict[str, Any]]) -> Path:
 
 def test_the_page_writes_one_folder_of_every_kind_of_run(runs: Path) -> None:
     assert sorted(path.name for path in runs.iterdir()) == RUNS, (
-        'two single solves, a scenario sweep, and a rolling horizon with and without its windows'
+        'two single solves, a scenario sweep and a rolling horizon'
     )
 
 
@@ -219,12 +218,16 @@ STRICT = {
         'rows': pl.Int64,
         'nonzeros': pl.Int64,
         'solves': pl.Int64,
-        'loads': pl.Int64,
+        'solver_instances': pl.Int64,
+        'load_seconds': pl.Float64,
+        'tidy_seconds': pl.Float64,
         'attach_seconds': pl.Float64,
         'build_seconds': pl.Float64,
         'handoff_seconds': pl.Float64,
         'solve_seconds': pl.Float64,
+        'readback_seconds': pl.Float64,
         'write_seconds': pl.Float64,
+        'archive_seconds': pl.Float64,
         'specsolve_run': pl.String,
         'slice_axis': pl.String,
         'slice': pl.String,
@@ -247,20 +250,27 @@ STRICT = {
 }
 
 
+def _globs(member: str) -> list[str]:
+    """*member* as the files that hold it: the one a single solve writes, and under ``answer/`` a sweep's one per slice."""
+    return [member, member.removesuffix('.parquet') + '/*.parquet'] if member.startswith('answer/') else [member]
+
+
+def _stacked(runs: Path, member: str) -> pl.DataFrame:
+    return pl.concat([pl.read_parquet(runs / '*' / glob) for glob in _globs(member)])
+
+
 @pytest.mark.parametrize('member', sorted(STRICT), ids=str)
-def test_one_glob_reads_every_run_under_one_strict_schema(member: str, runs: Path) -> None:
+def test_one_table_reads_every_run_under_one_strict_schema(member: str, runs: Path) -> None:
     """A column added, dropped or retyped in one kind of run fails the read, as it fails a warehouse."""
-    table = pl.scan_parquet(runs / '*' / member, schema=STRICT[member]).collect()
+    table = pl.concat([pl.scan_parquet(runs / '*' / glob, schema=STRICT[member]).collect() for glob in _globs(member)])
     assert table['specsolve_run'].unique().sort().to_list() == RUNS, 'every run is in the one table'
 
 
-#: ``answer/primal/p.parquet`` across the folder: the scenario sweep adds its
-#: key, and the rolling horizon writes the swept ``snapshot`` where a single
-#: solve writes ``t``.
+#: ``p`` across the folder: each sweep adds its key.
 P_UNION = {
     'scenario': pl.String,
+    't_start': pl.Int64,
     't': pl.Int64,
-    'snapshot': pl.Int64,
     'generator': pl.String,
     'value': pl.Float64,
     'specsolve_run': pl.String,
@@ -269,27 +279,21 @@ P_UNION = {
 
 def _value_table(runs: Path, name: str = 'p') -> pl.DataFrame:
     """One answer table across every run, unioned by column name."""
-    files = sorted(runs.glob(f'*/answer/primal/{name}.parquet'))
+    files = sorted([*runs.glob(f'*/answer/primal/{name}.parquet'), *runs.glob(f'*/answer/primal/{name}/*.parquet')])
     return pl.concat([pl.read_parquet(file) for file in files], how='diagonal')
 
 
-def test_a_value_table_globs_only_by_name_across_kinds_of_run(runs: Path) -> None:
-    """A strict glob of a value table is refused, and a union by name has exactly the columns the runs add."""
-    with pytest.raises(pl.exceptions.SchemaError, match='extra column'):
-        pl.read_parquet(runs / '*' / 'answer' / 'primal' / 'p.parquet')
+def test_a_value_table_unions_by_name_across_kinds_of_run(runs: Path) -> None:
+    """A union by name has exactly the columns the runs add."""
     union = _value_table(runs)
     assert union.select(sorted(union.columns)).schema == pl.Schema(dict(sorted(P_UNION.items()))), (
-        'the union of p is t, generator and value, plus scenario from the sweep and snapshot from the rolling horizon'
+        'the union of p is t, generator and value, plus the key of each sweep'
     )
 
 
 # ---------------------------------------------------------------------------
 # the warehouse joins
 # ---------------------------------------------------------------------------
-
-
-def _stacked(runs: Path, member: str) -> pl.DataFrame:
-    return pl.read_parquet(runs / '*' / member)
 
 
 def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -> None:
@@ -303,10 +307,9 @@ def test_a_value_table_joins_its_dimension_tables_on_run_and_label(runs: Path) -
 
     held = sorted(runs.glob('*/sources/t.parquet'))
     steps = pl.concat([pl.read_parquet(file) for file in held])
-    over_t = p.filter(pl.col('t').is_not_null())
-    assert over_t.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
-    assert sorted(file.parent.parent.name for file in held) == ['base', 'peak', 'scenarios'], (
-        'a rolling horizon holds no index of t, which each window numbers for itself'
+    assert p.join(steps, on=['specsolve_run', 't'], how='anti').is_empty(), 'every step is a label of its run'
+    assert sorted(file.parent.parent.name for file in held) == RUNS, (
+        'every run holds the labels of t, a rolling horizon the whole of it'
     )
 
 
@@ -319,7 +322,6 @@ def test_a_value_table_joins_the_record_on_the_run(runs: Path) -> None:
     sweeps = record.filter(pl.col('slice').is_not_null()).group_by('specsolve_run').agg(pl.col('slice').sort())
     assert sorted(sweeps.rows()) == [
         ('rolling', ['0', '4']),
-        ('rolling-kept', ['0', '4']),
         ('scenarios', ['high', 'low']),
     ], 'a sweep has one record row per slice, named in slice as text'
 
@@ -379,7 +381,7 @@ def test_every_member_of_the_folder_is_a_type_every_reader_agrees_on(runs: Path)
 
 
 REPRO: dict[str, Any] = {
-    'dimensions': {'t': {'dtype': 'int'}},
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'load': {'dims': ['t']}, 'weight': {'dims': ['t'], 'dtype': 'int'}},
     'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}}},
     'constraints': {'covered': {'dims': ['t'], 'expression': 'p >= load'}},
@@ -408,7 +410,7 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 ) -> None:
     """Each of these reached ``sources/`` and ``answer/`` as it arrived."""
     dtype = 'datetime' if labels.dtype.is_temporal() else 'int'
-    spec = {**REPRO, 'dimensions': {'t': {'dtype': dtype}}}
+    spec = {**REPRO, 'dimensions': {'t': {'dtype': dtype, 'ordered': True}}}
     steps = labels.alias('t')
     sources = {
         't': steps.to_frame(),
@@ -424,5 +426,5 @@ def test_an_archive_writes_a_source_of_a_type_readers_disagree_on_as_one_they_ag
 
 
 def test_an_unsigned_integer_int64_cannot_hold_is_archived_as_it_arrived() -> None:
-    frame = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
-    assert frame['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'
+    table = _with_run(pl.LazyFrame({'id': pl.Series([2**64 - 1], dtype=pl.UInt64)}), 'run').collect()
+    assert table['id'].to_list() == [2**64 - 1], 'a UInt64 past Int64 keeps its value rather than failing the archive'
