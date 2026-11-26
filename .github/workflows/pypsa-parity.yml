@@ -13,18 +13,18 @@ concurrency:
   group: pypsa-parity-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   parity:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: the language is mathspec at the release pyproject.toml floors
-        id: pin
-        run: echo "version=$(grep -o 'mathspec>=[^,"]*' pyproject.toml | cut -d= -f2)" >> "$GITHUB_OUTPUT"
       # The corpus is the release the committed rungs were certified from, and PyPSA is the
-      # commit that corpus pins. A later corpus adds rungs and data prep, so moving this tag
-      # is its own change, with the rungs it adds.
+      # commit that corpus pins, in the `parity` environment of pyproject.toml. A later corpus
+      # adds rungs and data prep, so moving this tag is its own change, with the rungs it adds.
       - uses: actions/checkout@v7
         with:
           repository: energy-models/mathspec
@@ -33,17 +33,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:
           run-install: false
-      - name: polars as pixi.lock pins it
-        id: polars
-        run: echo "version=$(pixi list -e default --frozen --no-install --json polars | jq -r '.[] | select(.name == "polars") | .version')" >> "$GITHUB_OUTPUT"
       - name: every rung against pypsa, with this tree's specsolve
-        run: >
-          pixi exec -s uv uv run
-          --with-editable .
-          --with "$(grep -o 'linopy==[^"]*' pyproject.toml)"
-          --with "mathspec==${{ steps.pin.outputs.version }}"
-          --with "pypsa @ git+https://github.com/PyPSA/PyPSA@3625c8168b0b45a7936ddcb3a4da99dd608125ca"
-          --with "highspy==1.15.1" --with "polars==${{ steps.polars.outputs.version }}"
-          python differential/pypsa/parity.py corpus
+        run: pixi run -e parity python differential/pypsa/parity.py corpus
       - name: the committed certificate, projections and tables are what this tree produces
         run: git diff --exit-code -- differential/pypsa && test -z "$(git status --porcelain differential/pypsa)"
