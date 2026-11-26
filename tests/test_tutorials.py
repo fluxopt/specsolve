@@ -204,6 +204,14 @@ def test_a_mip_is_priced_once_its_decisions_are_fixed(lifecycle: tuple[dict[str,
     assert prices == pytest.approx([10.0, 10.0, 50.0, 10.0]), 'gas sets the price in snapshot 2, and wind elsewhere'
 
 
+def test_rounding_a_relaxed_commitment_brackets_the_mip(lifecycle: tuple[dict[str, Any], str]) -> None:
+    """The rounding section's claim: the relaxation and the rounded commitment bound the MIP, and here meet it."""
+    namespace, _ = lifecycle
+    lower, upper = namespace['relaxation'].objective, namespace['committed'].objective
+    assert (lower, upper) == pytest.approx((10875.0, 14000.0)), 'the page quotes the two bounds'
+    assert upper == pytest.approx(namespace['mip'].objective), 'the page says rounding found the MIP optimum'
+
+
 def test_removing_a_constraint_moves_the_answer(lifecycle: tuple[dict[str, Any], str]) -> None:
     namespace, _ = lifecycle
     assert namespace['with_ramp'] > namespace['without_ramp'], 'popping the key has to give the objective back'
@@ -227,3 +235,15 @@ def test_a_second_table_varies_with_the_same_column(scenarios: tuple[dict[str, A
     objectives = dict(namespace['both'].records.select('scenario', 'objective').iter_rows())
     assert objectives['mild'] == pytest.approx(10500.0), 'the mild scenario keeps its cost table'
     assert objectives['cold'] > 16530.0, 'dearer gas in the cold scenario has to cost more'
+
+
+def test_each_scenario_draws_its_tables_from_their_pools(scenarios: tuple[dict[str, Any], str]) -> None:
+    """The pool section's claim: a scenario row picks one label of each pool, and the dear-gas cold one costs most."""
+    namespace, _ = scenarios
+    objectives = dict(namespace['pooled'].records.select('scenario', 'objective').iter_rows())
+    assert objectives == pytest.approx({'s1': 15000.0, 's2': 16530.0, 's3': 24540.0}), (
+        'one solve per row of draws, each with its own load and cost'
+    )
+    assert objectives['s2'] == pytest.approx(
+        dict(namespace['scenarios'].records.select('scenario', 'objective').iter_rows())['cold']
+    ), 'cold load with cheap gas is the cold scenario of the first section'

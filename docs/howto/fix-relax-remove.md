@@ -111,6 +111,29 @@ Gas sets the price in snapshot 2. In the other snapshots wind is at the margin.
 The prices hold the on-off decisions fixed, so they do not include the cost of
 keeping gas on.
 
+## Round a relaxed answer
+
+To get an integer answer without solving the MIP, solve with the integer
+decisions relaxed, round them, and solve again with them fixed. Relax `on` to
+the range 0 to 1, round it up, and hold it there with `fixable` from the
+section above:
+
+```python exec="true" source="material-block" result="text" session="lifecycle"
+relaxable = to_spec(UNITS).to_dict()
+relaxable['variables']['on'] |= {'domain': 'continuous', 'bounds': {'lower': 0, 'upper': 1}}
+relaxation = sps.solve(relaxable, units)
+
+rounded = relaxation.primal('on').with_columns(value=(pl.col('value') - 1e-6).ceil())
+committed = sps.solve(fixable, units | {'on_fixed': rounded})
+print(f'relaxed {relaxation.objective}, rounded {committed.objective}, MIP {mip.objective}')
+```
+
+The relaxed objective is a lower bound and the rounded one an upper bound, so
+the MIP's optimum lies between 10875 and 14000. Here rounding found it. The
+`- 1e-6` keeps a zero that the solver returns as a small positive number at
+zero. If a unit's minimum output exceeds the load left for it, rounding up has
+no feasible dispatch, and `committed.status` says so.
+
 ## Remove a constraint
 
 `pop` the constraint's key from the spec:
