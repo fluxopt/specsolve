@@ -16,6 +16,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   baseline:
     name: the baseline seeds
@@ -30,7 +33,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-fuzz-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-fuzz-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-fuzz-${{ runner.os }}-
       - name: A thousand random models, compared seed by seed with tests/fuzz/baseline.json
         run: pixi run fuzz
@@ -48,7 +51,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-fuzz-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-fuzz-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-fuzz-${{ runner.os }}-
       # The day since 1970 picks the range, so each night runs seeds no earlier night ran.
       - name: Ten thousand seeds the baseline never ran
