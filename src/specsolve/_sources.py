@@ -800,12 +800,13 @@ def _refuse_unknown_or_repeated_coordinates(
     known = {d: dimension_labels[d] for d in p.dims if d in dimension_labels}
     positions = _row_major_positions(p.dims, table, known)
     if positions is None:
-        answers = table.select(
-            pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
-            *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
-        ).row(0, named=True)
-        repeated = answers['#duplicated']
-        strays = [d for d in known if not answers[f'#known {d}']]
+        answers: dict[str, bool] = (
+            table.select(_is_label(d, labels).all().alias(d) for d, labels in known.items()).row(0, named=True)
+            if known
+            else {}
+        )
+        repeated = table.select(p.dims).is_duplicated().any()
+        strays = [d for d in known if not answers[d]]
     else:
         repeated = positions.n_unique() < table.height
         strays = [
