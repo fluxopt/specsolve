@@ -816,13 +816,14 @@ def _refuse_unknown_or_repeated_coordinates(
         return
 
     known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
-    answers = table.select(
-        pl.struct(p.dims).is_duplicated().any().alias('#duplicated'),
-        *(_is_label(d, labels).all().alias(f'#known {d}') for d, labels in known.items()),
-    ).row(0, named=True)
+    answers: dict[str, bool] = (
+        table.select(_is_label(d, labels).all().alias(d) for d, labels in known.items()).row(0, named=True)
+        if known
+        else {}
+    )
 
     for d, labels in known.items():
-        if not answers[f'#known {d}']:
+        if not answers[d]:
             strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
             shown = ', '.join(repr(s) for s in strangers[:5])
             more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
@@ -835,7 +836,7 @@ def _refuse_unknown_or_repeated_coordinates(
                 f'as absent. Fix the label, or add it to the labels of {d}.'
             )
 
-    if not answers['#duplicated']:
+    if not table.select(p.dims).is_duplicated().any():
         return
     duplicated = table.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
