@@ -7,14 +7,10 @@ over it, and one `rung_*.py` per rung whose `build()` returns the PyPSA network 
 its data inline. `prep.py` beside this file is the prep: a network becomes
 the tables the file declares, every "data prep" parameter computed there.
 This file is the rest of the engine side — prepare, build, solve, compare — and
-it needs a checkout of that repository at the commit `pypsa-parity.yml` names. No
-pixi environment carries pypsa, so run it locally with the workflow's own line:
+it needs a checkout of that repository at the commit `pypsa-parity.yml` names. The
+`parity` pixi environment carries pypsa, so run it locally as the workflow does:
 
-    pixi exec -s uv uv run --with-editable . \
-        --with "$(grep -o 'linopy==[^"]*' pyproject.toml)" \
-        --with "pypsa @ git+https://github.com/PyPSA/PyPSA@3625c8168b0b45a7936ddcb3a4da99dd608125ca" \
-        --with "highspy==1.15.1" --with "polars>=2.0" \
-        python differential/pypsa/parity.py ../mathspec
+    pixi run -e parity python differential/pypsa/parity.py ../mathspec
 
 Per rung, from the same network:
 

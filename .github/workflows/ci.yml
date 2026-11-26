@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   suite:
     runs-on: ubuntu-24.04
@@ -28,11 +31,10 @@ jobs:
         with:
           run-install: false
 
-      # No pixi.lock exists, so the cache keys on pyproject.toml and the solve runs fresh.
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-ci-suite-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-ci-suite-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-ci-suite-${{ runner.os }}-
 
       - run: pixi install -e default
@@ -57,7 +59,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-ci-docs-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-ci-docs-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-ci-docs-${{ runner.os }}-
 
       # The retry and timeout are for a slow apt mirror that killed four runs on 2026-08-19.
@@ -110,7 +112,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-ci-floors-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-ci-floors-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-ci-floors-${{ runner.os }}-
       - run: pixi run test-floors
 
@@ -125,7 +127,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-ci-pyodide-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-ci-pyodide-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-ci-pyodide-${{ runner.os }}-
       - run: pixi run test-pyodide
 
