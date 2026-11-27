@@ -109,17 +109,18 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
     once; ``dimension`` and ``relation``, one per entry with labels of its
     own; ``parameter``, one per parameter, checked and collected; and
     ``check``, the refusal that needs every source read. The checks of the
-    relations' labels, the parameters' lazy shaping and the read of the
-    dimensions' labels the checks share run before the first parameter's
-    check, and are in its row.
+    relations' labels and the parameters' lazy shaping run before the first
+    parameter's check, and are in its row.
     """
     _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)
     sources: dict[str, pl.LazyFrame] = {}
+    labels_by_dimension: dict[str, pl.Series] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
+            labels_by_dimension[dname] = _labels_of(dname, sources[dname])
             lap('tidy', 'dimension', dname)
     relations: dict[str, pl.LazyFrame] = {}
     for name, relation in program.relations.items():
@@ -128,16 +129,15 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
-    _refuse_unknown_labels_in_relations(program, relations, sources)
+    _refuse_unknown_labels_in_relations(program, relations, labels_by_dimension)
     sources |= relations
 
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = parameter_table(pname, pdef, data[pname], sources)
-    dimension_labels = _dimension_labels(program.dimensions, sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, dimension_labels)
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels_by_dimension)
         lap('tidy', 'parameter', pname)
 
     for dname in program.dimensions:
@@ -490,7 +490,7 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
 
 
 def _refuse_unknown_labels_in_relations(
-    program: Program, relations: Mapping[str, pl.LazyFrame], labels: Mapping[str, pl.LazyFrame]
+    program: Program, relations: Mapping[str, pl.LazyFrame], labels_by_dimension: Mapping[str, pl.Series]
 ) -> None:
     """Every column of every relation holds labels of its dimension.
 
@@ -499,7 +499,7 @@ def _refuse_unknown_labels_in_relations(
     """
     for name, relation in program.relations.items():
         for role, dim in relation.columns:
-            _refuse_unknown_labels_in_column(relations[name], name, role, dim, _labels_of(dim, labels[dim]))
+            _refuse_unknown_labels_in_column(relations[name], name, role, dim, labels_by_dimension[dim])
 
 
 def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
@@ -525,11 +525,6 @@ def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, d
 def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
     """One dimension's labels."""
     return table.select(dim).pipe(collected)[dim]
-
-
-def _dimension_labels(dims: Iterable[str], labels_tables: Mapping[str, pl.LazyFrame]) -> dict[str, pl.Series]:
-    """The labels of each of *dims* that *labels_tables* holds a table for, read once; a dimension not read yet is left out."""
-    return {d: _labels_of(d, labels_tables[d]) for d in dims if d in labels_tables}
 
 
 def _read_relation(source: Source, name: str, relation: Relation, labels: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
@@ -638,7 +633,9 @@ def read_values(
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
     table = parameter_table(name, declared, obj, labels, kind)
-    return _checked_parameter(name, declared, table, labels, _dimension_labels(dims, labels), kind)
+    return _checked_parameter(
+        name, declared, table, labels, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind
+    )
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -745,13 +742,13 @@ def _checked_parameter(
     p: Parameter,
     table: pl.LazyFrame,
     sources: Mapping[str, pl.LazyFrame],
-    dimension_labels: Mapping[str, pl.Series],
+    labels_by_dimension: Mapping[str, pl.Series],
     kind: str = 'parameter',
 ) -> pl.LazyFrame:
     """*table* held to what its entry claims, collected once.
 
-    *dimension_labels* holds the labels of each dimension read so far
-    ([`_dimension_labels`][]), read once for every table checked against them.
+    *labels_by_dimension* holds the labels of each dimension read so far,
+    read once for every table checked against them.
 
     The collect is the one model-sized materialisation on the way in.
 
@@ -773,14 +770,14 @@ def _checked_parameter(
         table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
     )
     checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
-    _refuse_unknown_or_repeated_coordinates(name, p, checked, dimension_labels, kind)
+    _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
     return checked.lazy()
 
 
 def _refuse_unknown_or_repeated_coordinates(
-    name: str, p: Parameter, table: pl.DataFrame, dimension_labels: Mapping[str, pl.Series], kind: str
+    name: str, p: Parameter, table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series], kind: str
 ) -> None:
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
 
@@ -797,7 +794,7 @@ def _refuse_unknown_or_repeated_coordinates(
             )
         return
 
-    known = {d: dimension_labels[d] for d in p.dims if d in dimension_labels}
+    known = {d: labels_by_dimension[d] for d in p.dims if d in labels_by_dimension}
     positions = _row_major_positions(p.dims, table, known)
     if positions is None:
         answers: dict[str, bool] = (
