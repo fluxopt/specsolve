@@ -336,7 +336,7 @@ def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed:
 
 def built_counts(model) -> tuple[dict[str, int], dict[str, int]]:
     """Rows per constraint and columns per variable of one build, before any solve."""
-    built = model._engine._model
+    built = model._built
     return (
         {name: held.height for name, held in built.constraints.items()},
         {name: held.height for name, held in built.variables.items()},
@@ -350,7 +350,7 @@ def fed(sources: dict[str, object]) -> list[str]:
 
 def _keyed_model(model) -> dict[str, object]:
     """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
-    built = model._engine._model
+    built = model._built
     tables = built.tables
 
     def keys(held: dict) -> dict[int, tuple]:
@@ -431,7 +431,7 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     and ``-`` where the rung builds no row of the entry at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
-    model = built_model._engine._model
+    model = built_model._built
     scope = Scope(model.program, model.attached, model.variables)
     verdicts: dict[str, str] = {}
     for name, block in {**program.constraints, **program.variables}.items():
