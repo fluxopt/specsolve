@@ -65,10 +65,10 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
-    [`in_memory`][], since every read holds one table whole. A dimension's
-    cast is built once and the parameters are cast in one batch: building a
-    cast to an ``Enum`` of many labels costs a fixed time per expression, and
-    PyPSA's spec casts hundreds of tables over the same dozen dimensions.
+    [`in_memory`][], since every read holds one table whole. Each dimension's
+    cast is built once and shared, since building a cast to an ``Enum`` of
+    many labels costs a fixed time per expression, and the parameters are
+    cast in one batch.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -87,18 +87,12 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         if casts:
             relations[name] = relations[name].with_columns(casts)
     to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
-    uncollected: dict[str, pl.LazyFrame] = {}
+    cast: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        table = _plain_strings(parameters[name], p.dims)
-        casts = [to_enum[d] for d in p.dims if d in to_enum]
-        if p.dtype == 'float':
-            casts.append(_AS_FLOAT)
-        if casts:
-            uncollected[name] = table.lazy().with_columns(casts)
-        else:
-            parameters[name] = table
+        casts = [to_enum[d] for d in p.dims if d in to_enum] + ([_AS_FLOAT] if p.dtype == 'float' else [])
+        cast[name] = _plain_strings(parameters[name], p.dims).lazy().with_columns(casts)
     with in_memory():
-        parameters |= dict(zip(uncollected, collected_all(uncollected.values()), strict=True))
+        parameters = dict(zip(cast, collected_all(cast.values()), strict=True))
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
