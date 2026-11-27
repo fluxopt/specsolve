@@ -105,7 +105,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
             lap('tidy', 'dimension', dname)
     relations: dict[str, pl.LazyFrame] = {}
     for name, relation in program.relations.items():
-        relations[name] = _read_relation(data[name], name, relation, sources)
+        relations[name] = _read_relation(data[name], name, relation, labels_by_dimension)
         lap('tidy', 'relation', name)
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
@@ -118,7 +118,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels_by_dimension)
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], labels_by_dimension)
         lap('tidy', 'parameter', pname)
 
     for dname in program.dimensions:
@@ -397,18 +397,22 @@ def in_microseconds(table: pl.DataFrame, owner: str, midnight: Collection[str] =
     )
 
 
-def _over_datetimes(columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]) -> list[str]:
+def _over_datetimes(columns: Iterable[tuple[str, str]], labels_by_dimension: Mapping[str, pl.Series]) -> list[str]:
     """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's labels are datetimes.
 
     The labels are read first and follow their entry, so a column follows
     the labels rather than the entry: a date beside labels that are dates
     stays a date.
     """
-    return [c for c, dim in columns if dim in labels and isinstance(labels[dim].collect_schema()[dim], pl.Datetime)]
+    return [
+        c
+        for c, dim in columns
+        if dim in labels_by_dimension and isinstance(labels_by_dimension[dim].dtype, pl.Datetime)
+    ]
 
 
 def _typed_as_labels(
-    owner: str, table: pl.DataFrame, columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]
+    owner: str, table: pl.DataFrame, columns: Iterable[tuple[str, str]], labels_by_dimension: Mapping[str, pl.Series]
 ) -> pl.DataFrame:
     """*table* with each label column, ``(column, dimension)`` in *columns*, of a type its dimension's labels compare with.
 
@@ -423,9 +427,9 @@ def _typed_as_labels(
     """
     casts = []
     for column, dim in columns:
-        if dim not in labels:
+        if dim not in labels_by_dimension:
             continue
-        given, listed = table.schema[column], labels[dim].collect_schema()[dim]
+        given, listed = table.schema[column], labels_by_dimension[dim].dtype
         if table.height == 0 or given == pl.Null:
             if given != listed:
                 casts.append(pl.col(column).cast(listed))
@@ -508,10 +512,12 @@ def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
     return table.select(dim).pipe(collected)[dim]
 
 
-def _read_relation(source: Source, name: str, relation: Relation, labels: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
+def _read_relation(
+    source: Source, name: str, relation: Relation, labels_by_dimension: Mapping[str, pl.Series]
+) -> pl.LazyFrame:
     """One supplied relation as the table both lanes read: one column per declared column, under its own name.
 
-    A column is read in its dimension's label type, from *labels*.
+    A column is read in its dimension's label type, from *labels_by_dimension*.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -537,8 +543,10 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
     owner = f"relation '{name}'"
-    rows = in_microseconds(table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, labels))
-    rows = _typed_as_labels(owner, rows, relation.columns, labels)
+    rows = in_microseconds(
+        table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, labels_by_dimension)
+    )
+    rows = _typed_as_labels(owner, rows, relation.columns, labels_by_dimension)
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -614,9 +622,7 @@ def read_values(
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
     table = parameter_table(name, declared, obj, labels, kind)
-    return _checked_parameter(
-        name, declared, table, labels, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind
-    )
+    return _checked_parameter(name, declared, table, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -722,7 +728,6 @@ def _checked_parameter(
     name: str,
     p: Parameter,
     table: pl.LazyFrame,
-    sources: Mapping[str, pl.LazyFrame],
     labels_by_dimension: Mapping[str, pl.Series],
     kind: str = 'parameter',
 ) -> pl.LazyFrame:
@@ -748,9 +753,9 @@ def _checked_parameter(
         )
     owner = f"{kind} '{name}'"
     checked = in_microseconds(
-        table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
+        table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), labels_by_dimension)
     )
-    checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
+    checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), labels_by_dimension)
     _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
