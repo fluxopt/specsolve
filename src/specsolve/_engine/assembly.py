@@ -20,7 +20,7 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import rowless, specialized
+from specsolve._engine.specialize import is_empty, specialized
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
@@ -180,6 +180,7 @@ class Assembly:
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
         self.obj_sense: ObjectiveSense | None = None
+        self._empty_tables = {}
 
     def run(self) -> BuiltModel:
         """Build every entry, then freeze what they produced.
@@ -283,8 +284,8 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if rowless(v, self.attached):
-            indexed = indices.nothing(self.scope, v.dims, COL)
+        if is_empty(v, self.attached):
+            indexed = self._empty_table(v.dims, COL)
         else:
             indexed = indices.table(self.scope, v.dims, v.where, COL, start)
         self.n_cols = start + indexed.height
@@ -354,8 +355,8 @@ class Assembly:
         absence never meets the full product of its dimensions.
         """
         start = self.n_rows
-        if rowless(c, self.attached):
-            return self._without_a_row(name, indices.nothing(self.scope, c.dims, ROW), start)
+        if is_empty(c, self.attached):
+            return self._without_a_row(name, self._empty_table(c.dims, ROW), start)
         admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
@@ -421,6 +422,16 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
+
+    def _empty_table(self, dims: tuple[str, ...], index: str) -> pl.DataFrame:
+        """What an empty entry gets in place of its indexed table: its columns, no rows.
+
+        One per dimensions and index column, shared, since building it is most
+        of what such an entry costs.
+        """
+        if (dims, index) not in self._empty_tables:
+            self._empty_tables[dims, index] = indices.nothing(self.scope, dims, index)
+        return self._empty_tables[dims, index]
 
     def _without_a_row(
         self, name: str, indexed: pl.DataFrame, start: int
