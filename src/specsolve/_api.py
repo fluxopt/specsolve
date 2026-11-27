@@ -17,7 +17,6 @@ Example::
 
 from __future__ import annotations
 
-import copy
 import json
 import math
 import warnings
@@ -306,8 +305,7 @@ class Model:
             self._built = None
             self._solved = None
             if held is not None and changed and numbers_only(self._program, held, measured, attached, changed):
-                self._measured = copy.deepcopy(measured)
-                self._built = spliced_model(held, attached, changed, self._measured, lap)
+                self._built = spliced_model(held, attached, changed, measured, lap)
                 return
             self._measured = Measured()
             self._built = build_model(self._program, attached, self._measured, lap)
