@@ -120,11 +120,15 @@ class QueryBuilder:
     """Turn program nodes into polars queries over the model's tidy tables.
 
     ``solution`` is set on the builder a read makes and on no other: with it
-    every variable and every ``dual(c)`` turns into a value.
+    every variable and every ``dual(c)`` turns into a value. ``builds`` is set
+    on the builder of a build and on no other: a build places each term on an
+    entry's rows by the term's own dimensions, so a term that holds nothing
+    can be left out, where a read takes its dimensions from the terms it is given.
     """
 
     scope: Scope
     solution: Solution | None = None
+    builds: bool = False
 
     # ------------------------------------------------------------------
     # bounds
@@ -291,9 +295,20 @@ class QueryBuilder:
             return map_terms(inner, rewrite)
 
         def region(r: program.Region) -> ExpressionTerms:
-            """One region's value, kept only where that region applies."""
+            """One region's value, kept only where that region applies.
+
+            The coordinates it claims are read once, over the dimensions its
+            condition reads. In a build, a region that claims none builds no
+            term: each term would carry presences over the full product of its
+            dimensions, read only to be cut away. A read keeps it, since a read
+            takes its dimensions from its terms and the region may be the only
+            one over a dimension.
+            """
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            truth = narrowed(self.scope, on, r.when).select(*on) if on else None
+            truth = narrowed(self.scope, on, r.when).select(*on).pipe(collected) if on else None
+            if truth is not None and not truth.height and self.builds:
+                return ExpressionTerms((), ())
+            truth = truth.lazy() if truth is not None else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
                 """A region's presence, silent about the coordinates the region does not claim.

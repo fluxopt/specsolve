@@ -114,6 +114,7 @@ class Assembly:
         measured: Measured,
         lap: Lap,
     ) -> None:
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.lap = lap
         self.attached = attached
@@ -121,7 +122,7 @@ class Assembly:
         self.variables: dict[str, indices.Indexed] = {}
         self.constraints: dict[str, indices.Indexed] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.builder = QueryBuilder(self.scope)
+        self.builder = QueryBuilder(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, contiguous ``0..n-1`` across the model.
