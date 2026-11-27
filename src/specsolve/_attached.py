@@ -48,9 +48,10 @@ class Dimension:
     """One dimension's labels, held once for everything that reads them."""
 
     name: str
-    #: The labels in the order they arrived, as the engine holds them: labels
-    #: that arrived as ``String`` as an ``Enum`` in that order, so its physical
-    #: code is a label's position, and any other in the type it arrived in.
+    #: The labels in the order they arrived, as the engine holds them: string
+    #: labels, in any polars encoding, as an ``Enum`` in that order, so its
+    #: physical code is a label's position, and any other in the type it
+    #: arrived in.
     labels: pl.Series
     #: The cast of a column called [`name`][] into [`dtype`][], null where a
     #: value is none of the labels, or ``None`` where the labels are held as
@@ -62,6 +63,8 @@ class Dimension:
     @classmethod
     def of(cls, name: str, labels: pl.Series) -> Dimension:
         """The dimension *name* over *labels*, as [`tidy_sources`][specsolve._sources.tidy_sources] read them."""
+        if isinstance(labels.dtype, (pl.Categorical, pl.Enum)):
+            labels = labels.cast(pl.String)
         if labels.dtype != pl.String:
             return cls(name, labels, None)
         ordered = pl.Enum(labels)

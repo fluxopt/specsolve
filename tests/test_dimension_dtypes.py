@@ -79,7 +79,6 @@ def test_an_empty_labels_table_takes_the_declared_dtype():
     assert tables['d'].schema['d'] == pl.Int64, 'the empty labels are read as the declared int'
 
 
-@pytest.mark.xfail(strict=True, reason='a str dimension whose labels are encoded is held encoded, its tables as strings')
 @pytest.mark.parametrize(
     'labels',
     [
@@ -88,7 +87,13 @@ def test_an_empty_labels_table_takes_the_declared_dtype():
     ],
 )
 def test_encoded_string_labels_build_under_a_where_as_plain_strings_do(labels):
-    """Labels in a polars string encoding read as the same strings, where a `where` joins them to a parameter."""
+    """Labels in a polars string encoding read as the same strings, where a `where` joins them to a parameter.
+
+    A `str` dimension whose labels arrived `Categorical` or `Enum` was held in
+    that encoding, while a parameter's label column was read as plain strings,
+    so the join behind the `where` was refused by polars: `cat on left does not
+    match str on right`.
+    """
     spec = _spec('str') | {
         'parameters': {'cap': {'dims': ['d']}, 'on': {'dims': ['d'], 'dtype': 'bool'}},
         'variables': {'x': {'dims': ['d'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 'cap'}}},
