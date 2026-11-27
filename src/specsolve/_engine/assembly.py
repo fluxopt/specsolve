@@ -114,6 +114,7 @@ class Assembly:
         measured: Measured,
         lap: Lap,
     ) -> None:
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.lap = lap
         self.attached = attached
