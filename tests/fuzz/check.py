@@ -8,7 +8,7 @@ Each check is an oracle that needs no expected answer:
   canonical form is a fixed point.
 - **typeset**: every format prints an accepted spec, written out and as stated.
 - **build**: the two lanes accept the same data or refuse it with the same
-  sentence. An oracle gap (``OracleCannotBuildError``) is not a finding.
+  sentence. A gap in the linopy lane (``OracleCannotBuildError``) is not a finding.
 - **read**: every expression the case names reads the same on both lanes at one
   point (:func:`tests.differential.at_a_point`'s claim, without its asserts).
 - **solve**: for a linear case with an objective (linopy solves no feasibility problem), both lanes reach the same status and objective,
@@ -39,11 +39,9 @@ from mathspec import advice, to_spec, typeset
 from mathspec.errors import MathSpecError
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
-from specsolve._inputs import lowered
-from specsolve._sources import tidy_sources
+from specsolve._names import COEFF, ROW
 from specsolve.errors import DataError, SpecsolveError
-from tests.differential import RTOL, _frame, _hold, by_coordinate
+from tests.differential import RTOL, _hold, _table, by_coordinate
 from tests.linopy_lane.loader import OracleCannotBuildError
 from tests.oracle import specsolve_linopy
 
@@ -52,6 +50,7 @@ if TYPE_CHECKING:
 
     from mathspec.spec import Spec
 
+    from specsolve._engine.assembly import BuiltModel
     from tests.fuzz.generate import Case
 
 #: A value the two lanes read apart by less than this is the same value.
@@ -129,7 +128,7 @@ def check(case: Case, *, solve: bool = True) -> Outcome:
 def _guarded(oracle: str, run: Callable[[], list[Finding]]) -> list[Finding]:
     """*run*'s findings, or the crash it raised: one oracle that raises does not hide the others' findings.
 
-    An oracle gap is no finding here either, as everywhere else in this module.
+    A gap in the linopy lane is no finding here either, as everywhere else in this module.
     """
     try:
         return run()
@@ -220,7 +219,7 @@ def _reads(spec: Spec, case: Case, model: Any, relational: Any) -> list[Finding]
     for expression in case.reads:
         ours, mine = _attempt(lambda e=expression: by_coordinate(read(e)))
         theirs, oracle = _attempt(
-            lambda e=expression: by_coordinate(_frame(specsolve_linopy.evaluate(model, spec, e, dict(case.sources))))
+            lambda e=expression: by_coordinate(_table(specsolve_linopy.evaluate(model, spec, e, dict(case.sources))))
         )
         if _is_gap(oracle) or _is_gap(mine):
             continue
@@ -281,19 +280,17 @@ def _close(a: float, b: float) -> bool:
 def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]:
     """Solve both lanes and compare what they built and reached.
 
-    The oracle is solved through HiGHS directly and with its zeros kept: under
+    The linopy lane's model is solved through HiGHS directly and with its zeros kept: under
     ``sanitize_zeros`` and through an LP file linopy drops a row whose every
     coefficient is zero, and the language keeps that row.
     """
     m = specsolve_linopy.build(spec, dict(sources))
     status, condition = m.solve(solver_name='highs', output_flag=False, io_api='direct', sanitize_zeros=False)
     oracle = float(m.objective.value) if status == 'ok' else math.nan
-    program = lowered(spec)
     findings = []
-    with Engine() as engine:
-        engine.build(program, tidy_sources(program, dict(sources)))
-        result = engine.solve(solver_options={'output_flag': False})
-        diagnostics = engine.diagnostics()
+    with sps.build(spec, dict(sources)) as relational:
+        result = relational.solve(solver_options={'output_flag': False})
+        diagnostics = relational.metrics()
         if (diagnostics.columns, diagnostics.rows) != (m.nvars, m.ncons):
             findings.append(
                 Finding(
@@ -303,7 +300,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
                 )
             )
         else:
-            findings += _same_matrix(engine, m)
+            findings += _same_matrix(relational._built, m)
         if result.termination_condition != condition:
             if {result.termination_condition, condition} <= {'infeasible', 'infeasible_or_unbounded', 'unbounded'}:
                 return findings, False
@@ -326,7 +323,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
         if all(v.domain == 'continuous' for v in spec.variables.values()):
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'model.lp'
-                engine.write(path)
+                relational.write(path)
                 written = _resolve(path)
             if written is None or not _close(written, oracle):
                 findings.append(
@@ -351,17 +348,17 @@ def _resolve(path: Path) -> float | None:
     return h.getInfo().objective_function_value
 
 
-def _same_matrix(engine: Engine, m: Any) -> list[Finding]:
+def _same_matrix(built: BuiltModel, m: Any) -> list[Finding]:
     """Each constraint's rows as a sorted multiset of rows, each row its sorted coefficients up to sign.
 
     The lanes number rows and columns apart, and may move every term of a row
     to the other side, which negates the row and flips its sense: the objective
     check sees a sense that is wrong, this one the coefficients.
     """
-    tables = engine._model.handoff
+    tables = built.tables
     findings = []
-    for constraint, block in engine._model.constraints.items():
-        got = _canonical(tables.matrix_block(block.start, block.start + block.height), block.height)
+    for constraint, indexed in built.constraints.items():
+        got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height), indexed.height)
         want = _linopy_matrix(m, constraint)
         if len(got) != len(want) or any(
             len(a) != len(b) or not all(_close(x, y) for x, y in zip(a, b, strict=True))
@@ -382,7 +379,7 @@ def _up_to_sign(row: list[float]) -> tuple[float, ...]:
 
 
 def _canonical(matrix: pl.DataFrame, height: int) -> list[tuple[float, ...]]:
-    rows = matrix.group_by('row').agg(pl.col('coeff')).get_column('coeff').to_list()
+    rows = matrix.group_by(ROW).agg(pl.col(COEFF)).get_column(COEFF).to_list()
     return sorted([_up_to_sign(r) for r in rows] + [()] * (height - len(rows)))
 
 
@@ -467,7 +464,7 @@ def _attempt(call: Callable[[], Any]) -> tuple[Any, BaseException | None]:
 
 
 def _is_gap(e: BaseException | None) -> bool:
-    """A refusal one lane makes by design: the oracle's ``OracleCannotBuildError``, or the relational lane's #1137."""
+    """A refusal one lane makes by design: the linopy lane's ``OracleCannotBuildError``, or the relational lane's #1137."""
     return isinstance(e, OracleCannotBuildError) or (
         isinstance(e, SpecsolveError) and not isinstance(e, DataError) and 'specsolve cannot build that' in str(e)
     )

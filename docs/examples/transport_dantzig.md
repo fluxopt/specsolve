@@ -23,8 +23,8 @@ Dantzig's transportation problem, the first model of the GAMS library: ship cann
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{I}`$ | index $`i`$ — `plant` — canning plants, with limited capacity |
 | $`\mathcal{J}`$ | index $`j`$ — `market` — markets, with demand to be met |
+| $`\mathcal{I}`$ | index $`i`$ — `plant` — canning plants, with limited capacity |
 
 #### Parameters
 
@@ -32,47 +32,47 @@ Dantzig's transportation problem, the first model of the GAMS library: ship cann
 |---|---|
 | $`a`$ | `capacity` over $`\mathcal{I}`$ — capacity of each plant |
 | $`b`$ | `demand` over $`\mathcal{J}`$ — demand at each market |
-| $`d`$ | `distance` over $`\mathcal{I} \times \mathcal{J}`$ — distance from plant to market |
+| $`d`$ | `distance` over $`\mathcal{J} \times \mathcal{I}`$ — distance from plant to market |
 | $`f`$ | `freight` (scalar) — freight rate per case per unit distance |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`x`$ | `shipment` over $`\mathcal{I} \times \mathcal{J}`$ — cases shipped from a plant to a market |
+| $`x`$ | `shipment` over $`\mathcal{J} \times \mathcal{I}`$ — cases shipped from a plant to a market |
 
 #### Variable domains
 
 **`shipment`**
 
 ```math
-x_{i,j} \ge 0 \qquad \forall\, i \in \mathcal{I},\ j \in \mathcal{J}
+x_{j,i} \ge 0 \qquad \forall\, j \in \mathcal{J},\ i \in \mathcal{I}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{i \in \mathcal{I},\ j \in \mathcal{J}} \frac{x_{i,j} \cdot d_{i,j} \cdot f}{1000}
+\min \sum_{j \in \mathcal{J},\ i \in \mathcal{I}} \frac{x_{j,i} \cdot d_{j,i} \cdot f}{1000}
 ```
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-\sum_{j \in \mathcal{J}} x_{i,j} \le a_{i} \qquad \forall\, i \in \mathcal{I}
-```
-
 **`meet_demand`**
 
 ```math
-\sum_{i \in \mathcal{I}} x_{i,j} \ge b_{j} \qquad \forall\, j \in \mathcal{J}
+\sum_{i \in \mathcal{I}} x_{j,i} \ge b_{j} \qquad \forall\, j \in \mathcal{J}
+```
+
+**`within_capacity`**
+
+```math
+\sum_{j \in \mathcal{J}} x_{j,i} \le a_{i} \qquad \forall\, i \in \mathcal{I}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -126,10 +126,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/transport_dantzig.yaml', sources) as solution:
-        solution.objective  # 153.675
-        solution.dual('within_capacity')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/transport_dantzig.yaml', sources) as result:
+        result.objective  # 153.675
+        result.dual('within_capacity')
     ```
 
 === "linopy"

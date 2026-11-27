@@ -1,23 +1,22 @@
-"""A rolling horizon on specsolve, checked against the horizon it approximates.
+"""A rolling horizon on specsolve, checked against the single solve it approximates.
 
     pixi run python examples/rolling/run.py
 
 A storage schedule solved a window at a time with `solve_over`, against the
 answer full foresight gives.
 
-One file, `horizon.yaml`, written over a *local* index `t`. The same YAML is
-solved as one window over the whole horizon — the reference — and then as
-rolling windows of increasing lookahead, each handing its state of charge to
-the next through `carry`.
+One file, `horizon.yaml`, and one set of sources. They are solved once over
+every snapshot — the reference — and then as rolling windows of increasing
+lookahead, each handing its state of charge to the next through `carry`.
 
 **The store cycles in every schedule**: wind blows nightly and load triples by
 day, so charging and discharging is worth doing inside any window. What
 lookahead buys is the *end* of one. Charge a window cannot spend before its
-horizon runs out is worth nothing to it, so it arrives empty and hands zero to
+last snapshot is worth nothing to it, so it arrives empty and hands zero to
 the next; a window that can see far enough has somewhere to spend it.
 
-Windows advance eight hours against a twelve-hour cycle, so a boundary lands at
-a different point of the day each time.
+Windows advance eight hours against a twelve-hour cycle, so a horizon end
+lands at a different point of the day each time.
 
 Three properties are asserted rather than printed:
 
@@ -50,10 +49,11 @@ LOAD = [25.0 if night else 85.0 for night in NIGHT]
 WIND = [70.0 if night else 0.0 for night in NIGHT]
 
 #: Windows advance eight hours against a twelve-hour cycle.
-STEP = 8
+HORIZON = 8
 
 SOURCES = {
     'generator': pl.DataFrame({'generator': GENERATORS}),
+    'snapshot': range(PERIODS),
     'p_max': pl.DataFrame(
         {
             'snapshot': [t for t in range(PERIODS) for _ in GENERATORS],
@@ -67,36 +67,33 @@ SOURCES = {
 }
 
 
-def full_foresight() -> sps.types.Sweep:
-    """One window over the whole horizon — the answer rolling is measured against."""
-    return sps.solve_over(
-        MODEL,
-        SOURCES,
-        sps.EachWindow('snapshot', steps=PERIODS, lookahead=0, into='t'),
-    )
+def full_foresight() -> sps.types.Result:
+    """One solve over every snapshot — the answer rolling is measured against."""
+    return sps.solve(MODEL, SOURCES)
 
 
-def rolling(steps: int, lookahead: int) -> sps.types.Sweep:
-    """Windows keeping *steps* coordinates and seeing *lookahead* beyond them.
+def rolling(horizon: int, lookahead: int) -> sps.types.Sweep:
+    """Windows whose horizon is *horizon* coordinates, each seeing *lookahead* beyond it.
 
-    The carry names no coordinate: `soc` is over `(t)` and `soc_initial` over
-    `()`, so `t` is what it collapses, and the row handed on is the last one the
-    window *keeps* rather than the last it solved. With lookahead those differ,
-    and the last solved row is a level the next window is about to recompute.
+    The carry names no coordinate: `soc` is over `(snapshot)` and `soc_initial`
+    over `()`, so `snapshot` is what it collapses, and the row handed on is the
+    window's *horizon end* rather than the last row it solved. With lookahead
+    those differ, and the last solved row is a level the next window is about
+    to recompute.
     """
     return sps.solve_over(
         MODEL,
         SOURCES,
-        sps.EachWindow('snapshot', steps=steps, lookahead=lookahead, into='t', carry={'soc_initial': 'soc'}),
+        sps.EachWindow('snapshot', horizon=horizon, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
 
 
-def cost_of(sweep: sps.types.Sweep) -> float:
-    """What the schedule cost, summed over the snapshots each window owns.
+def cost_of(sweep: sps.types.Result | sps.types.Sweep) -> float:
+    """What the schedule cost, summed over the horizon of each window.
 
     A window objective covers its lookahead too, so summing them double-counts.
     `spend` is the model's own per-snapshot definition, and the sweep's answer
-    keeps only the rows a window owns.
+    keeps only the rows of each window's horizon.
     """
     return float(sweep.evaluate('spend')['value'].sum())
 
@@ -106,19 +103,19 @@ def main() -> None:
     best = cost_of(reference)
     peak = reference.primal('soc')['value'].max()
     print(f'{DAYS} days of {DAY} hours: six of cheap wind, then six of none.')
-    print(f'full foresight   one window                      cost {best:>9.2f}   peak soc {peak:>6.1f}')
+    print(f'full foresight   one solve                       cost {best:>9.2f}   peak soc {peak:>6.1f}')
     print()
 
     for lookahead in (0, 4, 8):
-        sweep = rolling(STEP, lookahead)
+        sweep = rolling(HORIZON, lookahead)
         schedule = sweep.primal('soc')
-        assert schedule['snapshot'].to_list() == list(range(PERIODS)), 'the answer must cover the horizon'
+        assert schedule['snapshot'].to_list() == list(range(PERIODS)), 'the answer must cover every snapshot'
 
         cost = cost_of(sweep)
         assert cost >= best - 1e-6, 'rolling cannot beat full foresight'
         assert schedule['value'].max() > 0, 'the store must be used in every schedule'
         print(
-            f'rolling  steps={STEP:<3} lookahead={lookahead:<3} '
+            f'rolling  horizon={HORIZON:<3} lookahead={lookahead:<3} '
             f'windows {len(sweep):>2}   cost {cost:>9.2f}   peak soc {schedule["value"].max():>6.1f}'
             f'   +{100 * (cost - best) / best:>5.1f}%'
         )
@@ -126,7 +123,7 @@ def main() -> None:
     print()
     print('The store cycles in every schedule — this is not a model where storage')
     print('stops being worth having. What myopia costs is the end of each window:')
-    print('charge a window cannot spend before its horizon runs out is worth')
+    print('charge a window cannot spend before its last snapshot is worth')
     print('nothing to it, so it arrives empty and the next window starts from zero.')
     print('Lookahead gives it somewhere to spend that charge, and the gap closes.')
     print()

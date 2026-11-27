@@ -1,6 +1,6 @@
 """The ``lp_file`` sink: the model as LP text.
 
-Every section is a lazy frame sunk straight into the open file, in label
+Every section is a lazy table sunk straight into the open file, in index
 order, so a model writes the same bytes twice.
 """
 
@@ -13,12 +13,13 @@ import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks.capabilities import Capabilities
-from specsolve._sinks.handoff import SENSE_CODES
+from specsolve._sinks.tables import SENSE_CODES
 from specsolve._sinks.text import append_lines, chunk_key, digits, number
 
 if TYPE_CHECKING:
-    from specsolve._sinks.handoff import Handoff
+    from specsolve._sinks.tables import SinkTables
 
 
 #: Every construct the language can reach, quadratic rows included. A reader
@@ -44,18 +45,18 @@ _LP_DOMAIN_SECTION = {
 EMIT_BUDGET = 2_000_000
 
 
-def write_lp_file(handoff: Handoff, path: str | Path) -> None:
+def write_lp_file(tables: SinkTables, path: str | Path) -> None:
     """Write the model as LP text."""
     path = Path(path)
-    objective = handoff.obj.lazy().sort('col').select(_term(pl.col('coeff'), pl.col('col')))
+    objective = tables.obj.lazy().sort(COL).select(_term(pl.col(COEFF), pl.col(COL)))
     bounds = (
-        handoff.cols.lazy()
-        .with_row_index('col')
+        tables.cols.lazy()
+        .with_row_index(COL)
         .select(
             pl.concat_str(
                 _bound(pl.col('lb'), '-infinity').alias('lb'),
                 pl.lit(' <= x').alias('open'),
-                digits(pl.col('col')),
+                digits(pl.col(COL)),
                 pl.lit(' <= ').alias('close'),
                 _bound(pl.col('ub'), '+infinity').alias('ub'),
             )
@@ -63,39 +64,39 @@ def write_lp_file(handoff: Handoff, path: str | Path) -> None:
     )
 
     with open(path, 'wb') as f:
-        f.write((b'max' if handoff.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
-        if handoff.objective_constant:
-            f.write(f'{handoff.objective_constant:+.17g}\n'.encode())
+        f.write((b'max' if tables.objective_sense == 'maximize' else b'min') + b'\n\nobj:\n')
+        if tables.objective_constant:
+            f.write(f'{tables.objective_constant:+.17g}\n'.encode())
         append_lines(objective, f)
-        if handoff.quad.height:
+        if tables.quad.height:
             f.write(b'+ [\n')
-            append_lines(_quadratic_terms(handoff), f)
+            append_lines(_quadratic_terms(tables), f)
             f.write(b'] / 2\n')
 
         f.write(b'\ns.t.\n\n')
-        for block in handoff.row_blocks(EMIT_BUDGET):
-            append_lines(_constraint_lines(handoff, block.lo, block.hi, handoff.matrix_block(block.lo, block.hi)), f)
-        if handoff.qmatrix.height:
-            append_lines(_quadratic_row_lines(handoff), f)
+        for chunk in tables.row_chunks(EMIT_BUDGET):
+            append_lines(_constraint_lines(tables, chunk.lo, chunk.hi, tables.matrix_chunk(chunk.lo, chunk.hi)), f)
+        if tables.qmatrix.height:
+            append_lines(_quadratic_row_lines(tables), f)
 
         f.write(b'\nbounds\n')
         append_lines(bounds, f)
 
         for domain, keyword in _LP_DOMAIN_SECTION.items():
-            chosen = handoff.cols.lazy().with_row_index('col').filter(pl.col('vtype') == domain)
+            chosen = tables.cols.lazy().with_row_index(COL).filter(pl.col('vtype') == domain)
             if chosen.select(pl.len()).pipe(collected).item() == 0:
                 continue
             f.write(f'\n{keyword}\n'.encode())
-            append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col('col')))), f)
+            append_lines(chosen.select(pl.concat_str(pl.lit('x'), digits(pl.col(COL)))), f)
 
-        if handoff.sos.height:
+        if tables.sos.height:
             f.write(b'\nsos\n')
-            append_lines(_set_lines(handoff), f)
+            append_lines(_set_lines(tables), f)
 
         f.write(b'\nend\n')
 
 
-def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
+def _quadratic_row_lines(tables: SinkTables) -> pl.LazyFrame:
     """Every quadratic constraint, ``c7: +1 x0 + [ 2 x0 * x1 ] >= 4``, one sorted stream.
 
     A line's key is ``(row, part, at)``: ``part`` orders header, linear terms,
@@ -104,43 +105,43 @@ def _quadratic_row_lines(handoff: Handoff) -> pl.LazyFrame:
     arrives ordered. Not doubled: the format divides only the objective's
     bracket by two.
     """
-    lo = handoff.linear_row_count
+    lo = tables.linear_row_count
 
-    def _keyed(frame: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
-        return frame.select(
-            pl.col('row').cast(pl.Int64),
+    def _keyed(table: pl.LazyFrame, part: int, at: pl.Expr, line: pl.Expr) -> pl.LazyFrame:
+        return table.select(
+            pl.col(ROW).cast(pl.Int64),
             pl.lit(part, dtype=pl.Int64).alias('part'),
             at.cast(pl.Int64).alias('at'),
             line.alias('line'),
         )
 
-    rows = handoff.rows.lazy().filter(pl.col('row') >= lo)
-    entries = handoff.matrix_block(lo, handoff.row_count).lazy()
-    pairs = handoff.qmatrix.lazy().with_row_index('at')
+    rows = tables.rows.lazy().filter(pl.col(ROW) >= lo)
+    coefficients = tables.matrix_chunk(lo, tables.row_count).lazy()
+    pairs = tables.qmatrix.lazy().with_row_index('at')
     zero = pl.lit(0)
     return (
         pl.concat(
             [
-                _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col('row')), pl.lit(':'))),
-                _keyed(entries, 1, pl.col('col'), _term(pl.col('coeff'), pl.col('col'))),
+                _keyed(rows, 0, zero, pl.concat_str(pl.lit('c'), digits(pl.col(ROW)), pl.lit(':'))),
+                _keyed(coefficients, 1, pl.col(COL), _term(pl.col(COEFF), pl.col(COL))),
                 _keyed(rows, 2, zero, pl.lit('+ [')),
-                _keyed(pairs, 3, pl.col('at'), _pair(pl.col('coeff'))),
+                _keyed(pairs, 3, pl.col('at'), _pair(pl.col(COEFF))),
                 _keyed(rows, 4, zero, pl.concat_str(pl.lit('] '), _footer())),
             ]
         )
-        .sort('row', 'part', 'at')
+        .sort(ROW, 'part', 'at')
         .select('line')
     )
 
 
-def _quadratic_terms(handoff: Handoff) -> pl.LazyFrame:
+def _quadratic_terms(tables: SinkTables) -> pl.LazyFrame:
     """The objective's quadratic part, one ``+2 x3 * x7`` line per pair.
 
     The format divides the section by two, so every coefficient is doubled, on
     the diagonal and off it alike. A pair arrives ordered, summed and
     deduplicated, so nothing here sorts.
     """
-    return handoff.quad.lazy().select(_pair(pl.col('coeff') * 2))
+    return tables.quad.lazy().select(_pair(pl.col(COEFF) * 2))
 
 
 def _pair(coeff: pl.Expr) -> pl.Expr:
@@ -148,24 +149,24 @@ def _pair(coeff: pl.Expr) -> pl.Expr:
     return pl.concat_str(
         *_signed(coeff),
         pl.lit(' x'),
-        digits(pl.col('col_l')),
-        pl.when(pl.col('col_l') == pl.col('col_r'))
+        digits(pl.col(COL_L)),
+        pl.when(pl.col(COL_L) == pl.col(COL_R))
         .then(pl.lit(' ^ 2'))
-        .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col('col_r')))),
+        .otherwise(pl.concat_str(pl.lit(' * x'), digits(pl.col(COL_R)))),
     )
 
 
-def _set_lines(handoff: Handoff) -> pl.LazyFrame:
+def _set_lines(tables: SinkTables) -> pl.LazyFrame:
     """Each special-ordered set as one ``s0: S2 :: x3:1 x4:2`` line, in linopy's spelling.
 
     ``maintain_order`` keeps a set's line the same bytes twice.
     """
     return (
-        handoff.sos.lazy()
+        tables.sos.lazy()
         .group_by('set', maintain_order=True)
         .agg(
             pl.col('type').first(),
-            pl.concat_str(pl.lit('x'), digits(pl.col('col')), pl.lit(':'), digits(pl.col('weight')))
+            pl.concat_str(pl.lit('x'), digits(pl.col(COL)), pl.lit(':'), digits(pl.col('weight')))
             .str.join(' ')
             .alias('members'),
         )
@@ -182,33 +183,33 @@ def _set_lines(handoff: Handoff) -> pl.LazyFrame:
     )
 
 
-def _constraint_lines(handoff: Handoff, lo: int, hi: int, entries: pl.DataFrame) -> pl.LazyFrame:
+def _constraint_lines(tables: SinkTables, lo: int, hi: int, coefficients: pl.DataFrame) -> pl.LazyFrame:
     """Every constraint line for rows ``[lo, hi)``, one sorted stream.
 
     A row's lines occupy ``slots`` consecutive keys — header, placeholder, each
-    term at its column index, sense — so one sort settles both the row order and
+    term at its column index, sense — so one sort fixes both the row order and
     the order within a row. The anti-join gives a termless row the ``+0 x0`` a
     parser needs. The terms are sorted although they arrive sorted, so the union
     sort merges runs rather than permuting them.
     """
-    slots = handoff.cols.height + 3
+    slots = tables.cols.height + 3
 
     def _key(within: pl.Expr) -> pl.Expr:
-        return chunk_key(pl.col('row'), lo, slots, within)
+        return chunk_key(pl.col(ROW), lo, slots, within)
 
-    rows = handoff.rows.lazy().filter(pl.col('row').is_between(lo, hi, closed='left'))
-    matrix = entries.lazy()
+    rows = tables.rows.lazy().filter(pl.col(ROW).is_between(lo, hi, closed='left'))
+    matrix = coefficients.lazy()
     header = rows.select(
         _key(pl.lit(0, dtype=pl.Int64)),
-        pl.concat_str(pl.lit('c').alias('c'), digits(pl.col('row')), pl.lit(':').alias('colon')).alias('line'),
+        pl.concat_str(pl.lit('c').alias('c'), digits(pl.col(ROW)), pl.lit(':').alias('colon')).alias('line'),
     )
-    placeholder = rows.join(matrix.select('row'), on='row', how='anti').select(
+    placeholder = rows.join(matrix.select(ROW), on=ROW, how='anti').select(
         _key(pl.lit(1, dtype=pl.Int64)),
         pl.lit('+0 x0').alias('line'),
     )
-    terms = matrix.sort('row', 'col').select(
-        _key(pl.col('col').cast(pl.Int64) + 2),
-        _term(pl.col('coeff'), pl.col('col')).alias('line'),
+    terms = matrix.sort(ROW, COL).select(
+        _key(pl.col(COL).cast(pl.Int64) + 2),
+        _term(pl.col(COEFF), pl.col(COL)).alias('line'),
     )
     footer = rows.select(_key(pl.lit(slots - 1, dtype=pl.Int64)), _footer().alias('line'))
     return pl.concat([header, placeholder, terms, footer]).sort('key').select('line')

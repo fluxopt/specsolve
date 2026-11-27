@@ -1,0 +1,418 @@
+"""A ``where:`` condition as a query: which rows of a coordinate product survive.
+
+The program's condition nodes in; a boolean expression out, with the table
+the walk joined the condition's parameters onto. [`narrowed`][] is the product
+an entry is instantiated over, cut by its condition.
+"""
+
+from __future__ import annotations
+
+import itertools
+from typing import TYPE_CHECKING, assert_never
+
+import polars as pl
+from mathspec import program
+
+from specsolve._collect import collected
+from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mapping, walk_join
+from specsolve._engine.scope import join_on, missing_value
+from specsolve._engine.shifts import translate_rows
+from specsolve._messages import position_out_of_range_message, short_groups_message
+from specsolve._names import CONSTANT, LABEL, POSITION, VALUE
+from specsolve.errors import DataError
+
+if TYPE_CHECKING:
+    import datetime
+    from collections.abc import Callable
+
+    from polars._typing import JoinStrategy
+
+    from specsolve._engine.scope import Scope
+
+
+class Carrier:
+    """A table a walk joins onto, each attachment made at most once, *attached* already made."""
+
+    def __init__(self, table: pl.LazyFrame, attached: tuple[str, ...] = ()) -> None:
+        self.table = table
+        self._attached: set[str] = set(attached)
+
+    def once(self, alias: str, attach: Callable[[pl.LazyFrame, str], pl.LazyFrame]) -> str:
+        """Join *attach* onto the table under *alias*, unless it already is, and return *alias*."""
+        if alias not in self._attached:
+            self.table = attach(self.table, alias)
+            self._attached.add(alias)
+        return alias
+
+
+def _defined(col: pl.Expr, dtype: program.ParameterDtype) -> pl.Expr:
+    """What a bare parameter name in a ``where`` asks of *col*, by its declared dtype.
+
+    A ``bool`` is its own answer, a ``str`` is defined wherever it has a row,
+    and a number has to be finite as well.
+    """
+    if dtype == 'bool':
+        return col.is_not_null() & col.cast(pl.Boolean)
+    if dtype == 'str':
+        return col.is_not_null()
+    return col.is_not_null() & col.is_finite()
+
+
+def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) -> pl.LazyFrame:
+    """The coordinate product over *dims* where *where* holds, with the positions a caller sorts by.
+
+    A joining condition that reads only some of *dims*, and none outside them, is
+    evaluated over their product and semi-joined; every other shape filters the
+    full product, so an error names all of its dimensions. Both keep row order.
+    """
+    out = scope.product(dims)
+    if where is None:
+        return out
+    on = tuple(d for d in dims if d in where.dims)
+    if on and len(on) < len(dims) and set(where.dims) <= set(dims):
+        keyed = scope.product(on)
+        carrier, condition = query_condition(scope, keyed, where, on)
+        if carrier is keyed:
+            return out.filter(falsy_if_null(condition))
+        surviving = carrier.filter(falsy_if_null(condition)).select(*on)
+        return out.join(surviving, on=list(on), how='semi')
+    carrier, condition = query_condition(scope, out, where, dims)
+    return carrier.filter(falsy_if_null(condition))
+
+
+def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
+    """How many rows of *atom*'s parameter it holds at, as a one-cell table; a missing row reads as false."""
+    keys = tuple(atom.dims)
+    if not keys:
+        carrier, condition = query_condition(scope, scope.product(()), program.Mask(atom), keys)
+    else:
+        own = scope.data.parameters[atom.name].rename({VALUE: _parameter_alias(atom.name)})
+        carrier, condition = query_condition(scope, own, program.Mask(atom), keys, (atom.name,))
+    return carrier.filter(falsy_if_null(condition)).select(pl.len())
+
+
+def passes_without_a_row(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> bool:
+    """Whether *atom* holds where its parameter has no row: the parameter's missing value passes it."""
+    return not _false_without_a_row(program.Mask(atom), atom.name, scope)
+
+
+def counted_over_nothing(atom: program.CountComparison) -> bool:
+    """Whether *atom* holds where the dimension it counts along has no label: its count is zero."""
+    return pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
+
+
+def _parameter_alias(parameter: str) -> str:
+    """The column a parameter's value is read from once it is joined onto a walk's table."""
+    return f'__where {parameter}__'
+
+
+def query_condition(
+    scope: Scope, table: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...], carried: tuple[str, ...] = ()
+) -> tuple[pl.LazyFrame, pl.Expr]:
+    """The table with the condition's parameters joined, and the boolean expression.
+
+    A parameter in *carried* is not joined: *table* already holds its value
+    under its alias, one value per row.
+
+    Walking joins the parameters, so the condition is built before the table is
+    read. A name *mask* is certain of ([`_certain_names`][]) is inner- or
+    semi-joined rather than left-joined. No join maintains order: the code
+    that reads the table verifies it ([`indices.in_position_order`][]).
+    """
+    certain = {name for name in _certain_names(mask) if _false_without_a_row(mask, name, scope)}
+    carrier = Carrier(table, tuple(_parameter_alias(name) for name in carried))
+    serial = itertools.count()
+
+    def join_parameter(parameter: str) -> str:
+        how: JoinStrategy = 'inner' if parameter in certain else 'left'
+        return carrier.once(
+            _parameter_alias(parameter),
+            lambda f, alias: scope.parameter_join(f, parameter, dims, alias, f"where-parameter '{parameter}'", how),
+        )
+
+    def refuse_outside_table(reading: str, dimension: str) -> None:
+        """A condition reading a dimension outside *dims* — refused at load, asserted here."""
+        assert dimension in dims, f'where-comparison on {reading} is outside the dimensions {list(dims)}'
+
+    def join_position(dimension: str) -> str:
+        refuse_outside_table(f"dimension '{dimension}'", dimension)
+        return carrier.once(
+            f'__where position {dimension}__',
+            lambda f, alias: f.join(
+                scope.data.dimensions[dimension].table.select(
+                    pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)
+                ),
+                on=dimension,
+                how='left',
+            ),
+        )
+
+    def join_group_offset(p: program.DimensionPosition) -> str:
+        """One column: the row's position minus its own group's target position."""
+        assert p.partition is not None, 'an ungrouped position counts along the whole dimension and asks for no table'
+        grouping = Grouping.of(scope.data, p.partition)
+        for dim in grouping.keys:
+            refuse_outside_table(f"dimension '{dim}'", dim)
+        _refuse_short_groups(p, grouping)
+        target = pl.lit(p.position) if p.position >= 0 else pl.col(GROUP_SIZE) + p.position
+        offset = pl.col(GROUP_RANK) - target
+        return carrier.once(
+            f'__where position {p.name} by {p.partition.name}__',
+            lambda f, alias: f.join(
+                grouping.table.select(pl.col(LABEL).alias(p.name), *grouping.joined, offset.alias(alias)),
+                on=list(grouping.keys),
+                how='left',
+            ),
+        )
+
+    def join_relation(relation: str, dims: tuple[str, ...], column: str | None) -> str:
+        """*relation* read at *dims* — one value column, or with ``None`` whether a row is there at all."""
+        for dim in dims:
+            refuse_outside_table(f"relation '{relation}' reading dimension '{dim}'", dim)
+        shape = scope.program.relations[relation]
+        roles = shape.key or shape.roles
+        assert tuple(shape.dim(role) for role in roles) == dims, f"relation '{relation}' is read at its key"
+        read = pl.col(column) if column is not None else pl.lit(value=True)
+        return carrier.once(
+            f'__where relation {relation}.{column or ""}__',
+            lambda f, alias: f.join(
+                scope.data.relations[relation].select(
+                    *(pl.col(role).alias(dim) for role, dim in zip(roles, dims, strict=True)), read.alias(alias)
+                ),
+                on=list(dims),
+                how='left',
+            ),
+        )
+
+    def join_reduction(label: str, build: Callable[[str], pl.LazyFrame], on: tuple[str, ...]) -> str:
+        """A table a leaf reduces its own product to, joined onto the walk's by *on*.
+
+        The alias is numbered: two leaves of one condition can reduce the same table to different answers.
+        """
+        for dimension in on:
+            refuse_outside_table(f'where {label}', dimension)
+        alias = f'__where {label} {next(serial)}__'
+        return carrier.once(alias, lambda f, a: join_on(f, build(a), on, 'left'))
+
+    def walk(p: program.Condition) -> pl.Expr:
+        if isinstance(p, program.ParameterComparison):
+            column = pl.col(join_parameter(p.name))
+            if (fill := missing_value(scope.program, p.name)) is not None:
+                column = column.fill_null(fill)
+            return _compare(column, p.op, p.value)
+        if isinstance(p, program.ExpressionComparison):
+            left, right = (_values(scope, side) for side in (p.left, p.right))
+            columns = tuple(
+                join_reduction('value', lambda a, v=values: v.rename({CONSTANT: a}), on) for values, on in (left, right)
+            )
+            return _COLUMN_COMPARISONS[p.op](pl.col(columns[0]), pl.col(columns[1]))
+        if isinstance(p, program.CountComparison):
+            if not scope.data.dimensions[p.over].size:
+                return _COLUMN_COMPARISONS[p.op](pl.lit(0), pl.lit(p.value))
+            keys = scope.in_dimension_order(p.dims)
+            alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
+            return _COLUMN_COMPARISONS[p.op](pl.col(alias).fill_null(0), pl.lit(p.value))
+        if isinstance(p, program.TranslatedCondition):
+            on = scope.in_dimension_order(p.dims)
+            alias = join_reduction(f'shift {p.along}', lambda a: _translated(scope, p, on, a), on)
+            return falsy_if_null(pl.col(alias))
+        if isinstance(p, program.JoinedCondition):
+            on = scope.in_dimension_order(p.dims)
+            alias = join_reduction(f'at {p.columns.name}', lambda a: _joined(scope, p, a), on)
+            return falsy_if_null(pl.col(alias))
+        if isinstance(p, program.DimensionComparison):
+            refuse_outside_table(f"dimension '{p.name}'", p.name)
+            return _compare(_dimension_column(p.name, p.value), p.op, p.value)
+        if isinstance(p, program.DimensionPosition):
+            if p.partition is not None:
+                return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
+            at = _resolved_position(p, scope.data.dimensions[p.name].size)
+            return _COLUMN_COMPARISONS[p.op](pl.col(join_position(p.name)), pl.lit(at))
+        if isinstance(p, program.RelationComparison):
+            column = pl.col(join_relation(p.name, p.dims, p.column))
+            if isinstance(p.value, str):
+                column = column.cast(pl.String)
+            return _compare(column, p.op, p.value)
+        if isinstance(p, program.RelationPairComparison):
+            left = pl.col(join_relation(p.name, p.dims, p.column))
+            right = pl.col(join_relation(p.other, p.dims, p.other_column))
+            return _COLUMN_COMPARISONS[p.op](left, right)
+        if isinstance(p, program.RelationDefined):
+            return pl.col(join_relation(p.name, p.dims, None)).is_not_null()
+        if isinstance(p, program.ParameterDefined):
+            dtype = scope.program.parameters[p.name].dtype
+            defined = _defined(pl.col(join_parameter(p.name)), dtype)
+            if dtype == 'bool' or p.name not in scope.data.given:
+                return defined
+            given = carrier.once(
+                f'__where given {p.name}__',
+                lambda f, alias: join_on(
+                    f, scope.data.given[p.name].with_columns(pl.lit(value=True).alias(alias)), p.dims, 'left'
+                ),
+            )
+            return falsy_if_null(pl.col(given)) & defined
+        if isinstance(p, program.VariableDefined):
+            on = list(scope.program.variables[p.name].dims)
+            coordinates = scope.variables[p.name].table.select(*on)
+            if p.name in certain:
+                carrier.once(f'__where defined {p.name}__', lambda f, _: f.join(coordinates, on=on, how='semi'))
+                return pl.lit(value=True)
+            flag = carrier.once(
+                f'__where defined {p.name}__',
+                lambda f, alias: f.join(
+                    coordinates.unique().with_columns(pl.lit(value=True).alias(alias)), on=on, how='left'
+                ),
+            )
+            return falsy_if_null(pl.col(flag))
+        if isinstance(p, program.BooleanLiteral):
+            return pl.lit(value=p.value)
+        if isinstance(p, program.ConditionReference):
+            return walk(p.body)
+        if isinstance(p, program.And):
+            return walk(p.left) & walk(p.right)
+        if isinstance(p, program.Or):
+            return walk(p.left) | walk(p.right)
+        if isinstance(p, program.Not):
+            return ~falsy_if_null(walk(p.operand))
+        assert_never(p)
+
+    condition = walk(mask.root)
+    return carrier.table, condition
+
+
+def _values(scope: Scope, side: program.Expression) -> tuple[pl.LazyFrame, tuple[str, ...]]:
+    """One side of a comparison of expressions as ``(dims…, CONSTANT)``, and the dimensions it is keyed by.
+
+    Read by the query builder, so it cannot drift from the rows. Its terms
+    are added so that a null spreads, which [`falsy_if_null`][] reads as false.
+    """
+    # in-function: the query builder imports this module
+    from specsolve._engine.queries import QueryBuilder
+
+    builder = QueryBuilder(scope)
+    terms = builder.expression(side, 'a where comparing expressions')
+    assert not (terms.linear or terms.quadratic), (
+        'a where compares expressions the language keeps every variable out of'
+    )
+    dims = scope.spanned(terms.constant)
+    added = builder.summed_onto(terms.constant, narrowed(scope, dims, None), absent='spreads')
+    return added.select(*dims, CONSTANT), dims
+
+
+def _counted(scope: Scope, p: program.CountComparison, alias: str) -> pl.LazyFrame:
+    """How many coordinates along ``over`` the condition admits, per coordinate of the rest.
+
+    A coordinate no row survives at is missing, which the walk reads as zero.
+    """
+    dims = scope.in_dimension_order(p.condition.dims)
+    keys = [d for d in dims if d != p.over]
+    surviving = narrowed(scope, dims, p.condition)
+    if not keys:
+        return surviving.select(pl.len().alias(alias))
+    return surviving.group_by(keys).agg(pl.len().alias(alias))
+
+
+def _translated(scope: Scope, p: program.TranslatedCondition, dims: tuple[str, ...], alias: str) -> pl.LazyFrame:
+    """Where the operand holds *offset* coordinates back along ``along``, true-only.
+
+    The end the move vacates is a missing row, which reads as false.
+    """
+    assert p.along in dims, f"a shift along '{p.along}' is read at a table carrying it"
+    admitted = narrowed(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
+    return translate_rows(scope, admitted, dims, [alias], p.along, p.offset)
+
+
+def _joined(scope: Scope, p: program.JoinedCondition, alias: str) -> pl.LazyFrame:
+    """Where the operand holds at the coarse coordinate the relation maps each fine one to, true-only.
+
+    A fine coordinate the relation has no row for is a missing row, which reads as false.
+    """
+    dims = scope.in_dimension_order(p.operand.dims)
+    admitted = narrowed(scope, dims, p.operand).select(*dims).with_columns(pl.lit(value=True).alias(alias))
+    read, _ = walk_join(admitted, mapping(scope.data.relations, p.columns), p.columns, dims, [alias])
+    return read
+
+
+def _certain_names(mask: program.Mask) -> frozenset[str]:
+    """Parameter and variable names whose absence alone makes the whole condition false.
+
+    Only the ``AND`` spine counts: under ``OR`` or ``NOT`` an absent value can still leave the condition true.
+    """
+    atoms = (program.ParameterComparison, program.ParameterDefined, program.VariableDefined)
+    return frozenset(a.name for a in mask.conjuncts if isinstance(a, atoms))
+
+
+def _refuse_short_groups(p: program.DimensionPosition, grouping: Grouping) -> None:
+    """Refuse a position no coordinate of some group occupies, as [`_resolved_position`][] does ungrouped.
+
+    A coordinate in no group is not in the grouping's table, so it is never counted short.
+    """
+    assert p.partition is not None
+    needed = p.position + 1 if p.position >= 0 else -p.position
+    sizes = grouping.table.select(*grouping.key, GROUP_SIZE).unique().pipe(collected)
+    named = (row[0] if len(grouping.key) == 1 else row[:-1] for row in sizes.iter_rows() if row[-1] < needed)
+    if short := sorted(str(group) for group in named):
+        raise DataError(short_groups_message(p.name, p.partition.name, p.op, p.position, short))
+
+
+def _false_without_a_row(mask: program.Mask, name: str, scope: Scope) -> bool:
+    """Whether the mask is false at a coordinate where *name* has no row, so a join may drop that coordinate.
+
+    A name with no fill value reads null there. One with a value reads it, and
+    the mask is still false where a conjunct on the name is false at that value,
+    as ``installed > 0`` is under ``missing: 0``.
+    """
+    fill = missing_value(scope.program, name)
+    if fill is None:
+        return True
+    return any(
+        isinstance(atom, program.ParameterDefined)
+        or (
+            isinstance(atom, program.ParameterComparison)
+            and not pl.select(_compare(pl.lit(fill), atom.op, atom.value)).item()
+        )
+        for atom in mask.conjuncts
+        if getattr(atom, 'name', None) == name
+    )
+
+
+def falsy_if_null(condition: pl.Expr) -> pl.Expr:
+    """*condition* with null read as false: a missing row excludes the coordinate."""
+    return condition.fill_null(value=False)
+
+
+def _resolved_position(p: program.DimensionPosition, cardinality: int) -> int:
+    """*p*'s position from 0 in a dimension of *cardinality* labels, where *p* may count negative from the end.
+
+    Out of range is an error: a boundary clause that seeds no row leaves the recurrence unanchored.
+    """
+    at = p.position + cardinality if p.position < 0 else p.position
+    if not 0 <= at < cardinality:
+        raise DataError(position_out_of_range_message(p.name, p.op, p.position, at, cardinality))
+    return at
+
+
+def _dimension_column(dimension: str, value: float | str | datetime.date) -> pl.Expr:
+    """The column a where-comparison on *dimension* reads.
+
+    A string label is compared as ``String``, not ``Enum``: the where-string
+    rules read an unknown label as matching nothing.
+    """
+    column = pl.col(dimension)
+    return column.cast(pl.String) if isinstance(value, str) else column
+
+
+#: The comparison operators, evaluated column against column.
+_COLUMN_COMPARISONS: dict[program.ComparisonOperator, Callable[[pl.Expr, pl.Expr], pl.Expr]] = {
+    '==': lambda left, right: left == right,
+    '!=': lambda left, right: left != right,
+    '<': lambda left, right: left < right,
+    '<=': lambda left, right: left <= right,
+    '>': lambda left, right: left > right,
+    '>=': lambda left, right: left >= right,
+}
+
+
+def _compare(column: pl.Expr, op: program.ComparisonOperator, value: float | str | datetime.date) -> pl.Expr:
+    """One where-comparison against a literal."""
+    return _COLUMN_COMPARISONS[op](column, pl.lit(value))

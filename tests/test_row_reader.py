@@ -14,11 +14,12 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COEFF, ROW
 from specsolve.errors import SpecsolveError
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
-    from specsolve._result import ConstraintRow
+    from specsolve._answer.result import ConstraintRow
 
 DATA = {
     'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
@@ -62,7 +63,7 @@ def test_a_row_is_its_terms_its_comparison_and_its_right_hand_side() -> None:
     with sps.build(DISPATCH_SPEC, DATA) as model:
         row = model.row('balance', snapshot=2)
 
-    assert _terms(row) == [('p', 'snapshot=2, generator=wind', 1.0), ('p', 'snapshot=2, generator=gas', 1.0)]
+    assert _terms(row) == [('p', 'generator=wind, snapshot=2', 1.0), ('p', 'generator=gas, snapshot=2', 1.0)]
     assert (row.sense, row.rhs) == ('==', 100.0), 'the right-hand side is the bound value, not the parameter name'
 
 
@@ -71,7 +72,7 @@ def test_printing_a_row_gives_one_line_with_every_coordinate_named() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         printed = str(model.row('commit', t=1, g='gas'))
 
-    assert printed == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
+    assert printed == 'commit[g=gas, t=1]: +1 p[g=gas, t=1] -200 u[g=gas, t=1] <= 0'
 
 
 _HOUR = datetime.datetime(2026, 1, 1, 1)
@@ -98,7 +99,7 @@ def test_a_term_prints_its_coordinate_as_the_row_prints_its_own(
     """One line, one way of writing a coordinate: named, and the same text for a label wherever it sits.
 
     The row printed its own coordinate named and through Python's `str()`, and
-    its terms by position through polars: `p[1, gas]` beside `commit[t=1, g=gas]`,
+    its terms by position through polars: `p[gas, 1]` beside `commit[g=gas, t=1]`,
     `2026-01-01 01:00:00.000000` beside `2026-01-01 01:00:00`, `1e-7` beside `1e-07`.
     """
     spec = {
@@ -116,7 +117,7 @@ def test_a_term_prints_its_coordinate_as_the_row_prints_its_own(
 def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     """Twelve terms of three hundred are twelve arbitrary ones.
 
-    A wide row prints each declaration's term count and coefficient span. The
+    A wide row prints each entry's term count and coefficient span. The
     model here has a thousand-fold spread *inside one row*.
     """
     generators = [f'g{i}' for i in range(300)]
@@ -139,11 +140,11 @@ def test_a_row_too_wide_to_spell_out_summarises_instead_of_truncating() -> None:
     with sps.build(spec, data) as model:
         row = model.row('balance', t=0)
 
-    assert row.terms.height == 301, 'the frame keeps every term whatever the line does'
+    assert row.terms.height == 301, 'the table keeps every term whatever the line does'
     assert str(row) == 'balance[t=0]: 301 terms — p: 300 (|coef| 0.001…0.3), slack: 1 (|coef| 1000) >= 5'
 
 
-def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
+def test_an_entry_whose_coefficients_are_all_one_says_so_once() -> None:
     """A single magnitude prints as itself, not as a range against itself."""
     generators = [f'g{i}' for i in range(30)]
     data = {
@@ -160,11 +161,11 @@ def test_a_declaration_whose_coefficients_are_all_one_says_so_once() -> None:
 def test_it_answers_on_a_model_that_was_never_solved() -> None:
     """A model too wrong to solve is the one whose rows need reading, so no solve is required."""
     with sps.build(DISPATCH_SPEC, DATA) as model:
-        assert model.diagnostics().solves == 0, 'nothing has been solved, and the row still reads'
+        assert model.metrics().solves == 0, 'nothing has been solved, and the row still reads'
         assert model.row('balance', snapshot=0).rhs == 80.0
 
 
-def test_a_row_spanning_two_declarations_names_both() -> None:
+def test_a_row_spanning_two_entries_names_both() -> None:
     """``p <= p_max * u`` puts a term from each of two variables in one row.
 
     The coefficient on ``u`` is the one the *data* supplied.
@@ -172,7 +173,7 @@ def test_a_row_spanning_two_declarations_names_both() -> None:
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert _terms(row) == [('p', 't=1, g=gas', 1.0), ('u', 't=1, g=gas', -200.0)], (
+    assert _terms(row) == [('p', 'g=gas, t=1', 1.0), ('u', 'g=gas, t=1', -200.0)], (
         'p - p_max*u <= 0, with p_max the bound value for gas'
     )
     assert (row.sense, row.rhs) == ('<=', 0.0)
@@ -183,16 +184,16 @@ def test_the_coefficient_is_the_one_data_produced_not_the_one_declared() -> None
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         terms = model.row('commit', t=0, g='wind').terms
     wind = dict(zip(terms['variable'].to_list(), terms['coefficient'].to_list(), strict=True))
-    assert wind['u'] == -40.0, "wind's bound, where the same declaration gives gas -200"
+    assert wind['u'] == -40.0, "wind's bound, where the same entry gives gas -200"
 
 
 def test_a_term_whose_variable_is_absent_is_absent_from_the_row() -> None:
-    """A masked variable leaves a *shorter* row: the file sums over both generators, the row has one term."""
+    """A variable left absent leaves a *shorter* row: the file sums over both generators, the row has one term."""
     spec = override(COMMITMENT, **{'variables.p.where': 'p_max > 100'})
     with sps.build(spec, COMMITMENT_DATA) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', 't=0, g=gas', 1.0)], 'wind is masked out of p, so the balance row lost its term'
+    assert _terms(row) == [('p', 'g=gas, t=0', 1.0)], 'wind is absent from p, so the balance row lost its term'
 
 
 def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
@@ -203,7 +204,7 @@ def test_a_row_a_where_removed_says_so_rather_than_answering() -> None:
 
 
 def test_a_partial_coordinate_is_refused_rather_than_answered_about_one_row() -> None:
-    """A partial coordinate names a block, not a row."""
+    """A partial coordinate names several of an entry's rows, not one row."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model, pytest.raises(SpecsolveError, match='declared over'):
         model.row('commit', t=0)
 
@@ -236,23 +237,23 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     still return plausible terms.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
-        tables = model._engine._model.handoff
+        tables = model._built.tables
         for name in ('commit', 'balance'):
-            block = model._engine._model.constraints[name]
-            coordinates = block.frame.collect()
-            for offset in range(block.height):
-                at = block.start + offset
-                given = tables.matrix_block(at, at + 1)
-                where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != 'row'}
+            indexed = model._built.constraints[name]
+            coordinates = indexed.table.collect()
+            for offset in range(indexed.height):
+                at = indexed.start + offset
+                given = tables.matrix_chunk(at, at + 1)
+                where = {d: coordinates.item(offset, d) for d in coordinates.columns if d != ROW}
                 read = model.row(name, **where)
-                assert read.terms['coefficient'].to_list() == pytest.approx(given['coeff'].to_list()), (
+                assert read.terms['coefficient'].to_list() == pytest.approx(given[COEFF].to_list()), (
                     f'{name} at {where} does not carry the coefficients the sink was handed for row {at}'
                 )
                 assert read.terms.height == given.height
 
 
 #: A coefficient and a right-hand side that ``%g``'s six significant digits
-#: cannot tell apart from their neighbours, and a scalar declaration — the
+#: cannot tell apart from their neighbours, and a scalar entry — the
 #: cases where the *rendering* is what makes a row readable or not.
 PRECISE: dict[str, Any] = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
@@ -278,30 +279,30 @@ def test_a_coefficient_prints_every_digit_the_data_gave_it() -> None:
     with sps.build(PRECISE, PRECISE_DATA) as model:
         printed = str(model.row('balance', t=0))
 
-    assert printed == 'balance[t=0]: +1.0000001 p[t=0, g=a] +12345678 p[t=0, g=b] >= 12345678.9', (
+    assert printed == 'balance[t=0]: +1.0000001 p[g=a, t=0] +12345678 p[g=b, t=0] >= 12345678.9', (
         'every digit the data carried survives, and a whole coefficient still reads as linopy prints it'
     )
 
 
-def test_a_row_echoed_at_a_prompt_is_the_line_not_the_frame() -> None:
+def test_a_row_echoed_at_a_prompt_is_the_line_not_the_table() -> None:
     """``repr`` is how a row is read in a REPL and in a notebook cell, so it is the line too."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
         row = model.row('commit', t=1, g='gas')
 
-    assert repr(row) == str(row) == 'commit[t=1, g=gas]: +1 p[t=1, g=gas] -200 u[t=1, g=gas] <= 0'
+    assert repr(row) == str(row) == 'commit[g=gas, t=1]: +1 p[g=gas, t=1] -200 u[g=gas, t=1] <= 0'
 
 
 def test_a_row_has_one_spelling_whatever_order_its_coordinate_was_given_in() -> None:
-    """One row, one identity: the declaration orders the coordinate, not the caller's keywords."""
+    """One row, one identity: its dimensions sorted by name order the coordinate, not the caller's keywords."""
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
-        by_declaration = model.row('commit', t=1, g='gas')
-        reversed_kwargs = model.row('commit', g='gas', t=1)
+        by_name = model.row('commit', g='gas', t=1)
+        reversed_kwargs = model.row('commit', t=1, g='gas')
 
-    assert str(by_declaration) == str(reversed_kwargs)
-    assert list(reversed_kwargs.coordinate) == ['t', 'g'], "the declaration's dim order, not the call's"
+    assert str(by_name) == str(reversed_kwargs)
+    assert list(reversed_kwargs.coordinate) == ['g', 't'], "the dimensions sorted by name, not the call's order"
 
 
-def test_a_declaration_over_no_dims_carries_no_bracket() -> None:
+def test_an_entry_over_no_dims_carries_no_bracket() -> None:
     """``z``, not ``z[]`` — linopy's spelling, and an empty bracket states a
     coordinate that does not exist."""
     spec = {
@@ -333,21 +334,21 @@ def test_a_dimension_called_name_is_still_a_coordinate() -> None:
 
 
 def test_a_coefficient_the_data_made_zero_leaves_no_term() -> None:
-    """The third way a built row is shorter than its file, beside a masked
-    variable and a masked row: a zero coefficient is pruned, not printed as ``+0``.
+    """The third way a built row is shorter than its file, beside an absent
+    variable and an absent row: a zero coefficient is pruned, not printed as ``+0``.
     """
     zeroed = {**PRECISE_DATA, 'cost': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 2.0]})}
     with sps.build(PRECISE, zeroed) as model:
         row = model.row('balance', t=0)
 
-    assert _terms(row) == [('p', 't=0, g=b', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
+    assert _terms(row) == [('p', 'g=b, t=0', 2.0)], 'a zero coefficient is not a term, so `a` is not in the row'
 
 
 @pytest.mark.parametrize(
     ('coordinate', 'names'),
     [
-        pytest.param({'t': '0', 'g': 'wind'}, 'Int64', id='a string against an integer dim'),
-        pytest.param({'t': 0, 'g': 1}, 'Enum', id='an integer against a label dim'),
+        pytest.param({'t': '0', 'g': 'wind'}, 'Int64', id='a string against an integer dimension'),
+        pytest.param({'t': 0, 'g': 1}, 'Enum', id='an integer against a label dimension'),
         pytest.param({'t': 0, 'g': 'nope'}, 'Enum', id='a stranger against an Enum'),
     ],
 )

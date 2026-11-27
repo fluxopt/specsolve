@@ -10,9 +10,15 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from specsolve._answer_layout import AT_LOWER, AT_UPPER, BASIC, FIXED, SUPERBASIC
+from specsolve._answer.status import SolveStatus
+from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
+    AT_LOWER,
+    AT_UPPER,
+    BASIC,
+    FIXED,
+    SUPERBASIC,
     Basis,
     InfeasibleSubsystemIndices,
     SolveAnswer,
@@ -22,7 +28,6 @@ from specsolve._sinks.solver import (
     solver_vector,
     spelled_senses,
 )
-from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -30,7 +35,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from specsolve._sinks.handoff import Handoff, RowVectors
+    from specsolve._sinks.tables import RowVectors, SinkTables
 
 
 #: Gurobi status -> termination condition: linopy's ``Gurobi.CONDITION_MAP``
@@ -76,6 +81,7 @@ class Gurobi(Solver):
     #: holder's lifetime.
     _release: weakref.finalize[[Any, Any], Gurobi]
 
+    name = 'gurobi'
     requires = ('gurobipy', 'scipy.sparse')
     recorded_options = frozenset(
         {
@@ -96,6 +102,11 @@ class Gurobi(Solver):
         'The gurobi sink requires the [gurobi] extra (gurobipy, scipy): pip install "specsolve[gurobi]"'
     )
 
+    dual_ray_advice = (
+        "re-solve with solver_options={'InfUnbdInfo': 1}, which gurobi needs set before the solve to compute "
+        'the certificate at all'
+    )
+
     #: The only sink with no quadratic exclusion, as
     #: ``tests/test_gurobi_capability_probes.py`` measures.
     lp_values = MappingProxyType({'complete': 'no_gain', 'partial': 'no_gain'})
@@ -105,8 +116,8 @@ class Gurobi(Solver):
         )
     )
 
-    def _load(self, handoff: Handoff) -> None:
-        self._m, self._env = _built(handoff, self._options)
+    def _load(self, tables: SinkTables) -> None:
+        self._m, self._env = _built(tables, self._options)
         self._release = weakref.finalize(self, _released, self._m, self._env)
 
     def dual_ray(self) -> pl.Series | None:
@@ -118,6 +129,8 @@ class Gurobi(Solver):
         import numpy as np
 
         gurobipy = _gurobipy()
+        if self._m.NumQConstrs:
+            return None
         try:
             values = np.asarray(self._m.getAttr('FarkasDual'), dtype=np.float64)
         except (AttributeError, gurobipy.GurobiError):
@@ -128,16 +141,16 @@ class Gurobi(Solver):
     def handle(self) -> Any:
         return self._m
 
-    def push(self, handoff: Handoff) -> None:
+    def push(self, tables: SinkTables) -> None:
         """Whole vectors, one call each."""
         gurobipy = _gurobipy()
-        cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
+        cols = tables.dense_columns(gurobipy.GRB.INFINITY)
         for attribute, values in (('LB', cols.lb), ('UB', cols.ub), ('Obj', cols.cost)):
             self._m.setAttr(attribute, values)
-        self._m.setAttr('RHS', handoff.dense_rows(gurobipy.GRB.INFINITY).rhs[: self._m.NumConstrs])
-        self._m.ObjCon = handoff.objective_constant
-        if handoff.quad.height:
-            _set_quadratic(self._m, handoff, cols.cost)
+        self._m.setAttr('RHS', tables.dense_rows(gurobipy.GRB.INFINITY).rhs[: self._m.NumConstrs])
+        self._m.ObjCon = tables.objective_constant
+        if tables.quad.height:
+            _set_quadratic(self._m, tables, cols.cost)
         self._m.update()
 
     def _basis(self) -> tuple[Any, Any] | None:
@@ -152,7 +165,7 @@ class Gurobi(Solver):
             return None
         return basis_codes(-columns, (BASIC, AT_LOWER, AT_UPPER, SUPERBASIC)), basis_codes(-rows, (BASIC, AT_LOWER))
 
-    def _warm(self, basis: Basis) -> None:
+    def _start_from_basis(self, basis: Basis) -> None:
         """``VBasis`` and ``CBasis``; a row is ``0`` basic or ``-1`` not, whichever bound it is at."""
         self._m.setAttr(
             'VBasis', solver_codes(basis.columns, {BASIC: 0, AT_LOWER: -1, AT_UPPER: -2, FIXED: -1, SUPERBASIC: -3})
@@ -161,7 +174,7 @@ class Gurobi(Solver):
         self._m.setAttr('CBasis', rows)
         self._m.update()
 
-    def _start(self, values: Any) -> None:
+    def _start_from_values(self, values: Any) -> None:
         """``Start`` for a mixed-integer model and ``PStart`` for an LP, ``GRB.UNDEFINED`` where no value is given."""
         import numpy as np
 
@@ -169,7 +182,7 @@ class Gurobi(Solver):
         self._m.setAttr('Start' if self._m.IsMIP else 'PStart', given)
         self._m.update()
 
-    def _run(self, handoff: Handoff) -> SolveAnswer:
+    def _run(self, tables: SinkTables) -> SolveAnswer:
         """The one ``GurobiError`` translated is a caller's ``QCPDual`` on a nonconvex quadratic constraint."""
         import numpy as np
 
@@ -234,7 +247,7 @@ def _released(m: Any, environment: Any) -> None:
     environment.dispose()
 
 
-def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any]:
+def _built(tables: SinkTables, solver_options: Mapping[str, Any] | None) -> tuple[Any, Any]:
     """The model and the environment to release.
 
     Options go on the environment, since a licence parameter such as
@@ -245,8 +258,8 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
     environment = gurobipy.Env(params={'OutputFlag': 0, **dict(solver_options or {})})
     m = None
     try:
-        m = _loaded(handoff, environment, gurobipy)
-        _completed(m, handoff, gurobipy)
+        m = _loaded(tables, environment, gurobipy)
+        _completed(m, tables, gurobipy)
         return m, environment
     except BaseException:
         if m is not None:
@@ -255,33 +268,33 @@ def _built(handoff: Handoff, solver_options: Mapping[str, Any] | None) -> tuple[
         raise
 
 
-def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
+def _loaded(tables: SinkTables, environment: Any, gurobipy: Any) -> Any:
     """Columns, linear rows and the objective in one ``loadModel`` call.
 
     ``loadModel`` reads the matrix by column, so the linear rows' CSR is
     transposed here. Its ``qobj_coo`` takes each pair's coefficient whole, as
-    [`quad`][specsolve._sinks.handoff.Handoff.quad] holds it. The
+    [`quad`][specsolve._sinks.tables.SinkTables.quad] holds it. The
     senses go in as bytes, which ``loadModel`` would otherwise convert one
     character at a time.
     """
     import numpy as np
     import scipy.sparse
 
-    cols = handoff.dense_columns(gurobipy.GRB.INFINITY)
-    rows = handoff.dense_rows(gurobipy.GRB.INFINITY)
-    (linear,) = handoff.row_blocks(None)
-    entries = linear.entries
+    cols = tables.dense_columns(gurobipy.GRB.INFINITY)
+    rows = tables.dense_rows(gurobipy.GRB.INFINITY)
+    (linear,) = tables.row_chunks(None)
+    coefficients = linear.coefficients
     matrix = scipy.sparse.csr_matrix(
-        (entries['coeff'].to_numpy(), entries['col'].to_numpy(), np.append(linear.starts, entries.height)),
-        shape=(linear.height, handoff.column_count),
+        (coefficients[COEFF].to_numpy(), coefficients[COL].to_numpy(), np.append(linear.starts, coefficients.height)),
+        shape=(linear.height, tables.column_count),
     ).tocsc()
-    quad = handoff.quad
+    quad = tables.quad
     m = gurobipy.loadModel(
         env=environment,
-        numvars=handoff.column_count,
+        numvars=tables.column_count,
         numconstrs=linear.height,
-        modelsense=gurobipy.GRB.MAXIMIZE if handoff.objective_sense == 'maximize' else gurobipy.GRB.MINIMIZE,
-        objcon=handoff.objective_constant,
+        modelsense=gurobipy.GRB.MAXIMIZE if tables.objective_sense == 'maximize' else gurobipy.GRB.MINIMIZE,
+        objcon=tables.objective_constant,
         obj=cols.cost,
         lb=cols.lb,
         ub=cols.ub,
@@ -289,45 +302,43 @@ def _loaded(handoff: Handoff, environment: Any, gurobipy: Any) -> Any:
         constr_csc=(matrix.data, matrix.indices, matrix.indptr),
         sense=_spelled(gurobipy).astype('S1')[rows.sense[: linear.height]],
         rhs=rows.rhs[: linear.height],
-        qobj_coo=(quad['coeff'].to_numpy(), (quad['col_l'].to_numpy(), quad['col_r'].to_numpy())),
+        qobj_coo=(quad[COEFF].to_numpy(), (quad[COL_L].to_numpy(), quad[COL_R].to_numpy())),
     )
     m.update()
     return m
 
 
-def _completed(m: Any, handoff: Handoff, gurobipy: Any) -> None:
+def _completed(m: Any, tables: SinkTables, gurobipy: Any) -> None:
     """What ``loadModel`` cannot take: the SOS and the quadratic rows, over the model's own ``Var`` list."""
-    if not handoff.sos.height and not handoff.qmatrix.height:
+    if not tables.sos.height and not tables.qmatrix.height:
         return
     columns = m.getVars()
-    _add_sets(m, columns, handoff, gurobipy)
-    _add_quadratic_rows(m, columns, handoff, handoff.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
+    _add_sets(m, columns, tables, gurobipy)
+    _add_quadratic_rows(m, columns, tables, tables.dense_rows(gurobipy.GRB.INFINITY), _spelled(gurobipy))
     m.update()
 
 
-def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowVectors, spelling: Any) -> None:
+def _add_quadratic_rows(m: Any, columns: list[Any], tables: SinkTables, rows: RowVectors, spelling: Any) -> None:
     """Every quadratic constraint, one ``addMQConstr`` call each, over only the columns it holds.
 
-    A row takes its quadratic entries unhalved, as [`_set_quadratic`][] does,
-    and its linear entries from the matrix at the same row label. A matrix or
+    A row takes its quadratic coefficients unhalved, as [`_set_quadratic`][] does,
+    and its linear coefficients from the matrix at the same row index. A matrix or
     vector as wide as the model would cost each row time in the column count.
     """
     import numpy as np
     import scipy.sparse
 
-    for row, pairs in handoff.quadratic_blocks():
-        held, at = np.unique(
-            np.concatenate([pairs['col_l'].to_numpy(), pairs['col_r'].to_numpy()]), return_inverse=True
-        )
+    for row, pairs in tables.quadratic_rows():
+        held, at = np.unique(np.concatenate([pairs[COL_L].to_numpy(), pairs[COL_R].to_numpy()]), return_inverse=True)
         quadratic = scipy.sparse.csr_matrix(
-            (pairs['coeff'].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
+            (pairs[COEFF].to_numpy(), (at[: pairs.height], at[pairs.height :])), shape=(held.size, held.size)
         )
         on = [columns[col] for col in held]
-        entries = handoff.matrix_block(row, row + 1)
-        linear = [columns[col] for col in entries['col']]
+        coefficients = tables.matrix_chunk(row, row + 1)
+        linear = [columns[col] for col in coefficients[COL]]
         m.addMQConstr(
             quadratic,
-            entries['coeff'].to_numpy() if linear else None,
+            coefficients[COEFF].to_numpy() if linear else None,
             spelling[rows.sense[row]],
             float(rows.rhs[row]),
             on,
@@ -336,29 +347,29 @@ def _add_quadratic_rows(m: Any, columns: list[Any], handoff: Handoff, rows: RowV
         )
 
 
-def _set_quadratic(m: Any, handoff: Handoff, cost: Any) -> None:
+def _set_quadratic(m: Any, tables: SinkTables, cost: Any) -> None:
     r"""The objective's quadratic part, as the matrix Gurobi reads.
 
     ``setMObjective`` takes :math:`Q` in :math:`x^\top Q x` unhalved, so
-    [`quad`][specsolve._sinks.handoff.Handoff.quad] goes in as it
+    [`quad`][specsolve._sinks.tables.SinkTables.quad] goes in as it
     stands. It sets the whole objective, so *cost* is passed again.
     """
     import scipy.sparse
 
     pairs = scipy.sparse.csr_matrix(
         (
-            handoff.quad['coeff'].to_numpy(),
-            (handoff.quad['col_l'].to_numpy(), handoff.quad['col_r'].to_numpy()),
+            tables.quad[COEFF].to_numpy(),
+            (tables.quad[COL_L].to_numpy(), tables.quad[COL_R].to_numpy()),
         ),
-        shape=(handoff.column_count, handoff.column_count),
+        shape=(tables.column_count, tables.column_count),
     )
-    m.setMObjective(pairs, cost, handoff.objective_constant)
+    m.setMObjective(pairs, cost, tables.objective_constant)
 
 
-def _add_sets(m: Any, columns: list[Any], handoff: Handoff, gurobipy: Any) -> None:
+def _add_sets(m: Any, columns: list[Any], tables: SinkTables, gurobipy: Any) -> None:
     """Every special-ordered set, one ``addSOS`` call each."""
     order = {1: gurobipy.GRB.SOS_TYPE1, 2: gurobipy.GRB.SOS_TYPE2}
-    for set_type, cols, weights in handoff.sets():
+    for set_type, cols, weights in tables.sets():
         m.addSOS(order[set_type], [columns[at] for at in cols], weights.to_list())
 
 

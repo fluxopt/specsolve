@@ -24,26 +24,26 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
-| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
+| $`\mathrm{capital\_cost}`$ | `capital_cost` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom,max}}`$ | `p_nom_max` over $`\mathcal{G}`$ — most capacity that may stand at a generator once built |
 | $`\mathrm{p}^{\mathrm{nom,set}}`$ | `p_nom_set` over $`\mathcal{G}`$, `absent` where the data has no row — the capacity a generator is to hold, for the generators whose capacity is already decided |
-| $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{T} \times \mathcal{G}`$, `absent` where the data has no row — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{p}^{\mathrm{set}}`$ | `p_set` over $`\mathcal{G} \times \mathcal{T}`$, `absent` where the data has no row — the output a generator is to deliver, for the snapshots in which it is scheduled rather than chosen |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator |
 
 #### Variable domains
@@ -51,7 +51,7 @@ PyPSA dispatch and capacity fixed by data: a row that is present pins its variab
 **`p`**
 
 ```math
-p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 **`p_nom`**
@@ -63,16 +63,10 @@ p_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capital\_cost}_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capital\_cost}_{g}
 ```
 
 #### Subject to
-
-**`within_capacity`**
-
-```math
-p_{t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
 
 **`capacity_fixed`**
 
@@ -83,19 +77,25 @@ p^{\mathrm{nom}}_{g} = \mathrm{p}^{\mathrm{nom,set}}_{g} \qquad \forall\, g \in 
 **`dispatch_fixed`**
 
 ```math
-p_{t,g} = \mathrm{p}^{\mathrm{set}}_{t,g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G} \,:\, \mathrm{p}^{\mathrm{set}}_{t,g} \text{ is defined}
+p_{g,t} = \mathrm{p}^{\mathrm{set}}_{g,t} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T} \,:\, \mathrm{p}^{\mathrm{set}}_{g,t} \text{ is defined}
 ```
 
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+p_{g,t} \le p^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -129,7 +129,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: most capacity that may stand at a generator once built
         dims: [generator]
       capital_cost:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       marginal_cost:
         description: cost of one unit of output
@@ -197,10 +197,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_fixed.yaml', sources) as solution:
-        solution.objective  # 49900.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_fixed.yaml', sources) as result:
+        result.objective  # 49900.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -252,10 +252,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **Two partial tables, at different ranks.** `p_set` is sparse over *(snapshot,
 generator)*, two rows and both `chp`, and `p_nom_set` over *(generator)*
-alone. The mask is the entire feature, so a model that pinned everything would
+alone. The condition is the entire feature, so a model that pinned everything would
 prove nothing. Both constraints carry `where:` naming the parameter, the
 language's spelling for *the rows this table has*. PyPSA spells the same thing
-as `NaN` in a widened frame and tests `~isnull()`.
+as `NaN` in a widened table and tests `~isnull()`.
 
 **The capacity fixing needs a capacity variable.** Every generator here is
 extendable, including the two whose capacity is pinned. A non-extendable

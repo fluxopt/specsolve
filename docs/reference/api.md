@@ -45,7 +45,11 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.EachCoordinate
+::: specsolve.build_slice
+    options:
+      heading_level: 4
+
+::: specsolve.EachLabel
     options:
       heading_level: 4
 
@@ -75,19 +79,11 @@ with an underscore, and any other name under `specsolve.` is internal. The
     options:
       heading_level: 4
 
-::: specsolve.types.ResultArchive
-    options:
-      heading_level: 4
-
-::: specsolve.types.SweepArchive
-    options:
-      heading_level: 4
-
 ::: specsolve.types.ArchivedInputs
     options:
       heading_level: 4
 
-The rows and frames those hand back:
+The rows and tables those hand back:
 
 ::: specsolve.types.Diagnostics
     options:
@@ -115,31 +111,24 @@ The rows and frames those hand back:
 
 ### Read an answer back
 
-::: specsolve.load_archive
+An answer carries its `sources` exactly where an archive holds it:
+
+```python
+result = sps.solve(spec, sources)  # result.sources is None: no archive
+result = sps.solve(spec, sources, archive='case/')  # the paths under case/sources/
+result = sps.read_archive('case/')  # the tables
+sps.solve(result.spec, result.sources)
+```
+
+::: specsolve.read_archive
     options:
       heading_level: 4
 
-::: specsolve.load_inputs
-    options:
-      heading_level: 4
-
-::: specsolve.load_result
-    options:
-      heading_level: 4
-
-::: specsolve.load_sweep
+::: specsolve.read_inputs
     options:
       heading_level: 4
 
 ::: specsolve.scan_archive
-    options:
-      heading_level: 4
-
-::: specsolve.scan_result
-    options:
-      heading_level: 4
-
-::: specsolve.scan_sweep
     options:
       heading_level: 4
 
@@ -189,7 +178,7 @@ The rest are specsolve's:
 
 ### Names that differ only by case
 
-**Two declarations of one namespace whose names differ only by case are
+**Two entries of one namespace whose names differ only by case are
 refused** by every function. A case-insensitive filesystem folds `p` and `P` into
 one file on disk.
 
@@ -219,12 +208,12 @@ Rename it.
 
 ### What each sink takes
 
-`Model.check(sink)` refuses a built model the sink cannot ingest, naming the
+`Model.check_sink(sink)` refuses a built model the sink cannot ingest, naming the
 sinks that do. `solve` and `write` refuse the same. The check reads the built
 model, so a square the data prices at zero, an integer variable with no column
 or an empty set asks for nothing. Where a model can land is
 [a separate question](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself)
-from whether it is sayable.
+from whether the language states it.
 
 | | `lp_file` | `mps_file` | HiGHS direct | Gurobi direct | Xpress direct |
 |---|---|---|---|---|---|

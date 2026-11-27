@@ -1,4 +1,4 @@
-"""The irreducible infeasible subsystem of the last solve, read back by declaration and coordinate.
+"""The irreducible infeasible subsystem of the last solve, read back by entry and coordinate.
 
 The model is a dispatch whose second snapshot asks for more than both
 technologies can deliver, so the one minimal conflict is that snapshot's
@@ -93,7 +93,7 @@ def test_two_rows_that_conflict_with_no_bound_between_them(solver_name: str) -> 
     with sps.build(TWO_ROWS, TWO_ROWS_SOURCES) as model:
         model.solve(solver_name)
         found = model.infeasible_subsystem()
-    assert {name: frame.to_dicts() for name, frame in found.constraints.items()} == {
+    assert {name: table.to_dicts() for name, table in found.constraints.items()} == {
         'demand': [{'snapshot': 0, 'sense': '>=', 'rhs': 3.0}],
         'limit': [{'snapshot': 0, 'sense': '<=', 'rhs': 1.0}],
     }, 'snapshot 0 asks at least 3 and at most 1; snapshot 1 is slack'
@@ -118,7 +118,7 @@ def test_the_last_solve_is_the_one_explained(solver_name: str) -> None:
         model.solve(solver_name)
         model.update({'demand': pl.DataFrame({'snapshot': [0, 1], 'value': [200.0, 60.0]})})
         model.solve(solver_name)
-        assert model.diagnostics().loads == 1, 'only numbers moved, so the solver kept the model'
+        assert model.metrics().solver_instances == 1, 'only numbers moved, so the solver kept the model'
         found = model.infeasible_subsystem()
     assert found.constraints['balance'].to_dicts() == [{'snapshot': 0, 'sense': '==', 'rhs': 200.0}], (
         'the shortfall is at snapshot 0 now'
@@ -140,7 +140,7 @@ def test_a_discrete_model_names_the_row_where_the_solver_finds_one(solver_name: 
             assert 'gurobi' in str(refused), 'the refusal names a sink that does find one'
             return
     assert list(found.constraints) == ['odd'], 'spare is slack'
-    assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dims'
+    assert found.constraints['odd'].to_dicts() == [{'sense': '==', 'rhs': 3.0}], 'a scalar row has no dimensions'
 
 
 def _unsolved(model: Any) -> None:
@@ -161,7 +161,7 @@ def _solved_then_broken(model: Any) -> None:
     """A second solve from nothing whose run raises: the solver no longer holds what the first solved."""
     from specsolve._sinks.highs import Highs
 
-    def broken(self: Highs, handoff: object) -> None:
+    def broken(self: Highs, tables: object) -> None:
         raise RuntimeError('the run broke')
 
     model.solve()
@@ -219,7 +219,7 @@ def test_a_gurobi_search_stopped_short_is_refused(minimal: int | None) -> None:
         pytest.skip('gurobi is not installed here')
     with sps.build(SHORT, SOURCES) as model:
         model.solve('gurobi')
-        held = model._engine._solver
+        held = model._solver
         held._m = _StoppedShort(held._m, minimal)
         with pytest.raises(SpecsolveError, match='found no subsystem'):
             model.infeasible_subsystem()

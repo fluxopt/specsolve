@@ -11,7 +11,7 @@ import specsolve as sps
 sps.check('dispatch.yaml')
 ```
 
-`check` raises on a construct outside the language. `model.check('highs')`
+`check` raises on a construct outside the language. `model.check_sink('highs')`
 refuses a built model the solver cannot take
 ([what each sink takes](../reference/api.md#what-each-sink-takes)).
 
@@ -19,13 +19,15 @@ refuses a built model the solver cannot take
 
 ```python
 model = sps.build('dispatch.yaml', sources)
+size = model.metrics()
+size.columns, size.rows, size.nonzeros  # 8, 4, 8
 report = model.diagnostics()
-report.columns, report.rows, report.nonzeros  # 8, 4, 8
 report.omissions  # rows a constraint declared and did not build
 report.sparse_parameters  # parameters whose table is short of their coordinates
 ```
 
-A count smaller than you expected is a mask, or a table with a row missing
+A count smaller than you expected is a `where:` that leaves coordinates
+absent, or a table with a row missing
 ([diagnostics](../reference/api.md#specsolve.types.Diagnostics)).
 
 ## 3. Read the row that is wrong
@@ -36,7 +38,7 @@ print(model.row('power_balance', snapshot=2))
 ```
 
 The line is the row as the solver got it. A term you expected and do not see
-is a mask; a coefficient you did not expect is the data
+is left absent by a `where:`; a coefficient you did not expect is the data
 ([`Model.row`](../reference/api.md#specsolve.types.Model.row)).
 
 ## 4. When the solve is infeasible

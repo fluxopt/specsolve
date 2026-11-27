@@ -2,14 +2,14 @@
 
 Three-way differential on examples/transport.yaml:
   1. specsolve_linopy.build + solve (sum via linopy groupby)
-  2. lowered Program -> Engine -> the `highs` solver, plus the LP file
+  2. compiled Program -> the engine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
 
-Plus ``examples/monthly_budget.yaml``, which is the same primitive over *time*:
+Plus ``examples/monthly_budget.yaml``, which is the same operator over *time*:
 a relation over ``snapshot`` groups it into months exactly as a relation over
 ``generator`` groups onto buses. The gallery page quotes its dual and prints
-its snapshot index, so a test has to hold both.
+its `month_of` table, so a test has to hold both.
 """
 
 from __future__ import annotations
@@ -29,8 +29,7 @@ from mathspec.program import (
 )
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
-from specsolve._sources import tidy_sources
+from specsolve._names import COEFF, COL, ROW
 from specsolve.errors import DataError
 from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
@@ -70,7 +69,7 @@ def test_transport_yaml_agrees_with_an_independent_oracle(transport_data):
 
 
 # ---------------------------------------------------------------------------
-# lowering
+# compiling
 # ---------------------------------------------------------------------------
 
 
@@ -88,7 +87,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
     program = schema_of(TRANSPORT_YAML).program
 
     (c,) = program.constraints.values()
-    assert c.dims == ('snapshot', 'bus')
+    assert c.dims == ('bus', 'snapshot'), 'the dimensions sorted by name'
     terms = _flatten(c.lhs)
     grouped = {
         (t.operand.operand.name, t.operand.columns.dropped_dims, t.operand.columns.name, t.operand.columns.added_dims)
@@ -109,10 +108,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
 
 
 def _relationally(data):
-    schema = schema_of(TRANSPORT_YAML)
-    program = schema.program
-    with Engine() as engine:
-        engine.build(program, tidy_sources(program, data))
+    sps.build(schema_of(TRANSPORT_YAML), data).close()
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
@@ -132,7 +128,7 @@ def test_a_coordinate_must_be_single_valued(transport_data):
     """Two rows disagreeing about a generator's bus is a data bug, not a
     silently-picked winner.
 
-    Only the *index* is doubled here. Doubling the generator frame outright
+    Only the *relation* is doubled here. Doubling the generator table outright
     duplicates the parameters it also feeds, and the keyed-parameter check
     below catches that first — which is correct, and would leave this test
     asserting the wrong message.
@@ -147,7 +143,7 @@ def test_a_coordinate_must_be_single_valued(transport_data):
 
 
 def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
-    """A parameter is a function of its dims, so two rows for one coordinate
+    """A parameter is a function of its dimensions, so two rows for one coordinate
     has no answer — and the linopy lane will not lay such a source out either.
     """
     gens, lines, load = transport_data
@@ -158,12 +154,12 @@ def test_a_parameter_carrying_a_coordinate_twice_is_refused(transport_data):
         _relationally(data)
 
 
-def test_a_coordinate_bearing_dim_needs_an_index_source(transport_data):
-    """A coordinate cannot be inferred from the parameters that use the dim —
+def test_a_coordinate_bearing_dim_needs_a_labels_source(transport_data):
+    """A coordinate cannot be inferred from the parameters that use the dimension —
     inferring it is what would let a typo extend the label space.
 
     Nor from the map over it: `gen_bus` still says which generators sit where,
-    and a relation over a dimension never says which of its members exist.
+    and a relation over a dimension never says which of its labels exist.
     """
     gens, lines, load = transport_data
     data = _inputs(gens, lines, load)
@@ -199,11 +195,11 @@ objective:
 def _partial_inputs():
     """`item` carries relation `grp`: i0 and i1 in group g0, i2 in none."""
     items = ['i0', 'i1', 'i2']
-    index = pd.DataFrame({'item': items})
+    labels = pd.DataFrame({'item': items})
     grp = pd.DataFrame({'item': ['i0', 'i1'], 'g': ['g0', 'g0']})
     return (
         {  # relational sources
-            'item': index,
+            'item': labels,
             'grp': grp,
             'g': pd.DataFrame({'g': ['g0']}),
             'cap': pd.DataFrame({'item': items, 'value': [5.0, 5.0, 5.0]}),
@@ -212,7 +208,7 @@ def _partial_inputs():
         {  # the same, in the shapes the linopy lane is usually fed
             'cap': pd.Series([5.0, 5.0, 5.0], index=pd.Index(items, name='item')),
             'target': pd.Series([3.0], index=pd.Index(['g0'], name='g')),
-            'item': index,
+            'item': labels,
             'grp': grp,
             'g': pd.Index(['g0'], name='g'),
         },
@@ -250,11 +246,11 @@ GROUPED_ONTO_BUS = {
     'objective': {'sense': 'minimize', 'expression': 'sum(p, over=generator)'},
 }
 
-#: The two ways a grouped sum's own index departs from the dimension it
+#: The two ways a grouped sum's own labels depart from the dimension it
 #: produces. Both instances carry 10 of load in total, so landing the group on
-#: the declared index is the only thing between them and the same optimum.
+#: the declared labels is the only thing between them and the same optimum.
 GROUPED_ONTO_BUS_SOURCES = {
-    'a label no member reaches': {
+    'a label no generator reaches': {
         'bus': pl.DataFrame({'bus': ['north', 'south', 'east']}),
         'generator': ['g1', 'g2'],
         'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']}),
@@ -273,14 +269,14 @@ GROUPED_ONTO_BUS_SOURCES = {
 
 @pytest.mark.parametrize('sources', GROUPED_ONTO_BUS_SOURCES.values(), ids=GROUPED_ONTO_BUS_SOURCES.keys())
 def test_a_grouped_sum_lands_on_the_dimension_it_declares(sources):
-    """The result spans ``bus``'s declared index, not the labels the relation reaches.
+    """The result spans the labels ``bus`` is given, not the ones the relation reaches.
 
-    A groupby yields only the labels some member points at, and in sorted
+    A groupby yields only the labels some generator points at, and in sorted
     order. Either departure — a bus no generator sits on, or a declared order
     that is not alphabetical — leaves the linopy lane holding a ``bus`` that is
     not the model's ``bus``, and linopy v1 refuses the next combination, since
     it aligns on membership and order alike. The relational lane never faces
-    the question: it joins on the label and takes its rows from the dims
+    the question: it joins on the label and takes its rows from the dimensions
     product, not from whatever the group produced.
     """
     with differential(GROUPED_ONTO_BUS, sources) as run:
@@ -319,19 +315,21 @@ BROADCAST_SOURCES = {
 
 
 def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
-    """The variable does not carry the grouped dim, so a group holds it twice.
+    """The variable does not carry the grouped dimension, so a group holds it twice.
 
     `sum(x * w, over=generator, by=gen_bus[bus])` with `x` indexed by snapshot
     alone: `generator` reaches the term by broadcast from `w`, so two
-    generators on one bus put the *same* `var_label` on one row. Nothing after
+    generators on one bus put the *same* `col_index` on one row. Nothing after
     this point can tell them apart — a solver handed a row with a column twice
-    is entitled to reject the whole model, and HiGHS does.
+    is entitled to refuse the whole model, and HiGHS does.
     """
     with sps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as model:
-        tables = model._engine._model.handoff
-        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
+        tables = model._built.tables
+        matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
         assert matrix.height == 4, 'a column appears twice on a row'
-        assert matrix['coeff'].to_list() == [3.0, 5.0, 3.0, 5.0], 'the 1.0 and the 2.0 merged'
+        assert matrix[COEFF].to_list() == [3.0, 3.0, 5.0, 5.0], (
+            'the 1.0 and the 2.0 merged, at b1 in both snapshots before b2'
+        )
 
         result = model.solve()
     assert result.termination_condition == 'optimal'
@@ -339,8 +337,8 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
 
 
 def test_sum_over_a_declared_dim_needs_no_such_collapse():
-    """The counterpart: when the variable carries the grouped dim, each merged
-    row has its own label and there is nothing to add."""
+    """The counterpart: when the variable carries the grouped dimension, each merged
+    row has its own column index and there is nothing to add."""
     spec = override(
         BROADCAST_GROUP_SUM,
         **{
@@ -349,9 +347,9 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
         },
     )
     with sps.build(spec, BROADCAST_SOURCES) as model:
-        tables = model._engine._model.handoff
-        matrix = tables.matrix_block(0, tables.row_count).sort('row', 'col')
-        assert matrix.height == 6, 'one entry per (row, generator-on-that-bus), not one per bus'
+        tables = model._built.tables
+        matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
+        assert matrix.height == 6, 'one coefficient per (row, generator-on-that-bus), not one per bus'
         assert model.solve().termination_condition == 'optimal'
 
 
@@ -361,7 +359,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
 
 #: `y` is indexed by bus and `w` by snapshot, so `y * w` holds one row per
 #: (bus, snapshot) and one *column* per bus. It is the objective's projection
-#: down to `(col, coeff)` that drops the dims and merges those rows.
+#: down to `(col, coeff)` that drops the dimensions and merges those rows.
 BROADCAST_OBJECTIVE = {
     'dimensions': {'snapshot': {'dtype': 'int', 'ordered': True}, 'bus': {'dtype': 'str'}},
     'parameters': {'w': {'dims': ['snapshot']}, 'floor': {'dims': ['bus']}},
@@ -381,17 +379,17 @@ BROADCAST_OBJECTIVE_SOURCES = {
 
 
 def test_an_objective_term_carrying_dims_is_still_summed_per_column():
-    """A coefficient is the *sum* over the dims the objective projects away.
+    """A coefficient is the *sum* over the dimensions the objective projects away.
 
-    The matrix keeps a term's dims — a constraint row is a function of dims
+    The matrix keeps a term's dimensions — a constraint row is a function of dimensions
     that include them — so one row there is one `(row, col)` cell. The
     objective drops them, and a term that still carries one then holds
     several rows per column.
     """
     with sps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as model:
-        obj = model._engine._model.handoff.obj.sort('col')
+        obj = model._built.tables.obj.sort(COL)
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
-        assert obj['coeff'].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
+        assert obj[COEFF].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
 
 def test_the_broadcast_objective_agrees_with_the_linopy_lane():
@@ -400,23 +398,23 @@ def test_the_broadcast_objective_agrees_with_the_linopy_lane():
         'w': pd.Series([1.0, 10.0, 100.0, 1000.0], index=pd.Index([0, 1, 2, 3], name='snapshot')),
         'floor': pd.Series([1.0, 2.0, 3.0], index=pd.Index(['b0', 'b1', 'b2'], name='bus')),
     }
-    index = {'snapshot': [0, 1, 2, 3], 'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
-    with differential(BROADCAST_OBJECTIVE, data | index, lp=True) as run:
+    labels = {'snapshot': [0, 1, 2, 3], 'bus': pd.Index(['b0', 'b1', 'b2'], name='bus')}
+    with differential(BROADCAST_OBJECTIVE, data | labels, lp=True) as run:
         assert run.oracle == pytest.approx(6666.0)
 
 
 def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     """The counterpart: a projection that merges nothing must change nothing.
 
-    `y * floor` reaches the objective carrying `bus` alone — `y`'s own dim — so
+    `y * floor` reaches the objective carrying `bus` alone — `y`'s own dimension — so
     each column holds exactly one row and the sum over it is that row. The
     aggregate must not turn a coefficient into anything but itself.
     """
     spec = override(BROADCAST_OBJECTIVE, **{'objective.expression': 'sum(y * floor)'})
     with sps.build(spec, BROADCAST_OBJECTIVE_SOURCES) as model:
-        obj = model._engine._model.handoff.obj.sort('col')
+        obj = model._built.tables.obj.sort(COL)
         assert obj.height == 3
-        assert obj['coeff'].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
+        assert obj[COEFF].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +427,7 @@ MONTHLY_PAGE = Path('docs/examples/monthly_budget.md')
 
 @pytest.fixture
 def monthly():
-    """The snapshot index and sources: six snapshots over three calendar months,
+    """The `month_of` table and the sources: six snapshots over three calendar months,
     wind capped in the first.
 
     The `month_of` relation is data prep: one polars expression.
@@ -492,7 +490,7 @@ def test_a_monthly_budget_binds_and_prices_itself(monthly):
 def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
     """Re-grouping the same snapshots re-states the budget, model untouched.
 
-    Quarters instead of months: one different column in the snapshot index,
+    Quarters instead of months: one different column in `month_of`,
     and the constraint now spans three-month blocks. That is the claim the
     page makes about weeks, seasons and representative periods, checked once.
     """
@@ -514,7 +512,7 @@ def test_the_monthly_grouping_is_a_column_and_nothing_else(monthly):
 def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
     """Why the target of a coordinate has to be a declared dimension.
 
-    Without one there is nothing to check the snapshot index against, and
+    Without one there is nothing to check `month_of`'s values against, and
     `2030-3` beside `2030-03` would quietly become a fourth group with a budget
     of its own — the model then solves a smaller problem and says nothing. The
     same check catches a generator assigned to a bus that does not exist.
@@ -527,8 +525,8 @@ def test_a_mistyped_month_is_a_typo_and_not_a_new_group(monthly):
         sps.solve(MONTHLY_YAML, {**sources, 'month_of': typo})
 
 
-def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
-    """The frame printed on the page is the frame these tests build.
+def test_the_table_the_page_prints_is_the_table_it_solves(monthly):
+    """The table printed on the page is the table these tests build.
 
     `test_doc_examples.py` sweeps `python` and `yaml` fences and runs neither,
     so a pasted *output* block is the one kind of doc claim nothing checks —
@@ -539,17 +537,17 @@ def test_the_index_the_page_prints_is_the_index_it_solves(monthly):
     month_of, _sources = monthly
     fences = re.findall(r'^```text\n(.*?)^```', MONTHLY_PAGE.read_text(), re.MULTILINE | re.DOTALL)
     printed = [block for block in fences if block.startswith('shape: (')]
-    assert len(printed) == 1, 'the page prints exactly one frame'
+    assert len(printed) == 1, 'the page prints exactly one table'
     with pl.Config(restore_defaults=True):
         assert printed[0].rstrip('\n') == str(month_of)
 
 
-#: Every load stands, so the `otherwise` region of `demand` holds no member
+#: Every load stands, so the `otherwise` region of `demand` holds no label
 #: at all and its grouped sum lands on no bus.
 DEMAND_BY_REGION = {
     'dimensions': {'bus': {'dtype': 'str'}, 'load': {'dtype': 'str'}},
     'relations': {'load_bus': {'key': 'load', 'values': 'bus'}},
-    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': 'neutral'}},
+    'parameters': {'p_set': {'dims': ['load']}, 'active': {'dims': ['load'], 'dtype': 'bool', 'missing': False}},
     'variables': {'g': {'dims': ['bus'], 'bounds': {'lower': 0}}},
     'expressions': {
         'demand': {'dims': ['load'], 'cases': {'on': {'when': 'active', 'expression': 'p_set'}}, 'otherwise': 0},
@@ -592,7 +590,7 @@ SUM_OVER_NOTHING = {
 def test_a_sum_over_a_dimension_with_no_labels_is_zero():
     """`sum(angle, over=tap)` with no tap is the empty sum, so each bus floors at one.
 
-    A constant summed over a dimension kept no row at a coordinate no member
+    A constant summed over a dimension kept no row at a coordinate no label
     landed in, so the row read a gap there and was refused as short of
     `angle`, which has no row to be short of.
     """

@@ -40,12 +40,12 @@ import pypsa
 
 DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_growth_limit.json'
 
-#: The lifetime every generator gets, long enough that nothing retires inside the horizon.
+#: The lifetime every generator gets, long enough that nothing retires inside the modelled period.
 LIFETIME = 60
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 

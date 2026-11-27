@@ -1,9 +1,12 @@
 """Shared fixtures and schema helpers for specsolve tests.
 
 Everything here is linopy-free and pandas-free at import, so it loads on a bare
-install. A module that needs the oracle imports ``tests.oracle`` or
+install. A module that needs the linopy lane imports ``tests.oracle`` or
 ``tests.differential``, whose ``importorskip`` skips it. A fixture that hands
-out pandas objects imports pandas in its own body.
+out pandas objects imports pandas in its own body. A helper that drives the
+build below ``specsolve.build`` imports what it drives in its own body too:
+`bench.ab` loads this module against an older checkout's ``src`` for a port's
+spec and sources, and that checkout may not have those names.
 """
 
 from __future__ import annotations
@@ -23,7 +26,9 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
+from specsolve._sinks.highs import Highs
 from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
@@ -36,6 +41,9 @@ from tools import constructs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from specsolve._engine.assembly import BuiltModel
+    from specsolve.types import Result
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -54,13 +62,24 @@ def port_sources(name: str) -> dict[str, Any]:
     """One JSON per port, filtered to what its model declares.
 
     The file keeps the upstream dump whole as provenance, and attaching refuses a
-    name the model does not declare.
+    name the model does not declare. JSON holds no datetime, so a column over a
+    `dtype: datetime` dimension is read from its ISO strings.
     """
     data = json.loads((PORTS_DIR / 'data' / f'{name}.json').read_text())
-    tables = {k: pl.DataFrame(v) if isinstance(v, dict) else v for k, v in data.items()}
     spec = PORTS_DIR / f'{name}.yaml'
     program = expanded(spec if spec.exists() else EXAMPLES_DIR / f'{name}.yaml', 'piecewise').program
-    return {k: v for k, v in tables.items() if k in attachable(program)}
+    timed = {d for d, dim in program.dimensions.items() if dim.dtype == 'datetime'}
+    timed_roles = {name: {r for r, d in rel.columns if d in timed} for name, rel in program.relations.items()}
+    tables = {}
+    for key, value in data.items():
+        if key not in attachable(program):
+            continue
+        if isinstance(value, dict):
+            value = pl.DataFrame(value)
+            columns = (timed & set(value.columns)) | timed_roles.get(key, set())
+            value = value.with_columns(pl.col(c).str.to_datetime() for c in columns if value.schema[c] == pl.String)
+        tables[key] = value
+    return tables
 
 
 def port_spec(name: str) -> Path:
@@ -141,15 +160,15 @@ def solve_written_file(path: Path | str) -> float:
     return h.getInfo().objective_function_value
 
 
-def by_coord(result: Any, name: str, *dims: str) -> dict[Any, float]:
-    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dim.
+def primal_by_coordinate(result: Any, name: str, *dims: str) -> dict[Any, float]:
+    """A variable's primal as ``{coordinate: value}`` — tuple keys past one dimension.
 
     One ``primal`` call: two separate calls are not promised to line up.
     """
-    frame = result.primal(name)
-    columns = [frame[dim] for dim in dims]
+    table = result.primal(name)
+    columns = [table[dim] for dim in dims]
     keys = columns[0] if len(dims) == 1 else zip(*columns, strict=True)
-    return dict(zip(keys, frame['value'], strict=True))
+    return dict(zip(keys, table['value'], strict=True))
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +223,7 @@ def dispatch_yaml() -> Path:
 
 @pytest.fixture
 def dispatch_spec_inputs():
-    """``DISPATCH_SPEC``'s data as pandas, index included — one mapping, both lanes."""
+    """``DISPATCH_SPEC``'s data as pandas, labels included — one mapping, both lanes."""
     import pandas as pd
 
     return {
@@ -240,7 +259,7 @@ def _dispatch_load() -> np.ndarray:
 
 @pytest.fixture
 def dispatch_inputs():
-    """Dispatch data as pandas — the shape the linopy oracle takes."""
+    """Dispatch data as pandas — the shape the linopy lane takes."""
     import pandas as pd
 
     return {
@@ -253,8 +272,8 @@ def dispatch_inputs():
 
 
 @pytest.fixture
-def dispatch_frame_inputs():
-    """The same data as tidy frames — the shape the engine documents."""
+def dispatch_table_inputs():
+    """The same data as tidy tables — the shape the engine documents."""
     generators = list(DISPATCH_GENERATORS)
     return {
         'p_max': pl.DataFrame({'generator': generators, 'value': list(DISPATCH_P_MAX)}),
@@ -289,7 +308,7 @@ def commitment_inputs():
 
 
 # ---------------------------------------------------------------------------
-# the law fixture: one model, one masked dimension
+# the law fixture: one model, one partly absent variable
 # ---------------------------------------------------------------------------
 
 #: The two dimensions every expression in the law and sweep tests is written over.
@@ -297,7 +316,7 @@ LAW_DIMS = {'f': {'dtype': 'str'}, 't': {'dtype': 'int', 'ordered': True}}
 
 
 def law_data() -> dict[str, Any]:
-    """``gate`` masks ``y`` at ``f=b``; ``w`` is a dense coefficient."""
+    """``gate`` leaves ``y`` absent at ``f=b``; ``w`` is a dense coefficient."""
     import pandas as pd
 
     return {
@@ -325,7 +344,7 @@ def law_spec(
     """
     return {
         'dimensions': dict(LAW_DIMS),
-        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': 'neutral'}, 'w': {'dims': ['f']}},
+        'parameters': {'gate': {'dims': ['f'], 'dtype': 'bool', 'missing': False}, 'w': {'dims': ['f']}},
         'variables': {
             'x': {'dims': ['f', 't'], 'bounds': {'lower': 0, 'upper': 100}},
             'y': {'dims': ['f', 't'], 'where': 'gate', 'bounds': {'lower': 0, 'upper': 50}},
@@ -335,11 +354,11 @@ def law_spec(
     }
 
 
-def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = False, masked: bool = True) -> dict:
-    """The probe behind the shift and window edge cases, over one masked operand.
+def narrowed_operand_spec(constraint: str, expression: str, *, grouped: bool = False, narrowed: bool = True) -> dict:
+    """The probe behind the shift and window edge cases, over one partly absent operand.
 
-    ``level`` is masked where ``usable`` says so (unmasked under
-    ``masked=False``), and ``take`` is capped only by *expression*'s row. The
+    ``level`` is absent where ``usable`` says so (present everywhere under
+    ``narrowed=False``), and ``take`` is capped only by *expression*'s row. The
     1000x penalty on ``level`` makes "row dropped" and "row built and binding"
     separable from the objective alone. ``grouped`` adds ``season_of``.
     """
@@ -356,7 +375,7 @@ def masked_operand_spec(constraint: str, expression: str, *, grouped: bool = Fal
     if grouped:
         spec['dimensions']['season'] = {'dtype': 'str'}
         spec['relations'] = {'season_of': {'key': 't', 'values': 'season'}}
-    if not masked:
+    if not narrowed:
         del spec['parameters']
         del spec['variables']['level']['where']
     return spec
@@ -399,28 +418,28 @@ def transport_data():
     return gens, lines, load
 
 
-def recomputed_row_values(engine, result) -> Any:
+def recomputed_row_values(built, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
-    built frames and the primal alone. Scattered rather than ``reduceat``-ed: a
-    purely quadratic row owns no linear entries, and ``reduceat`` repeats the
+    built tables and the primal alone. Scattered rather than ``reduceat``-ed: a
+    purely quadratic row owns no linear coefficients, and ``reduceat`` repeats the
     previous row on an empty span.
     """
-    tables = engine._model.handoff
+    tables = built.tables
     x = np.zeros(tables.column_count)
-    for name, block in engine._model.variables.items():
-        x[block.start : block.start + block.height] = result.primal(name)['value'].to_numpy()
+    for name, indexed in built.variables.items():
+        x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)
     spans = np.diff(tables.row_starts)
     rows = np.repeat(np.arange(tables.row_count), spans)
-    np.add.at(values, rows, tables.matrix['coeff'].to_numpy() * x[tables.matrix['col'].to_numpy()])
+    np.add.at(values, rows, tables.matrix[COEFF].to_numpy() * x[tables.matrix[COL].to_numpy()])
 
     quadratic = tables.qmatrix
     if quadratic.height:
-        pairs = quadratic['coeff'].to_numpy() * x[quadratic['col_l'].to_numpy()] * x[quadratic['col_r'].to_numpy()]
-        np.add.at(values, quadratic['row'].to_numpy(), pairs)
+        pairs = quadratic[COEFF].to_numpy() * x[quadratic[COL_L].to_numpy()] * x[quadratic[COL_R].to_numpy()]
+        np.add.at(values, quadratic[ROW].to_numpy(), pairs)
     return values
 
 
@@ -458,7 +477,7 @@ QP = {
         'q': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}},
     },
     'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=g) + sum(q, over=g) >= need'}},
-    #: A linear term beside the quadratic one: a hand-off that passed only ``Q`` drops it.
+    #: A linear term beside the quadratic one: a handoff that passed only ``Q`` drops it.
     'objective': {'sense': 'minimize', 'expression': 'sum(p * p + p * q + q * q + q * toll, over=g)'},
 }
 
@@ -468,7 +487,7 @@ QP_SOURCES = {
     'toll': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 7.0]}),
 }
 
-#: Maximisation and an objective constant, the two things a sink states outside the frames.
+#: Maximisation and an objective constant, the two things a sink states outside the tables.
 MAX = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
     'parameters': {'cap': {'dims': ['t']}},
@@ -552,13 +571,13 @@ def assert_infeasible_reports_both_axes(solver_name: str) -> None:
     import specsolve as sps
     from specsolve.errors import NoSolutionError
 
-    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as solution:
-        assert solution.status == 'warning'
-        assert solution.termination_condition == 'infeasible'
-        assert not solution.has_primal
-        assert solution.objective != solution.objective, 'nan, not 0.0'
+    with sps.solve(*CASES['INFEASIBLE'], solver_name=solver_name) as result:
+        assert result.status == 'warning'
+        assert result.termination_condition == 'infeasible'
+        assert not result.has_primal
+        assert result.objective != result.objective, 'nan, not 0.0'
         with pytest.raises(NoSolutionError, match='INFEASIBLE'):
-            solution.primal('p')
+            result.primal('p')
 
 
 #: A knapsack: the discrete model the update and warm-start tests share.
@@ -587,3 +606,20 @@ def solver_name(request: pytest.FixtureRequest) -> str:
     if not SOLVERS[request.param].is_available():
         pytest.skip(f'{request.param} is not installed here')
     return str(request.param)
+
+
+def build_program(program, sources) -> BuiltModel:
+    """*program* built over *sources* with no spec behind it, which is what the engine takes below ``specsolve.build``."""
+    from specsolve._api import attach_sources
+    from specsolve._clock import untimed
+    from specsolve._engine import assembly
+
+    return assembly.build(program, attach_sources(program, sources)[1], assembly.Measured(), untimed)
+
+
+def solve_built(built: BuiltModel) -> Result:
+    """*built* solved by HiGHS and read back, with no model around it."""
+    from specsolve._engine import readback
+
+    with Highs(built.tables) as solver:
+        return readback.result(built, solver.run(built.tables), 'highs', None)

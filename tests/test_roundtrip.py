@@ -66,14 +66,14 @@ def test_a_dict_built_model_gets_a_file():
     text = to_spec(built).to_yaml()
 
     assert to_spec(pyyaml.safe_load(text)).model_dump() == to_spec(built).model_dump()
-    assert text.startswith('version: 0\n'), 'a generated file should say which surface it targets'
+    assert text.startswith('version: 0\n'), 'a generated file should say which version of the format it targets'
     assert 'dimensions:' in text
     assert 'piecewise' not in text, 'an absent section is absence, not a value'
 
 
 def test_a_declared_version_survives():
     """`version:` is not a default when the file states it — a dumped model has
-    to keep saying which surface it targets (#67)."""
+    to keep saying which version of the format it targets (#67)."""
     text = to_spec({'version': 0, 'dimensions': {'t': {'dtype': 'int', 'ordered': True}}}).to_yaml()
     assert 'version: 0' in text
 
@@ -90,7 +90,7 @@ def test_the_review_copy_states_the_objective_sense(path: Path):
 
 
 def test_absence_is_dropped_and_values_are_kept():
-    """The whole rule, both halves: absence is dropped, every value is kept, default or not."""
+    """Absence is dropped, a value the file wrote is kept, and a default it left out is not written."""
     text = to_spec(
         {
             'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -101,8 +101,9 @@ def test_absence_is_dropped_and_values_are_kept():
 
     for absent in ('where: null', 'coords: {}', 'macros:', 'piecewise:'):
         assert absent not in text, f'{absent!r} is absence and should not be written'
-    for stated in ('dtype: int', 'sense: minimize', 'domain: continuous', 'version: 0'):
+    for stated in ('dtype: int', 'sense: minimize', 'version: 0'):
         assert stated in text, f'{stated!r} is a value and should be written'
+    assert 'domain:' not in text, 'the file wrote no domain, so its default is not written either'
 
 
 def test_json_carries_a_model_too():

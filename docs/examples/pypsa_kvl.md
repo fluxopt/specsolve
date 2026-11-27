@@ -9,7 +9,7 @@ variable. A `Line` is passive: around every independent cycle of the network,
 the reactance-weighted flows sum to zero.
 
 It builds on [the transport model](pypsa_transport.md) rather than on
-[cyclic storage](pypsa_cyclic_storage.md). Ramps, storage and a closed horizon
+[cyclic storage](pypsa_cyclic_storage.md). Ramps, storage and a closed cycle
 couple snapshots in time; a voltage law couples buses in space. Stacking the
 two would leave a mismatch ambiguous about which caused it.
 
@@ -29,68 +29,68 @@ PyPSA linear optimal power flow over passive AC lines under Kirchhoff's voltage 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
+| $`\mathcal{C}`$ | index $`c`$ — `cycle` — one independent loop of the network |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `line` with $`\mathrm{line\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{line\_to}: \mathcal{L} \to \mathcal{B}`$ — passive AC lines, each joining two buses |
-| $`\mathcal{C}`$ | index $`c`$ — `cycle` — one independent loop of the network |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{C} \times \mathcal{L}`$, $`0`$ where the data has no row — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `line_to` bus |
 | $`\mathrm{neg\_s\_nom}`$ | `neg_s_nom` over $`\mathcal{L}`$ — most a line may carry the other way, negative by convention |
-| $`\mathrm{cycle\_incidence}`$ | `cycle_incidence` over $`\mathcal{C} \times \mathcal{L}`$, `neutral` where the data has no row — the cycle basis, as a sparse table of reactance times direction — a line may belong to several cycles, so this is a parameter over both dimensions rather than a coordinate, and rows are absent where a line is in no cycle |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{s}^{\mathrm{nom}}`$ | `s_nom` over $`\mathcal{L}`$ — most a line may carry towards its `line_to` bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $`f`$ | `f` over $`\mathcal{L} \times \mathcal{T}`$ — flow on a line, signed towards its `line_to` bus — not chosen, but whatever the voltage law leaves |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
 
 **`f`**
 
 ```math
-\mathrm{neg\_s\_nom}_{l} \le f_{t,l} \le \mathrm{s}^{\mathrm{nom}}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{neg\_s\_nom}_{l} \le f_{l,t} \le \mathrm{s}^{\mathrm{nom}}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_from}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
 **`kirchhoff_voltage_law`**
 
 ```math
-\sum_{l \in \mathcal{L}} f_{t,l} \cdot \mathrm{cycle\_incidence}_{c,l} = 0 \qquad \forall\, t \in \mathcal{T},\ c \in \mathcal{C}
+\sum_{l \in \mathcal{L}} f_{l,t} \cdot \mathrm{cycle\_incidence}_{c,l} = 0 \qquad \forall\, c \in \mathcal{C},\ t \in \mathcal{T}
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_to}(l) = b} f_{l,t} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{line\_from}(l) = b} f_{l,t} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -151,7 +151,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
           may belong to several cycles, so this is a parameter over both dimensions
           rather than a coordinate, and rows are absent where a line is in no cycle
         dims: [cycle, line]
-        missing: neutral
+        missing: 0
       load:
         description: demand at each bus in each snapshot
         dims: [snapshot, bus]
@@ -199,10 +199,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_kvl.yaml', sources) as solution:
-        solution.objective  # 17000.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_kvl.yaml', sources) as result:
+        result.objective  # 17000.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"

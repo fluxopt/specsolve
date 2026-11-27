@@ -1,6 +1,6 @@
 """Relations: structure on a dimension, never an axis.
 
-Everything under ``dimensions:`` is an axis, and a label a dimension's members
+Everything under ``dimensions:`` is an axis, and a label each label of a dimension
 carry is a relation into another dimension.
 """
 
@@ -15,7 +15,7 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve.errors import DataError, SpecsolveError, SpecsolveWarning
-from tests.conftest import by_coord
+from tests.conftest import primal_by_coordinate
 
 
 def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
@@ -32,7 +32,7 @@ def _spec(objective: str = 'sum(x, over=snapshot)') -> dict:
     }
 
 
-def _index() -> pl.DataFrame:
+def _snapshots() -> pl.DataFrame:
     return pl.DataFrame({'snapshot': [0, 1, 2]})
 
 
@@ -58,7 +58,7 @@ def test_a_relation_names_the_columns_a_row_is_keyed_by_and_the_ones_they_determ
     )
     (declared,) = schema.program.relations_of('generator').values()
     assert (declared.key, declared.values) == (('generator',), ('bus',)), (
-        'the declaration fixes which columns identify a row and which they determine, and no direction'
+        'the entry fixes which columns identify a row and which they determine, and no direction'
     )
 
 
@@ -88,7 +88,7 @@ def test_a_by_typo_is_offered_the_relations_it_could_have_meant():
 
 
 def test_a_dimension_only_a_relation_targets_draws_no_advice():
-    """A relation's target is reached: its members are the labels the map is checked against."""
+    """A relation's target is reached: its labels are the ones the map is checked against."""
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         sps.check(_spec())
@@ -122,17 +122,17 @@ def test_a_dimension_grouped_into_draws_no_advice():
 
 
 def test_a_map_arrives_under_its_own_name():
-    sources = {'load': _load(), 'snapshot': _index(), 'period': _periods(), 'period_of': _period_of()}
-    with sps.solve(_spec(), sources) as solution:
-        assert solution.objective == pytest.approx(6.0)
+    sources = {'load': _load(), 'snapshot': _snapshots(), 'period': _periods(), 'period_of': _period_of()}
+    with sps.solve(_spec(), sources) as result:
+        assert result.objective == pytest.approx(6.0)
 
     with pytest.raises(DataError, match="no data provided for relation 'period_of'"):
-        sps.build(_spec(), {'load': _load(), 'snapshot': _index(), 'period': _periods()})
+        sps.build(_spec(), {'load': _load(), 'snapshot': _snapshots(), 'period': _periods()})
 
 
 def test_a_relation_is_single_valued_per_label():
     doubled = pl.DataFrame({'snapshot': [0, 0, 1, 2], 'period': [1, 2, 1, 2]})
-    sources = {'load': _load(), 'snapshot': _index(), 'period': _periods(), 'period_of': doubled}
+    sources = {'load': _load(), 'snapshot': _snapshots(), 'period': _periods(), 'period_of': doubled}
     with pytest.raises(DataError, match='more than once'):
         sps.build(_spec(), sources)
 
@@ -140,7 +140,7 @@ def test_a_relation_is_single_valued_per_label():
 def _unused_target_spec(month: dict) -> dict:
     """#488's incremental multi-period shape.
 
-    The flat ``snapshot`` index declares every relation it will need, but no
+    The flat ``snapshot`` dimension declares every relation it will need, but no
     constraint groups into ``month`` yet — only ``period`` is used.
     """
     return {
@@ -183,8 +183,8 @@ def _unused_target_sources() -> dict:
 )
 def test_a_relation_may_target_a_dimension_nothing_spans_yet(month, extra):
     """#488: the first build after declaring a relation, before its constraint exists."""
-    with sps.solve(_unused_target_spec(month), _unused_target_sources() | extra) as solution:
-        assert solution.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
+    with sps.solve(_unused_target_spec(month), _unused_target_sources() | extra) as result:
+        assert result.objective == pytest.approx(10.0), 'each period caps its snapshots at 5, so the model builds'
 
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
@@ -199,32 +199,32 @@ def test_an_unused_target_still_checks_containment(lane):
 
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
-def test_an_unused_target_without_an_index_is_refused_with_the_true_reason(lane):
-    """The refusal names the missing index, not data the caller may well have supplied (#488)."""
+def test_an_unused_target_without_labels_is_refused_with_the_true_reason(lane):
+    """The refusal names the missing labels, not data the caller may well have supplied (#488)."""
     from tests.oracle import specsolve_linopy
 
     build = sps.build if lane == 'relational' else specsolve_linopy.build
-    with pytest.raises(DataError, match='no index of its own') as caught:
+    with pytest.raises(DataError, match='no labels of its own') as caught:
         build(_unused_target_spec({'dtype': 'str', 'ordered': True}), _unused_target_sources())
-    assert "Pass an index for 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
+    assert "Pass the labels of 'month'" in str(caught.value), 'the refusal has to say what would satisfy it'
 
 
-def test_both_lanes_read_the_same_index():
+def test_both_lanes_read_the_same_labels():
     """The `period_of` relation is read the same way on the linopy lane too —
     both lanes reach the 6.0 the relational test above asserts.
 
-    The oracle is imported in the body, so the bare install skips this one test.
+    The linopy lane is imported in the body, so the bare install skips this one test.
     """
     from tests.differential import differential
     from tests.oracle import pd
 
     data = {'load': pd.Series({0: 1.0, 1: 2.0, 2: 3.0}).rename_axis('snapshot')}
-    index = {
+    structure = {
         'snapshot': pd.DataFrame({'snapshot': [0, 1, 2]}),
         'period': pd.DataFrame({'period': [1, 2]}),
         'period_of': pd.DataFrame({'snapshot': [0, 1, 2], 'period': [1, 1, 2]}),
     }
-    with differential(_spec(), data | index) as run:
+    with differential(_spec(), data | structure) as run:
         assert run.oracle == pytest.approx(6.0)
 
 
@@ -236,7 +236,7 @@ def test_both_lanes_read_the_same_index():
 #: A three-line network whose structure is entirely relations: each line has two
 #: endpoints, and `spur` deliberately has an open end so the partial case is
 #: reachable. `voltage` targets an int dimension and `send`/`recv` a string one,
-#: so one model covers every relation predicate.
+#: so one model covers every relation condition.
 NETWORK = {
     'dimensions': {'bus': {'dtype': 'str'}, 'line': {'dtype': 'str'}, 'kv': {'dtype': 'int'}},
     'relations': {
@@ -280,14 +280,14 @@ NETWORK_SOURCES = {
         pytest.param('recv', ['loop', 'ring_a', 'ring_b'], id='a-bare-relation-is-the-partial-case'),
         pytest.param('NOT voltage == 220', ['ring_b', 'spur'], id='negated'),
         pytest.param('voltage == 380 AND send != recv', ['ring_b'], id='conjoined-with-a-pair-comparison'),
-        pytest.param("at(bus == 'north', by=send[bus])", ['loop', 'ring_a', 'spur'], id='a-predicate-read-at'),
+        pytest.param("at(bus == 'north', by=send[bus])", ['loop', 'ring_a', 'spur'], id='a-condition-read-at'),
         pytest.param("at(bus == 'north', by=recv[bus])", ['loop', 'ring_b'], id='read-at-a-partial-relation'),
     ],
 )
 def test_a_where_reads_a_relation(where, kept):
     """The atom #553 asked for, in both shapes.
 
-    `kept` is asserted rather than just a count: a predicate that inverted its
+    `kept` is asserted rather than just a count: a condition that inverted its
     sense would keep the complement, which is the same size on a symmetric
     case and a different model everywhere.
 
@@ -308,7 +308,7 @@ def test_a_where_reads_a_relation(where, kept):
         # the linopy lane's null exclusion: numpy answers `None != 'north'` with True
         pytest.param("recv != 'north'", 10.0, id='not-equal-over-a-null-value'),
         pytest.param('recv != send', 30.0, id='not-equal-between-two-relations'),
-        pytest.param("at(bus == 'north', by=send[bus])", 80.0, id='a-predicate-read-at'),
+        pytest.param("at(bus == 'north', by=send[bus])", 80.0, id='a-condition-read-at'),
         pytest.param("NOT at(bus == 'south', by=recv[bus])", 90.0, id='negated-read-at-a-partial-relation'),
         pytest.param("at(bus == 'north', by=recv[bus]) AND voltage == 220", 30.0, id='read-at-conjoined'),
     ],
@@ -316,9 +316,9 @@ def test_a_where_reads_a_relation(where, kept):
 def test_a_relation_where_agrees_with_the_oracle(where, objective):
     """Both lanes, one answer — the differential half of #553.
 
-    A mask reading a relation is a join on the dim table in the relational lane
+    A condition reading a relation is a join on the dimension table in the relational lane
     and an array read in the linopy one; nothing but this shows they agree on
-    which rows survive, since a wrong mask still solves.
+    which rows survive, since a wrong condition still solves.
     """
     from tests.differential import differential
     from tests.oracle import pd
@@ -328,7 +328,7 @@ def test_a_relation_where_agrees_with_the_oracle(where, objective):
         'cap': pd.Series(CAP, index=LINES),
         'price': pd.Series(PRICE, index=LINES),
     }
-    index = {
+    structure = {
         'bus': pd.Index(['north', 'south'], name='bus'),
         'line': pd.DataFrame({'line': LINES}),
         'kv': pd.DataFrame({'kv': [220, 380]}),
@@ -336,15 +336,15 @@ def test_a_relation_where_agrees_with_the_oracle(where, objective):
         'recv': pd.DataFrame({'line': LINES[:3], 'bus': RECV}),
         'voltage': pd.DataFrame({'line': LINES, 'kv': VOLTAGE}),
     }
-    with differential(spec, data | index) as run:
+    with differential(spec, data | structure) as run:
         assert run.result.objective == pytest.approx(objective), (
             f'where: {where!r} — the two lanes agree on the objective but not on this one'
         )
 
 
-def test_a_where_on_a_relation_outside_the_frame_is_refused():
-    """A relation is read on the dim it maps out of, so that dim has to be in the
-    frame — otherwise the mask would silently reduce over an unlisted dim."""
+def test_a_where_on_a_relation_outside_the_entrys_dimensions_is_refused():
+    """A relation is read on the dimension it maps out of, so that dimension has to be one of
+    the entry's — otherwise the condition would silently reduce over an unlisted dimension."""
     spec = {
         **NETWORK,
         'variables': {'f': {'dims': ['line'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
@@ -365,8 +365,8 @@ def test_a_where_on_a_relation_outside_the_frame_is_refused():
 def test_two_relations_over_different_dims_cannot_be_compared():
     """There is no row carrying both, so the comparison has nothing to test.
 
-    The pair comparison is legal exactly because two relations over one dim are
-    two columns of one index. Drop that condition and this reads as a join
+    The pair comparison is legal exactly because two relations over one dimension are
+    two columns keyed by the same labels. Drop that condition and this reads as a join
     nobody wrote.
     """
     spec = {
@@ -389,8 +389,8 @@ def test_two_relations_over_different_dims_cannot_be_compared():
 def test_two_relations_into_different_label_sets_cannot_be_compared(extra, where):
     """One dimension is necessary but not sufficient — the targets must match too.
 
-    A bus label is never a zone label, so the predicate could only mask
-    everything out.
+    A bus label is never a zone label, so the condition could only leave
+    everything absent.
     """
     spec = {
         **NETWORK,
@@ -415,14 +415,14 @@ def test_a_relation_comparison_is_checked_against_its_dtype():
 
 
 def test_a_relation_compares_against_a_label_the_target_lacks():
-    """A stranger label masks everything out; it does not raise.
+    """A stranger label leaves everything absent; it does not raise.
 
     The relation column is compared as a string, because the target's `Enum`
     refuses a label outside it.
     """
     spec = {**NETWORK, 'variables': {'f': {**NETWORK['variables']['f'], 'where': "send == 'atlantis'"}}}
     with sps.build(spec, NETWORK_SOURCES) as model:
-        surviving = model._engine._model.variables['f'].frame.select(pl.len()).collect().item()
+        surviving = model._built.variables['f'].table.select(pl.len()).collect().item()
     assert surviving == 0, "a label no bus carries matches nothing, so no 'f' is built"
 
 
@@ -457,26 +457,28 @@ BASE_SOURCES = {
 _LABELS_AND_MAP = pl.DataFrame({'generator': GENERATORS, 'gen_bus': ['south', 'north', None]})
 
 
-def test_a_map_is_not_a_column_of_the_index_it_runs_over():
+def test_a_map_is_not_a_column_of_the_labels_it_runs_over():
     """The one stray column that is refused rather than filtered away.
 
-    An index may carry anything — attributes, other frameworks' fields — and
+    A labels table may carry anything — attributes, other frameworks' fields — and
     the extras are dropped. A column named after a relation over that dimension
     is not an extra: it is a map somebody meant to supply, and dropping it
     would build the model they did not write.
     """
-    with pytest.raises(DataError, match=re.escape("index for dimension 'generator' carries a 'gen_bus' column")):
+    with pytest.raises(
+        DataError, match=re.escape("the labels table of dimension 'generator' carries a 'gen_bus' column")
+    ):
         sps.solve(BASE, {**BASE_SOURCES, 'gen_bus': _RELATION, 'generator': _LABELS_AND_MAP})
 
 
 def test_a_map_alone_does_not_say_which_labels_exist():
     """A map is a relation over a dimension, never the dimension.
 
-    It may omit members and its key order is whatever someone typed, so reading
-    the label set out of it would let an added entry create a member and a
+    It may omit labels and its key order is whatever someone typed, so reading
+    the label set out of it would let an added entry create a label and a
     reordered map re-order the axis that ``shift`` reads positionally. With
     nothing supplying ``generator``'s labels, the map over it leaves the
-    dimension without an index, and both lanes say so.
+    dimension without labels, and both lanes say so.
     """
     with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
         sps.solve(BASE, {**BASE_SOURCES, 'gen_bus': _RELATION})
@@ -496,21 +498,21 @@ _RELATION = pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['north', 'south']})
 _SUPPLIED_SOURCES = {**BASE_SOURCES, 'generator': GENERATORS, 'gen_bus': _RELATION}
 
 
-def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_index():
-    """The point: a caller adds a map to a dimension whose index is not theirs.
+def test_a_supplied_relation_reaches_the_declared_map_without_touching_the_labels():
+    """The point: a caller adds a map to a dimension whose labels are not theirs.
 
     `g3` is the cheapest generator and contributes nothing, which is what an
-    unmapped label means. The index goes in as a bare label list, so nothing
+    unmapped label means. The labels go in as a bare list, so nothing
     here rewrites a table someone else generated.
     """
     with sps.solve(SUPPLIED, _SUPPLIED_SOURCES) as result:
-        built = by_coord(result, 'p', 'generator')
+        built = primal_by_coordinate(result, 'p', 'generator')
         assert result.objective == pytest.approx(13.0)
     assert built['g3'] == pytest.approx(0.0), 'a generator in no row of the map is a generator on no bus'
 
 
 def test_a_supplied_relation_agrees_with_the_oracle():
-    """Both lanes read the relation through the one front door, so both see it."""
+    """Both lanes read the relation through `tidy_sources`, so both see it."""
     from tests.differential import differential
     from tests.oracle import pd
 
@@ -553,7 +555,7 @@ def test_a_where_reads_a_map_that_leaves_a_label_out():
     }
     with sps.solve(spec, sources) as result:
         built = sorted(row['snapshot'] for row in result.primal('x').to_dicts())
-    assert built == [0, 1, 2], 'the variable is unmasked; only the constraint reads the map'
+    assert built == [0, 1, 2], 'the variable has no condition; only the constraint reads the map'
     assert result.objective == pytest.approx(3.0), 'snapshot 2 is in no row of the map, so nothing constrains it'
 
 
@@ -602,7 +604,7 @@ def test_a_supplied_map_does_not_say_which_labels_exist():
     """A relation over a dimension is not the dimension, whoever holds it.
 
     Reading the label set out of the map would let an omitted row delete a
-    member, and `g3` — mapped nowhere and still a generator — is exactly the
+    label, and `g3` — mapped nowhere and still a generator — is exactly the
     row that would vanish.
     """
     with pytest.raises(DataError, match=re.escape("has its maps (sources['gen_bus'])")):
@@ -611,7 +613,7 @@ def test_a_supplied_map_does_not_say_which_labels_exist():
 
 @pytest.mark.parametrize('lane', ['relational', 'linopy'])
 def test_a_supplied_relation_is_refused_the_same_way_on_both_lanes(lane):
-    """One defect, one sentence: the checks live in the door both lanes enter."""
+    """One defect, one sentence: the checks live in `tidy_sources`, the one function both lanes read data through."""
     from tests.oracle import specsolve_linopy
 
     build = sps.solve if lane == 'relational' else specsolve_linopy.build
@@ -655,14 +657,14 @@ def test_two_maps_into_one_target_each_take_their_own_key():
 
 def test_the_second_map_is_checked_as_hard_as_the_first():
     """Per-map, not per-dimension: the check runs for `line_from` as for `line_to`."""
-    index = pl.DataFrame({'line': ['l1', 'l2'], 'line_from': ['south', 'north']})
+    labels = pl.DataFrame({'line': ['l1', 'l2'], 'line_from': ['south', 'north']})
     with pytest.raises(DataError, match=re.escape("carries a 'line_from' column")):
-        sps.solve(TWO_MAPS, {**_TWO_MAP_SOURCES, 'line': index})
+        sps.solve(TWO_MAPS, {**_TWO_MAP_SOURCES, 'line': labels})
 
 
 #: A parameter written positionally over a dimension that carries a supplied
 #: map. `cost` is a bare list, so which label each number belongs to is the
-#: index's row order — the order a map joined onto it must not disturb. `cap`
+#: row order of `t`'s labels — the order a map joined onto it must not disturb. `cap`
 #: pins the solution to `t = 0` alone, so the objective *is* that label's cost.
 POSITIONAL = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {'dtype': 'str'}},
@@ -674,10 +676,10 @@ POSITIONAL = {
 }
 
 
-def test_a_supplied_map_does_not_reorder_the_index_it_joins_onto():
-    """A label's position is its ordinal, and joining a map on may not move it.
+def test_a_supplied_map_does_not_reorder_the_labels_it_joins_onto():
+    """A label's position is its place in label order, and joining a map on may not move it.
 
-    A positional shape is placed against the labels read back off the index
+    A positional shape is placed against the labels read back off the labels table
     *after* the map has been joined onto it, so a join free to reorder hands
     every one of these numbers to the wrong label. Both lanes would agree on
     that model, so the check is a number rather than a comparison between them.

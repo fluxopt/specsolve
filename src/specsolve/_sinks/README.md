@@ -4,12 +4,12 @@ How a built model leaves the engine — the boxes downstream of the engine in
 [docs/development/architecture.md](../../../docs/development/architecture.md)'s pipeline, which
 carries the argument for the split. This page is the membership list.
 
-**Two families.** A **solver** takes the handoff and runs it; a **writer**
-takes the handoff and renders it to a file. Everything else follows.
+**Two families.** A **solver** takes the sink tables and runs them; a **writer**
+takes them and renders them to a file. Everything else follows.
 
 | | solver | writer |
 |---|---|---|
-| answers | a `Solver` subclass holding one model | `(handoff, path) -> None` |
+| answers | a `Solver` subclass holding one model | `(tables, path) -> None` |
 | chosen by | **name**, at the call — `solver_name='gurobi'` | **suffix**, from the output — `model.lp` |
 | registry | `SOLVERS`, closed, holding the classes | `WRITERS`, closed |
 | members | `highs.py` (`highspy`, ships), `gurobi.py` (`[gurobi]`: `gurobipy`, `scipy`), `xpress.py` (`[xpress]`), over `solver.py` | `lp_file.py`, `mps_file.py` (nothing beyond polars), over `text.py` |
@@ -24,74 +24,74 @@ below, and sharing through it is what stops one leaf importing the other.
 
 The split is by who can answer. `loaded(held, name, …)` is the whole of
 **reuse or load again**: it keeps a held solver exactly when it is the named
-class whose recorded digest and options match the new handoff — and then pushes
+class whose recorded digest and options match the new tables — and then pushes
 the new numbers onto it — closing and replacing it otherwise. The base records
-that evidence at the load; a subclass owns **the hand-off**:
+that evidence at the load; a subclass owns **the handoff**:
 
 | | |
 |---|---|
 | `loaded(held, name, …)` | reuse or load again — the whole of that decision |
-| `Solver.run(handoff, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
-| `Solver.warm(basis)` / `start(values)` | `_warm` / `_start`, plus the refusal of either that does not span the model |
-| `_load(handoff)` | hand the model over and hold what reads it back |
-| `push(handoff)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
-| `_run(handoff)` | solve what is loaded, and read it back |
+| `Solver.run(tables, basis=)` | `_run`, and `_basis` read against the model's bounds where asked, plus the refusal of a vector that does not span the model |
+| `Solver.start_from_basis(basis)` / `start_from_values(values)` | `_start_from_basis` / `_start_from_values`, plus the refusal of either that does not span the model |
+| `_load(tables)` | hand the model over and hold what reads it back |
+| `push(tables)` | only after `loaded` matched the digest — new bounds, costs and right-hand sides |
+| `_run(tables)` | solve what is loaded, and read it back |
 | `_basis()` | the basis the last run ended on, in `BASIS_STATUSES`' words, or `None` |
-| `_warm(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
-| `_start(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
+| `_start_from_basis(basis)` | set a `Basis` on the loaded model in the solver's own statuses |
+| `_start_from_values(values)` | hand a value per column to the solver to start from, an LP's as a mixed-integer model's |
 | `infeasible_subsystem()` | after an infeasible solve, on request: the rows and bounds that cannot hold together, in the solver's indices, or `None` |
 | `forget()` | discard the work the last solve did, keeping the model loaded |
 | `close()` | drop the handle, and any licence with it |
 
 The first three are the family's and identical for everyone; the last nine are a
 member's, and are its own library's shape. Nothing above the family decides
-which solver to keep or checks what one returned — an engine hands over a `Handoff`
+which solver to keep or checks what one returned — an engine hands over a `SinkTables`
 and is given an answer.
 
 So a model rebuilt with new numbers (`model.update`) has them pushed onto what
 the solver already holds. A solve carries the solver on by default;
 `start=None` or an answer given calls `forget()`, so the run begins as if the
 model were new. A member with nothing to discard implements `forget()` as a no-op.
-`forget()` rather than a reload, because keeping the solver skips the hand-off,
+`forget()` rather than a reload, because keeping the solver skips the handoff,
 while carrying its progress wins or loses by model.
 
 A **genuine rebuild** loads a fresh solver, which starts cold.
 
-`warm(basis)` is how a caller carries one anyway. A `Basis` is a code per
+`start_from_basis(basis)` is how a caller carries one anyway. A `Basis` is a code per
 column and per row in `BASIS_STATUSES`, one vocabulary for every member, so a
 basis HiGHS read warms Gurobi. It is positional, and the engine is what makes
 it fit: `solve(start=)` lays an earlier answer's basis onto the new build by
 coordinate (`readback.matched_basis`), so a cutting-plane master that gained a
-*row* starts from every row it kept. `start(values)` hands values over the same
+*row* starts from every row it kept. `start_from_values(values)` hands values over the same
 way: an incumbent to a mixed-integer solve, and a primal to an LP where the
 member's `lp_values` says it takes one.
 
-The guard is `Handoff.structure` — a digest of everything a re-solve may
-not change, recorded by the solver at its load and cached on the handoff. **Values are re-pushed, not diffed**: linopy's persistent layer
+The guard is `SinkTables.structure` — a digest of everything a re-solve may
+not change, recorded by the solver at its load and cached on the tables. **Values are re-pushed, not diffed**: linopy's persistent layer
 (`persistent/diff.py`) computes a delta against a snapshot of the previous
 model, where here the previous model is released before the new one exists, that
 release being what keeps an updated build at one model's peak. What a diff would
 need is exactly what is not kept.
 
-`handoff.py` is what both read. Neither family imports the other and no member
+`tables.py` is what both read. Neither family imports the other and no member
 imports a sibling — `tests/test_architecture.py` reads all of that off the
 path, which is what keeps `gurobipy` off the import path of a caller who
 solves with HiGHS.
 
 ## The contract
 
-A sink takes a `Handoff` and nothing else: the frames `cols`
+A sink takes a `SinkTables` and nothing else: the tables `cols`
 (col, lb, ub, vtype), `obj` (col, coeff), `rows` (row, sense, rhs), `matrix`
 (row, col, coeff) and `sos` (set, type, col, weight), plus the counts it
 chunks by and the objective's sense and constant — those last two live outside
-the frames because a constant has no column to attach to.
+the tables because a constant has no column to attach to.
 
-A sink never learns how the handoff was filled, and the engine never learns
+A sink never learns how the tables were filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
-`lp_file.py`, not another method on `Engine`.
+`lp_file.py`, not another branch of the build.
 
-The one thing sinks may share is a *projection* of those frames, never a step
-of the work — `Handoff.dense_columns`, which every solver reads — or a
+The one thing sinks may share is a *projection* of those tables, never a step
+of the work — `SinkTables.dense_columns`, which every solver reads — or a
 family's one shared module, which holds no member's own answer: `solver.py` is the
 lifecycle without a solver in it, `text.py` the renderings without a
 format in them.
@@ -104,7 +104,7 @@ column of the matrix — so `mps_file` sorts the matrix into `(col, row)` order
 once and builds its own offsets from the result. That sort is the writer's
 peak, and it is the only place in `sinks/` where the format, rather than the
 engine, decides the order. The engine holds no column index because this is
-its one consumer, and building one on every build to serve it would be paid by
+its one reader, and building one on every build to serve it would be paid by
 every caller who never writes a file.
 
 ## The one uneven stream
@@ -119,11 +119,11 @@ supports = frozenset({'sos', ...})  # gurobi: addSOS, no binaries and no bound t
 # highs: left out, and the refusal names the way past it
 ```
 
-— and `sinks.refusal(handoff, name)` answers before the load, off the model
-that was built, which is what `Model.check(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
+— and `sinks.refusal(tables, name)` answers before the load, off the model
+that was built, which is what `Model.check_sink(sink)` asks: a `sos:` block whose dimension has no labels builds no set and
 asks for nothing, and the same goes for a square the data prices at zero or an
 integer variable no column is built for. Nothing is
-rewritten at the hand-off: the language writes a set out itself,
+rewritten at the handoff: the language writes a set out itself,
 `to_spec(...).expand()` stating each as binaries and linking rows, and that is
 the model a sink without the concept is given. `_load`, `push`, `_run` and the
 span check see one model, the one that was built, so a member is written as
@@ -132,7 +132,7 @@ though the fifth stream were never there.
 ## How the three take the matrix
 
 `matrix` is CSR, and two of the three want it that way: `highs.py` hands over
-the three arrays and `xpress.py` hands `addRows` the same triple a block
+the three arrays and `xpress.py` hands `addRows` the same triple a chunk
 already is. `gurobi.py` is the exception — `loadModel` reads the matrix by
 column, so it transposes the CSR first, which is what the `[gurobi]` extra's
 scipy is for.
@@ -150,9 +150,10 @@ places it bites are worth naming because neither is a choice:
 ## Adding one
 
 **A solver:** `<name>.py` named for the solver, defining a `Solver`
-subclass named for it — `_load`, `push`, `_run`, `close` — and one line in
-`SOLVERS` holding the class. Constructing it loads the model and stops there,
-which is what `bench/` measures.
+subclass named for it — its `name`, `_load`, `push`, `_run`, `close` — and the
+class in the tuple `SOLVERS` is built from. What a caller is told about it, such
+as `dual_ray_advice`, is a `ClassVar` beside them. Constructing it loads the
+model and stops there, which is what `bench/` measures.
 Import the solver **inside the function** and declare an extra for it — the
 module boundary is the fence, the lazy import is what keeps this package free
 to import for callers who will never use it. Copy linopy's status map for it
@@ -167,18 +168,18 @@ model to a reader holding both.
 
 Either way it declares what it can ingest, and stream — nothing here may
 materialise the model a second time — and nothing above changes. No method on the engine, no branch in `_api.py`,
-no name on the Python surface.
+no name in the public API.
 
 ## What a sink can ingest
 
 `capabilities.py` is the second axis of [the
 ceiling](https://mathspec.readthedocs.io/en/latest/about/what-counts-as-language/#what-each-tool-decides-for-itself) —
 what a sink takes, as against what the language may say — and its docstring is
-where the entries are argued. One descriptor per sink, declared in the sink's
+where each rule is argued. One descriptor per sink, declared in the sink's
 own module: a `ClassVar` on a `Solver`, a field on a `Writer`.
 
 Three callers read it, each off the built model, and between them a construct
-a sink has no spelling for cannot reach that sink by any door: `Model.check`,
+a sink has no spelling for cannot reach that sink through any verb: `Model.check_sink`,
 which asks without a solve, and the engine's `solve` and `write` — which ask
 without being asked, a file written without the section being a different model
 that parses and solves.
@@ -189,7 +190,7 @@ Two runs of one model produce the same bytes
 ([#109](https://github.com/fluxopt/specsolve/issues/109)). It is not free and it
 is easy to lose: a parallel join hands back a group in whatever order it
 finished it, so a sink that gathers a row's terms and *then* orders the rows
-has already lost the order within one. `lp_file` emits one frame of lines
+has already lost the order within one. `lp_file` emits one table of lines
 carrying its own sort key instead, and sorts once. The solvers are ordered for
 a different reason — `searchsorted` requires it, and the CSR `indptr` it
 produces is only a row's extent if the rows it indexes are sorted.

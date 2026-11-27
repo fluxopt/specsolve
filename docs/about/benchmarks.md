@@ -99,11 +99,11 @@ one per value that exists. Every variable and constraint also runs over
 
 <!-- bench:/models -->
 
-From 100k columns up, linopy's peak memory stays within 1.3× of specsolve's
+From 100k columns up, linopy's peak memory stays within 1.4× of specsolve's
 on HiGHS, except on `network`, the one model that sums through a grouping.
-There it is 2.7× at 1M columns, 1.75 GB against 0.65 GB, and the memory
+There it is 2.6× at 1M columns, 1.80 GB against 0.69 GB, and the memory
 budget stops linopy at that size
-([#2039](https://github.com/fluxopt/specsolve/pull/2039)).
+([#2242](https://github.com/fluxopt/specsolve/pull/2242)).
 
 ## A script that builds one model
 
@@ -116,10 +116,10 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 <div class="bench"><div class="bench-table"><table class="bench-heat">
 <thead><tr><th>launch to exit</th><th>dispatch<br>10k columns</th><th>network<br>10k columns</th><th>nodal<br>3k columns</th><th>sector<br>3k columns</th></tr></thead>
 <tbody>
-<tr><td>specsolve</td><td class="own">0.46 s</td><td class="own">0.51 s</td><td class="own">0.47 s</td><td class="own">0.49 s</td></tr>
-<tr><td>specsolve-in-memory</td><td data-ratio="1.009">0.46 s · 1.0x</td><td data-ratio="0.977">0.50 s · 1.0x</td><td data-ratio="0.994">0.46 s · 1.0x</td><td data-ratio="0.956">0.47 s · 1.0x</td></tr>
-<tr><td>linopy</td><td data-ratio="2.088">0.96 s · 2.1x</td><td data-ratio="2.141">1.10 s · 2.1x</td><td data-ratio="1.969">0.92 s · 2.0x</td><td data-ratio="1.935">0.95 s · 1.9x</td></tr>
-<tr><td>pyomo</td><td data-ratio="1.500">0.69 s · 1.5x</td><td data-ratio="1.735">0.89 s · 1.7x</td><td data-ratio="1.449">0.68 s · 1.4x</td><td data-ratio="1.507">0.74 s · 1.5x</td></tr>
+<tr><td>specsolve</td><td class="own">0.47 s</td><td class="own">0.53 s</td><td class="own">0.42 s</td><td class="own">0.41 s</td></tr>
+<tr><td>specsolve-in-memory</td><td data-ratio="1.120">0.52 s · 1.1x</td><td data-ratio="1.048">0.55 s · 1.0x</td><td data-ratio="1.029">0.43 s · 1.0x</td><td data-ratio="1.065">0.43 s · 1.1x</td></tr>
+<tr><td>linopy</td><td data-ratio="2.254">1.05 s · 2.3x</td><td data-ratio="2.379">1.26 s · 2.4x</td><td data-ratio="2.190">0.91 s · 2.2x</td><td data-ratio="2.181">0.89 s · 2.2x</td></tr>
+<tr><td>pyomo</td><td data-ratio="1.592">0.74 s · 1.6x</td><td data-ratio="1.857">0.98 s · 1.9x</td><td data-ratio="1.475">0.61 s · 1.5x</td><td data-ratio="1.669">0.68 s · 1.7x</td></tr>
 </tbody></table></div></div>
 
 <!-- bench:/fresh -->
@@ -127,6 +127,65 @@ process builds the model, hands it to HiGHS and exits, without a solve.
 A script that builds one small model with specsolve and hands it to the solver
 finishes in about half a second, about half of linopy's time
 ([#2031](https://github.com/fluxopt/specsolve/pull/2031)).
+
+## Where specsolve's build spends its time
+
+Each table follows one model up its size ladder and splits specsolve's time
+into the [phases](../reference/api.md#specsolve.types.Metrics) its engine
+clocks. A phase that grows faster than the model is where a build slows down
+first. A phase a run did not clock reads `—`.
+
+<!-- bench:phases -->
+
+<details markdown="1">
+<summary><b>dispatch</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 200 columns | 1k columns | 5k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| load | 0.941 ms | 1.11 ms | 0.956 ms | 0.97 ms | 0.951 ms | 0.923 ms | 0.987 ms | 1 ms | 1.04 ms | 0.986 ms |
+| tidy | 4.09 ms | 5.14 ms | 4.09 ms | 4.41 ms | 4.08 ms | 4.15 ms | 4.28 ms | 4.57 ms | 10.1 ms | 15.5 ms |
+| attach | 0.738 ms | 0.806 ms | 0.723 ms | 0.732 ms | 0.719 ms | 0.72 ms | 0.805 ms | 0.728 ms | 0.907 ms | 0.984 ms |
+| build | 6.81 ms | 6.54 ms | 6.59 ms | 6.58 ms | 8.56 ms | 11.9 ms | 27.6 ms | 40.6 ms | 153 ms | 307 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>network</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 800 columns | 4k columns | 10k columns | 50k columns | 100k columns | 500k columns | 1M columns | 5M columns | 10M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| load | 1.81 ms | 1.85 ms | 1.76 ms | 2.02 ms | 2.03 ms | 1.97 ms | 2.01 ms | 2 ms | 2.02 ms |
+| tidy | 12.5 ms | 12.3 ms | 12.4 ms | 13.6 ms | 15.8 ms | 32.1 ms | 63.9 ms | 485 ms | 947 ms |
+| attach | 2.57 ms | 2.3 ms | 2.06 ms | 2.72 ms | 2.84 ms | 5.67 ms | 10 ms | 27.9 ms | 38.8 ms |
+| build | 18.9 ms | 19.5 ms | 20 ms | 26.4 ms | 34 ms | 88.2 ms | 152 ms | 636 ms | 1.3 s |
+
+</details>
+
+<details markdown="1">
+<summary><b>nodal</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| load | 0.847 ms | 0.874 ms | 0.911 ms | 0.865 ms | 1.05 ms | 0.912 ms | 0.897 ms | 0.968 ms | 0.947 ms |
+| tidy | 4.28 ms | 4.15 ms | 4.28 ms | 4.52 ms | 4.53 ms | 7.28 ms | 11.4 ms | 59.4 ms | 115 ms |
+| attach | 0.879 ms | 0.88 ms | 0.822 ms | 0.801 ms | 0.981 ms | 1.44 ms | 1.97 ms | 6.25 ms | 12 ms |
+| build | 5.93 ms | 8.77 ms | 7.5 ms | 7.2 ms | 8.36 ms | 18.9 ms | 21.3 ms | 71.4 ms | 144 ms |
+
+</details>
+
+<details markdown="1">
+<summary><b>sector</b> — specsolve's phases on the highs sink</summary>
+
+| phase | 300 columns | 1.5k columns | 3k columns | 15k columns | 30k columns | 150k columns | 300k columns | 1.5M columns | 3M columns |
+| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| load | 0.994 ms | 1.04 ms | 1.03 ms | 1.15 ms | 1.08 ms | 0.958 ms | 0.978 ms | 0.983 ms | 0.986 ms |
+| tidy | 6.36 ms | 5.38 ms | 5.9 ms | 7.01 ms | 6.65 ms | 18.7 ms | 31.1 ms | 164 ms | 397 ms |
+| attach | 1.13 ms | 1.22 ms | 1.01 ms | 1.74 ms | 1.38 ms | 2.76 ms | 3.72 ms | 19.8 ms | 20.5 ms |
+| build | 8.29 ms | 9.29 ms | 9.84 ms | 14.8 ms | 18.2 ms | 42.2 ms | 62.2 ms | 262 ms | 612 ms |
+
+</details>
+
+<!-- bench:/phases -->
 
 ## Not measured yet
 

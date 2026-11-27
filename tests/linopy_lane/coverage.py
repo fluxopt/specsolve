@@ -1,10 +1,10 @@
-"""Is the data there where a declaration needs it? The two positions that ask.
+"""Is the data there where an entry needs it? The two positions that ask.
 
-Everything else in this lane reads a missing ``neutral`` parameter row as a
+Everything else in this lane reads a missing row of a ``missing: 0`` parameter as a
 zero coefficient (the absence rules). These are the two places that reading
 has no answer for: **a divisor**, where zero is not a divisor at all, and **a
 constant side**, where zero is the bound rather than the absence of one. Both
-are decided against the rows the declaration actually builds, so a ``where``
+are decided against the rows the entry actually builds, so a ``where``
 that removed the coordinate has already answered. A ``missing: absent``
 parameter is never asked: its missing row removes the row it would have
 reached (:func:`~tests.linopy_lane.absence.combined`). The walk itself is
@@ -58,7 +58,7 @@ def check_constant_side_covers(name: str, row: program.Constraint, ctx: Evaluati
     every constant term, a parameter in a variable-free additive position,
     whichever side it was written on and beside whatever term: a coefficient,
     which a variable stands with in a product, is a zero when it is missing (the
-    absence rules) and is not one. Keyed to the rows the declaration builds, not
+    absence rules) and is not one. Keyed to the rows the entry builds, not
     to the coordinate product: a `where` that removed the coordinate has already
     answered the question.
     """
@@ -75,7 +75,7 @@ def _constant_leaves(
     """Every parameter standing as a constant term under *node*, with the rows it must cover.
 
     A constant term is a parameter in a variable-free additive position — `hi`
-    in `x + hi`. Under a sum a missing neutral row is one summand fewer, so a
+    in `x + hi`. Under a sum a missing ``missing: 0`` row is one term fewer, so a
     reduction ends the walk. A parameter a variable stands with in
     a product is a coefficient instead, and a sparse coefficient is a zero the
     absence rules allow, so ``coefficient`` records having passed through such a
@@ -111,8 +111,8 @@ def _under_regions(
     """Every node under *node*, each with the rows it actually has to cover.
 
     The mask narrows at every region of a ``cases:`` block: a region's data is
-    owed only where that region applies, so asking a term to cover the whole
-    frame would refuse a model the language accepts. Sorted by the caller
+    owed only where that region applies, so asking a term to cover every
+    coordinate of its entry would refuse a model the language accepts. Sorted by the caller
     where the order decides which name an error can reach: a mask is an array,
     so the pairs are not orderable among themselves.
     """
@@ -135,19 +135,19 @@ def check_divisors_cover(
     *,
     terms: bool = True,
 ) -> None:
-    """A divisor must have a value, and one that is not zero, wherever this declaration divides by it.
+    """A divisor must have a value, and one that is not zero, wherever this entry divides by it.
 
     Not "wherever it is indexed": sparse data is the ordinary case, and a check
     keyed to the coordinate product would refuse models that never touch the
     gap. Two things can already have removed a coordinate — the row's own
-    ``where``, and the mask on a variable in the numerator — and either is
+    ``where``, and the condition on a variable in the numerator — and either is
     enough, so the requirement is their conjunction, narrowed at a ``cases:``
     region like the constant side is.
 
     Reached before :func:`~tests.linopy_lane.builder._eval`, the last moment the
     gap is visible: :func:`absence.coefficient` fills an uncovered slot with
     0.0 at the parameter leaf, and from there the division yields an infinity
-    and the row is masked out silently. A zero the data holds is asked after
+    and the row is left absent silently. A zero the data holds is asked after
     the gaps, of the divisor as *evaluate* reads it, so a divisor that adds up
     to zero is found too. With *terms* false a zero under a dividend that
     carries a variable is left to the row it lands in, which a constraint asks
@@ -176,7 +176,7 @@ def check_read_divisors_cover(
     The read is taken twice by *evaluate*: once with the divisors' missing
     rows absent, and once with them read as one. A coordinate the second
     answers and the first does not is one a quotient by a missing row reaches,
-    so another summand being absent there already keeps it out. A zero is not
+    so another term of the sum being absent there already keeps it out. A zero is not
     asked: a read takes a quotient by zero as absent (:func:`absence.divisor`).
     """
     divisors = program.parameters_of(*(n.divisor for n in program.walk(expression) if isinstance(n, program.Divide)))
@@ -196,13 +196,13 @@ def _quotients(
 ) -> Iterator[tuple[program.Divide, frozenset[str], Any]]:
     """Every quotient by a parameter under *expressions*, with its divisor's parameters and where it divides.
 
-    Where it divides is the region's mask and the mask of every variable in
+    Where it divides is the region's condition and the condition of every variable in
     the numerator at the quotient's own coordinate, either of which removes
     the coordinate. A quotient that stands at the row's own coordinate is
     also removed where a variable beside it there is absent, which takes the
-    row; that mask narrows the quotient's own coordinates and adds none, so
-    a count stays one of the quotient's coordinates. A variable declared ``missing: neutral`` is a zero where it is
-    masked, and removes nothing.
+    row; that absence narrows the quotient's own coordinates and adds none, so
+    a count stays one of the quotient's coordinates. A variable declared ``missing: 0`` is a zero where it is
+    absent, and removes nothing.
     """
     at_the_row = [node for e in expressions for node in _at_the_row(e)]
     row_variables = {node.name for node in at_the_row if isinstance(node, program.VariableReference)}
@@ -215,13 +215,13 @@ def _quotients(
                 continue
             needed = region
             for variable in sorted(_in_place(quotient.numerator)):
-                if ctx.program.variables[variable].missing != 'neutral':
+                if isinstance(ctx.program.variables[variable].missing, str):
                     present = absence.present(ctx.model, variable)
                     needed = present if needed is None else (needed & present)
             if any(quotient is node for node in at_the_row):
                 own = {d for p in params for d in ctx.dataset[p].dims} | set(getattr(needed, 'dims', ()))
                 for variable in sorted(row_variables):
-                    if ctx.program.variables[variable].missing != 'neutral':
+                    if isinstance(ctx.program.variables[variable].missing, str):
                         present = absence.present(ctx.model, variable)
                         present = present.any([d for d in present.dims if d not in own])
                         needed = present if needed is None else (needed & present)
@@ -235,8 +235,8 @@ def _in_place(
     """The variables, or the parameters, under *expression* that stand at its own coordinate.
 
     A sum, a window, a shift or a lookup moves a variable's slots elsewhere, so
-    its mask says nothing about where *expression* exists: `sum(v) / p` divides
-    at every coordinate of `p`. A parameter summed there is one summand fewer
+    its condition says nothing about where *expression* exists: `sum(v) / p` divides
+    at every coordinate of `p`. A parameter summed there is one term fewer
     where it has no row, never a gap in what it sums to.
     """
     if isinstance(expression, kind):

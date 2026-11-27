@@ -17,6 +17,8 @@ Each case stresses a different SQL shape:
 ``fleet``      the same variable total spread over many declarations.
 ``declarations`` ``fleet``'s question as a sweep over the declaration count,
                with its model YAML generated per rung (``_declarations_spec``).
+``curves``     ``dispatch`` with each unit's cost bounded below by its own convex
+               piecewise curve, as ``method: lp`` segment lines over ``bp``.
 ``profiled``   ``nodal``'s ladder with no mask, and an availability table with a
                row per variable.
 ``network``    buses joined by lines, a store at every bus and a portfolio
@@ -63,7 +65,8 @@ class Shape:
 
     ``density`` is the fraction of the coordinate product a case's mask keeps;
     1.0 for cases with no mask. ``masked`` says whether each declaration
-    carries a ``where:`` at all, whatever it keeps.
+    carries a ``where:`` at all, whatever it keeps. ``empty`` counts, per kind,
+    the declarations the ``declarations`` case adds that hold no row.
     """
 
     label: str
@@ -71,12 +74,15 @@ class Shape:
     nominal_variables: int
     density: float = 1.0
     masked: bool = False
+    empty: int = 0
 
     @property
     def key(self) -> str:
         dims = '-'.join(f'{k}{v}' for k, v in sorted(self.sizes.items()))
         if self.density != 1.0:
             dims = f'{dims}-d{self.density:g}'
+        if self.empty:
+            dims = f'{dims}-empty{self.empty}'
         return f'{dims}-masked' if self.masked else dims
 
 
@@ -127,7 +133,7 @@ class Case:
 
 
 def shortened(shape: Shape) -> Shape:
-    """*shape* one snapshot shorter: the next window of a horizon whose length moved.
+    """*shape* one snapshot shorter: a later window of a rolling horizon, its length moved.
 
     Every rung carries ``snapshot``, and a build one snapshot shorter has
     other counts, so no loaded solver can take it by value.
@@ -143,7 +149,7 @@ def shortened(shape: Shape) -> Shape:
 def rescaled(path: str) -> pl.DataFrame:
     """The parameter at *path* with every value one percent larger: new coefficients on the same pattern.
 
-    A zero stays zero, so no entry enters or leaves the matrix; only its numbers move.
+    A zero stays zero, so no coefficient enters or leaves the matrix; only its numbers move.
     """
     return pl.read_parquet(path).with_columns(pl.col('value') * 1.01)
 
@@ -154,16 +160,16 @@ def _seed(shape: Shape) -> np.random.Generator:
     return np.random.default_rng(int.from_bytes(digest, 'big'))
 
 
-def _dump(frames: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
+def _dump(tables: dict[str, pd.DataFrame], dest: Path) -> dict[str, str]:
     paths = {}
-    for name, df in frames.items():
+    for name, df in tables.items():
         path = (dest / f'{name}.parquet').absolute()
         df.to_parquet(path, index=False)
         paths[name] = str(path)
     return paths
 
 
-def _installed_frame(nodes: list[str], techs: list[str], installed: np.ndarray, capacity: np.ndarray) -> pd.DataFrame:
+def _installed_table(nodes: list[str], techs: list[str], installed: np.ndarray, capacity: np.ndarray) -> pd.DataFrame:
     """The (node, tech) pairs that exist, tidy — the table *is* the sparsity."""
     live = installed.reshape(-1)
     return pd.DataFrame(
@@ -289,7 +295,7 @@ def _nodal_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(nodes, techs, installed, capacity),
+            'installed': _installed_table(nodes, techs, installed, capacity),
             'cost': pd.DataFrame({'tech': techs, 'value': cost}),
             'demand': pd.DataFrame(
                 {
@@ -340,7 +346,7 @@ def _sector_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(nodes, techs, installed, capacity),
+            'installed': _installed_table(nodes, techs, installed, capacity),
             'produces': pd.DataFrame({'tech': techs, 'carrier': [carriers[c] for c in serves], 'value': efficiency}),
             'cost': pd.DataFrame({'tech': techs, 'value': rng.uniform(10.0, 100.0, len(techs))}),
             'demand': pd.DataFrame(
@@ -408,6 +414,49 @@ def _transport_data(shape: Shape, dest: Path) -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------
+# curves
+
+#: Breakpoints per curve, the curve's own ends included.
+CURVE_POINTS = 5
+
+
+def _curves_spec(shape: Shape) -> str:
+    """``piecewise.yaml`` with its curve expanded into rows, the only form specsolve builds."""
+    from mathspec import to_spec
+
+    del shape
+    return to_spec(str(MODELS / 'curves' / 'piecewise.yaml')).expand('piecewise').to_yaml()
+
+
+def _curves_data(shape: Shape, dest: Path) -> dict[str, str]:
+    """Parquet for one rung of the ``curves`` ladder.
+
+    Each unit's curve runs from 0 to its ``p_max`` in equal steps, with slopes
+    drawn and sorted ascending, so it is convex and ``method: lp`` accepts it.
+    Load is drawn against the fleet total, so it is feasible.
+    """
+    rng = _seed(shape)
+    n_snap, n_unit = shape.sizes['snapshot'], shape.sizes['unit']
+    units = [f'u{i:05d}' for i in range(n_unit)]
+    p_max = rng.uniform(50.0, 150.0, n_unit)
+    slopes = np.sort(rng.uniform(10.0, 100.0, (n_unit, CURVE_POINTS - 1)), axis=1)
+    x = p_max[:, None] * np.linspace(0.0, 1.0, CURVE_POINTS)[None, :]
+    y = np.concatenate([np.zeros((n_unit, 1)), np.cumsum(slopes * np.diff(x, axis=1), axis=1)], axis=1)
+    load = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
+    curve = {'unit': np.repeat(units, CURVE_POINTS), 'bp': np.tile(np.arange(CURVE_POINTS), n_unit)}
+    tables = {
+        'p_max': pd.DataFrame({'unit': units, 'value': p_max}),
+        'load': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': load}),
+        'bp_x': pd.DataFrame({**curve, 'value': x.ravel()}),
+        'bp_y': pd.DataFrame({**curve, 'value': y.ravel()}),
+        'unit': pd.DataFrame({'unit': units}),
+        'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+        'bp': pd.DataFrame({'bp': np.arange(CURVE_POINTS)}),
+    }
+    return _dump(tables, dest)
+
+
+# --------------------------------------------------------------------------
 # fleet
 
 
@@ -415,25 +464,34 @@ def _fleet_data(shape: Shape, dest: Path) -> dict[str, str]:
     """Parquet for one rung of the ``fleet`` ladder — and of ``declarations``,
     whose generated models read the same three tables.
 
-    Demand can be met three ways, all three priced.
+    Demand can be met three ways, all three priced. A rung with ``empty``
+    declarations also gets ``store``, a dimension without a label, and the two
+    parameters over it, each without a row, and draws its twin's numbers, so
+    the pair writes one LP file.
     """
-    rng = _seed(shape)
+    rng = _seed(replace(shape, empty=0))
     n_snap, n_unit = shape.sizes['snapshot'], shape.sizes['unit']
     units = [f'u{i:05d}' for i in range(n_unit)]
 
     p_max = rng.uniform(50.0, 150.0, n_unit)
     demand = p_max.sum() * 0.6 * (0.8 + 0.4 * rng.random(n_snap))
 
-    return _dump(
-        {
-            'p_max': pd.DataFrame({'unit': units, 'value': p_max}),
-            'cost': pd.DataFrame({'unit': units, 'value': rng.uniform(10.0, 100.0, n_unit)}),
-            'demand': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': demand}),
-            'unit': pd.DataFrame({'unit': units}),
-            'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
-        },
-        dest,
-    )
+    tables = {
+        'p_max': pd.DataFrame({'unit': units, 'value': p_max}),
+        'cost': pd.DataFrame({'unit': units, 'value': rng.uniform(10.0, 100.0, n_unit)}),
+        'demand': pd.DataFrame({'snapshot': np.arange(n_snap), 'value': demand}),
+        'unit': pd.DataFrame({'unit': units}),
+        'snapshot': pd.DataFrame({'snapshot': np.arange(n_snap)}),
+    }
+    if shape.empty:
+        tables |= {
+            'store': pd.DataFrame({'store': pd.Series(dtype=str)}),
+            'e_max': pd.DataFrame({'store': pd.Series(dtype=str), 'value': pd.Series(dtype=float)}),
+            'stored': pd.DataFrame(
+                {'unit': pd.Series(dtype=str), 'store': pd.Series(dtype=str), 'value': pd.Series(dtype=bool)}
+            ),
+        }
+    return _dump(tables, dest)
 
 
 # --------------------------------------------------------------------------
@@ -459,7 +517,9 @@ def _declarations_spec(shape: Shape) -> str:
     Each declaration gets its own variable, capacity constraint and objective
     term, and one balance ties them to the load. On a ``masked`` rung every
     declaration also carries ``where: p_max > 0``, which ``_fleet_data`` draws
-    strictly positive, so the paired rungs build the identical model.
+    strictly positive, so the paired rungs build the identical model. An
+    ``empty`` rung adds the declarations of `_empty_declarations` and builds
+    the same model too.
     """
     names = [f'v{i:03d}' for i in range(shape.sizes['declaration'])]
     guard = ', where: "p_max > 0"' if shape.masked else ''
@@ -469,6 +529,7 @@ def _declarations_spec(shape: Shape) -> str:
     caps = '\n'.join(f'  cap_{v}: {{dims: [snapshot, unit], expression: "{v} <= p_max"{guard}}}' for v in names)
     balance = _added(f'sum({v}, over=unit)' for v in names)
     objective = _added(f'sum({v} * cost)' for v in names)
+    empty = _empty_declarations(shape.empty)
     return f"""# Generated by bench.cases._declarations_spec — one file per rung of the
 # declaration sweep. fleet's mechanism with the declaration count as the axis.
 dimensions:
@@ -476,7 +537,7 @@ dimensions:
     dtype: int
   unit:
     dtype: str
-
+{empty['dimensions']}
 parameters:
   p_max:
     dims: [unit]
@@ -484,20 +545,50 @@ parameters:
     dims: [unit]
   demand:
     dims: [snapshot]
-
+{empty['parameters']}
 variables:
 {variables}
-
+{empty['variables']}
 constraints:
 {caps}
-  balance:
+{empty['constraints']}  balance:
     dims: [snapshot]
     expression: "{balance} == demand"
-
+{empty['assumptions']}
 objective:
   sense: minimize
   expression: "{objective}"
 """
+
+
+def _empty_declarations(per_kind: int) -> dict[str, str]:
+    """YAML for *per_kind* declarations of each shape that holds no row in PyPSA's spec.
+
+    A variable and its constraint over ``store``, a dimension without a label;
+    a variable and its constraint whose ``where:`` admits nothing, since
+    ``_fleet_data`` draws ``p_max`` below 150; and an assumption that counts
+    along ``store``. None of them reaches the matrix, so the rung builds its
+    twin's model. Every block ends in a newline, or is empty.
+    """
+    if not per_kind:
+        return dict.fromkeys(('dimensions', 'parameters', 'variables', 'constraints', 'assumptions'), '')
+    over = [f'e{i:03d}' for i in range(per_kind)]
+    masked = [f'z{i:03d}' for i in range(per_kind)]
+    never = 'where: "p_max > 1000"'
+    return {
+        'dimensions': '  store:\n    dtype: str\n',
+        'parameters': '  e_max:\n    dims: [store]\n  stored:\n    dims: [unit, store]\n    dtype: bool\n',
+        'variables': ''.join(
+            [f'  {v}: {{dims: [snapshot, store], bounds: {{lower: 0, upper: e_max}}}}\n' for v in over]
+            + [f'  {v}: {{dims: [snapshot, unit], bounds: {{lower: 0, upper: p_max}}, {never}}}\n' for v in masked]
+        ),
+        'constraints': ''.join(
+            [f'  cap_{v}: {{dims: [snapshot, store], expression: "{v} <= e_max"}}\n' for v in over]
+            + [f'  cap_{v}: {{dims: [snapshot, unit], expression: "{v} <= p_max", {never}}}\n' for v in masked]
+        ),
+        'assumptions': '\nassumptions:\n'
+        + ''.join(f'  a{i:03d}: {{holds: "count(stored, over=store) < 1"}}\n' for i in range(per_kind)),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -625,7 +716,7 @@ def _network_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     return _dump(
         {
-            'installed': _installed_frame(buses, techs, installed, capacity).rename(columns={'node': 'bus'}),
+            'installed': _installed_table(buses, techs, installed, capacity).rename(columns={'node': 'bus'}),
             'p_max': pd.DataFrame(
                 {
                     'snapshot': np.repeat(np.arange(n_snap), len(bus_of)),
@@ -727,9 +818,9 @@ def _milp_data(shape: Shape, dest: Path) -> dict[str, str]:
 
     milp = SHAPES['milp']
     paths = {}
-    for name, frame in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
+    for name, table in tables(milp, shape.sizes['snapshot'] * per_label(milp)).items():
         path = (dest / f'{name}.parquet').absolute()
-        frame.write_parquet(path)
+        table.write_parquet(path)
         paths[name] = str(path)
     return paths
 
@@ -740,7 +831,7 @@ def _ladder(
     per_snapshot: int,
     density: float = 1.0,
 ) -> tuple[Shape, ...]:
-    """A case's rungs, one per entry of *snapshots*, below them a tenth and a hundredth of the first.
+    """A case's rungs, one per element of *snapshots*, below them a tenth and a hundredth of the first.
 
     ``3xs``..``l`` is the published ladder. ``xl`` and ``2xl`` test the claim in
     ``docs/about/benchmarks.md`` that a model whose dense build cannot fit on
@@ -791,24 +882,36 @@ def _width_ladder(
 
 
 def _declaration_sweep(
-    pool: int, snapshots: int, counts: Sequence[int], masked: Sequence[int] = ()
+    pool: int,
+    snapshots: int,
+    counts: Sequence[int],
+    masked: Sequence[int] = (),
+    empty: Sequence[int] = (),
+    per_kind: int = 0,
 ) -> tuple[Shape, ...]:
     """One model size, several declaration counts — rungs named ``n002``/``n008``/…
 
     The pool of units splits into N declarations of pool/N units each, so total
     variables, rows and snapshots are flat across the sweep. Counts in *masked*
     get a second rung, suffixed ``m``, whose declarations each carry a vacuous
-    ``where:``.
+    ``where:``. Counts in *empty* get one suffixed ``e``, which adds *per_kind*
+    declarations of each kind that holds no row.
     """
-    for n in (*counts, *masked):
+    for n in (*counts, *masked, *empty):
         if pool % n:
             raise ValueError(f'a pool of {pool} units does not split into {n} equal declarations')
-    if not set(masked) <= set(counts):
-        raise ValueError(f'masked rungs {sorted(set(masked) - set(counts))} have no dense twin to be read against')
-    sizes = {n: {'declaration': n, 'unit': pool // n, 'snapshot': snapshots} for n in (*counts, *masked)}
+    for suffix, paired in (('masked', masked), ('empty', empty)):
+        if not set(paired) <= set(counts):
+            raise ValueError(
+                f'{suffix} rungs {sorted(set(paired) - set(counts))} have no dense twin to be read against'
+            )
+    if empty and per_kind < 1:
+        raise ValueError(f'an empty rung adds at least one declaration of each kind, not {per_kind}')
+    sizes = {n: {'declaration': n, 'unit': pool // n, 'snapshot': snapshots} for n in (*counts, *masked, *empty)}
     return (
         *(Shape(f'n{n:03d}', sizes[n], snapshots * pool) for n in counts),
         *(Shape(f'n{n:03d}m', sizes[n], snapshots * pool, masked=True) for n in masked),
+        *(Shape(f'n{n:03d}e', sizes[n], snapshots * pool, empty=per_kind) for n in empty),
     )
 
 
@@ -845,7 +948,9 @@ CASES: dict[str, Case] = {
     ),
     'declarations': Case(
         name='declarations',
-        ladder=_declaration_sweep(pool=512, snapshots=2_000, counts=(2, 8, 32, 128), masked=(8, 128)),
+        ladder=_declaration_sweep(
+            pool=512, snapshots=2_000, counts=(2, 8, 32, 128), masked=(8, 128), empty=(8,), per_kind=60
+        ),
         write=_fleet_data,
         generate_spec=_declarations_spec,
     ),
@@ -873,6 +978,12 @@ CASES: dict[str, Case] = {
         write=_sector_data,
         coefficient='produces',
         about='each technology delivers one of five carriers, such as heat or hydrogen',
+    ),
+    'curves': Case(
+        name='curves',
+        generate_spec=_curves_spec,
+        ladder=_ladder({'unit': 50}, (100, 1_000, 10_000, 100_000, 400_000, 1_200_000), per_snapshot=100),
+        write=_curves_data,
     ),
     'profiled': Case(
         name='profiled',

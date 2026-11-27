@@ -2,19 +2,6 @@
 version: 2
 
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "quarterly"
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore"
-    groups:
-      python:
-        patterns:
-          - "*"
-
   - package-ecosystem: "pre-commit"
     directory: "/"
     schedule:

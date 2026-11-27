@@ -28,48 +28,48 @@ PyPSA linear optimal power flow with a limit on how fast a generator may change 
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
-| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
-| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
 | $`\mathrm{neg\_rating}`$ | `neg_rating` over $`\mathcal{L}`$ — most a link may carry the other way, negative by convention |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{ramp\_limit\_down}`$ | `ramp_limit_down` over $`\mathcal{G}`$ — share of capacity output may fall by from one snapshot to the next |
+| $`\mathrm{ramp\_limit\_up}`$ | `ramp_limit_up` over $`\mathcal{G}`$ — share of capacity output may rise by from one snapshot to the next |
+| $`\mathrm{rating}`$ | `rating` over $`\mathcal{L}`$ — most a link may carry towards its `link_to` bus |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
-| $`f`$ | `f` over $`\mathcal{T} \times \mathcal{L}`$ — flow on a link, signed towards its `link_to` bus |
+| $`f`$ | `f` over $`\mathcal{L} \times \mathcal{T}`$ — flow on a link, signed towards its `link_to` bus |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Variable domains
-
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
 
 **`f`**
 
 ```math
-\mathrm{neg\_rating}_{l} \le f_{t,l} \le \mathrm{rating}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+\mathrm{neg\_rating}_{l} \le f_{l,t} \le \mathrm{rating}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g}
 ```
 
 #### Subject to
@@ -77,25 +77,25 @@ PyPSA linear optimal power flow with a limit on how fast a generator may change 
 **`nodal_balance`**
 
 ```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{t,l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
-**`ramp_up`**
-
-```math
-p_{t,g} - p_{t - 1,g} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} f_{l,t} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} f_{l,t} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 **`ramp_down`**
 
 ```math
-p_{t - 1,g} - p_{t,g} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+p_{g,t - 1} - p_{g,t} \le \mathrm{ramp\_limit\_down}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`ramp_up`**
+
+```math
+p_{g,t} - p_{g,t - 1} \le \mathrm{ramp\_limit\_up}_{g} \cdot \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -196,10 +196,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_ramp.yaml', sources) as solution:
-        solution.objective  # 18200.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_ramp.yaml', sources) as result:
+        result.objective  # 18200.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -250,8 +250,8 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 `shift` vacates the first snapshot, and a vacated position is *absent*, so the
 row there drops on its own. That is the boundary PyPSA wants, and no `where`
 states it. `edge='wrap'` would put the last snapshot onto the first and build
-a different model, and a gate such as `snapshot > 0` would hardcode the index
-origin. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
+a different model, and a gate such as `snapshot > 0` would hardcode the first
+label. [Cyclic storage](pypsa_cyclic_storage.md) wants the wrap and asks for
 it by name.
 
 ## What it exercises

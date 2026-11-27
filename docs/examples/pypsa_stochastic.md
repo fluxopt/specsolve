@@ -42,27 +42,33 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 
 | Symbol | Meaning |
 |---|---|
+| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 | $`\mathcal{S}`$ | index $`s`$ — `scenario` — the futures the fleet is built against, one of which will happen |
 | $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods, the same in every future |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` — generating units, each built once and run in every future |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
+| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the modelled period |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{S} \times \mathcal{T}`$ — demand to be met, and the one thing that differs between futures |
-| $`\mathrm{capex}`$ | `capex` over $`\mathcal{G}`$ — cost of holding one unit of capacity over the horizon |
 | $`\mathrm{opex}`$ | `opex` over $`\mathcal{G}`$ — cost of one unit of output |
+| $`\mathrm{probability}`$ | `probability` over $`\mathcal{S}`$ — how likely a future is — the weights the expectation is taken with |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{S} \times \mathcal{T}`$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
 | $`p^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — capacity built at a generator — the first-stage decision, which spans no scenario because it is taken before anyone knows which future arrived |
-| $`p`$ | `p` over $`\mathcal{S} \times \mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot of a future — the second-stage decision, one per scenario |
 
 #### Variable domains
+
+**`p`**
+
+```math
+p_{g,s,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
+```
 
 **`p_nom`**
 
@@ -70,36 +76,30 @@ PyPSA stochastic optimisation: one network and three futures, where capacity is 
 p^{\mathrm{nom}}_{g} \ge 0 \qquad \forall\, g \in \mathcal{G}
 ```
 
-**`p`**
-
-```math
-p_{s,t,g} \ge 0 \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 #### Objective
 
 ```math
-\min \sum_{s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}} p_{s,t,g} \cdot \mathrm{opex}_{g} \cdot \mathrm{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g}
+\min \sum_{g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}} p_{g,s,t} \cdot \mathrm{opex}_{g} \cdot \mathrm{probability}_{s} + \sum_{g \in \mathcal{G}} p^{\mathrm{nom}}_{g} \cdot \mathrm{capex}_{g}
 ```
 
 #### Subject to
 
-**`within_capacity`**
-
-```math
-p_{s,t,g} \le p^{\mathrm{nom}}_{g} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`power_balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{s,t,g} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,s,t} = \mathrm{load}_{s,t} \qquad \forall\, s \in \mathcal{S},\ t \in \mathcal{T}
+```
+
+**`within_capacity`**
+
+```math
+p_{g,s,t} \le p^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ s \in \mathcal{S},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -132,7 +132,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: demand to be met, and the one thing that differs between futures
         dims: [scenario, snapshot]
       capex:
-        description: cost of holding one unit of capacity over the horizon
+        description: cost of holding one unit of capacity over the modelled period
         dims: [generator]
       opex:
         description: cost of one unit of output
@@ -177,10 +177,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_stochastic.yaml', sources) as solution:
-        solution.objective  # 33940.0
-        solution.dual('power_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_stochastic.yaml', sources) as result:
+        result.objective  # 33940.0
+        result.dual('power_balance')
     ```
 
 === "PyPSA"
@@ -232,8 +232,8 @@ feasible dispatch in the severe future, which asks for 210.
 **One capacity, three scenarios of rows.** `within_capacity` is `p <= p_nom`
 with a `dims:` of `[scenario, snapshot, generator]` against a variable declared
 over `[generator]`: nine rows reading one column. That is how a first-stage
-decision couples to a second-stage one. The dim algebra broadcasts the capacity
-because the constraint's frame says to.
+decision couples to a second-stage one. The dimension algebra broadcasts the capacity
+because the constraint's dimensions say to.
 
 **Prices carry the probability, and they add up to the capital cost.** The nodal
 price in `mild` is 6.0 rather than 10.0, because the term it prices is weighted
@@ -254,7 +254,7 @@ once is paid for by every future that runs it out.
 
 ## What it exercises
 
-Two variables that span different dimensions, coupled by a constraint whose
-frame is the wider of the two, and an objective that reduces one of them against
+Two variables that span different dimensions, coupled by a constraint indexed
+over the wider of the two, and an objective that reduces one of them against
 a probability. Nothing here declares a stage. The two stages are visible only in
 which dimensions each `dims:` lists.

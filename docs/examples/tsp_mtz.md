@@ -21,7 +21,7 @@ Which parts of it the language can say:
 |---|---|
 | DFJ, subsets **written out** | **sayable** — the subsets go in as data, exactly as [KVL's cycle basis](pypsa_kvl.md) does. Verified on an 8-city instance: 246 subsets, one correct tour |
 | DFJ, subsets **generated lazily** | **outside** — solve, find violations, add rows, re-solve is an *algorithm*, not a model. Nothing declarative describes it |
-| MTZ | sayable, and what this port uses |
+| MTZ | in the language, and what this port uses |
 
 The refusal is only the second row. The first is not a language limit: it is 2ⁿ
 rows, which stops being practical somewhere around twenty cities. A
@@ -90,16 +90,16 @@ The travelling salesman problem in the Miller-Tucker-Zemlin formulation: visit e
 
 #### Subject to
 
-**`leave_each_city_once`**
-
-```math
-\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
-```
-
 **`enter_each_city_once`**
 
 ```math
 \sum_{f \in \mathcal{F}} \mathit{travel}_{f,t} = 1 \qquad \forall\, t \in \mathcal{T}
+```
+
+**`leave_each_city_once`**
+
+```math
+\sum_{t \in \mathcal{T}} \mathit{travel}_{f,t} = 1 \qquad \forall\, f \in \mathcal{F}
 ```
 
 **`ordering`**
@@ -190,7 +190,7 @@ objective:
 **The tour position sits at both ends of one row.** MTZ needs `u`, the tour
 position, at *both ends of the same row*: `u_i − u_j`. A variable indexed by one
 dimension appears twice under two different roles, a self-join that looks like
-it should need a primitive.
+it should need an operator.
 
 It does not. Declare the identity map from `city` onto each end of the pair:
 

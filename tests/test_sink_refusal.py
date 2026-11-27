@@ -1,6 +1,6 @@
 """Whether a sink takes a model is asked of the model that was built, not of the file.
 
-`Model.check(sink)` asks it with no solve. The answer needs no installed
+`Model.check_sink(sink)` asks it with no solve. The answer needs no installed
 solver — it is read off a declared table — and a refusal names the sinks that
 would have taken it. The file is an upper
 bound: a square the data prices at zero, an integer variable no column is
@@ -44,17 +44,17 @@ WITH_A_QUADRATIC_ROW = PLAIN | {
 INTEGRAL = PLAIN | {'variables': {'p': {'dims': ['g'], 'domain': 'integer', 'bounds': {'lower': 0, 'upper': 10}}}}
 
 
-def _handoff(spec, sources=SOURCES):
+def _tables(spec, sources=SOURCES):
     """The built model a capability question is asked of, as a stub sink is asked it."""
     with sps.build(spec, dict(sources)) as model:
-        return model._engine._model.handoff
+        return model._built.tables
 
 
 def _refusal(spec, sink: str, sources=SOURCES) -> str | None:
-    """What `Model.check` says of *sink*, or ``None`` where it takes the build."""
+    """What `Model.check_sink` says of *sink*, or ``None`` where it takes the build."""
     with sps.build(spec, dict(sources)) as model:
         try:
-            model.check(sink)
+            model.check_sink(sink)
         except SpecsolveError as refused:
             return str(refused)
     return None
@@ -70,7 +70,7 @@ def test_a_plain_lp_is_taken_by_every_sink():
 
 
 def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
-    """Nothing is rewritten at the hand-off, so the refusal names the language's own way out."""
+    """Nothing is rewritten at the handoff, so the refusal names the language's own way out."""
     with pytest.raises(SpecsolveError, match="'highs' sink cannot take special-ordered sets") as refusal:
         sps.solve(WITH_A_SET, SOURCES)
     assert 'gurobi' in str(refusal.value), 'the sinks that take a set are named'
@@ -79,7 +79,7 @@ def test_a_set_on_highs_is_refused_before_the_load_naming_the_expansion():
 
 def test_an_unknown_sink_names_the_ones_there_are():
     with sps.build(PLAIN, dict(SOURCES)) as model, pytest.raises(SpecsolveError, match='unknown sink') as refused:
-        model.check('cplex')
+        model.check_sink('cplex')
     assert re.search(r'\.lp, \.mps, gurobi, highs, xpress', str(refused.value)), (
         'the refusal lists every sink there is, so a reader picks one instead of guessing'
     )
@@ -101,7 +101,7 @@ def test_which_shipped_sinks_refuse_what_the_language_can_say():
         'and MPS spells it in a section this writer does not write'
     )
     assert _refusing(WITH_A_QUADRATIC_ROW) == {'highs', 'xpress', '.mps'}, (
-        'and a quadratic row, which HiGHS has no entry point for at all'
+        'and a quadratic row, which HiGHS has no method for at all'
     )
 
 
@@ -169,7 +169,7 @@ def test_check_refuses_exactly_what_the_verb_refuses(spec, sink, verb, tmp_path)
     """One path, one message: a CI job that checks instead of solving learns the same thing."""
     with sps.build(spec, dict(SOURCES)) as model:
         with pytest.raises(SpecsolveError) as checked:
-            model.check(sink)
+            model.check_sink(sink)
         with pytest.raises(SpecsolveError) as acted:
             verb(model, tmp_path)
     assert str(checked.value) == str(acted.value)
@@ -182,7 +182,7 @@ def test_a_sink_that_takes_nothing_is_refused_by_name_and_offered_the_others(mon
         capabilities = Capabilities(supports=frozenset({}))
 
     monkeypatch.setitem(SOLVERS, 'stub', Stub)
-    message = sinks.refusal(_handoff(WITH_A_SET), 'stub')
+    message = sinks.refusal(_tables(WITH_A_SET), 'stub')
     assert message is not None
     assert "'stub'" in message, 'the refusal names the sink'
     assert 'special-ordered sets' in message, "the refusal names the construct, in the modeller's own words"
@@ -199,7 +199,7 @@ def test_a_sink_excluding_a_pair_says_so_rather_than_denying_the_half(monkeypatc
         )
 
     monkeypatch.setitem(SOLVERS, 'stub', Stub)
-    message = sinks.refusal(_handoff(INTEGRAL | {'sos': WITH_A_SET['sos']}), 'stub')
+    message = sinks.refusal(_tables(INTEGRAL | {'sos': WITH_A_SET['sos']}), 'stub')
     assert message is not None
     assert 'separately and refuses them together' in message
     assert 'binary or integer variables' in message and 'special-ordered sets' in message

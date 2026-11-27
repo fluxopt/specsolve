@@ -38,17 +38,17 @@ DATA = Path(__file__).resolve().parents[2] / 'data' / 'pypsa_ac_dc.json'
 
 
 def load_tables() -> dict[str, pd.DataFrame]:
-    """The instance, one frame per parameter — what a caller of either library holds."""
+    """The instance, one table per parameter — what a caller of either library holds."""
     return {k: pd.DataFrame(v) if isinstance(v, dict) else v for k, v in json.loads(DATA.read_text()).items()}
 
 
-def _wide(frame: pd.DataFrame, columns: str) -> pd.DataFrame:
+def _wide(table: pd.DataFrame, columns: str) -> pd.DataFrame:
     """A tidy (snapshot, entity, value) table as the wide frame PyPSA wants."""
-    return frame.pivot(index='snapshot', columns=columns, values='value')
+    return table.pivot(index='snapshot', columns=columns, values='value')
 
 
-def _series(frame: pd.DataFrame, index: str) -> pd.Series:
-    return frame.set_index(index)['value']
+def _series(table: pd.DataFrame, index: str) -> pd.Series:
+    return table.set_index(index)['value']
 
 
 def build(tables: dict[str, pd.DataFrame]) -> pypsa.Network:

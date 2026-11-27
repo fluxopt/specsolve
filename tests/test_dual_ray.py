@@ -84,7 +84,9 @@ def test_a_ray_spans_the_constraint_it_names(solver_name: str) -> None:
     """One weight per row, laid out over the constraint's own coordinates — ``dual``'s shape."""
     answer = certified(solver_name, ASKED[solver_name])
     ray = answer.dual_ray('demand')
-    assert ray.columns == ['snapshot', 'value'], 'a ray is tidy over the constraint dims, like every other reader'
+    assert ray.columns == ['snapshot', 'value'], (
+        'a ray is tidy over the dimensions of the constraint, like every other reader'
+    )
     assert ray['snapshot'].to_list() == [0, 1], 'rows come back in label order'
     answer.close()
 
@@ -112,6 +114,19 @@ def test_a_solve_that_found_an_answer_has_nothing_to_certify() -> None:
     with sps.solve(SHORT, feasible) as answer:
         assert answer.termination_condition == 'optimal'
         with pytest.raises(SpecsolveError, match='terminated'):
+            answer.dual_ray('demand')
+
+
+def test_an_archived_answer_says_it_holds_no_ray(tmp_path) -> None:
+    """A ray is live only, so an answer read back from an archive refuses it and says how to get one.
+
+    The archived answer carried neither a ray nor a reason for having none, so
+    the read reached an internal assertion.
+    """
+    sps.solve(SHORT, SOURCES, archive=tmp_path / 'short')
+    with sps.read_archive(tmp_path / 'short') as answer:
+        assert answer.termination_condition == 'infeasible'
+        with pytest.raises(SpecsolveError, match='an archive holds none'):
             answer.dual_ray('demand')
 
 

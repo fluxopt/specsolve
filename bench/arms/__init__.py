@@ -1,7 +1,7 @@
 """Every arm, and the four verbs the harness asks of one.
 
 An arm is one library's answer to the same question: same parquet, same model,
-same seam. Adding one is a module here and an entry in `ARMS`.
+same handoff. Adding one is a module here and a key in `ARMS`.
 
 Each arm module defines:
 
@@ -44,7 +44,8 @@ one window that gets timed — the one *following* prepares. An arm whose
 scratch, and the harness holds it to the change the window made.
 
 ``Counts`` may carry ``phases``, the library's own seconds per phase of the
-call, which the harness records beside the wall time.
+call, and ``laps``, the rows those phases sum, which the harness records beside
+the wall time.
 
 ``Prepared`` is opaque to the harness. ``prepare`` runs before the clock, so
 work the harness rather than the library imposes is charged to nobody.

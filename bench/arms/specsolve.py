@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import itertools
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -52,18 +53,18 @@ def prepare(
     return case.spec_path(case.shape(size)), checked_sources(case, size, paths)
 
 
-def _handoff(handle: Any) -> Any:
-    """The built model's frames, wherever the checkout under test keeps them.
+def _tables(handle: Any) -> Any:
+    """The built model's tables, wherever the checkout under test keeps them.
 
     The ladder runs across checkouts, so this reaches the handle, the engine and
-    the frames (``handoff`` or ``tables``) in each shape an older checkout had.
+    the tables (``handoff`` or ``tables``) in each shape an older checkout had.
     """
     engine = getattr(handle, '_engine', handle)
-    built = getattr(engine, '_model', None)
+    built = getattr(engine, '_built', None) or getattr(engine, '_model', None)
     if built is None:
         return engine._tables()
-    handoff = getattr(built, 'handoff', None) or built.tables
-    return handoff() if callable(handoff) else handoff
+    tables = getattr(built, 'tables', None) or built.handoff
+    return tables() if callable(tables) else tables
 
 
 def _counts(tables: Any, *, nonzeros: bool) -> Counts:
@@ -77,14 +78,42 @@ def _counts(tables: Any, *, nonzeros: bool) -> Counts:
 
 
 def _clocks(model: Any) -> dict[str, float]:
-    """The engine's own seconds per phase, summed over the model's life; empty on a checkout that kept none."""
+    """The engine's own seconds per phase that ran, summed over the model's life; empty on a checkout that kept none.
+
+    A checkout with `Model.metrics` reads it; one from before it (#2188) kept
+    the phases in the engine's `_seconds`, which `bench.ab` meets on an older base.
+    """
+    if callable(getattr(model, 'metrics', None)):
+        metrics = model.metrics()
+        return {
+            field.removesuffix('_seconds'): seconds
+            for field, seconds in metrics._asdict().items()
+            if field.endswith('_seconds') and seconds > 0
+        }
     return dict(getattr(getattr(model, '_engine', None), '_seconds', None) or {})
+
+
+def _laps(model: Any, since: int = 0) -> list[dict[str, Any]]:
+    """Every lap from the *since*-th on, as rows of `Model.timings`; empty on a checkout from before it (#2207).
+
+    Copied off the engine's log rather than read through ``timings()``: this
+    runs inside the timed call, and building a polars frame there is charged
+    to the wall time.
+    """
+    log = getattr(model, '_clock', None) or getattr(getattr(model, '_engine', None), '_log', None)
+    if log is None:
+        return []
+    steps = list(log._steps)
+    return [
+        {'run': run, 'phase': steps[code][0], 'step': steps[code][1], 'entry': steps[code][2], 'seconds': seconds}
+        for run, code, seconds in itertools.islice(zip(log._runs, log._codes, log._seconds, strict=True), since, None)
+    ]
 
 
 def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
     """Build relationally and hand the model over — an LP file, or a solver; the solver never runs.
 
-    A solver is constructed straight off the frames, so its load is in no
+    A solver is constructed straight off the tables, so its load is in no
     phase: it is the wall time less the phases.
     """
     import specsolve as sps
@@ -96,30 +125,33 @@ def build_and_emit(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
         else:
             _loaded(sink, model).close()
 
-        return _counts(_handoff(model), nonzeros=True) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=True) | {'phases': _clocks(model), 'laps': _laps(model)}
 
 
 def _loaded(sink: str, model: Any) -> Any:
     """A solver holding *model*, for a sink that has one: its class, or the ``build_<sink>`` an older checkout loads through."""
     module = importlib.import_module(f'specsolve._sinks.{sink}')
     load = getattr(module, f'build_{sink}', None) or getattr(module, sink.capitalize())
-    return load(_handoff(model))
+    return load(_tables(model))
 
 
-#: The private engine method each verb is timed through, which a checkout older than the verb lacks.
-TIMED_THROUGH = {'window': '_hand_off', 'read': '_answered'}
+#: The private engine method each verb was timed through while an `Engine` ran the lifecycle, which a checkout older than the verb lacks.
+TIMED_THROUGH = {'window': 'handoff', 'read': '_answered'}
 
 
 def unsupported(verb: str) -> str | None:
     """Why the checkout under test cannot take *verb*, or None when it can.
 
-    `bench.yml` measures the base branch's `src/` under this harness, and a base
-    older than the method a verb is timed through has none of it. Its cells are
-    skipped there, and the gate compares only what both runs measured.
+    A run of this harness against an older checkout's `src/` meets a base
+    without the method a verb is timed through. Its cells are skipped there, so
+    a comparison holds only what both runs measured. A checkout whose `Model`
+    runs the lifecycle itself has every verb.
     """
-    from specsolve._engine.engine import Engine
-
     method = TIMED_THROUGH.get(verb)
+    try:
+        from specsolve._engine.engine import Engine
+    except ModuleNotFoundError:
+        return None
     if method is None or hasattr(Engine, method):
         return None
     return f'this checkout has no Engine.{method}, which the {verb} is timed through'
@@ -151,61 +183,75 @@ def window_setup(
 def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts:
     """What the second window of a rolling horizon costs, up to the solve.
 
-    ``update`` rebuilds, and ``_hand_off`` is what ``solve`` does before the run: it
+    ``update`` rebuilds, and ``handoff`` is what ``solve`` does before the run: it
     digests the new build against the one the solver holds, then pushes the
     bounds, costs and right-hand sides onto it, or loads it from scratch where
     the digest moved. A later window pays one digest fewer, because the held
     one is kept. A *cold* window closes the held solver first, so the model
     is loaded from scratch.
     """
-    before = _clocks(model)
+    before, lapped = _clocks(model), len(_laps(model))
     model.update(sources)
     reloaded = _handed_off(model, sink, cold=cold)
     phases = {phase: seconds - before.get(phase, 0.0) for phase, seconds in _clocks(model).items()}
-    return _counts(_handoff(model), nonzeros=True) | {'reloaded': reloaded, 'phases': phases}
+    return _counts(_tables(model), nonzeros=True) | {
+        'reloaded': reloaded,
+        'phases': phases,
+        'laps': _laps(model, since=lapped),
+    }
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
-    """``Engine._hand_off`` as the checkout under test spells it, and whether it loaded the solver from scratch.
+    """The handoff, and whether it loaded the solver from scratch; a *cold* window closes the held solver first.
 
-    A checkout that still takes ``keep`` closes the held solver itself for a
-    cold window, inside the timed hand-off; a later one has no ``keep``, so a
-    cold window closes it here first.
+    ``Model._handoff``, or ``Engine.handoff`` on a checkout whose engine holds the solver.
     """
-    engine = model._engine
-    if 'keep' in inspect.signature(engine._hand_off).parameters:
-        _, kept = engine._hand_off(sink, None, 'nothing' if cold else 'solver')
-        return kept == 'nothing'
-    if cold and engine._solver is not None:
-        engine._solver.close()
-        engine._solver = None
-    return engine._hand_off(sink, None)[1]
+    holder = getattr(model, '_engine', model)
+    if cold and holder._solver is not None:
+        holder._solver.close()
+        holder._solver = None
+    handoff = getattr(holder, '_handoff', None) or holder.handoff
+    return handoff(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
 SWEEP_SLICES = 4
 
 
-def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
-    """``solve_over`` across hand-built slices of the rung's own data, folded in order on one model.
+def _under_each_scenario(spec: Path, sources: dict[str, str]) -> dict[str, Any]:
+    """*sources* with one parameter repeated under each of ``SWEEP_SLICES`` scenarios.
 
-    Every slice carries the same values, so the first loads the solver and the
-    rest push. The solver runs on every slice, and ``phases`` sums the sweep's
-    own per-slice clocks, so its ``solve`` is what the wall time owes the
-    solver and the rest is the sweep's.
+    The parameter over the fewest dimensions carries the column, so cutting it
+    is the least of what a slice costs.
+    """
+    import polars as pl
+
+    import specsolve as sps
+
+    parameters = sps.check(spec).parameters
+    carrier = min((name for name in parameters if name in sources), key=lambda name: len(parameters[name].dims))
+    scenarios = pl.LazyFrame({'scenario': range(SWEEP_SLICES)})
+    return {**sources, carrier: pl.scan_parquet(sources[carrier]).join(scenarios, how='cross')}
+
+
+def sweep(sink: str, prepared: tuple[Path, dict[str, str]]) -> Counts:
+    """``solve_over`` across scenarios of the rung's own data, folded in order on one model.
+
+    Every scenario carries the same values, so the first loads the solver and
+    the rest push. The solver runs on every slice, and ``phases`` sums the
+    sweep's own per-slice clocks, so its ``solve`` is what the wall time owes
+    the solver and the rest is the sweep's.
     """
     import specsolve as sps
 
     spec, sources = prepared
-    swept = sps.solve_over(
-        spec, sources, [(i, sources) for i in range(SWEEP_SLICES)], key_name='scenario', solver_name=sink
-    )
+    swept = sps.solve_over(spec, _under_each_scenario(spec, sources), sps.EachLabel('scenario'), solver_name=sink)
     metrics = swept.metrics
     return {
         'columns': metrics['columns'][0],
         'rows': metrics['rows'][0],
         'nonzeros': metrics['nonzeros'][0],
-        'loads': int(metrics['loads'].sum()),
+        'loads': int(metrics['solver_instances'].sum()),
         'phases': {
             column.removesuffix('_seconds'): float(metrics[column].sum())
             for column in metrics.columns
@@ -225,17 +271,17 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
 
     import specsolve as sps
     from specsolve._sinks.solver import SolveAnswer
-    from specsolve._status import SolveStatus
 
+    status = _named('SolveStatus', 'specsolve._answer.status', 'specsolve._status')
     spec, sources = prepared
     model = sps.build(spec, sources)
-    handoff = _handoff(model)
-    rows = pl.zeros(handoff.row_count, dtype=pl.Float64, eager=True)
+    tables = _tables(model)
+    rows = pl.zeros(tables.row_count, dtype=pl.Float64, eager=True)
     answer = SolveAnswer(
-        SolveStatus('optimal'),
+        status('optimal'),
         0.0,
-        primal=pl.zeros(handoff.column_count, dtype=pl.Float64, eager=True),
-        dual=None if model._engine._discrete() else rows,
+        primal=pl.zeros(tables.column_count, dtype=pl.Float64, eager=True),
+        dual=None if _discrete(model) else rows,
         activity=rows,
     )
     return (model, answer, into), {}
@@ -245,14 +291,13 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     """Lay *answer* out against the build, then read every value back — *into* tidy frames, or onto disk.
 
     ``frames`` collects every variable's primal and every constraint's dual;
-    ``parquet`` is ``Result.save``. Both read the default answer, which holds
+    ``parquet`` writes the answer as an archive holds it, through
+    ``Result._save`` where a checkout has no ``Result.save``. Both read the default answer, which holds
     no optional output. The answer passes through
     ``Model._with_record_fields`` as a solve's does, so what `solve` attaches
     is timed too; a checkout older than it reads the engine's answer as it is.
     """
-    answered = model._engine._answered
-    kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
-    result = answered(answer, 'highs', *kept, None)
+    result = _laid_out(model, answer)
     if (with_record_fields := getattr(model, '_with_record_fields', None)) is not None:
         result = with_record_fields(result, 'highs', None, ())
     if into == 'frames':
@@ -263,8 +308,46 @@ def read(model: Any, answer: Any, into: str) -> Counts:
                 result.dual(name)
     else:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
-            result.save(Path(tmp) / 'answer')
-    return _counts(_handoff(model), nonzeros=False)
+            _write_answer(result, Path(tmp) / 'answer')
+    return _counts(_tables(model), nonzeros=False)
+
+
+def _named(name: str, *modules: str) -> Any:
+    """*name* out of the first of *modules* the checkout under test has, the newest home first."""
+    for module in modules[:-1]:
+        try:
+            return getattr(importlib.import_module(module), name)
+        except ModuleNotFoundError:
+            continue
+    return getattr(importlib.import_module(modules[-1]), name)
+
+
+def _discrete(model: Any) -> list[str]:
+    """The variables *model* declares as anything but continuous, as the checkout under test names them."""
+    if (engine := getattr(model, '_engine', None)) is not None:
+        return engine._discrete()
+    from specsolve._engine import readback
+
+    return readback.discrete(model._built)
+
+
+def _laid_out(model: Any, answer: Any) -> Any:
+    """*answer* laid out against *model*'s build as a result: ``readback.result``, or ``Engine._answered`` before it."""
+    if (engine := getattr(model, '_engine', None)) is None:
+        from specsolve._engine import readback
+
+        return readback.result(model._built, answer, 'highs', None)
+    answered = engine._answered
+    kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
+    return answered(answer, 'highs', *kept, None)
+
+
+def _write_answer(result: Any, out: Path) -> None:
+    """*result*'s answer at *out*, as the checkout under test writes one."""
+    if (save := getattr(result, 'save', None)) is not None:
+        save(out)
+        return
+    result._save(out, _named('write_whole', 'specsolve._answer.layout', 'specsolve._answer_layout'))
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
@@ -273,7 +356,7 @@ def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:
 
     spec, sources = prepared
     with sps.build(spec, sources) as model:
-        return _counts(_handoff(model), nonzeros=False) | {'phases': _clocks(model)}
+        return _counts(_tables(model), nonzeros=False) | {'phases': _clocks(model), 'laps': _laps(model)}
 
 
 def written(prepared: tuple[Path, dict[str, str]], path: Path) -> None:

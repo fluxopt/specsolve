@@ -51,7 +51,7 @@ names the solvers that do. To ask without solving, build and check:
 import specsolve as sps
 
 model = sps.build('dispatch.yaml', sources)
-model.check('gurobi')
+model.check_sink('gurobi')
 ```
 
 The full table is

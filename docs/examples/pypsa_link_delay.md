@@ -27,28 +27,28 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B},\ \mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{E}`$ | index $`e`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{E} \to \mathcal{B}`$ — generating units, each sitting on one bus |
 | $`\mathcal{L}`$ | index $`l`$ — `link` with $`\mathrm{link\_from}: \mathcal{L} \to \mathcal{B},\ \mathrm{link\_to}: \mathcal{L} \to \mathcal{B}`$ — controllable connections, each joining two buses |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E}`$ — installed capacity of a generator |
-| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
-| $`\mathrm{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{L}`$ — most a link may take in during one snapshot |
-| $`\mathrm{efficiency}`$ | `efficiency` over $`\mathcal{L}`$ — share of what entered a link that arrives at the other end |
 | $`\mathrm{delay}`$ | `delay` over $`\mathcal{L}`$ — how many snapshots a link takes to deliver what it took in |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{efficiency}`$ | `efficiency` over $`\mathcal{L}`$ — share of what entered a link that arrives at the other end |
+| $`\mathrm{link\_p\_nom}`$ | `link_p_nom` over $`\mathcal{L}`$ — most a link may take in during one snapshot |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
+| $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{E}`$ — cost of one unit of output |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{E}`$ — installed capacity of a generator |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{E}`$ — output of a generator in a snapshot |
-| $`g`$ | `g` over $`\mathcal{T} \times \mathcal{L}`$ — what a link takes in during a snapshot, at the bus it leaves |
+| $`g`$ | `g` over $`\mathcal{L} \times \mathcal{T}`$ — what a link takes in during a snapshot, at the bus it leaves |
+| $`p`$ | `p` over $`\mathcal{E} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Notation
 
@@ -58,22 +58,22 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 
 #### Variable domains
 
-**`p`**
-
-```math
-0 \le p_{t,e} \le \mathrm{p}^{\mathrm{nom}}_{e} \qquad \forall\, t \in \mathcal{T},\ e \in \mathcal{E}
-```
-
 **`g`**
 
 ```math
-0 \le g_{t,l} \le \mathrm{link\_p\_nom}_{l} \qquad \forall\, t \in \mathcal{T},\ l \in \mathcal{L}
+0 \le g_{l,t} \le \mathrm{link\_p\_nom}_{l} \qquad \forall\, l \in \mathcal{L},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{e,t} \le \mathrm{p}^{\mathrm{nom}}_{e} \qquad \forall\, e \in \mathcal{E},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ e \in \mathcal{E}} p_{t,e} \cdot \mathrm{marginal\_cost}_{e}
+\min \sum_{e \in \mathcal{E},\ t \in \mathcal{T}} p_{e,t} \cdot \mathrm{marginal\_cost}_{e}
 ```
 
 #### Subject to
@@ -81,13 +81,13 @@ PyPSA's delayed link: power withdrawn at one snapshot arrives at a later one, so
 **`nodal_balance`**
 
 ```math
-\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{t,e} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{t \boxminus_{0} \mathrm{delay},l} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{t,l} \right) = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
+\sum_{e \in \mathcal{E} \,:\, \mathrm{gen\_bus}(e) = b} p_{e,t} + \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_to}(l) = b} g_{l,t \boxminus_{0} \mathrm{delay}} \cdot \mathrm{efficiency}_{l} - \left( \sum_{l \in \mathcal{L} \,:\, \mathrm{link\_from}(l) = b} g_{l,t} \right) = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -186,10 +186,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_link_delay.yaml', sources) as solution:
-        solution.objective  # 4311.111111111111
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_link_delay.yaml', sources) as result:
+        result.objective  # 4311.111111111111
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -257,9 +257,9 @@ positions contribute.
 The refusal is right here. PyPSA zeroes those positions rather than leaving them
 absent, and the two readings build different models.
 
-**Both ends of the horizon show.** Shipments of 44.44 leave in snapshots 0 and 1
+**Both ends of the modelled period show.** Shipments of 44.44 leave in snapshots 0 and 1
 and arrive as 40 in snapshots 2 and 3. Nothing is shipped in snapshots 4 and 5,
-because it would arrive after the horizon ends and be lost. The prices say the
+because it would arrive after the last snapshot and be lost. The prices say the
 same thing: `port_b` pays 100 while it waits, then 11.11, the cheap unit's 10
 divided by the ship's 0.9.
 

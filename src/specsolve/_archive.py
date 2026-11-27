@@ -1,7 +1,7 @@
 """Reading an archive back: the spec, the data it was solved with, and what came back.
 
-[`load_archive`][] reads it whole; [`scan_archive`][] leaves the frames on
-disk; [`load_inputs`][] reads the spec and the data without the answer.
+[`read_archive`][] reads it whole; [`scan_archive`][] leaves the tables on
+disk; [`read_inputs`][] reads the spec and the data without the answer.
 ``archive=`` on the verbs that solve writes one, through
 [`specsolve._archive_layout`][].
 """
@@ -20,16 +20,10 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
-from specsolve._answer_layout import (
-    ANSWER_LAYOUT,
-    KINDS,
-    METRICS_FILE,
-    Metrics,
-    other_layout,
-    row_of,
-    saved_frames,
-)
-from specsolve._api import build, load_result, scan_result
+from specsolve._answer import whole_kind_reason
+from specsolve._answer.layout import ANSWER_LAYOUT, other_layout
+from specsolve._answer.result import read_result
+from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
     AXIS_MEMBER,
@@ -38,20 +32,11 @@ from specsolve._archive_layout import (
     SPEC_MEMBER,
     opened,
 )
-from specsolve._axes import axis_from
 from specsolve._collect import collected
-from specsolve._inputs import lower
+from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._sweep import (
-    MANIFEST_FILE,
-    OWNED_FILE,
-    WINDOWS_DIR,
-    Spill,
-    Sweep,
-    opened_sweep,
-    slice_index,
-    with_key,
-)
+from specsolve._sweep.axes import as_built, axis_from, carry_plan
+from specsolve._sweep.sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -60,60 +45,11 @@ if TYPE_CHECKING:
     from mathspec.program import Expression
     from mathspec.spec import Spec
 
-    from specsolve._axes import Axis
-    from specsolve._inputs import Buildable, Label, Source
-    from specsolve._result import Result
+    from specsolve._answer.result import Result
+    from specsolve._inputs import Label, Source, SpecLike
+    from specsolve._sweep.axes import Axis
 
-__all__ = ['ArchivedInputs', 'ResultArchive', 'SweepArchive', 'load_archive', 'load_inputs', 'scan_archive']
-
-
-@dataclass(frozen=True)
-class ResultArchive:
-    """A spec, the data it was solved with, and what one solve of it returned.
-
-    ``sps.solve(archive.spec, archive.sources)`` asks the question again.
-
-    Attributes:
-        spec: The spec as written, read back as one ``Spec`` whatever went in.
-        sources: What was attached, keyed as the file declares it, as
-            [`tidy`][specsolve._api.tidy] returns it: a table from
-            [`load_archive`][], the path to one from [`scan_archive`][],
-            which also holds the ``specsolve_run`` column.
-        result: What the solve returned.
-        metrics: What reaching the answer took, as one
-            [`Metrics`][specsolve._answer_layout.Metrics].
-    """
-
-    spec: Spec
-    sources: Mapping[str, Source]
-    result: Result
-    metrics: Metrics
-
-
-@dataclass(frozen=True)
-class SweepArchive:
-    """A spec, the data a sweep was solved over, the axis that cut it, and what came back.
-
-    ``sps.solve_over(archive.spec, archive.sources, archive.axis)`` runs it
-    again.
-
-    Attributes:
-        spec: The spec as written.
-        sources: What the sweep was given, uncut, as [`ResultArchive`][]
-            holds them. A source the axis cuts holds the axis column first; a
-            parameter given as one number over a window's local index is held
-            over the axis, so each slice cuts from it what it attached.
-        axis: What cut them, with the ``carry=`` it chained the slices with.
-        sweep: The archived answer, in memory from [`load_archive`][], on
-            disk from [`scan_archive`][]. ``per_window=True`` reads an
-            EachWindow sweep's windows where ``keep_windows=True`` kept them,
-            and is refused otherwise.
-    """
-
-    spec: Spec
-    sources: Mapping[str, Source]
-    axis: Axis
-    sweep: Sweep
+__all__ = ['ArchivedInputs', 'read_archive', 'read_inputs', 'scan_archive']
 
 
 @dataclass(frozen=True)
@@ -128,7 +64,7 @@ class ArchivedInputs:
         spec: The spec as written.
         sources: What was attached, keyed as the file declares it, as the
             tables [`tidy`][specsolve._api.tidy] returns. A sweep's are uncut,
-            as [`SweepArchive`][] holds them.
+            as [`Sweep.sources`][specsolve._sweep.sweep.Sweep.sources] holds them.
         axis: What cut the sources, with the ``carry=`` it chained the slices
             with, or ``None`` for an archive of one solve.
     """
@@ -138,11 +74,11 @@ class ArchivedInputs:
     axis: Axis | None
 
 
-def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
+def read_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInputs:
     """Read the spec and the data an archive holds, without its answer.
 
     The spec and the sources have a layout of their own, so this reads an
-    archive whose answer [`load_archive`][] refuses because its layout has
+    archive whose answer [`read_archive`][] refuses because its layout has
     moved.
 
     Args:
@@ -154,15 +90,19 @@ def load_inputs(path: str | Path, into: str | Path | None = None) -> ArchivedInp
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
         LayoutError: A member outside the layout, an *into* given for a
-            directory, or a spec and sources whose layout has moved since
+            directory, or a spec and sources whose layout has changed since
             they were written.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
-    return _whole(path, into, partial(_inputs, whole=True))
+    return _read_unpacked(path, into, partial(_inputs, eager=True))
 
 
-def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back whole: the sources as tables, the answer's frames in memory.
+def read_archive(path: str | Path, into: str | Path | None = None) -> Result | Sweep:
+    """Read an archive back whole: the answer, its tables in memory, carrying the spec and the sources as tables.
+
+    ``sps.solve(result.spec, result.sources)`` asks the question again, and
+    ``sps.solve_over(sweep.spec, sweep.sources, sweep.axis)`` runs a sweep
+    again.
 
     Args:
         path: The archive, a ``.zip`` or the directory one was written to.
@@ -171,23 +111,27 @@ def load_archive(path: str | Path, into: str | Path | None = None) -> ResultArch
             Refused for a directory archive, which is read where it lies.
 
     Returns:
-        A [`SweepArchive`][] where the archive carries an axis, a
-        [`ResultArchive`][] where it does not.
+        The [`Sweep`][] where the archive carries an axis, with its
+        [`sources`][specsolve._sweep.sweep.Sweep.sources] uncut and its
+        [`axis`][specsolve._sweep.sweep.Sweep.axis]; the
+        [`Result`][specsolve._answer.result.Result] where it does not, with its
+        [`sources`][specsolve._answer.result.Result.sources] and the
+        [`metrics`][specsolve._answer.result.Result.metrics] reaching it took.
 
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
         LayoutError: A member outside the layout, an *into* given for a
-            directory, or a spec, sources or answer whose layout has moved
+            directory, or a spec, sources or answer whose layout has changed
             since it was written. Where only the answer's has,
-            [`load_inputs`][] still reads the spec and the sources.
+            [`read_inputs`][] still reads the spec and the sources.
         SpecsolveError: An answer that names a different spec than the one
             beside it.
         zipfile.BadZipFile: A file that is not a zip archive.
     """
-    return _whole(path, into, partial(_read, whole=True))
+    return _read_unpacked(path, into, partial(_read, eager=True))
 
 
-def _whole[T](path: str | Path, into: str | Path | None, read: Callable[[Path, Path], T]) -> T:
+def _read_unpacked[T](path: str | Path, into: str | Path | None, read: Callable[[Path, Path], T]) -> T:
     """What *read* makes of the archive at *path*, given where its members are and the path to name.
 
     A zip with no *into* is unpacked to a scratch directory that is gone when
@@ -200,22 +144,22 @@ def _whole[T](path: str | Path, into: str | Path | None, read: Callable[[Path, P
         return read(opened(held, scratch), held)
 
 
-def scan_archive(path: str | Path, into: str | Path | None = None) -> ResultArchive | SweepArchive:
-    """Read an archive back off disk: the sources as paths, each frame read at the call that asks for it.
+def scan_archive(path: str | Path, into: str | Path | None = None) -> Result | Sweep:
+    """Read an archive back off disk: the sources as paths, each table read at the call that asks for it.
 
-    As [`load_archive`][], except that *into* is required for a zip, and kept,
+    As [`read_archive`][], except that *into* is required for a zip, and kept,
     since the members have to outlive the value; a zip with no *into* raises
     ``LayoutError``.
     """
-    return _read(opened(path, into), Path(path), whole=False)
+    return _read(opened(path, into), Path(path), eager=False)
 
 
-def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
-    """The spec, the sources and the axis the archive *under* holds, its sources as tables where *whole*, else as paths."""
+def _inputs(under: Path, archive: Path, *, eager: bool) -> ArchivedInputs:
+    """The spec, the sources and the axis the archive *under* holds, its sources as tables where *eager*, else as paths."""
     _refuse_other_inputs(under, archive)
     spec = to_spec(under / SPEC_MEMBER)
     sources: dict[str, Source] = {
-        member.stem: parquet.read(member).drop(RUN, strict=False) if whole else member
+        member.stem: parquet.read(member).drop(RUN, strict=False) if eager else member
         for member in sorted((under / SOURCES_DIR).glob('*.parquet'))
     }
     axis_member = under / AXIS_MEMBER
@@ -224,17 +168,16 @@ def _inputs(under: Path, archive: Path, *, whole: bool) -> ArchivedInputs:
     return ArchivedInputs(spec, sources, axis_from(json.loads(axis_member.read_text())))
 
 
-def _read(under: Path, archive: Path, *, whole: bool) -> ResultArchive | SweepArchive:
-    inputs = _inputs(under, archive, whole=whole)
+def _read(under: Path, archive: Path, *, eager: bool) -> Result | Sweep:
+    inputs = _inputs(under, archive, eager=eager)
     _refuse_another_layout(under / ANSWER_DIR, archive)
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers((load_result if whole else scan_result)(saved), spec, sources)
-        metrics = row_of(Metrics, parquet.read(saved / METRICS_FILE).row(0, named=True), saved / METRICS_FILE)
-        return ResultArchive(spec, sources, answer, metrics)
-    answer = _attach_sweep_readers(_read_archived_sweep(saved, whole=whole), spec, sources, inputs.axis)
-    return SweepArchive(spec, sources, inputs.axis, answer)
+        answer = _attach_readers(read_result(saved, eager=eager), spec, sources)
+        return replace(answer, _spec=spec, _sources=sources)
+    answer = _attach_sweep_readers(read_sweep_answer(saved, eager=eager), spec, sources, inputs.axis)
+    return replace(answer, spec=spec, sources=sources, axis=inputs.axis)
 
 
 def _refuse_other_inputs(under: Path, archive: Path) -> None:
@@ -242,7 +185,7 @@ def _refuse_other_inputs(under: Path, archive: Path) -> None:
     if (other := other_layout(under, INPUTS_LAYOUT)) is not None:
         raise LayoutError(
             f'{str(archive)!r} holds a spec and sources {other} and this package reads layout '
-            f'{INPUTS_LAYOUT}. The layout moves before 1.0 and nothing reads another one back. The files are '
+            f'{INPUTS_LAYOUT}. The layout changes before 1.0 and nothing reads another one back. The files are '
             f"plain: 'spec.yaml' is the spec, and each 'sources/<key>.parquet' is one source as the solve read "
             f'it. Read the spec with mathspec.to_spec, pass each source as its path, and solve again. A sweep '
             f"archive also holds 'axis.json', which names the axis and the carry the sweep ran with. A .zip "
@@ -253,63 +196,42 @@ def _refuse_other_inputs(under: Path, archive: Path) -> None:
 def _refuse_another_layout(saved: Path, archive: Path) -> None:
     """Refuse an archived answer in another layout, and name the reader that still takes the spec and the sources.
 
-    Checked before the answer is read, so this message wins over the generic
-    one [`load_result`][] gives, which names a scratch directory for a zip.
+    Checked before the answer is read, which assumes its layout.
     """
     if (other := other_layout(saved)) is not None:
         raise LayoutError(
             f'{str(archive)!r} holds an answer {other} and this package reads layout {ANSWER_LAYOUT}, so it '
             f'does not read the answer back. The spec and the data are in a layout this package reads: '
-            f'sps.load_inputs({str(archive)!r}) returns them, to solve again.'
+            f'sps.read_inputs({str(archive)!r}) returns them, to solve again.'
         )
 
 
-def _attach_readers(answer: Result, spec: Buildable, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._result.Result.evaluate].
+def _attach_readers(answer: Result, spec: SpecLike, sources: Mapping[str, Source]) -> Result:
+    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._answer.result.Result.evaluate].
 
     *spec* is rebuilt over *sources* at the first undeclared read, never
     solved, and cached. *answer* comes back unchanged where the solve left no
     values.
     """
-    if not answer._primals:
+    if not answer.has_primal:
         return answer
-    frames = answer._primals
-    dual_frames = answer._duals
+    tables = answer._readable('primal', 'the solution')
+    dual_tables = answer._readable('dual', 'the duals')
     no_duals = answer._no_duals
     built: list[Callable[[str | Mapping[str, object]], pl.DataFrame]] = []
 
     def evaluate(written: str | Mapping[str, object]) -> pl.DataFrame:
         if not built:
-            primals = {name: frame.pipe(collected) for name, frame in frames.items()}
+            primals = {name: table.pipe(collected) for name, table in tables.items()}
             duals = (
-                {name: frame.pipe(collected) for name, frame in dual_frames.items()}
-                if no_duals is None and dual_frames
+                {name: table.pipe(collected) for name, table in dual_tables.items()}
+                if no_duals is None and dual_tables
                 else None
             )
             built.append(build(spec, sources)._evaluator(primals, duals, no_duals))
         return built[0](written)
 
-    return replace(answer, _evaluate=evaluate)
-
-
-def _read_archived_sweep(under: Path, *, whole: bool) -> Sweep:
-    """The sweep an archive's ``answer/`` holds: one file per name, and the windows where kept.
-
-    ``per_window=True`` is refused naming ``keep_windows=True`` where the
-    archive has no windows. The ``specsolve_run`` column every archived frame
-    carries is left on disk, so a frame read out of one equals the frame the
-    live sweep returns.
-
-    Args:
-        under: The archive's ``answer/``.
-        whole: Read every frame into memory, as [`load_sweep`][] does, rather
-            than at the call that asks, as [`scan_sweep`][] does.
-    """
-    kept = json.loads((under / MANIFEST_FILE).read_text())['windows']
-    opened = opened_sweep(under, under / WINDOWS_DIR / OWNED_FILE if kept else None)
-    answer = {kind: saved_frames(under / kind, whole=whole) for kind in KINDS}
-    windows = Spill(under / WINDOWS_DIR, opened.key_name, opened.record[opened.key_name].dtype)
-    return replace(opened, _answer=answer, _windows=kept, _slices=windows.frames(whole=whole) if kept else {})
+    return replace(answer, _expressions=replace(answer._held_expressions(), undeclared=evaluate))
 
 
 def _attach_sweep_readers(
@@ -329,18 +251,28 @@ def _attach_sweep_readers(
 def _per_slice(
     sweep: Sweep, spec: Spec, sources: Mapping[str, Source], axis: Axis
 ) -> Iterator[tuple[Label, Callable[[str | Mapping[str, object]], pl.DataFrame]]]:
-    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt from its cut of the sources."""
-    primal, dual = slice_index(sweep, 'primal'), slice_index(sweep, 'dual')
-    for key, slice_sources in axis.slices(sources):
-        slice_primals = {name: by_key[key] for name, by_key in primal.items() if key in by_key}
-        if not slice_primals:
+    """``(key, evaluate)`` for each slice that produced a solution, its model rebuilt as the sweep built it.
+
+    A slice a carry wrote into takes what the slice before it handed on, read
+    off that slice's saved primal. From the seed alone it is another model
+    wherever a ``where`` reads the carried parameter.
+    """
+    program = as_program(spec)
+    solved = {key: tables for _, key, tables in sweep._tables_by_slice(('primal', 'dual'))}
+    slices, _ = axis._slice(program, sources, sweep.key_name)
+    for current in as_built(slices, carry_plan(program, axis), lambda before: solved[before.key]['primal']):
+        tables = solved.get(current.key, {})
+        if not tables.get('primal'):
             continue
-        slice_duals = {name: by_key[key] for name, by_key in dual.items() if key in by_key} or None
-        yield key, build(spec, slice_sources)._evaluator(slice_primals, slice_duals, sweep._no_duals)
+        model = build(spec, current.sources)
+        yield (
+            current.key,
+            model._evaluator(tables['primal'], tables['dual'] or None, whole_kind_reason(sweep._reasons, 'dual')),
+        )
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:
-    """Refuse a block that reads a parameter the sweep carried — its value is not stored per slice."""
+    """Refuse an entry that reads a parameter the sweep carried — its value is not stored per slice."""
     if touched := sorted({name for node in nodes for name in parameters_of(node)} & carried):
         raise SpecsolveError(
             f'this expression reads {touched}, which the sweep carried from one slice into the next, and a '
@@ -358,10 +290,10 @@ def _sweep_evaluator(
 ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
     """One expression at every slice's solution, keyed by slice."""
     carried = set(axis.carry)
-    key_dtype = sweep.record.schema[sweep.key_name]
+    key_dtype = sweep.records.schema[sweep.key_name]
 
     def evaluate(expression: str | Mapping[str, object]) -> pl.DataFrame:
-        _refuse_carried(carried, [lower(spec, expression)])
+        _refuse_carried(carried, [expression_node(spec, expression)])
         pieces = [
             with_key(evaluate_one(expression), sweep.key_name, key, key_dtype)
             for key, evaluate_one in _per_slice(sweep, spec, sources, axis)

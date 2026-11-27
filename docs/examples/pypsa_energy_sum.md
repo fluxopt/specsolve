@@ -1,4 +1,4 @@
-# PyPSA energy totals — a bound across the whole horizon
+# PyPSA energy totals — a bound across every snapshot
 
 A generator's dispatch reduced over every snapshot and bounded: a contracted delivery, a reservoir's season.
 
@@ -18,78 +18,78 @@ free to balance. Both bounds bind, and they bind in opposite directions.
 <details markdown="1">
 <summary>The same model, as math</summary>
 
-PyPSA energy-total bounds: a generator's dispatch reduced over the whole horizon and bounded — a contracted delivery on one, a reservoir's season on another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
+PyPSA energy-total bounds: a generator's dispatch reduced over every snapshot and bounded — a contracted delivery on one, a reservoir's season on another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
 
 #### Sets
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 | $`\mathcal{B}`$ | index $`b`$ — `bus` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — network nodes |
 | $`\mathcal{G}`$ | index $`g`$ — `generator` with $`\mathrm{gen\_bus}: \mathcal{G} \to \mathcal{B}`$ — generating units, each sitting on one bus |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
-| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over every snapshot, for the generators that have such a limit |
+| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over every snapshot, for the generators that owe one |
+| $`\mathrm{load}`$ | `load` over $`\mathcal{B} \times \mathcal{T}`$ — demand at each bus in each snapshot |
 | $`\mathrm{marginal\_cost}`$ | `marginal_cost` over $`\mathcal{G}`$ — cost of one unit of output |
-| $`\mathrm{e}^{\mathrm{sum,max}}`$ | `e_sum_max` over $`\mathcal{G}`$, `absent` where the data has no row — most energy a generator may deliver over the whole horizon, for the generators that have such a limit |
-| $`\mathrm{e}^{\mathrm{sum,min}}`$ | `e_sum_min` over $`\mathcal{G}`$, `absent` where the data has no row — least energy a generator must deliver over the whole horizon, for the generators that owe one |
-| $`\mathrm{load}`$ | `load` over $`\mathcal{T} \times \mathcal{B}`$ — demand at each bus in each snapshot |
+| $`\mathrm{p}^{\mathrm{nom}}`$ | `p_nom` over $`\mathcal{G}`$ — installed capacity of a generator |
+| $`\mathrm{weighting}`$ | `weighting` over $`\mathcal{T}`$ — hours a snapshot stands for — what turns a power into an energy |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — output of a generator in a snapshot |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — output of a generator in a snapshot |
 
 #### Variable domains
 
 **`p`**
 
 ```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{nom}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} p_{t,g} \cdot \mathrm{marginal\_cost}_{g} \cdot \mathrm{weighting}_{t}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} p_{g,t} \cdot \mathrm{marginal\_cost}_{g} \cdot \mathrm{weighting}_{t}
 ```
 
 #### Subject to
 
-**`nodal_balance`**
-
-```math
-\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{t,g} = \mathrm{load}_{t,b} \qquad \forall\, t \in \mathcal{T},\ b \in \mathcal{B}
-```
-
 **`energy_cap`**
 
 ```math
-\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \le \mathrm{e}^{\mathrm{sum,max}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,max}}_{g} \text{ is defined}
+\sum_{t \in \mathcal{T}} p_{g,t} \cdot \mathrm{weighting}_{t} \le \mathrm{e}^{\mathrm{sum,max}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,max}}_{g} \text{ is defined}
 ```
 
 **`energy_floor`**
 
 ```math
-\sum_{t \in \mathcal{T}} p_{t,g} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}
+\sum_{t \in \mathcal{T}} p_{g,t} \cdot \mathrm{weighting}_{t} \ge \mathrm{e}^{\mathrm{sum,min}}_{g} \qquad \forall\, g \in \mathcal{G} \,:\, \mathrm{e}^{\mathrm{sum,min}}_{g} \text{ is defined}
+```
+
+**`nodal_balance`**
+
+```math
+\sum_{g \in \mathcal{G} \,:\, \mathrm{gen\_bus}(g) = b} p_{g,t} = \mathrm{load}_{b,t} \qquad \forall\, b \in \mathcal{B},\ t \in \mathcal{T}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
     ```yaml
     description: >-
-      PyPSA energy-total bounds: a generator's dispatch reduced over the whole
-      horizon and bounded — a contracted delivery on one, a reservoir's season on
+      PyPSA energy-total bounds: a generator's dispatch reduced over every
+      snapshot and bounded — a contracted delivery on one, a reservoir's season on
       another, and a third free to balance. Optimum 21400.0, from PyPSA itself.
 
     dimensions:
@@ -122,13 +122,13 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         dims: [generator]
       e_sum_max:
         description: >-
-          most energy a generator may deliver over the whole horizon, for the
+          most energy a generator may deliver over every snapshot, for the
           generators that have such a limit
         dims: [generator]
         missing: absent
       e_sum_min:
         description: >-
-          least energy a generator must deliver over the whole horizon, for the
+          least energy a generator must deliver over every snapshot, for the
           generators that owe one
         dims: [generator]
         missing: absent
@@ -153,14 +153,14 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
       energy_cap:
         description: >-
           a generator with a ceiling on total energy delivers no more than it over
-          the horizon — the weighting is what makes the sum an energy rather than a
+          every snapshot — the weighting is what makes the sum an energy rather than a
           count of snapshots
         dims: [generator]
         where: e_sum_max
         expression: sum(p * weighting, over=snapshot) <= e_sum_max
 
       energy_floor:
-        description: a generator that owes a total delivers at least it over the horizon
+        description: a generator that owes a total delivers at least it over every snapshot
         dims: [generator]
         where: e_sum_min
         expression: sum(p * weighting, over=snapshot) >= e_sum_min
@@ -172,10 +172,10 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve('examples/ports/pypsa_energy_sum.yaml', sources) as solution:
-        solution.objective  # 21400.0
-        solution.dual('nodal_balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve('examples/ports/pypsa_energy_sum.yaml', sources) as result:
+        result.objective  # 21400.0
+        result.dual('nodal_balance')
     ```
 
 === "PyPSA"
@@ -237,6 +237,6 @@ division. The recorded reference is the dual, the object both models hold.
 ## What it exercises
 
 A reduction over a dimension the constraint does not span: `sum(p * weighting,
-over=snapshot)` with `dims: [generator]`. The `where:` masking a row to where
+over=snapshot)` with `dims: [generator]`. The `where:` keeping a row only where
 its bound exists, on both a `<=` and a `>=`. And a parameter that multiplies
 inside a reduction and again in the objective.

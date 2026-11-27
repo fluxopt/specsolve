@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIXI_LOCKED: "true"
+
 jobs:
   sweep:
     name: shard ${{ matrix.shard }}
@@ -23,13 +26,13 @@ jobs:
         shard: ['0/2', '1/2']
     steps:
       - uses: actions/checkout@v7
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@v0.11.3
         with:
           run-install: false
       - uses: actions/cache@v6
         with:
           path: ~/.cache/rattler/cache
-          key: pixi-sweep-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: pixi-sweep-${{ runner.os }}-${{ hashFiles('pixi.lock') }}
           restore-keys: pixi-sweep-${{ runner.os }}-
       - name: Every expression to depth three, on both lanes
         run: pixi run sweep ${{ matrix.shard }}

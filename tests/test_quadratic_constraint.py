@@ -3,10 +3,10 @@
 `linopy.Model` refuses a `QuadraticExpression` in a constraint, so two weaker
 oracles replace the differential one:
 
-1. **Two independent encodings** — the direct `addMQConstr` hand-off against
+1. **Two independent encodings** — the direct `addMQConstr` handoff against
    the same model as LP text read back by Gurobi's parser. They share the
-   frames and nothing below, so an encoding error shows up as two numbers.
-2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built frames
+   tables and nothing below, so an encoding error shows up as two numbers.
+2. **A residual at the primal** — `xᵀQx + Ax` recomputed from the built tables
    (`conftest.recomputed_row_values`) against the activity the solver reports.
 
 Neither catches a *shared misreading*, so one test here is an optimum done by
@@ -21,6 +21,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._names import COL_L, COL_R
 from specsolve.errors import SpecsolveError
 from tests.conftest import recomputed_row_values
 
@@ -96,7 +97,7 @@ def test_the_two_encodings_reach_one_optimum(expression, tmp_path):
         path = tmp_path / 'model.lp'
         sps.write(varied, SOURCES, path)
         assert _read_back(path) == pytest.approx(direct.objective, rel=RTOL), (
-            'the written file and the direct hand-off are the same model by two routes; a '
+            'the written file and the direct handoff are the same model by two routes; a '
             'disagreement is an encoding error in one of them'
         )
 
@@ -105,14 +106,14 @@ def test_the_activity_is_the_whole_left_hand_side():
     """`xᵀQx + Ax`, recomputed — the residual half of the oracle.
 
     Not ``Ax``: for ``p·q >= 4`` it is 4 at the optimum where
-    ``Ax`` is 0, the row owning no linear entry at all.
+    ``Ax`` is 0, the row owning no linear coefficient at all.
     """
     with sps.build(SPEC, SOURCES) as model:
         result = model.solve(solver_name='gurobi', outputs={'activity'})
-        recomputed = recomputed_row_values(model._engine, result)
-        block = model._engine._model.constraints['coupled']
+        recomputed = recomputed_row_values(model._built, result)
+        indexed = model._built.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
-        assert reported == pytest.approx(recomputed[block.start : block.start + block.height], rel=RTOL)
+        assert reported == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
 
 
@@ -136,8 +137,8 @@ def test_the_optimum_is_the_one_done_by_hand():
 # ---------------------------------------------------------------------------
 
 
-def test_quadratic_declarations_take_the_tail_of_the_label_space():
-    """Quadratic is a property of a *declaration*, so its rows are contiguous —
+def test_quadratic_entries_take_the_tail_of_the_label_space():
+    """Quadratic is a property of an *entry*, so its rows are contiguous —
     which is what keeps every read-back a slice. Declared first in the file
     here, deliberately: the ordering is the engine's, not the author's."""
     first = spec(
@@ -147,16 +148,51 @@ def test_quadratic_declarations_take_the_tail_of_the_label_space():
         }
     )
     with sps.build(first, SOURCES) as model:
-        tables = model._engine._model.handoff
-        assert model._engine._model.constraints['cap'].start == 0, 'the linear declaration is built first'
-        assert [row for row, _ in tables.quadratic_blocks()] == [1, 2], (
+        tables = model._built.tables
+        assert model._built.constraints['cap'].start == 0, 'the linear entry is built first'
+        assert [row for row, _ in tables.quadratic_rows()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
         assert tables.linear_row_count == 1
 
 
+def test_an_infeasible_model_of_quadratic_rows_alone_reads_back_with_no_dual_ray():
+    """Gurobi computes no Farkas dual for a model with a quadratic row, so the answer carries none.
+
+    With a linear row beside it, reading one raises; with none, it reads an
+    empty vector, which is a ray of the wrong length rather than no ray.
+    """
+    alone = spec(constraints={'coupled': SPEC['constraints']['coupled']})
+    with sps.solve(alone, {**SOURCES, 'floor': pl.DataFrame({'value': [200.0]})}, solver_name='gurobi') as result:
+        assert result.termination_condition == 'infeasible', 'p·q tops out at 100 under the bounds of 10'
+        with pytest.raises(sps.errors.SpecsolveError, match='ray'):
+            result.dual_ray('coupled')
+
+
+@pytest.mark.parametrize(
+    ('expression', 'condition'),
+    [
+        pytest.param('p * q * weight + p >= floor', 'optimal', id='a linear term beside the cancelled pairs'),
+        pytest.param('p * q * weight >= floor', 'infeasible', id='nothing beside them, so 0 >= floor'),
+    ],
+)
+def test_a_quadratic_row_whose_pairs_all_cancel_reaches_gurobi(expression, condition):
+    """A later row of a quadratic constraint whose every pair is zero is still one of gurobi's rows.
+
+    The sink loaded only the rows `qmatrix` named, so such a row was missing and
+    the activity read back was a row short of the model.
+    """
+    weighted = spec(
+        parameters={'floor': {'dims': []}, 'weight': {'dims': ['g']}},
+        constraints={'coupled': {'dims': ['g'], 'expression': expression}},
+    )
+    sources = {**SOURCES, 'weight': pl.DataFrame({'g': ['a', 'b'], 'value': [1.0, 0.0]})}
+    with sps.solve(weighted, sources, solver_name='gurobi') as result:
+        assert result.termination_condition == condition
+
+
 def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
-    """A row with no term closes up the block, and every quadratic entry moves with its row.
+    """A row with no term closes up the entry's rows, and every quadratic coefficient moves with its row.
 
     ``k`` has no value at ``a``, so that row has no term and is not built, and
     ``b`` and ``c`` move up to rows 0 and 1. Each keeps its own pair:
@@ -165,14 +201,14 @@ def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
     """
     sparse = {
         'dimensions': {'g': {'dtype': 'str'}},
-        'parameters': {'k': {'dims': ['g'], 'missing': 'neutral'}},
+        'parameters': {'k': {'dims': ['g'], 'missing': 0}},
         'variables': {'p': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 10}}},
         'constraints': {'quad': {'dims': ['g'], 'expression': 'k * p * p <= 10'}},
         'objective': {'sense': 'maximize', 'expression': 'sum(p, over=g)'},
     }
     sources = {'g': ['a', 'b', 'c'], 'k': pl.DataFrame({'g': ['b', 'c'], 'value': [1.0, 4.0]})}
     with sps.build(sparse, sources) as model:
-        assert model._engine._model.handoff.qmatrix.rows() == [(0, 1, 1, 1.0), (1, 2, 2, 4.0)], (
+        assert model._built.tables.qmatrix.rows() == [(0, 1, 1, 1.0), (1, 2, 2, 4.0)], (
             'row b holds p_b² at 1 and row c holds p_c² at 4, each on its new row'
         )
         assert model.solve(solver_name='gurobi').objective == pytest.approx(10 + 10**0.5 + 2.5**0.5, rel=1e-3), (
@@ -212,24 +248,24 @@ def test_asking_for_prices_on_a_nonconvex_row_says_which_option_did_it():
         sps.solve(nonconvex, SOURCES, solver_name='gurobi', solver_options={'QCPDual': 1})
 
 
-def _entries(expression: str, sources=None) -> pl.DataFrame:
+def _coefficients(expression: str, sources=None) -> pl.DataFrame:
     """The quadratic stream of a model whose row is *expression*."""
     varied = spec(constraints={'coupled': {'dims': ['g'], 'expression': expression}})
     with sps.build(varied, dict(sources or SOURCES)) as model:
-        return model._engine._model.handoff.qmatrix
+        return model._built.tables.qmatrix
 
 
 def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
-    """``q · p`` and ``p · q`` are one entry of one row.
+    """``q · p`` and ``p · q`` are one coefficient of one row.
 
     Sharper here than in the objective: a pair written the other way round
     lands in ``Q``'s *lower* triangle, still solves — ``xᵀQx`` reads both — and
     stops matching the LP file, where the two orders are two different lines.
     """
-    written = _entries('p * q >= floor')
-    reversed_ = _entries('q * p >= floor')
+    written = _coefficients('p * q >= floor')
+    reversed_ = _coefficients('q * p >= floor')
     assert written.equals(reversed_), 'the order the factors were written in is not part of the model'
-    assert (written['col_l'] <= written['col_r']).all(), 'a pair is ordered by column index'
+    assert (written[COL_L] <= written[COL_R]).all(), 'a pair is ordered by column index'
 
 
 def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
@@ -253,9 +289,9 @@ def test_a_quadratic_row_is_structure_whole_and_a_update_reloads():
             first = model.solve(solver_name='gurobi').objective
             model.update(moved)
             again = model.solve(solver_name='gurobi').objective
-            assert model.diagnostics().loads == 2, 'anything about a quadratic row is a model to load again'
+            assert model.metrics().solver_instances == 2, 'anything about a quadratic row is a model to load again'
             with sps.solve(weighted, moved, solver_name='gurobi') as fresh:
-                assert again == pytest.approx(fresh.objective, rel=SEARCHED), (
+                assert again == pytest.approx(fresh.objective, rel=SEARCHED, nan_ok=True), (
                     'an update answers what a fresh build answers — a coefficient or a right-hand '
                     'side left behind would answer the model before it'
                 )
@@ -277,7 +313,7 @@ def test_a_linear_right_hand_side_beside_a_quadratic_row_is_pushed():
         model.solve(solver_name='gurobi').close()
         model.update(tight)
         pushed = model.solve(solver_name='gurobi')
-        assert model.diagnostics().loads == 1, 'only a linear right-hand side moved, so it is pushed'
+        assert model.metrics().solver_instances == 1, 'only a linear right-hand side moved, so it is pushed'
         with sps.solve(capped, tight, solver_name='gurobi') as fresh:
             assert pushed.objective == pytest.approx(fresh.objective, rel=SEARCHED), (
                 'a pushed right-hand side answers what a fresh build answers'
@@ -289,14 +325,14 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     """A purpose-built probe: no data change can reach this one.
 
     The digest reads the pattern *and* the coefficients, and every update a
-    model can express moves both — labels are dense, so a mask that changes
+    model can express moves both — solver indices are contiguous, so a condition that changes
     which pair a row holds also changes how many there are. Asked of the tables
-    directly instead: one entry at a different column, same coefficient.
+    directly instead: one coefficient at a different column, same value.
     """
     with sps.build(SPEC, SOURCES) as model:
-        tables = model._engine._model.handoff
+        tables = model._built.tables
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
-        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col('col_r') + 1))
+        moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col(COL_R) + 1))
         assert moved.structure != tables.structure, (
             'the same coefficient on a different pair is a different row, and a digest that '
             'missed it would push new numbers onto a solver holding the old constraint'
@@ -309,8 +345,8 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
 
 
 def test_the_linopy_lane_refuses_it_in_the_languages_own_words(tmp_path):
-    """Hard rule 3's amendment where it bites. The oracle still *accepts* the
-    model — one ``_inputs.lowered`` gate — and refuses it before linopy is asked,
+    """Hard rule 3's amendment where it bites. The linopy lane still *accepts* the
+    model — one ``_inputs.as_program`` — and refuses it before linopy is asked,
     where linopy's ``NotImplementedError`` names nothing."""
     import yaml as pyyaml
 
@@ -329,16 +365,16 @@ def test_highs_refuses_it_before_the_load_and_names_who_takes_it():
     assert 'gurobi' in str(refused.value), 'the refusal names the sink that takes a quadratic row'
 
 
-def test_the_highs_hand_off_refuses_one_even_when_reached_directly():
-    """The backstop for the hand-off `bench/` uses: constructing `Highs` is past the
+def test_the_highs_handoff_refuses_one_even_when_reached_directly():
+    """The backstop for the handoff `bench/` uses: constructing `Highs` is past the
     capability check, and the linear rows of a quadratic model load perfectly
     well — as a different model, answering a number nothing would question."""
     from specsolve._sinks.highs import Highs
 
     with sps.build(SPEC, SOURCES) as model, pytest.raises(SpecsolveError, match='no quadratic-constraint concept'):
-        Highs(model._engine._model.handoff)
+        Highs(model._built.tables)
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():
-    """Whether a model is sayable is solver-independent, and this one is."""
+    """Whether a model is in the language does not depend on the solver, and this one is."""
     sps.check(SPEC)

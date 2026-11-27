@@ -1,4 +1,4 @@
-# A horizon too large for one solve
+# A model too large for one solve
 
 A model over a year can be too large to solve at once. Solve it a window at a
 time instead, and see what that costs. Every block runs from the `examples/`
@@ -34,14 +34,14 @@ result = sps.solve('tutorial/storage.yaml', fleet | {'snapshot': load['snapshot'
 print(result.objective)
 ```
 
-## A longer horizon is a larger model
+## More snapshots make a larger model
 
-Repeat the day to make a longer horizon, and build the model without solving
+Repeat the day to make more snapshots, and build the model without solving
 it. [`diagnostics`](reference/api.md#specsolve.types.Model.diagnostics) gives
 its size:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
-def horizon(days: int) -> dict:
+def span(days: int) -> dict:
     hours = days * load.height
     repeated = pl.DataFrame({'snapshot': range(hours), 'value': days * load['value'].to_list()})
     return fleet | {'snapshot': range(hours), 'load': repeated, 'soc_initial': 0.0}
@@ -49,8 +49,8 @@ def horizon(days: int) -> dict:
 
 sizes = []
 for days in (1, 3, 30, 365):
-    with sps.build('tutorial/storage.yaml', horizon(days)) as model:
-        size = model.diagnostics()
+    with sps.build('tutorial/storage.yaml', span(days)) as model:
+        size = model.metrics()
     sizes.append({'days': days, 'columns': size.columns, 'rows': size.rows})
 print(pl.DataFrame(sizes))
 ```
@@ -60,30 +60,33 @@ and hours than this one, and its solve gets slower as it grows.
 
 ## Window by window
 
-A rolling horizon solves the horizon in windows. Here three days stand in for
-a year, and the load is over `hour`:
+A rolling horizon solves the whole of `snapshot` in windows. Here three days
+stand in for a year:
 
 ```python exec="true" source="material-block" session="horizon" workdir="examples"
-days = pl.DataFrame({'hour': range(12), 'value': 3 * load['value'].to_list()})
-hourly = fleet | {'load': days, 'soc_initial': 0.0}
+three_days = span(3)
 ```
 
-[`EachWindow`](reference/sweeps.md#the-axes) cuts `hour` into windows of
-three hours, and numbers the hours of each window from zero into `snapshot`.
-`lookahead=0` means a window sees only the hours it keeps.
-[`carry`](reference/sweeps.md#carrying-state-between-slices) copies the last
-`soc` of a window into the `soc_initial` of the next:
+[`EachWindow`](reference/sweeps.md#the-axes) cuts `snapshot` into windows of
+three hours. Each window is the same model over its own snapshots, so the
+spec and the sources are the ones a single solve takes. The battery's first
+row is written `position(snapshot) == 0`, which is the first snapshot of each
+window. The hours a window keeps are its horizon, and `lookahead=0` means a
+window sees only its horizon.
+[`carry`](reference/sweeps.md#carrying-state-between-slices) copies `soc` at
+the last hour of a window's horizon (its horizon end) into the `soc_initial`
+of the next:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
 windows = sps.solve_over(
     'tutorial/storage.yaml',
-    hourly,
-    sps.EachWindow('hour', steps=3, lookahead=0, into='snapshot', carry={'soc_initial': 'soc'}),
+    three_days,
+    sps.EachWindow('snapshot', horizon=3, lookahead=0, carry={'soc_initial': 'soc'}),
 )
-print(windows.metrics.select('hour_start', 'columns', 'rows'))
+print(windows.metrics.select('snapshot_start', 'columns', 'rows'))
 ```
 
-Each window has 21 columns, however long the horizon is.
+Each window has 21 columns, however many snapshots there are.
 
 ## What a window cannot see
 
@@ -98,7 +101,7 @@ def schedule_cost(sweep: sps.types.Sweep) -> float:
     return (output['value'] * output['cost']).sum() + (on['value'] * on['no_load_cost']).sum()
 
 
-whole = sps.solve('tutorial/storage.yaml', horizon(3))
+whole = sps.solve('tutorial/storage.yaml', three_days)
 print(f'one solve {whole.objective:.1f}, windows {schedule_cost(windows):.1f}')
 ```
 
@@ -106,7 +109,7 @@ The windows cost 12% more. To see why, look at the battery level at the end of
 each window:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
-print(windows.primal('soc').filter(pl.col('hour') % 3 == 2))
+print(windows.primal('soc').filter(pl.col('snapshot') % 3 == 2))
 ```
 
 Every window ends with the battery empty. A window cannot see the hours after
@@ -114,7 +117,7 @@ it, so it spends all the stored energy, and the next window needs gas sooner.
 
 ## Lookahead
 
-`lookahead` lets each window see more hours than it keeps, and solve them
+`lookahead` lets each window see hours after its horizon, and solve them
 too. Try none, one and three:
 
 ```python exec="true" source="material-block" result="text" session="horizon" workdir="examples"
@@ -122,8 +125,8 @@ rows = []
 for lookahead in (0, 1, 3):
     sweep = sps.solve_over(
         'tutorial/storage.yaml',
-        hourly,
-        sps.EachWindow('hour', steps=3, lookahead=lookahead, into='snapshot', carry={'soc_initial': 'soc'}),
+        three_days,
+        sps.EachWindow('snapshot', horizon=3, lookahead=lookahead, carry={'soc_initial': 'soc'}),
     )
     rows.append(
         {

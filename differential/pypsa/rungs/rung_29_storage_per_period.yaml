@@ -1,566 +1,726 @@
-description: A plain `n.optimize()`, and its multi-period and stochastic classes, in one file. Every second-stage
-  quantity spans a `scenario` (a future dispatch is chosen in) and every asset stands in the investment
-  `period`s its build year and lifetime span. A parameter spans `scenario` exactly when PyPSA reads it
-  per scenario. Capacity is chosen once, before the future is known, and paid once per active period at
-  its cost in expectation over the scenarios; operation is the expectation over the scenarios' weights,
-  with a share priced at the tail through the CVaR rows, which stand only where a risk preference is set.
-  A plain run feeds one scenario, one period, all-active masks and unit weights, and the model collapses
-  to the standard one. A security-constrained run copies each branch flow limit once per outage in an
-  `outage` set that a plain run leaves empty. Which snapshots an asset is active in, a scenario's weight,
-  and the outage factors are data prep.
+version: 0
+description: The file states a plain `n.optimize()`, its multi-period class under the `multi_investment_periods`
+  keyword, and its stochastic class, which `n.set_scenarios(...)` sets. Every quantity chosen once the
+  future is known (second-stage) spans the futures dispatch is chosen in (`scenario`). Capacity is chosen
+  once, before the future is known, and paid at its expected cost in each investment `period` its build
+  year and lifetime span. Operation is the expectation over the scenarios' weights, with a share priced
+  at the worst-outcome mean cost (CVaR) only where a risk preference is set. A plain run's data has one
+  scenario, one period, unit weights, no outage and every `active` flag true, so the problem is the standard
+  one. On a security-constrained run, PyPSA copies each branch flow limit once per `outage`, and the outage
+  factors, `active` flags and scenario weights come from data prep.
 dimensions:
-  scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
-  snapshot: {description: dispatch periods, dtype: datetime, ordered: true}
+  breakpoint: {dtype: int, ordered: true, description: 'the corners of a piecewise-linear curve, in order.
+      A curve runs over the breakpoints its data has rows for, so curves may differ in length'}
   bus: {description: network nodes}
   generator: {description: 'generating units, each on one bus'}
   link: {description: 'controllable connections, each from one bus to the buses it delivers to'}
-  link_output: {description: 'a link''s output ports, one label per port a link declares — PyPSA''s `bus1`,
-      `bus2`, … columns read long, so a link of any number of output ports is one term in the balance,
-      data prep'}
-  process: {description: 'generalized multi-port converters, each with an internal power that every port
-      draws or delivers at its own rate'}
-  process_output: {description: 'a process''s ports, one label per port a process declares — PyPSA''s
-      `bus0`, `bus1`, … each carry a signed `rate`, so a process of any number of ports is one term in
-      the balance, data prep'}
+  link_output: {description: 'a link''s output ports, one label per port a link declares. The labels are
+      PyPSA''s `bus1`, `bus2`, … columns read long, data prep. A link of any number of output ports is
+      then one term in the balance'}
   load: {description: 'demands, each on one bus'}
+  period: {dtype: int, ordered: true, description: investment periods. It is PyPSA's `investment_periods`}
+  process: {description: 'generalised multi-port converters, each with an internal power that every port
+      draws or delivers at its own rate'}
+  process_output: {description: 'a process''s ports, one label per port a process declares. The labels
+      are PyPSA''s `bus0`, `bus1`, …, each with a signed `rate`, data prep. A process of any number of
+      ports is then one term in the balance'}
+  scenario: {description: 'the futures dispatch is chosen in, each with a weight'}
+  snapshot: {dtype: datetime, ordered: true, description: dispatch periods}
   storage_unit: {description: 'storage units, dispatch and store behind one bus connection'}
   store: {description: 'pure energy stores, each on one bus'}
-  period: {description: investment periods — PyPSA's `investment_periods`, dtype: int, ordered: true}
 relations:
-  snapshot_period: {description: the investment period a snapshot falls in, key: snapshot, values: period}
-  Generator_bus: {description: the bus a generator sits on, key: generator, values: bus}
-  Link_output_link: {description: the link an output port belongs to, key: link_output, values: link}
-  Link_output_bus: {description: 'the bus an output port delivers to — PyPSA''s `bus1`, `bus2`, … columns.
-      A link of three output ports is three labels here rather than a third relation, so the file states
-      any number of them', key: link_output, values: bus}
-  Process_output_process: {description: the process a port belongs to, key: process_output, values: process}
-  Process_output_bus: {description: 'the bus a port draws from or delivers to — PyPSA''s `bus0`, `bus1`,
-      … columns. A process of three ports is three labels here rather than a third relation, so the file
-      states any number of them', key: process_output, values: bus}
-  Load_bus: {description: the bus a load sits on, key: load, values: bus}
-  StorageUnit_bus: {description: the bus a storage unit sits on, key: storage_unit, values: bus}
-  Store_bus: {description: the bus a store sits on, key: store, values: bus}
+  Generator_bus: {key: generator, values: bus, description: the bus a generator sits on}
+  Link_output_bus: {key: link_output, values: bus, description: 'the bus an output port delivers to. It
+      is PyPSA''s `bus1`, `bus2`, … columns. A link of three output ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Link_output_link: {key: link_output, values: link, description: the link an output port belongs to}
+  Load_bus: {key: load, values: bus, description: the bus a load sits on}
+  Process_output_bus: {key: process_output, values: bus, description: 'the bus a port draws from or delivers
+      to. It is PyPSA''s `bus0`, `bus1`, … columns. A process of three ports is three labels here rather
+      than a third relation, so the file states any number of them'}
+  Process_output_process: {key: process_output, values: process, description: the process a port belongs
+      to}
+  StorageUnit_bus: {key: storage_unit, values: bus, description: the bus a storage unit sits on}
+  Store_bus: {key: store, values: bus, description: the bus a store sits on}
+  snapshot_period: {key: snapshot, values: period, description: the investment period a snapshot falls
+      in}
 parameters:
-  snapshot_weightings_objective:
-    description: PyPSA's `snapshot_weightings.objective` — hours a snapshot stands for in the cost
-    dims: [snapshot]
-  Generator_p_nom:
-    description: nominal power
-    dims: [scenario, generator]
-  Generator_p_nom_extendable:
-    description: whether the nominal power is a decision
-    dims: [generator]
+  Bus_attached:
+    dims: [bus, snapshot]
     dtype: bool
-  Generator_p_min_pu:
-    description: least output, per unit of nominal power
-    dims: [scenario, snapshot, generator]
-  Generator_p_max_pu:
-    description: most output, per unit of nominal power — an availability profile
-    dims: [scenario, snapshot, generator]
-  Generator_marginal_cost:
-    description: cost of one unit of output
-    dims: [scenario, snapshot, generator]
-  Generator_marginal_cost_quadratic:
-    description: cost of the square of one unit of output
-    dims: [scenario, snapshot, generator]
-  Generator_sign:
-    description: the sign output enters its bus's balance with — PyPSA's `sign`, `1` unless given, `-1`
-      for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:43`)
-    dims: [generator]
-  Generator_committable:
-    description: whether output is gated by an on/off status decision
-    dims: [generator]
-    dtype: bool
-  Generator_ramp_limit_up:
-    description: most a generator may raise its output between snapshots, per unit of nominal power; no
-      value means no limit — read at the later of the two snapshots, so the limit may change over time
-    dims: [scenario, snapshot, generator]
-    missing: neutral
-  Generator_ramp_limit_down:
-    description: most a generator may lower its output between snapshots, per unit of nominal power; no
-      value means no limit — read at the later of the two snapshots, so the limit may change over time
-    dims: [scenario, snapshot, generator]
-    missing: neutral
-  Generator_ramp_limit_start_up:
-    description: most output in the snapshot a unit starts, per unit of nominal power; no value means
-      no limit
-    dims: [scenario, generator]
-    missing: neutral
-  Generator_ramp_limit_shut_down:
-    description: most output in the snapshot before a unit stops, per unit of nominal power; no value
-      means no limit
-    dims: [scenario, generator]
-    missing: neutral
-  Generator_status_initial:
-    description: one where the unit was on before the first snapshot, zero where off — PyPSA's `up_time_before
-      > 0`, data prep
-    dims: [scenario, generator]
-    dtype: int
-  Generator_p_init:
-    description: the output a unit brought into the horizon — PyPSA's `p_init`, read only where the unit
-      came in running; no value means it is unknown, so the unit carries no ramp row at the first snapshot
-    dims: [scenario, generator]
-    missing: neutral
-  Generator_p_nom_mod:
-    description: the module size a build comes in whole numbers of; no value means the build is continuous
-    dims: [generator]
-    missing: neutral
-  Link_efficiency:
-    description: share of the flow that arrives at an output port, PyPSA's `efficiency`, `efficiency2`,
-      … read long — negative where that port consumes rather than delivers. Read at the snapshot the flow
-      arrives, so a delayed port delivers at its arrival snapshot's efficiency (`constraints.py:1498`)
-    dims: [scenario, snapshot, link_output]
-  Link_output_delay:
-    description: snapshots a port's delivery lags its link's flow — PyPSA's `delay`, `delay2`, … read
-      long, divided by the `snapshot_weightings.generators` value and rounded up in data prep; zero for
-      a port that delivers at once. A port has the same delay in every scenario, because PyPSA refuses
-      a delay that differs by scenario (`constants.py:52`)
-    dims: [link_output]
-    dtype: int
-  Link_output_cyclic_delay:
-    description: whether a delayed port's flow wraps from the end of its investment period — PyPSA's `cyclic_delay`,
-      `cyclic_delay2`, …; where it does not, the flow still in transit at each period's first snapshots
-      is lost. The flag is the same in every scenario, as the delay is
-    dims: [link_output]
-    dtype: bool
-  Process_rate:
-    description: the energy a port draws or delivers per unit of internal power, PyPSA's `rate0`, `rate1`,
-      … read long — negative where the port withdraws, positive where it injects; a link is a process
-      whose `bus0` rate is minus one and whose output rates are its efficiencies. Read at the snapshot
-      the transfer arrives, so a delayed port transfers at its arrival snapshot's rate (`constraints.py:1498`)
-    dims: [scenario, snapshot, process_output]
-  Process_output_delay:
-    description: snapshots a port's transfer lags its process's internal power — PyPSA's `delay0`, `delay1`,
-      … read long, divided by the `snapshot_weightings.generators` value and rounded up in data prep;
-      zero for a port that transfers at once. A port has the same delay in every scenario, as a link's
-      port has
-    dims: [process_output]
-    dtype: int
-  Process_output_cyclic_delay:
-    description: whether a delayed port's transfer wraps from the end of its investment period — PyPSA's
-      `cyclic_delay0`, `cyclic_delay1`, …; where it does not, the energy still in transit at each period's
-      first snapshots is lost. The flag is the same in every scenario, as the delay is
-    dims: [process_output]
-    dtype: bool
-  Load_p_set:
-    description: demand
-    dims: [scenario, snapshot, load]
-  Load_sign:
-    description: the sign a load's demand enters its bus's balance with — PyPSA's `sign`, `-1` unless
-      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:43`)
-    dims: [load]
-  Load_active:
-    description: whether a load stands in the model — PyPSA's `active`. A load has no build year and no
-      lifetime, so the flag holds in every snapshot. PyPSA refuses one that differs by scenario (`constants.py:51`)
-    dims: [load]
-    dtype: bool
-  scenario_weight:
-    description: PyPSA's `scenario_weightings.weight` — the probability of a future
-    dims: [scenario]
-  period_weight_objective:
-    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs; PyPSA
-      reads it only under `multi_investment_periods`, so data prep feeds one otherwise, whatever the column
-      holds (`optimize.py:205-207`, `:264-266`)
-    dims: [period]
+    description: whether a load, a unit, a port or a branch that is active in the snapshot's period is
+      attached to the bus, data prep. A bus nothing is attached to has no balance row
   Generator_active:
-    description: whether a generator stands in a snapshot's period — PyPSA's `active`, from build year
-      and lifetime, data prep
-    dims: [snapshot, generator]
+    dims: [generator, snapshot]
     dtype: bool
-  Link_active:
-    description: whether a link stands in a snapshot's period — PyPSA's `active`, data prep
-    dims: [snapshot, link]
-    dtype: bool
-  StorageUnit_active:
-    description: whether a storage unit stands in a snapshot's period — PyPSA's `active`, data prep
-    dims: [snapshot, storage_unit]
-    dtype: bool
-  Store_active:
-    description: whether a store stands in a snapshot's period — PyPSA's `active`, data prep
-    dims: [snapshot, store]
-    dtype: bool
-  Process_active:
-    description: whether a process stands in a snapshot's period — PyPSA's `active`, data prep
-    dims: [snapshot, process]
-    dtype: bool
+    description: whether a generator is active in a snapshot's period. It is PyPSA's `active`, from build
+      year and lifetime, data prep
   Generator_active_asset:
-    description: whether a generator is one of PyPSA's `active_assets` — its `active` flag alone, without
-      build year and lifetime, so a unit that stands in no snapshot of the horizon still counts. PyPSA
-      refuses one that differs by scenario (`constants.py:51`)
     dims: [generator]
     dtype: bool
-  snapshot_weightings_stores:
-    description: PyPSA's `snapshot_weightings.stores` — hours a snapshot stands for in a storage balance
-    dims: [snapshot]
-  StorageUnit_p_nom:
+    description: whether a generator is one of PyPSA's `active_assets`, by its `active` flag alone, without
+      build year and lifetime. A unit that is active in no snapshot of the horizon still counts. PyPSA
+      refuses one that differs by scenario (`constants.py:54`)
+  Generator_committable:
+    dims: [generator]
+    dtype: bool
+    description: whether output is gated by an on/off status decision
+  Generator_marginal_cost:
+    dims: [generator, scenario, snapshot]
+    description: cost of one unit of output
+  Generator_marginal_cost_curve_p:
+    dims: [breakpoint, generator]
+    missing: absent
+    description: 'the output at each breakpoint of a generator''s piecewise `marginal_cost` curve: PyPSA''s
+      `p_pu` breakpoints times `p_nom`, data prep. A generator with no curve has no rows'
+  Generator_marginal_cost_quadratic:
+    dims: [generator, scenario, snapshot]
+    description: cost of the square of one unit of output
+  Generator_modules_installed:
+    dims: [generator, scenario]
+    description: how many whole modules a committable build has in place, data prep. It is `Generator_p_nom
+      / Generator_p_nom_mod` where a fixed build is modular, and one where it is not. PyPSA refuses a
+      fixed modular build whose nominal power is not a whole number of modules
+  Generator_p_init:
+    dims: [generator, scenario]
+    missing: 0.0
+    description: the output a unit brought into the horizon, data prep. It is PyPSA's `p_init` where the
+      unit came in running, and zero where it came in off. Under a rolling horizon, it is the output the
+      previous window solved. No value means it is unknown, and the unit then has no ramp row at the first
+      snapshot
+  Generator_p_max_pu:
+    dims: [generator, scenario, snapshot]
+    description: 'most output, per unit of nominal power: an availability profile'
+  Generator_p_min_pu:
+    dims: [generator, scenario, snapshot]
+    description: least output, per unit of nominal power
+  Generator_p_nom:
+    dims: [generator, scenario]
     description: nominal power
-    dims: [scenario, storage_unit]
-  StorageUnit_p_nom_extendable:
+  Generator_p_nom_extendable:
+    dims: [generator]
+    dtype: bool
     description: whether the nominal power is a decision
-    dims: [storage_unit]
+  Generator_p_nom_mod:
+    dims: [generator]
+    missing: absent
+    description: the module size a build comes in whole numbers of. No value means the build is continuous
+  Generator_ramp_limit_down:
+    dims: [generator, scenario, snapshot]
+    missing: absent
+    description: most a generator may lower its output between snapshots, per unit of nominal power. No
+      value means no limit. The value at the later of the two snapshots applies, so the limit may change
+      over time
+  Generator_ramp_limit_shut_down:
+    dims: [generator, scenario]
+    missing: absent
+    description: most output in the snapshot before a unit stops, per unit of nominal power. No value
+      means no limit
+  Generator_ramp_limit_start_up:
+    dims: [generator, scenario]
+    missing: absent
+    description: most output in the snapshot a unit starts, per unit of nominal power. No value means
+      no limit
+  Generator_ramp_limit_up:
+    dims: [generator, scenario, snapshot]
+    missing: absent
+    description: most a generator may raise its output between snapshots, per unit of nominal power. No
+      value means no limit. The value at the later of the two snapshots applies, so the limit may change
+      over time
+  Generator_sign:
+    dims: [generator]
+    description: the sign output enters its bus's balance with. It is PyPSA's `sign`, `1` unless given,
+      `-1` for a unit that draws power. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Generator_status_initial:
+    dims: [generator, scenario]
+    description: one where the unit was on before the first snapshot, zero where off. It is PyPSA's `up_time_before
+      > 0` for a committable unit, and one for a unit that is not, whose ramp rows PyPSA starts from on
+      (`constraints.py:323`), data prep. Under a rolling horizon, it is the status the previous window
+      solved, a fraction where unit commitment is linearised
+  Link_active:
+    dims: [link, snapshot]
     dtype: bool
-  StorageUnit_p_min_pu:
-    description: most storing, per unit of nominal power and negated
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_p_max_pu:
-    description: most dispatch, per unit of nominal power
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_max_hours:
-    description: energy capacity, as hours of dispatch at nominal power
-    dims: [scenario, storage_unit]
-  StorageUnit_efficiency_store:
-    description: share of the power drawn from the bus that becomes charge
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_efficiency_dispatch:
-    description: share of the charge drawn down that reaches the bus
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_sign:
-    description: the sign net dispatch enters its bus's balance with — PyPSA's `sign`, `1` unless given.
-      PyPSA refuses one that differs by scenario (`constants.py:43`)
-    dims: [storage_unit]
-  StorageUnit_retention:
-    description: share of charge kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
-      data prep
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_inflow:
-    description: energy arriving per hour, a river into a reservoir
-    dims: [scenario, snapshot, storage_unit]
-  StorageUnit_state_of_charge_initial:
-    description: charge held before the first snapshot
-    dims: [scenario, storage_unit]
-  StorageUnit_cyclic_state_of_charge:
-    description: whether the horizon closes on itself instead of opening on the initial charge
-    dims: [scenario, storage_unit]
+    description: whether a link is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Link_efficiency:
+    dims: [link_output, scenario, snapshot]
+    description: 'share of the flow that arrives at an output port, PyPSA''s `efficiency`, `efficiency2`,
+      … read long: negative where that port consumes rather than delivers. Read at the snapshot the flow
+      arrives, so a delayed port delivers at its arrival snapshot''s efficiency (`constraints.py:1575`)'
+  Link_output_cyclic_delay:
+    dims: [link_output]
     dtype: bool
-  StorageUnit_cyclic_state_of_charge_per_period:
-    description: whether each investment period closes on itself instead of carrying its charge on to
-      the next; it overrides `cyclic_state_of_charge` and `state_of_charge_initial_per_period`. PyPSA
-      reads it only under `multi_investment_periods`, so data prep feeds false otherwise
-    dims: [scenario, storage_unit]
+    description: whether a delayed port's flow wraps from the end of its investment period (PyPSA's `cyclic_delay`,
+      `cyclic_delay2`, …). Where it does not, the flow still in transit at each period's first snapshots
+      is lost. The flag is the same in every scenario, as the delay is
+  Link_output_delay:
+    dims: [link_output]
+    dtype: int
+    description: snapshots a port's delivery lags its link's flow (PyPSA's `delay`, `delay2`, … read long).
+      In data prep you divide it by the `snapshot_weightings.generators` value and round it up. It is
+      zero for a port that delivers at once. A port has the same delay in every scenario, because PyPSA
+      refuses a delay that differs by scenario (`constants.py:55`)
+  Load_active:
+    dims: [load]
     dtype: bool
-  StorageUnit_state_of_charge_initial_per_period:
-    description: whether each investment period opens on the initial charge instead of carrying the previous
-      period's; PyPSA reads it only under `multi_investment_periods`, so data prep feeds false otherwise
-    dims: [scenario, storage_unit]
+    description: whether a load is active in the network, PyPSA's `active`. A load has no build year and
+      no lifetime, so the flag is the same in every snapshot. PyPSA refuses one that differs by scenario
+      (`constants.py:54`)
+  Load_p_set:
+    dims: [load, scenario, snapshot]
+    description: demand
+  Load_sign:
+    dims: [load]
+    description: the sign a load's demand enters its bus's balance with. It is PyPSA's `sign`, `-1` unless
+      given, `1` for a load that feeds its bus. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Process_active:
+    dims: [process, snapshot]
     dtype: bool
-  StorageUnit_opens_late:
-    description: whether a snapshot is the first a storage unit stands in, where that is not the first
-      of the horizon — PyPSA's `active.cumsum() == 1` over the snapshots it stands in, past the first
-      snapshot, data prep; false in a run where every unit stands throughout
+    description: whether a process is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Process_output_cyclic_delay:
+    dims: [process_output]
+    dtype: bool
+    description: whether a delayed port's transfer wraps from the end of its investment period (PyPSA's
+      `cyclic_delay0`, `cyclic_delay1`, …). Where it does not, the energy still in transit at each period's
+      first snapshots is lost. The flag is the same in every scenario, as the delay is
+  Process_output_delay:
+    dims: [process_output]
+    dtype: int
+    description: snapshots a port's transfer lags its process's internal power (PyPSA's `delay0`, `delay1`,
+      … read long). In data prep you divide it by the `snapshot_weightings.generators` value and round
+      it up. It is zero for a port that transfers at once. A port has the same delay in every scenario,
+      as a link's port has
+  Process_rate:
+    dims: [process_output, scenario, snapshot]
+    description: the energy a port draws or delivers per unit of internal power (PyPSA's `rate0`, `rate1`,
+      … read long). It is negative where the port withdraws and positive where it injects. A link is a
+      process whose `bus0` rate is minus one and whose output rates are its efficiencies. The rate at
+      the snapshot the transfer arrives applies, so a delayed port transfers at its arrival snapshot's
+      rate (`constraints.py:1575`)
+  StorageUnit_active:
     dims: [snapshot, storage_unit]
     dtype: bool
+    description: whether a storage unit is active in a snapshot's period. It is PyPSA's `active`, data
+      prep
+  StorageUnit_cyclic_state_of_charge:
+    dims: [scenario, storage_unit]
+    dtype: bool
+    description: whether the horizon closes on itself instead of opening on the initial charge
+  StorageUnit_cyclic_state_of_charge_per_period:
+    dims: [scenario, storage_unit]
+    dtype: bool
+    description: whether each investment period closes on itself instead of carrying its charge on to
+      the next. It overrides `cyclic_state_of_charge` and `state_of_charge_initial_per_period`. PyPSA
+      reads it only under `multi_investment_periods`. Otherwise you feed false in data prep
+  StorageUnit_efficiency_dispatch:
+    dims: [scenario, snapshot, storage_unit]
+    description: share of the charge drawn down that reaches the bus
+  StorageUnit_efficiency_store:
+    dims: [scenario, snapshot, storage_unit]
+    description: share of the power drawn from the bus that becomes charge
   StorageUnit_inactive_snapshots:
-    description: how many snapshots a storage unit does not stand in — PyPSA's `(~active).sum()`, data
-      prep. A cyclic unit reaches back this many snapshots further, so it closes on the last snapshot
-      it stands in
     dims: [storage_unit]
     dtype: int
+    description: how many snapshots a storage unit is not active in. It is PyPSA's `(~active).sum()`,
+      data prep. A cyclic unit reaches back this many snapshots further, so it closes on the last snapshot
+      it is active in
+  StorageUnit_inflow:
+    dims: [scenario, snapshot, storage_unit]
+    description: energy arriving per hour, a river into a reservoir
   StorageUnit_marginal_cost:
+    dims: [scenario, snapshot, storage_unit]
     description: cost of one unit of dispatch
-    dims: [scenario, snapshot, storage_unit]
   StorageUnit_marginal_cost_quadratic:
-    description: cost of the square of one unit of dispatch; storing is not charged
     dims: [scenario, snapshot, storage_unit]
+    description: cost of the square of one unit of dispatch. Storing is not charged
   StorageUnit_marginal_cost_storage:
-    description: cost of one unit of charge held over one snapshot
     dims: [scenario, snapshot, storage_unit]
-  Store_e_nom:
-    description: nominal energy capacity
-    dims: [scenario, store]
-  Store_e_nom_extendable:
-    description: whether the nominal energy capacity is a decision
-    dims: [store]
+    description: cost of one unit of charge held over one snapshot
+  StorageUnit_max_hours:
+    dims: [scenario, storage_unit]
+    description: energy capacity, as hours of dispatch at nominal power
+  StorageUnit_opens_late:
+    dims: [snapshot, storage_unit]
     dtype: bool
-  Store_e_min_pu:
-    description: least energy held, per unit of nominal capacity — negative for a store that may go short
-    dims: [scenario, snapshot, store]
-  Store_e_max_pu:
-    description: most energy held, per unit of nominal capacity
-    dims: [scenario, snapshot, store]
-  Store_sign:
-    description: the sign the power a store delivers enters its bus's balance with — PyPSA's `sign`, `1`
-      unless given. PyPSA refuses one that differs by scenario (`constants.py:43`)
-    dims: [store]
-  Store_retention:
-    description: share of energy kept over a snapshot — PyPSA's `(1 - standing_loss) ** elapsed hours`,
+    description: whether a snapshot is the first a storage unit is active in, where that is not the first
+      of the horizon, data prep. It is PyPSA's `active.cumsum() == 1` over the snapshots it is active
+      in, past the first snapshot. It is false in a run where every unit is active throughout
+  StorageUnit_p_max_pu:
+    dims: [scenario, snapshot, storage_unit]
+    description: most dispatch, per unit of nominal power
+  StorageUnit_p_min_pu:
+    dims: [scenario, snapshot, storage_unit]
+    description: most storing, per unit of nominal power and negated
+  StorageUnit_p_nom:
+    dims: [scenario, storage_unit]
+    description: nominal power
+  StorageUnit_p_nom_extendable:
+    dims: [storage_unit]
+    dtype: bool
+    description: whether the nominal power is a decision
+  StorageUnit_retention:
+    dims: [scenario, snapshot, storage_unit]
+    description: share of charge kept over a snapshot. It is PyPSA's `(1 - standing_loss) ** elapsed hours`,
       data prep
-    dims: [scenario, snapshot, store]
-  Store_e_initial:
-    description: energy held before the first snapshot
-    dims: [scenario, store]
-  Store_e_cyclic:
-    description: whether the horizon closes on itself instead of opening on the initial energy
-    dims: [scenario, store]
+  StorageUnit_sign:
+    dims: [storage_unit]
+    description: the sign net dispatch enters its bus's balance with. It is PyPSA's `sign`, `1` unless
+      given. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  StorageUnit_state_of_charge_initial:
+    dims: [scenario, storage_unit]
+    description: charge held before the first snapshot
+  StorageUnit_state_of_charge_initial_per_period:
+    dims: [scenario, storage_unit]
     dtype: bool
-  Store_e_cyclic_per_period:
-    description: whether each investment period closes on itself instead of carrying its energy on to
-      the next; it overrides `e_cyclic` and `e_initial_per_period`. PyPSA reads it only under `multi_investment_periods`,
-      so data prep feeds false otherwise
-    dims: [scenario, store]
-    dtype: bool
-  Store_e_initial_per_period:
-    description: whether each investment period opens on the initial energy instead of carrying the previous
-      period's; PyPSA reads it only under `multi_investment_periods`, so data prep feeds false otherwise
-    dims: [scenario, store]
-    dtype: bool
-  Store_opens_late:
-    description: whether a snapshot is the first a store stands in, where that is not the first of the
-      horizon — PyPSA's `active.cumsum() == 1` over the snapshots it stands in, past the first snapshot,
-      data prep; false in a run where every store stands throughout
+    description: whether each investment period opens on the initial charge instead of carrying the previous
+      period's. PyPSA reads it only under `multi_investment_periods`. Otherwise you feed false in data
+      prep
+  Store_active:
     dims: [snapshot, store]
     dtype: bool
+    description: whether a store is active in a snapshot's period. It is PyPSA's `active`, data prep
+  Store_e_cyclic:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether the horizon closes on itself instead of opening on the initial energy
+  Store_e_cyclic_per_period:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether each investment period closes on itself instead of carrying its energy on to
+      the next. It overrides `e_cyclic` and `e_initial_per_period`. PyPSA reads it only under `multi_investment_periods`.
+      Otherwise you feed false in data prep
+  Store_e_initial:
+    dims: [scenario, store]
+    description: energy held before the first snapshot
+  Store_e_initial_per_period:
+    dims: [scenario, store]
+    dtype: bool
+    description: whether each investment period opens on the initial energy instead of carrying the previous
+      period's. PyPSA reads it only under `multi_investment_periods`. Otherwise you feed false in data
+      prep
+  Store_e_max_pu:
+    dims: [scenario, snapshot, store]
+    description: most energy held, per unit of nominal capacity
+  Store_e_min_pu:
+    dims: [scenario, snapshot, store]
+    description: 'least energy held, per unit of nominal capacity: negative for a store that may go short'
+  Store_e_nom:
+    dims: [scenario, store]
+    description: nominal energy capacity
+  Store_e_nom_extendable:
+    dims: [store]
+    dtype: bool
+    description: whether the nominal energy capacity is a decision
+  Store_efficiency_dispatch:
+    dims: [scenario, snapshot, store]
+    description: share of the energy drawn down that reaches the bus
+  Store_efficiency_store:
+    dims: [scenario, snapshot, store]
+    description: share of the power drawn from the bus that becomes energy held
   Store_inactive_snapshots:
-    description: how many snapshots a store does not stand in — PyPSA's `(~active).sum()`, data prep.
-      A cyclic store reaches back this many snapshots further, so it closes on the last snapshot it stands
-      in
     dims: [store]
     dtype: int
+    description: how many snapshots a store is not active in. It is PyPSA's `(~active).sum()`, data prep.
+      A cyclic store reaches back this many snapshots further, so it closes on the last snapshot it is
+      active in
+  Store_inflow:
+    dims: [scenario, snapshot, store]
+    description: energy arriving per hour, a river into a reservoir
   Store_marginal_cost:
+    dims: [scenario, snapshot, store]
     description: cost of one unit of power delivered
+  Store_marginal_cost_dispatch:
     dims: [scenario, snapshot, store]
+    description: cost of one unit of discharge, `p + p_store`
   Store_marginal_cost_quadratic:
+    dims: [scenario, snapshot, store]
     description: cost of the square of the net power delivered, so charging costs as much as delivering
-    dims: [scenario, snapshot, store]
   Store_marginal_cost_storage:
-    description: cost of one unit of energy held over one snapshot
     dims: [scenario, snapshot, store]
+    description: cost of one unit of energy held over one snapshot
+  Store_marginal_cost_store:
+    dims: [scenario, snapshot, store]
+    description: cost of one unit of charging, `p_store`
+  Store_max_hours:
+    dims: [scenario, store]
+    missing: absent
+    description: energy capacity, as hours of discharge at the power rating. The rating is `e_nom / max_hours`.
+      No value means PyPSA's default of infinity, and the store's power is then unbounded
+  Store_opens_late:
+    dims: [snapshot, store]
+    dtype: bool
+    description: whether a snapshot is the first a store is active in, where that is not the first of
+      the horizon, data prep. It is PyPSA's `active.cumsum() == 1` over the snapshots it is active in,
+      past the first snapshot. It is false in a run where every store is active throughout
+  Store_p_min_pu:
+    dims: [scenario, snapshot, store]
+    description: most charging, per unit of the power rating, negated. It is PyPSA's `p_min_pu`, `-1`
+      unless given, read only where `max_hours` has a value
+  Store_retention:
+    dims: [scenario, snapshot, store]
+    description: share of energy kept over a snapshot. It is PyPSA's `(1 - standing_loss) ** elapsed hours`,
+      data prep
+  Store_sign:
+    dims: [store]
+    description: the sign the power a store delivers enters its bus's balance with. It is PyPSA's `sign`,
+      `1` unless given. PyPSA refuses one that differs by scenario (`constants.py:46`)
+  Store_split_dispatch:
+    dims: [scenario, store]
+    dtype: bool
+    description: 'whether a store charges through `p_store` apart from its net dispatch `p`. It is PyPSA''s
+      `split_dispatch()`: true where an efficiency differs from one, a cost applies to one direction only,
+      or `cycles_max` is finite, in any snapshot (`stores.py:88-116`), data prep. Where it is false, `p_store`
+      is held at zero and the charging bound applies to `p`'
+  period_weight_objective:
+    dims: [period]
+    description: PyPSA's `investment_period_weightings.objective` — what a period's cost weighs. PyPSA
+      reads it only under `multi_investment_periods`. Otherwise you feed one in data prep, whatever the
+      column contains (`optimize.py:231-233`, `:293-297`)
+  scenario_weight:
+    dims: [scenario]
+    description: PyPSA's `scenario_weightings.weight` — the probability of a future
+  snapshot_weightings_objective:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.objective` — hours a snapshot weighs in the cost
+  snapshot_weightings_stores:
+    dims: [snapshot]
+    description: PyPSA's `snapshot_weightings.stores` — hours a snapshot weighs in a storage balance
 variables:
   Generator_p:
-    description: '`Generator-p` — output of a generator in a snapshot'
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
     where: Generator_active
+    description: '`Generator-p` — output of a generator in a snapshot'
   StorageUnit_p_dispatch:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_active
     description: '`StorageUnit-p_dispatch` — power delivered to the bus'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_active
   StorageUnit_p_store:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_active
     description: '`StorageUnit-p_store` — power drawn from the bus into charge'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_active
   StorageUnit_state_of_charge:
-    description: '`StorageUnit-state_of_charge` — energy held at the end of a snapshot'
     dims: [scenario, snapshot, storage_unit]
     where: StorageUnit_active
+    description: '`StorageUnit-state_of_charge` — energy held at the end of a snapshot'
   Store_e:
+    dims: [scenario, snapshot, store]
+    where: Store_active
     description: '`Store-e` — energy held at the end of a snapshot'
-    dims: [scenario, snapshot, store]
-    where: Store_active
   Store_p:
-    description: '`Store-p` — power delivered to the bus; charging is negative'
     dims: [scenario, snapshot, store]
     where: Store_active
+    description: '`Store-p` — net power delivered to the bus. Charging is negative'
+  Store_p_store:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    description: '`Store-p_store` — power drawn from the bus to charge, so that `p + p_store` is the discharge.
+      It is held at zero by its rows where the store does not split its dispatch'
   Generator_status:
-    description: '`Generator-status` — how much of a committable unit is on: an integer the rows below
-      cap at one, or at the module count where the build is modular'
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
     where: Generator_committed
+    bounds: {lower: 0.0}
     domain: integer
-    bounds: {lower: 0}
+    description: '`Generator-status` — how much of a committable unit is on. It is an integer the rows
+      below cap at one, or at the module count where the build is modular'
   Generator_p_nom_ext:
-    description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active;
-      the parameter of the same PyPSA name carries the fixed regime'
     dims: [generator]
     where: Generator_p_nom_extendable AND Generator_active_asset
+    description: '`Generator-p_nom` — nominal power where it is a decision, for a generator that is active.
+      A fixed build is the parameter of the same PyPSA name'
   Link_p:
-    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end: a positive value
-      withdraws there and injects at every bus the link''s output ports deliver to'
-    dims: [scenario, snapshot, link]
+    dims: [link, scenario, snapshot]
     where: Link_active
+    description: '`Link-p` — PyPSA''s `p0`, the flow measured at the `Link_bus0` end. A positive value
+      withdraws there and injects at every bus the link''s output ports deliver to'
   Process_p:
-    description: '`Process-p` — PyPSA''s internal power `p`: a positive value drives every port at its
-      own rate, withdrawing where the rate is negative and injecting where it is positive'
-    dims: [scenario, snapshot, process]
+    dims: [process, scenario, snapshot]
     where: Process_active
+    description: '`Process-p` — PyPSA''s internal power `p`. A positive value drives every port at its
+      own rate, withdrawing where the rate is negative and injecting where it is positive'
+  Generator_marginal_cost_piecewise:
+    dims: [generator, scenario, snapshot]
+    where: Generator_marginal_cost_curve AND Generator_active
+    description: '`Generator-marginal_cost_piecewise` — the running cost of a generator that pays along
+      a curve, held above the curve'
 constraints:
+  Bus_nodal_balance:
+    dims: [bus, scenario, snapshot]
+    where: Bus_attached
+    expression: Bus_injection == 0
+    description: '`Bus-nodal_balance` — what is generated at a bus meets the load there, less half of
+      every incident line''s and transformer''s loss. What is generated includes storage dispatch and
+      stores. It is net of what the links take away, plus what arrives over them after losses and any
+      delay at every port they deliver to. Each process port draws or delivers at its own rate, and each
+      passive branch carries its flow. PyPSA dissipates a branch''s loss half at either end. Each generator,
+      storage unit, store and load term enters with its component''s `sign` (`constraints.py:1480-1481`,
+      `:1592`), and an inactive load not at all. A bus nothing is attached to has no row. PyPSA refuses
+      one that carries load. The file states no assumption for it.'
   Generator_fix_p_lower:
-    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
     expression: Generator_p >= Generator_p_min_pu * Generator_p_nom
+    description: '`Generator-fix-p-lower` — a fixed generator outputs at least its minimum'
   Generator_fix_p_upper:
-    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
     where: not Generator_p_nom_extendable AND not Generator_committable AND Generator_active
     expression: Generator_p <= Generator_p_max_pu * Generator_p_nom
-  StorageUnit_fix_p_dispatch_lower:
-    description: '`StorageUnit-fix-p_dispatch-lower` — dispatch is non-negative'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_p_dispatch >= 0
-  StorageUnit_fix_p_dispatch_upper:
-    description: '`StorageUnit-fix-p_dispatch-upper` — a fixed unit dispatches at most its nominal power'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_p_dispatch <= StorageUnit_p_max_pu * StorageUnit_p_nom
-  StorageUnit_fix_p_store_lower:
-    description: '`StorageUnit-fix-p_store-lower` — storing is non-negative'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_p_store >= 0
-  StorageUnit_fix_p_store_upper:
-    description: '`StorageUnit-fix-p_store-upper` — a fixed unit stores at most its nominal power, the
-      minimum-per-unit column carrying that cap negated'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_p_store <= -StorageUnit_p_min_pu * StorageUnit_p_nom
-  StorageUnit_fix_state_of_charge_lower:
-    description: '`StorageUnit-fix-state_of_charge-lower` — charge is non-negative'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_state_of_charge >= 0
-  StorageUnit_fix_state_of_charge_upper:
-    description: '`StorageUnit-fix-state_of_charge-upper` — a fixed unit holds at most its hours at nominal
-      power'
-    dims: [scenario, snapshot, storage_unit]
-    where: StorageUnit_fix
-    expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
-  Generator_p_ramp_limit_up:
-    description: '`Generator-p-ramp_limit_up` — a generator raises output no faster than its ramp limit
-      of the build, and a committed one no further than its start-up ramp in the snapshot it turns on.
-      A unit that came into the horizon running carries a row at the first snapshot only where its `p_init`
-      gives the output it brought in, and no unit carries one at the start of a later investment period
-      — nor does any unit a big M releases instead'
-    dims: [scenario, snapshot, generator]
-    where: (Generator_ramp_limit_up OR Generator_ramp_limit_start_up) AND NOT (Generator_committable AND
-      Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND Generator_ramps_from_previous
-      AND Generator_active
-    expression: Generator_p - Generator_previous_p <= Generator_ramp_up_allowance
+    description: '`Generator-fix-p-upper` — a fixed generator outputs at most what is available'
   Generator_p_ramp_limit_down:
-    description: '`Generator-p-ramp_limit_down` — a generator lowers output no faster than its ramp limit
-      of the build, and a committed one no further than its shut-down ramp in the snapshot it turns off.
-      A unit that came into the horizon running carries a row at the first snapshot only where its `p_init`
-      gives the output it brought in, and no unit carries one at the start of a later investment period
-      — nor does any unit a big M releases instead'
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
     where: (Generator_ramp_limit_down OR Generator_ramp_limit_shut_down) AND NOT (Generator_committable
       AND Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND Generator_ramps_from_previous
       AND Generator_active
     expression: Generator_previous_p - Generator_p <= Generator_ramp_down_allowance
+    description: '`Generator-p-ramp_limit_down` — a generator lowers output no faster than its ramp limit
+      of the build. A committed one lowers it no further than its shut-down ramp in the snapshot it turns
+      off. A unit that came into the horizon running has a row at the first snapshot only where its `p_init`
+      gives the output it brought in. No unit has one at the start of a later investment period, nor does
+      any unit a big M releases instead'
+  Generator_p_ramp_limit_up:
+    dims: [generator, scenario, snapshot]
+    where: (Generator_ramp_limit_up OR Generator_ramp_limit_start_up) AND NOT (Generator_committable AND
+      Generator_p_nom_extendable AND NOT (Generator_p_nom_mod > 0)) AND Generator_ramps_from_previous
+      AND Generator_active
+    expression: Generator_p - Generator_previous_p <= Generator_ramp_up_allowance
+    description: '`Generator-p-ramp_limit_up` — a generator raises output no faster than its ramp limit
+      of the build. A committed one raises it no further than its start-up ramp in the snapshot it turns
+      on. A unit that came into the horizon running has a row at the first snapshot only where its `p_init`
+      gives the output it brought in. No unit has one at the start of a later investment period, nor does
+      any unit a big M releases instead'
   StorageUnit_energy_balance:
-    description: '`StorageUnit-energy_balance` — the charge carried in, plus what is stored after its
-      efficiency, less what dispatch draws down before its own, plus inflow not spilled'
     dims: [scenario, snapshot, storage_unit]
     where: StorageUnit_active
-    expression: StorageUnit_state_of_charge == ((StorageUnit_charge_carried_in + ((StorageUnit_efficiency_store
-      * StorageUnit_p_store) * snapshot_weightings_stores)) - ((StorageUnit_p_dispatch * snapshot_weightings_stores)
-      / StorageUnit_efficiency_dispatch)) + (StorageUnit_inflow * snapshot_weightings_stores)
+    expression: ((StorageUnit_charge_carried_in + ((StorageUnit_efficiency_store * StorageUnit_p_store)
+      * snapshot_weightings_stores)) - ((StorageUnit_p_dispatch * snapshot_weightings_stores) / StorageUnit_efficiency_dispatch))
+      + (StorageUnit_inflow * snapshot_weightings_stores) == StorageUnit_state_of_charge
+    description: '`StorageUnit-energy_balance` — the charge carried in, plus what is stored after its
+      efficiency, less what dispatch draws down before its own, plus inflow not spilled'
+  StorageUnit_fix_p_dispatch_lower:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_p_dispatch >= 0
+    description: '`StorageUnit-fix-p_dispatch-lower` — dispatch is non-negative'
+  StorageUnit_fix_p_dispatch_upper:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_p_dispatch <= StorageUnit_p_max_pu * StorageUnit_p_nom
+    description: '`StorageUnit-fix-p_dispatch-upper` — a fixed unit dispatches at most its nominal power'
+  StorageUnit_fix_p_store_lower:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_p_store >= 0
+    description: '`StorageUnit-fix-p_store-lower` — storing is non-negative'
+  StorageUnit_fix_p_store_upper:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_p_store <= -StorageUnit_p_min_pu * StorageUnit_p_nom
+    description: '`StorageUnit-fix-p_store-upper` — a fixed unit stores at most its nominal power, the
+      minimum-per-unit column carrying that cap negated'
+  StorageUnit_fix_state_of_charge_lower:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_state_of_charge >= 0
+    description: '`StorageUnit-fix-state_of_charge-lower` — charge is non-negative'
+  StorageUnit_fix_state_of_charge_upper:
+    dims: [scenario, snapshot, storage_unit]
+    where: StorageUnit_fix
+    expression: StorageUnit_state_of_charge <= StorageUnit_max_hours * StorageUnit_p_nom
+    description: '`StorageUnit-fix-state_of_charge-upper` — a fixed unit holds at most its hours at nominal
+      power'
+  Store_energy_balance:
+    dims: [scenario, snapshot, store]
+    where: Store_active
+    expression: ((Store_energy_carried_in - ((Store_p * snapshot_weightings_stores) / Store_efficiency_dispatch))
+      + (((Store_efficiency_store - (1 / Store_efficiency_dispatch)) * Store_p_store) * snapshot_weightings_stores))
+      + (Store_inflow * snapshot_weightings_stores) == Store_e
+    description: '`Store-energy_balance` — the energy carried in, less the discharge drawn down before
+      its efficiency, plus the charge after its own, plus inflow not spilled. The net dispatch `p` is
+      the discharge less `p_store`, so `p_store` enters with both efficiencies (`constraints.py:2472-2476`)'
   Store_fix_e_lower:
-    description: '`Store-fix-e-lower` — a fixed store holds at least its floor'
     dims: [scenario, snapshot, store]
     where: not Store_e_nom_extendable AND Store_active
     expression: Store_e >= Store_e_min_pu * Store_e_nom
+    description: '`Store-fix-e-lower` — a fixed store holds at least its floor'
   Store_fix_e_upper:
-    description: '`Store-fix-e-upper` — a fixed store holds at most its nominal capacity'
     dims: [scenario, snapshot, store]
     where: not Store_e_nom_extendable AND Store_active
     expression: Store_e <= Store_e_max_pu * Store_e_nom
-  Store_energy_balance:
-    description: '`Store-energy_balance` — the energy carried in, less what is delivered to the bus'
+    description: '`Store-fix-e-upper` — a fixed store holds at most its nominal capacity'
+  Store_fix_p_store_lower:
     dims: [scenario, snapshot, store]
-    where: Store_active
-    expression: Store_e == Store_energy_carried_in - Store_p * snapshot_weightings_stores
-  Bus_nodal_balance:
-    description: '`Bus-nodal_balance` — what is generated at a bus, storage dispatch and stores included,
-      less what the links take away, plus what arrives over them after losses and any delay at every port
-      they deliver to, each process port drawing or delivering at its own rate and each passive branch
-      carrying its flow, meets the load there, less half of every incident line''s and transformer''s
-      loss — PyPSA dissipates a branch''s loss half at either end. Each generator, storage unit, store
-      and load term enters with its component''s `sign` (`constraints.py:1404-1405`, `:1514`), and an
-      inactive load not at all. A bus nothing is attached to has no row; PyPSA refuses one that carries
-      load, and this file does not yet.'
-    dims: [scenario, snapshot, bus]
-    expression: Bus_injection == 0
+    where: NOT Store_e_nom_extendable AND Store_active
+    expression: Store_p_store >= 0
+    description: '`Store-fix-p_store-lower` — charging is non-negative'
+  Store_fix_p_store_upper:
+    dims: [scenario, snapshot, store]
+    where: NOT Store_e_nom_extendable AND Store_active AND (NOT Store_split_dispatch OR Store_max_hours)
+    expression: Store_p_store <= Store_charge_cap_pu * Store_e_nom
+    description: '`Store-fix-p_store-upper` — a fixed store charges at most its power rating where it
+      splits its dispatch, and not at all where it does not. A store that splits and has no `max_hours`
+      has no row'
 expressions:
-  Generator_previous_status:
-    description: the commitment state a generator carries into a snapshot — off at the first snapshot
-      it stands in past the first of the horizon, as PyPSA reads a status it did not build (`constraints.py:298`),
-      and the state carried over otherwise
-    dims: [scenario, snapshot, generator]
+  Bus_injection:
+    dims: [bus, scenario, snapshot]
+    expression: ((((Generator_injection + Link_injection) + Load_injection) + Process_injection) + StorageUnit_injection)
+      + Store_injection
+    description: what every component puts into a bus, less what it takes out of it. PyPSA writes each
+      term into the balance, and a load on its right-hand side
+  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
+  Generator_opex: {expression: 'sum(sum((Generator_running_cost * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p * Generator_p)
+      * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
+      by=snapshot_period[period]), over=generator), over=snapshot)'}
+  Generator_p_carried_over:
+    dims: [generator, scenario, snapshot]
+    description: the output a generator carries over into a snapshot. At the first, it is the `p_init`
+      it brought in, which is zero where it came in off. After that, it is the previous snapshot's
     cases:
-      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Generator_active, along=snapshot, offset=1)',
-        expression: 0}
-    otherwise: Generator_status_carried_over
-  Generator_status_carried_over:
-    description: the state a generator carries over into a snapshot — the state it brought into the horizon
-      at the first, the previous snapshot's after that
-    dims: [scenario, snapshot, generator]
-    cases:
-      opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
-    otherwise: shift(Generator_status, along=snapshot, offset=1)
-  Generator_previous_p:
-    description: the output a generator carries into a snapshot — at the first, the `p_init` it brought
-      in where it came in running and nothing where it came in off; the previous snapshot's after that
-    dims: [scenario, snapshot, generator]
-    cases:
-      opening: {when: position(snapshot) == 0, expression: Generator_status_initial * Generator_p_init}
+      opening: {when: position(snapshot) == 0, expression: Generator_p_init}
     otherwise: shift(Generator_p, along=snapshot, offset=1)
+  Generator_p_nom_committed:
+    dims: [generator, scenario]
+    description: 'the build a committed unit''s ramp rows are taken against: one module where the build
+      is modular, since its status counts modules, and the given build otherwise (`constraints.py:1131-1134`)'
+    cases:
+      modular_build: {when: Generator_p_nom_mod > 0, expression: Generator_p_nom_mod}
+    otherwise: Generator_p_nom
   Generator_p_nom_effective:
-    description: the build a generator's limits are taken against — the chosen one where it is extendable,
-      the given one otherwise
-    dims: [scenario, generator]
+    dims: [generator, scenario]
+    description: 'the build a generator''s limits are taken against: the chosen one where it is extendable,
+      the given one otherwise'
     cases:
       extendable: {when: Generator_p_nom_extendable, expression: Generator_p_nom_ext}
     otherwise: Generator_p_nom
-  Generator_ramp_up_rate:
-    description: the ramp limit a unit's up row reads — PyPSA's `ramp_limit_up`, or the full build where
-      it has none, since a start-up ramp alone builds the row
-    dims: [scenario, snapshot, generator]
+  Generator_previous_p:
+    dims: [generator, scenario, snapshot]
+    description: 'the output a generator carries into a snapshot. It is nothing at the first snapshot
+      it is active in past the first of the horizon: PyPSA fills an output it did not build with zero
+      (`constraints.py:716`). It is the output carried over otherwise'
     cases:
-      given: {when: Generator_ramp_limit_up, expression: Generator_ramp_limit_up}
-    otherwise: 1
-  Generator_ramp_down_rate:
-    description: the ramp limit a unit's down row reads — PyPSA's `ramp_limit_down`, or the full build
-      where it has none, since a shut-down ramp alone builds the row
-    dims: [scenario, snapshot, generator]
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Generator_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Generator_p_carried_over
+  Generator_previous_status:
+    dims: [generator, scenario, snapshot]
+    description: the commitment state a generator carries into a snapshot. It is off at the first snapshot
+      it is active in past the first of the horizon. PyPSA reads a status it did not build as off there
+      (`constraints.py:391`). It is the state carried over otherwise
     cases:
-      given: {when: Generator_ramp_limit_down, expression: Generator_ramp_limit_down}
-    otherwise: 1
-  Generator_start_up_rate:
-    description: the start-up ramp a unit's up row reads — PyPSA's `ramp_limit_start_up`, or the full
-      build where it has none
-    dims: [scenario, generator]
-    cases:
-      given: {when: Generator_ramp_limit_start_up, expression: Generator_ramp_limit_start_up}
-    otherwise: 1
-  Generator_shut_down_rate:
-    description: the shut-down ramp a unit's down row reads — PyPSA's `ramp_limit_shut_down`, or the full
-      build where it has none
-    dims: [scenario, generator]
-    cases:
-      given: {when: Generator_ramp_limit_shut_down, expression: Generator_ramp_limit_shut_down}
-    otherwise: 1
-  Generator_p_nom_committed:
-    description: the build a committed unit's ramp rows are taken against — one module where the build
-      is extendable and modular, the given build otherwise
-    dims: [scenario, generator]
-    cases:
-      modular_build: {when: Generator_p_nom_extendable AND Generator_p_nom_mod > 0, expression: Generator_p_nom_mod}
-    otherwise: Generator_p_nom
-  Generator_ramp_up_allowance:
-    description: how far a generator may raise output between two snapshots — its ramp limit of the build
-      while it stays on, plus its start-up ramp in the snapshot it turns on
-    dims: [scenario, snapshot, generator]
-    cases:
-      committed: {when: Generator_committable, expression: Generator_ramp_up_rate * Generator_p_nom_committed
-          * Generator_previous_status + Generator_start_up_rate * Generator_p_nom_committed * (Generator_status
-          - Generator_previous_status)}
-    otherwise: Generator_ramp_up_rate * Generator_p_nom_effective
+      opening_late: {when: 'position(snapshot) > 0 AND NOT shift(Generator_active, along=snapshot, offset=1)',
+        expression: '0'}
+    otherwise: Generator_status_carried_over
   Generator_ramp_down_allowance:
-    description: how far a generator may lower output between two snapshots — its ramp limit of the build
-      while it stays on, plus its shut-down ramp in the snapshot it turns off
-    dims: [scenario, snapshot, generator]
+    dims: [generator, scenario, snapshot]
+    description: how far a generator may lower output between two snapshots. It is its ramp limit of the
+      build while it stays on, plus its shut-down ramp in the snapshot it turns off
     cases:
       committed: {when: Generator_committable, expression: Generator_ramp_down_rate * Generator_p_nom_committed
-          * Generator_status + Generator_shut_down_rate * Generator_p_nom_committed * (Generator_previous_status
+          * Generator_status + Generator_shut_down_rate * Generator_p_nom_committed * (Generator_ramp_previous_status
           - Generator_status)}
     otherwise: Generator_ramp_down_rate * Generator_p_nom_effective
+  Generator_ramp_down_rate:
+    dims: [generator, scenario, snapshot]
+    description: the ramp limit in a unit's down row, PyPSA's `ramp_limit_down`. It is the full build
+      where PyPSA has none, since a shut-down ramp alone builds the row
+    cases:
+      given: {when: Generator_ramp_limit_down, expression: Generator_ramp_limit_down}
+    otherwise: '1'
+  Generator_ramp_previous_status:
+    dims: [generator, scenario, snapshot]
+    description: the status a committed unit's ramp rows carry into a snapshot. At the first snapshot,
+      a fixed modular unit that came in running has every module on, since the state it brought in is
+      on or off (`constraints.py:1152-1157`). The transition and down-time rows count it as one module
+      (PyPSA/PyPSA#2114). It is the state carried in otherwise
+    cases:
+      opening_modules: {when: position(snapshot) == 0 AND NOT Generator_p_nom_extendable AND Generator_p_nom_mod
+          > 0, expression: Generator_status_initial * Generator_modules_installed}
+    otherwise: Generator_previous_status
+  Generator_ramp_up_allowance:
+    dims: [generator, scenario, snapshot]
+    description: how far a generator may raise output between two snapshots. It is its ramp limit of the
+      build while it stays on, plus its start-up ramp in the snapshot it turns on
+    cases:
+      committed: {when: Generator_committable, expression: Generator_ramp_up_rate * Generator_p_nom_committed
+          * Generator_ramp_previous_status + Generator_start_up_rate * Generator_p_nom_committed * (Generator_status
+          - Generator_ramp_previous_status)}
+    otherwise: Generator_ramp_up_rate * Generator_p_nom_effective
+  Generator_ramp_up_rate:
+    dims: [generator, scenario, snapshot]
+    description: the ramp limit in a unit's up row, PyPSA's `ramp_limit_up`. It is the full build where
+      PyPSA has none, since a start-up ramp alone builds the row
+    cases:
+      given: {when: Generator_ramp_limit_up, expression: Generator_ramp_limit_up}
+    otherwise: '1'
+  Generator_running_cost:
+    dims: [generator, scenario, snapshot]
+    description: 'what a generator''s output costs in a snapshot: the value read off its piecewise curve
+      where it has one, and its linear `marginal_cost` otherwise. A curve replaces the linear cost, as
+      PyPSA drops the unit from that term (`optimize.py:333-348`)'
+    cases:
+      curve: {when: Generator_marginal_cost_curve, expression: Generator_marginal_cost_piecewise}
+    otherwise: Generator_p * Generator_marginal_cost
+  Generator_shut_down_rate:
+    dims: [generator, scenario]
+    description: the shut-down ramp in a unit's down row (PyPSA's `ramp_limit_shut_down`), or the full
+      build where it has none
+    cases:
+      given: {when: Generator_ramp_limit_shut_down, expression: Generator_ramp_limit_shut_down}
+    otherwise: '1'
+  Generator_start_up_rate:
+    dims: [generator, scenario]
+    description: the start-up ramp in a unit's up row (PyPSA's `ramp_limit_start_up`), or the full build
+      where it has none
+    cases:
+      given: {when: Generator_ramp_limit_start_up, expression: Generator_ramp_limit_start_up}
+    otherwise: '1'
+  Generator_status_carried_over:
+    dims: [generator, scenario, snapshot]
+    description: 'the state a generator carries over into a snapshot: the state it brought into the horizon
+      at the first, the previous snapshot''s after that'
+    cases:
+      opening: {when: position(snapshot) == 0, expression: Generator_status_initial}
+    otherwise: shift(Generator_status, along=snapshot, offset=1)
+  Link_injection: {expression: 'sum(Link_output_arrival, over=link_output, by=Link_output_bus[bus])'}
+  Link_output_arrival:
+    dims: [link_output, scenario, snapshot]
+    description: what a link delivers to an output port at a snapshot. It is its flow delayed by the port's
+      `delay` within its investment period. It is multiplied by the port's efficiency at the snapshot
+      the flow arrives. Where the port is `cyclic_delay`, the delayed flow wraps from the period's end.
+      Where it is not, the flow still in transit at the period's first snapshots is lost. A port that
+      does not delay (`delay` zero) delivers its flow unshifted, cyclic or not
+    cases:
+      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
+          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
+    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
+      edge=0, within=snapshot_period[period]) * Link_efficiency
+  Load_demand:
+    dims: [load, scenario, snapshot]
+    description: what a load draws from its bus's balance. It is its demand times its sign where it is
+      active, and nothing where it is not. PyPSA drops an inactive load from the balance (`constraints.py:1591-1592`)
+    cases:
+      active: {when: Load_active, expression: Load_sign * Load_p_set}
+    otherwise: '0'
+  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
+  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
+  Process_output_arrival:
+    dims: [process_output, scenario, snapshot]
+    description: what a process transfers at a port at a snapshot. It is its internal power delayed by
+      the port's `delay` within its investment period. It is multiplied by the port's rate at the snapshot
+      the transfer arrives. Where the port is `cyclic_delay`, the delayed transfer wraps from the period's
+      end. Where it is not, the energy still in transit at the period's first snapshots is lost. A port
+      that does not delay (`delay` zero) transfers at once, cyclic or not
+    cases:
+      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
+          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
+          * Process_rate'}
+    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
+      edge=0, within=snapshot_period[period]) * Process_rate
   StorageUnit_charge_carried_in:
-    description: the charge a unit opens a snapshot with — at the first snapshot it stands in, its last
-      such snapshot's less standing loss where it is cyclic and the given initial charge, which no standing
-      loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A unit
-      built in a later period opens in that period, and a cyclic one that retires closes on its own last
-      snapshot. Per period, the same holds with each investment period as the horizon
     dims: [scenario, snapshot, storage_unit]
+    description: the charge a unit opens a snapshot with. At the first snapshot it is active in, it is
+      its last such snapshot's less standing loss where it is cyclic. Where it is not, it is the given
+      initial charge, which no standing loss has touched yet. Otherwise it is the previous snapshot's
+      less standing loss. A unit built in a later period opens in that period, and a cyclic one that retires
+      closes on its own last snapshot. Per period, the same holds with each investment period as the horizon
     cases:
       cyclic: {when: StorageUnit_cyclic_state_of_charge AND NOT StorageUnit_cyclic_state_of_charge_per_period
           AND NOT StorageUnit_state_of_charge_initial_per_period AND (position(snapshot) == 0 OR StorageUnit_opens_late),
@@ -574,13 +734,29 @@ expressions:
       period_opening: {when: 'StorageUnit_state_of_charge_initial_per_period AND NOT StorageUnit_cyclic_state_of_charge_per_period
           AND position(snapshot, within=snapshot_period[period]) == 0', expression: StorageUnit_state_of_charge_initial}
     otherwise: StorageUnit_retention * shift(StorageUnit_state_of_charge, along=snapshot, offset=1)
-  Store_energy_carried_in:
-    description: the energy a store opens a snapshot with — at the first snapshot it stands in, its last
-      such snapshot's less standing loss where it is cyclic and the given initial energy, which no standing
-      loss has touched yet, where it is not; the previous snapshot's less standing loss otherwise. A store
-      built in a later period opens in that period, and a cyclic one that retires closes on its own last
-      snapshot. Per period, the same holds with each investment period as the horizon
+  StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
+      over=storage_unit, by=StorageUnit_bus[bus])'}
+  StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
+      sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
+      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
+      over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
+  Store_charge_cap_pu:
     dims: [scenario, snapshot, store]
+    description: the most charging through `p_store`, per unit of `e_nom`. It is `-p_min_pu / max_hours`
+      for a store that splits its dispatch, and zero otherwise (`stores.py:79-86`)
+    cases:
+      split: {when: Store_split_dispatch, expression: -Store_p_min_pu / Store_max_hours}
+    otherwise: '0'
+  Store_energy_carried_in:
+    dims: [scenario, snapshot, store]
+    description: the energy a store opens a snapshot with. At the first snapshot it is active in, it is
+      its last such snapshot's less standing loss where it is cyclic. Where it is not, it is the given
+      initial energy, which no standing loss has touched yet. Otherwise it is the previous snapshot's
+      less standing loss. A store built in a later period opens in that period, and a cyclic one that
+      retires closes on its own last snapshot. Per period, the same holds with each investment period
+      as the horizon
     cases:
       cyclic: {when: Store_e_cyclic AND NOT Store_e_cyclic_per_period AND NOT Store_e_initial_per_period
           AND (position(snapshot) == 0 OR Store_opens_late), expression: 'Store_retention * shift(shift(Store_e,
@@ -592,86 +768,38 @@ expressions:
       period_opening: {when: 'Store_e_initial_per_period AND NOT Store_e_cyclic_per_period AND position(snapshot,
           within=snapshot_period[period]) == 0', expression: Store_e_initial}
     otherwise: Store_retention * shift(Store_e, along=snapshot, offset=1)
-  Link_output_arrival:
-    description: what a link delivers to an output port at a snapshot — its flow delayed by the port's
-      `delay` within its investment period, times the port's efficiency at the snapshot the flow arrives;
-      where the port is `cyclic_delay` the delayed flow wraps from the period's end, and where it is not
-      the flow still in transit at the period's first snapshots is lost. A port that does not delay (`delay`
-      zero) delivers its flow unshifted, cyclic or not
-    dims: [scenario, snapshot, link_output]
-    cases:
-      wrapping: {when: Link_output_cyclic_delay, expression: 'shift(at(Link_p, by=Link_output_link[link]),
-          along=snapshot, offset=Link_output_delay, edge=''wrap'', within=snapshot_period[period]) * Link_efficiency'}
-    otherwise: shift(at(Link_p, by=Link_output_link[link]), along=snapshot, offset=Link_output_delay,
-      edge=0, within=snapshot_period[period]) * Link_efficiency
-  Process_output_arrival:
-    description: what a process transfers at a port at a snapshot — its internal power delayed by the
-      port's `delay` within its investment period, times the port's rate at the snapshot the transfer
-      arrives; where the port is `cyclic_delay` the delayed transfer wraps from the period's end, and
-      where it is not the energy still in transit at the period's first snapshots is lost. A port that
-      does not delay (`delay` zero) transfers at once, cyclic or not
-    dims: [scenario, snapshot, process_output]
-    cases:
-      wrapping: {when: Process_output_cyclic_delay, expression: 'shift(at(Process_p, by=Process_output_process[process]),
-          along=snapshot, offset=Process_output_delay, edge=''wrap'', within=snapshot_period[period])
-          * Process_rate'}
-    otherwise: shift(at(Process_p, by=Process_output_process[process]), along=snapshot, offset=Process_output_delay,
-      edge=0, within=snapshot_period[period]) * Process_rate
-  Generator_opex: {expression: 'sum(sum(((Generator_p * Generator_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=generator), over=snapshot) + sum(sum((((Generator_p
-      * Generator_p) * Generator_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=generator), over=snapshot)'}
-  StorageUnit_opex: {expression: '(sum(sum(((StorageUnit_p_dispatch * StorageUnit_marginal_cost) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot) +
-      sum(sum((((StorageUnit_p_dispatch * StorageUnit_p_dispatch) * StorageUnit_marginal_cost_quadratic)
-      * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit),
-      over=snapshot)) + sum(sum(((StorageUnit_state_of_charge * StorageUnit_marginal_cost_storage) * snapshot_weightings_objective)
-      * at(period_weight_objective, by=snapshot_period[period]), over=storage_unit), over=snapshot)'}
-  Store_opex: {expression: 'sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
+  Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
+  Store_opex: {expression: '(((sum(sum(((Store_p * Store_marginal_cost) * snapshot_weightings_objective)
       * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot) + sum(sum((((Store_p
       * Store_p) * Store_marginal_cost_quadratic) * snapshot_weightings_objective) * at(period_weight_objective,
-      by=snapshot_period[period]), over=store), over=snapshot) + sum(sum(((Store_e * Store_marginal_cost_storage)
+      by=snapshot_period[period]), over=store), over=snapshot)) + sum(sum(((Store_e * Store_marginal_cost_storage)
       * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]), over=store),
-      over=snapshot)'}
+      over=snapshot)) + sum(sum((((Store_p + Store_p_store) * Store_marginal_cost_dispatch) * snapshot_weightings_objective)
+      * at(period_weight_objective, by=snapshot_period[period]), over=store), over=snapshot)) + sum(sum(((Store_p_store
+      * Store_marginal_cost_store) * snapshot_weightings_objective) * at(period_weight_objective, by=snapshot_period[period]),
+      over=store), over=snapshot)'}
+  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
   scenario_opex:
     dims: [scenario]
     expression: (Generator_opex + StorageUnit_opex) + Store_opex
-    description: what a future costs to run — every operating term, weighted by the snapshot's hours and
-      its period, before the scenario's own weight; a start and a stop cost what they cost, unweighted,
-      as PyPSA adds them (`optimize.py:415-432`)
-  risk_weighted_opex: {expression: 'sum(scenario_weight * scenario_opex, over=scenario)'}
+    description: 'what a future costs to run: every operating term, weighted by the snapshot''s hours
+      and its period, before the scenario''s own weight. A start and a stop cost what they cost, unweighted,
+      as PyPSA adds them (`optimize.py:448-468`)'
   total_cost:
     dims: []
     expression: risk_weighted_opex
-    description: what the system costs — capacity once per active period at its expected cost over the
-      scenarios, operation in expectation over the scenarios, and a share of it at the tail
-  Load_demand:
-    description: what a load draws from its bus's balance — its demand times its sign where it is active,
-      nothing where it is not, since PyPSA drops an inactive load from the balance (`constraints.py:1513-1514`)
-    dims: [scenario, snapshot, load]
-    cases:
-      active: {when: Load_active, expression: Load_sign * Load_p_set}
-    otherwise: 0
-  Generator_injection: {expression: 'sum(Generator_sign * Generator_p, over=generator, by=Generator_bus[bus])'}
-  Link_injection: {expression: 'sum(Link_output_arrival, over=link_output, by=Link_output_bus[bus])'}
-  Load_injection: {expression: 'sum(Load_demand, over=load, by=Load_bus[bus])'}
-  Process_injection: {expression: 'sum(Process_output_arrival, over=process_output, by=Process_output_bus[bus])'}
-  StorageUnit_injection: {expression: 'sum(StorageUnit_sign * (StorageUnit_p_dispatch - StorageUnit_p_store),
-      over=storage_unit, by=StorageUnit_bus[bus])'}
-  Store_injection: {expression: 'sum(Store_sign * Store_p, over=store, by=Store_bus[bus])'}
-  Bus_injection:
-    dims: [scenario, snapshot, bus]
-    expression: ((((Generator_injection + Link_injection) + Load_injection) + Process_injection) + StorageUnit_injection)
-      + Store_injection
-    description: what every component puts into a bus, less what it takes out of it; PyPSA writes each
-      term into the balance, and a load on its right-hand side
+    description: what the system costs. Capacity counts once per active period at its expected cost over
+      the scenarios. Operation counts in expectation over the scenarios, and a share of it at the tail
 conditions:
-  Generator_committed: {description: a committable generator that stands in the snapshot's period — every
-      unit-commitment row's set, condition: Generator_committable AND Generator_active}
-  Generator_ramps_from_previous: {description: 'a snapshot whose ramp reads a previous output — any snapshot
-      but its period''s first, and the horizon''s first where the generator comes in off or carries an
-      initial output', condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR (position(snapshot)
-      == 0 AND (Generator_status_initial == 0 OR Generator_p_init))'}
-  StorageUnit_fix: {description: a storage unit with a fixed build that stands in the snapshot's period
-      — PyPSA's `fix` rows, condition: NOT StorageUnit_p_nom_extendable AND StorageUnit_active}
+  Generator_committed: {condition: Generator_committable AND Generator_active, description: 'a committable
+      generator that is active in the snapshot''s period: every unit-commitment row''s set'}
+  Generator_marginal_cost_curve: {condition: 'count(Generator_marginal_cost_curve_p, over=breakpoint)
+      > 0 AND Generator_active_asset', description: 'a generator that pays along a piecewise `marginal_cost`
+      curve: one of PyPSA''s `active_assets` with curve data (`optimize.py:307`, `piecewise.py:230-257`)'}
+  Generator_ramps_from_previous: {condition: 'position(snapshot, within=snapshot_period[period]) > 0 OR
+      (position(snapshot) == 0 AND (Generator_status_initial == 0 OR Generator_p_init))', description: 'a
+      snapshot whose ramp uses a previous output. It is any snapshot but its period''s first, and the
+      horizon''s first where the generator comes in off or carries an initial output'}
+  StorageUnit_fix: {condition: NOT StorageUnit_p_nom_extendable AND StorageUnit_active, description: a
+      storage unit with a fixed build that is active in the snapshot's period. It is PyPSA's `fix` rows}
 objective: {sense: minimize, expression: total_cost}

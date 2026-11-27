@@ -29,17 +29,17 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{D}`$ | index $`d`$ — `depot` with $`\mathrm{origin}: \mathcal{C} \to \mathcal{D}`$ — depots the chemicals leave from |
 | $`\mathcal{C}`$ | index $`c`$ — `connection` with $`\mathrm{origin}: \mathcal{C} \to \mathcal{D}`$ — one way of reaching one centre from one depot, by rail or by road |
+| $`\mathcal{D}`$ | index $`d`$ — `depot` with $`\mathrm{origin}: \mathcal{C} \to \mathcal{D}`$ — depots the chemicals leave from |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{stock}`$ | `stock` over $`\mathcal{D}`$ — tonnes standing at a depot |
 | $`\mathrm{cost}`$ | `cost` over $`\mathcal{C}`$ — cost per tonne moved over a connection |
-| $`\mathrm{min\_load}`$ | `min_load` over $`\mathcal{C}`$, `absent` where the data has no row — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
 | $`\mathrm{max\_load}`$ | `max_load` over $`\mathcal{C}`$, `absent` where the data has no row — largest delivery a connection accepts |
+| $`\mathrm{min\_load}`$ | `min_load` over $`\mathcal{C}`$, `absent` where the data has no row — smallest delivery a connection accepts — rail carries between 10 and 50 tonnes per delivery, and road is unconstrained |
+| $`\mathrm{stock}`$ | `stock` over $`\mathcal{D}`$ — tonnes standing at a depot |
 | $`\mathrm{total\_to\_move}`$ | `total_to_move` (scalar) — tonnes that have to leave the depots altogether |
 
 #### Variables
@@ -64,22 +64,22 @@ Moving 180 tonnes of chemicals out of four depots to three recycling centres, wh
 
 #### Subject to
 
-**`within_stock`**
-
-```math
-\sum_{c \in \mathcal{C} \,:\, \mathrm{origin}(c) = d} \mathit{moved}_{c} \le \mathrm{stock}_{d} \qquad \forall\, d \in \mathcal{D}
-```
-
 **`move_the_lot`**
 
 ```math
 \sum_{c \in \mathcal{C}} \mathit{moved}_{c} = \mathrm{total\_to\_move}
 ```
 
+**`within_stock`**
+
+```math
+\sum_{c \in \mathcal{C} \,:\, \mathrm{origin}(c) = d} \mathit{moved}_{c} \le \mathrm{stock}_{d} \qquad \forall\, d \in \mathcal{D}
+```
+
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -154,7 +154,7 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
 
 **The centre is in the connection's name and in nothing else.** This problem
 sets no per-centre demand, only a total of 180 t, so no constraint reads where a
-connection ends. A `destination` coordinate would be a declaration nothing
+connection ends. A `destination` coordinate would be an entry nothing
 consumes, and the language warns about that, so it is not written. The pairing
 is still visible where it matters: two connections out of `d2` differing only in
 mode, which is what a `(depot, centre)` table cannot hold.

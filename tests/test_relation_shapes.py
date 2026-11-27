@@ -7,7 +7,7 @@ single-valued map — two columns, one of them the key — is one shape of it:
 - **a key of several columns** reads the map *under a condition* the row
   carries, so the join carries the rest of the key through;
 - **several value columns** land one walk on a product of dimensions;
-- **a bare relation** fans a member out to every target it is related to;
+- **a bare relation** fans a label out to every target it is related to;
 - **a partition by a conditioned map** groups a shift, a window or a position
   by the value at the rest of the key, so a neighbour is a neighbour inside
   *this generator's* season;
@@ -29,7 +29,7 @@ import pytest
 
 import specsolve as sps
 from specsolve.errors import DataError, DimensionError
-from tests.conftest import by_coord, solve_written_file
+from tests.conftest import primal_by_coordinate, solve_written_file
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,7 +45,9 @@ def _solved(spec: dict[str, Any], sources: dict[str, Any], tmp_path: Path) -> tu
         result = model.solve()
         assert result.is_ok, f'the relational lane reached no solution: {result.status}'
         objective = result.objective
-        primals = {name: by_coord(result, name, *spec['variables'][name]['dims']) for name in spec['variables']}
+        primals = {
+            name: primal_by_coordinate(result, name, *spec['variables'][name]['dims']) for name in spec['variables']
+        }
     assert solve_written_file(tmp_path / 'model.lp') == pytest.approx(objective, rel=RTOL), (
         'the written LP file re-solves to a different objective than the lane reached'
     )
@@ -150,7 +152,7 @@ def test_a_combination_no_member_lands_on_is_an_empty_sum_on_a_constant_side(tmp
     )
 
 
-def _masked_sum_spec(expression: str) -> dict:
+def _narrowed_sum_spec(expression: str) -> dict:
     return {
         'dimensions': {'generator': {'dtype': 'str'}, 'bus': {'dtype': 'str'}},
         'relations': {'gen_bus': {'key': 'generator', 'values': 'bus'}},
@@ -161,7 +163,7 @@ def _masked_sum_spec(expression: str) -> dict:
     }
 
 
-MASKED_SUM_SOURCES = {
+NARROWED_SUM_SOURCES = {
     'generator': ['g1', 'g2'],
     'bus': ['a', 'b'],
     'gen_bus': pl.DataFrame({'generator': ['g1', 'g2'], 'bus': ['a', 'b']}),
@@ -174,11 +176,11 @@ def test_a_walk_onto_a_dimension_the_operand_carries_is_refused_and_names_the_re
     """A walk brings the dimension it lands on, so the operand may not already carry it.
 
     Inside the operator, `load[bus]` and a walk onto `bus` read as a product
-    over every (generator, bus) pair masked back down to the pairs the map
+    over every (generator, bus) pair narrowed back down to the pairs the map
     agrees with — which is the same answer as multiplying outside, reached by a
     spelling that hides what the call adds.
     """
-    spec = _masked_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
+    spec = _narrowed_sum_spec('sum(load * p, over=generator, by=gen_bus[bus]) <= cap')
     with pytest.raises(
         DimensionError, match=r"sum\(by=gen_bus\[bus\]\) groups by \['bus'\], which the expression already carries"
     ):
@@ -191,8 +193,8 @@ def test_the_factor_over_the_landed_dimension_multiplies_outside(tmp_path):
     Bus a holds `load_a * p1` and bus b holds `load_b * p2`, under caps of 4 —
     so 4 and 2.
     """
-    spec = _masked_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
-    objective, primals = _solved(spec, MASKED_SUM_SOURCES, tmp_path)
+    spec = _narrowed_sum_spec('load * sum(p, over=generator, by=gen_bus[bus]) <= cap')
+    objective, primals = _solved(spec, NARROWED_SUM_SOURCES, tmp_path)
     assert primals['p'] == pytest.approx({'g1': 4.0, 'g2': 2.0}), "each generator weighed by its own bus's load"
     assert objective == pytest.approx(6.0, rel=RTOL), '4 under a load of 1, and 2 under a load of 2'
 
@@ -241,7 +243,7 @@ def test_a_sum_through_a_bare_relation_counts_a_member_in_every_group_it_is_rela
 
 
 def test_a_constant_summed_through_a_bare_relation_reads_zero_where_nothing_reaches(tmp_path):
-    """The weights land on every bus a member reaches, and an unreached bus gets the empty sum."""
+    """The weights land on every bus a label reaches, and an unreached bus gets the empty sum."""
     spec = _bare_spec()
     spec['variables']['x'] = {'dims': ['bus'], 'bounds': {'lower': 0, 'upper': 10}}
     spec['constraints']['under'] = {
@@ -320,7 +322,7 @@ def test_both_lanes_carry_a_member_through_a_bare_relation_whose_two_roles_range
 def test_a_bare_relation_holding_a_pair_twice_is_refused():
     """A table has each coordinate at most once, and a bare relation's coordinate is the whole row."""
     sources = _bare_sources() | {'connection': pl.concat([CONNECTION, CONNECTION.head(1)])}
-    with pytest.raises(DataError, match=r'relates 1 tuple\(s\) more than once: generator=g1, bus=a'):
+    with pytest.raises(DataError, match=r'relates 1 tuple\(s\) more than once: bus=a, generator=g1'):
         sps.solve(_bare_spec(), sources)
 
 

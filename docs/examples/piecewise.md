@@ -27,7 +27,8 @@ this model with only that line changed.
 
 `convex` and `lp` are exact here because the curve is convex and the cost is
 minimised. Both check the curve when the data attaches. On this instance `convex` and `lp`
-reach the same optimum, 3850, and the same duals on `balance`.
+reach the same optimum, 3850. The second snapshot sits on a kink of the curve, so any
+dual of `balance` there from 20 to 25 is optimal, and the solver may report either end.
 
 The two LP methods trade columns for rows. On 20 generators × 48 snapshots × 6
 breakpoints:
@@ -49,25 +50,25 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
-| $`\mathcal{G}`$ | index $`g`$ — `generator` — dispatchable units |
 | $`\mathcal{K}`$ | index $`k`$ — `bp` — breakpoints of the cost curve |
+| $`\mathcal{G}`$ | index $`g`$ — `generator` — dispatchable units |
+| $`\mathcal{T}`$ | index $`t`$ — `snapshot` — dispatch periods |
 
 #### Parameters
 
 | Symbol | Meaning |
 |---|---|
-| $`\mathrm{p}^{\mathrm{max}}`$ | `p_max` over $`\mathcal{G}`$ — maximum dispatch |
+| $`x`$ | `bp_x` over $`\mathcal{K} \times \mathcal{G}`$ — breakpoint dispatch levels, one curve per generator |
+| $`y`$ | `bp_y` over $`\mathcal{K} \times \mathcal{G}`$ — cost at each breakpoint, one curve per generator |
 | $`\mathrm{load}`$ | `load` over $`\mathcal{T}`$ — demand to be met |
-| $`x`$ | `bp_x` over $`\mathcal{G} \times \mathcal{K}`$ — breakpoint dispatch levels, one curve per generator |
-| $`y`$ | `bp_y` over $`\mathcal{G} \times \mathcal{K}`$ — cost at each breakpoint, one curve per generator |
+| $`\mathrm{p}^{\mathrm{max}}`$ | `p_max` over $`\mathcal{G}`$ — maximum dispatch |
 
 #### Variables
 
 | Symbol | Meaning |
 |---|---|
-| $`p`$ | `p` over $`\mathcal{T} \times \mathcal{G}`$ — dispatched power |
-| $`\mathrm{cost}`$ | `op_cost` over $`\mathcal{T} \times \mathcal{G}`$ — operating cost, piecewise-linear in dispatch |
+| $`\mathrm{cost}`$ | `op_cost` over $`\mathcal{G} \times \mathcal{T}`$ — operating cost, piecewise-linear in dispatch |
+| $`p`$ | `p` over $`\mathcal{G} \times \mathcal{T}`$ — dispatched power |
 
 #### Notation
 
@@ -79,22 +80,22 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 
 #### Variable domains
 
-**`p`**
-
-```math
-0 \le p_{t,g} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
-```
-
 **`op_cost`**
 
 ```math
-\mathrm{cost}_{t,g} \ge 0 \qquad \forall\, t \in \mathcal{T},\ g \in \mathcal{G}
+\mathrm{cost}_{g,t} \ge 0 \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+```
+
+**`p`**
+
+```math
+0 \le p_{g,t} \le \mathrm{p}^{\mathrm{max}}_{g} \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Objective
 
 ```math
-\min \sum_{t \in \mathcal{T},\ g \in \mathcal{G}} \mathrm{cost}_{t,g}
+\min \sum_{g \in \mathcal{G},\ t \in \mathcal{T}} \mathrm{cost}_{g,t}
 ```
 
 #### Subject to
@@ -102,13 +103,13 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 **`balance`**
 
 ```math
-\sum_{g \in \mathcal{G}} p_{t,g} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
+\sum_{g \in \mathcal{G}} p_{g,t} = \mathrm{load}_{t} \qquad \forall\, t \in \mathcal{T}
 ```
 
 **`cost_curve`**
 
 ```math
-\left( p_{t,g},\ \mathrm{cost}_{t,g} \right) \in \mathrm{conv}_{k \in \mathcal{K}}(x_{g,k},\ y_{g,k}) \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
+\left( p_{g,t},\ \mathrm{cost}_{g,t} \right) \in \mathrm{conv}_{k \in \mathcal{K}}(x_{k,g},\ y_{k,g}) \qquad \forall\, g \in \mathcal{G},\ t \in \mathcal{T}
 ```
 
 #### Assumptions
@@ -116,25 +117,25 @@ Least-cost dispatch where each generator's cost curve is piecewise-linear in its
 **`cost_curve_complete`**
 
 ```math
-x_{g,k} \text{ is defined} \wedge y_{g,k} \text{ is defined} \qquad \forall\, g \in \mathcal{G},\ k \in \mathcal{K}
+x_{k,g} \text{ is defined} \wedge y_{k,g} \text{ is defined} \qquad \forall\, k \in \mathcal{K},\ g \in \mathcal{G}
 ```
 
 **`cost_curve_increasing`**
 
 ```math
-x_{g,k \boxminus_{0} 1} < x_{g,k} \qquad \forall\, g \in \mathcal{G},\ k \in \mathcal{K} \,:\, \mathrm{pos}(k) > 0
+x_{k \boxminus_{0} 1,g} < x_{k,g} \qquad \forall\, k \in \mathcal{K},\ g \in \mathcal{G} \,:\, \mathrm{pos}(k) > 0
 ```
 
 **`cost_curve_curvature`**
 
 ```math
-\lvert \{ k \in \mathcal{K} \,:\, \left( y_{g,k} - y_{g,k \boxminus_{0} 1} \right) \cdot \left( x_{g,k \boxplus_{0} 1} - x_{g,k} \right) > \left( y_{g,k \boxplus_{0} 1} - y_{g,k} \right) \cdot \left( x_{g,k} - x_{g,k \boxminus_{0} 1} \right) \wedge \mathrm{pos}(k) > 0 \wedge \mathrm{pos}(k) \neq \lvert \mathcal{K} \rvert - 1 \} \rvert = 0 \vee \lvert \{ k \in \mathcal{K} \,:\, \left( y_{g,k} - y_{g,k \boxminus_{0} 1} \right) \cdot \left( x_{g,k \boxplus_{0} 1} - x_{g,k} \right) < \left( y_{g,k \boxplus_{0} 1} - y_{g,k} \right) \cdot \left( x_{g,k} - x_{g,k \boxminus_{0} 1} \right) \wedge \mathrm{pos}(k) > 0 \wedge \mathrm{pos}(k) \neq \lvert \mathcal{K} \rvert - 1 \} \rvert = 0 \qquad \forall\, g \in \mathcal{G}
+\lvert \{ k \in \mathcal{K} \,:\, \left( y_{k,g} - y_{k \boxminus_{0} 1,g} \right) \cdot \left( x_{k \boxplus_{0} 1,g} - x_{k,g} \right) > \left( y_{k \boxplus_{0} 1,g} - y_{k,g} \right) \cdot \left( x_{k,g} - x_{k \boxminus_{0} 1,g} \right) \wedge \mathrm{pos}(k) > 0 \wedge \mathrm{pos}(k) \neq \lvert \mathcal{K} \rvert - 1 \} \rvert = 0 \vee \lvert \{ k \in \mathcal{K} \,:\, \left( y_{k,g} - y_{k \boxminus_{0} 1,g} \right) \cdot \left( x_{k \boxplus_{0} 1,g} - x_{k,g} \right) < \left( y_{k \boxplus_{0} 1,g} - y_{k,g} \right) \cdot \left( x_{k,g} - x_{k \boxminus_{0} 1,g} \right) \wedge \mathrm{pos}(k) > 0 \wedge \mathrm{pos}(k) \neq \lvert \mathcal{K} \rvert - 1 \} \rvert = 0 \qquad \forall\, g \in \mathcal{G}
 ```
 
 </details>
 <!-- math:end -->
 
-The tabs start from [the instance's tables](../howto/data.md) — one frame per parameter.
+The tabs start from [the instance's tables](../howto/data.md) — one table per parameter.
 
 === "specsolve"
 
@@ -188,10 +189,11 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
         description: >-
           cost read off the generator's curve — convex, so the weights need no
           binaries to keep them on one segment
-        over: bp
+        along: bp
+        dims: [snapshot, generator]
         links:
-          - [p, bp_x]
-          - [op_cost, bp_y]
+          p: [p, bp_x]
+          op_cost: [op_cost, bp_y]
         method: convex
 
     constraints:
@@ -206,10 +208,9 @@ The tabs start from [the instance's tables](../howto/data.md) — one frame per 
     ```
 
     ```python
-    # sources: parameter name -> frame or parquet path
-    with sps.solve(to_spec('examples/piecewise.yaml').expand(), sources) as solution:
-        solution.objective  # 3850.0
-        solution.dual('balance')
+    # sources: parameter name -> table or parquet path
+    with sps.solve(to_spec('examples/piecewise.yaml').expand(), sources) as result:
+        result.objective  # 3850.0
     ```
 
 === "linopy"

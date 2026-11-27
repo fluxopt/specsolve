@@ -11,8 +11,8 @@
 # `p_max_pu`, so solar is zero at night and storage has a reason to cycle. It
 # has a row for every installed pair in every snapshot, and none elsewhere.
 #
-# A store starts empty, PyPSA's default, rather than wrapping around the
-# horizon: a cyclic store admits the same charging whichever way time runs, so
+# A store starts empty, PyPSA's default, rather than wrapping from the last
+# snapshot to the first: a cyclic store admits the same charging whichever way time runs, so
 # a model with its time index reversed would solve to the same objective.
 #
 # Every installed plant draws from one pool, a fuel contract or an emission
@@ -43,7 +43,7 @@ relations:
 parameters:
   installed:            # capacity of `tech` at `bus`; absent pairs are not installed
     dims: [bus, tech]
-    missing: neutral
+    missing: 0
   p_max:                # installed capacity times availability
     dims: [snapshot, bus, tech]
     missing: absent

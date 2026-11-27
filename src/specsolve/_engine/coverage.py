@@ -1,6 +1,6 @@
-"""Is the data there where a declaration needs it? The positions that ask.
+"""Is the data there where an entry needs it? The positions that ask.
 
-Elsewhere a missing row of a ``missing: neutral`` parameter reads as a zero coefficient. A divisor and a
+Elsewhere a missing row of a ``missing: 0`` parameter reads as a zero coefficient. A divisor and a
 constant term have no such reading, so each is asked at the last moment the
 gap is still visible:
 
@@ -23,16 +23,17 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected_all
-from specsolve._engine.predicates import masked
-from specsolve._engine.scope import join_on
+from specsolve._collect import collected
+from specsolve._engine.conditions import narrowed
+from specsolve._engine.scope import join_on, missing_value
 from specsolve._engine.terms import constant_scalar
 from specsolve._messages import non_finite_message, sparse_divisor_message, uncovered_constant_message
-from specsolve._sinks.handoff import SENSE
+from specsolve._names import COEFF, CONSTANT, ROW
+from specsolve._sinks.tables import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
     from specsolve._engine.scope import Scope
     from specsolve._engine.terms import Term
@@ -52,15 +53,15 @@ def refuse_null_coefficients(stacked: pl.DataFrame, subject: str, *expressions: 
 
     Raises:
         DataError: Naming the divisor parameters of *expressions* and the
-            count of undefined entries.
+            count of undefined coefficients.
     """
-    coeff = stacked.get_column('coeff')
+    coeff = stacked.get_column(COEFF)
     divisors = program.parameters_of(*divisors_of(*expressions))
     _refuse_undefined(int(coeff.null_count()), int(coeff.is_finite().not_().sum()), divisors, subject)
 
 
 def refuse_null_constants(
-    frames: Sequence[pl.LazyFrame],
+    tables: Sequence[pl.LazyFrame],
     divisors: Collection[str],
     subject: str,
     message: Callable[[str, int], str] = sparse_divisor_message,
@@ -70,26 +71,43 @@ def refuse_null_constants(
     One that is not finite has no number to build either.
 
     Asked before [`constant_scalar`][terms.constant_scalar] sums the term,
-    which reads a null as zero. *frames* are narrowed by the caller to the
-    coordinates the declaration builds. *message* words it for the position.
+    which reads a null as zero. *tables* are narrowed by the caller to the
+    coordinates the entry builds. *message* words it for the position.
 
     Raises:
         DataError: Naming *divisors* and the count of undefined values.
     """
-    if not divisors:
-        return
-    cval = pl.col('cval')
-    counts = collected_all(
-        [
-            frame.select(
-                cval.null_count().alias('null'), cval.cast(pl.Float64).is_finite().not_().sum().alias('non_finite')
-            )
-            for frame in frames
-        ]
-    )
-    undefined = sum(int(count.item(0, 'null')) for count in counts)
-    non_finite = sum(int(count.item(0, 'non_finite')) for count in counts)
-    _refuse_undefined(undefined, non_finite, divisors, subject, message)
+    if divisors:
+        refuse_undefined_constants(undefined_constants(tables).pipe(collected), divisors, subject, message)
+
+
+def undefined_constants(tables: Sequence[pl.LazyFrame]) -> pl.LazyFrame:
+    """How many constant values of *tables* are null, and how many are not finite: one row, for [`refuse_undefined_constants`][]."""
+    cval = pl.col(CONSTANT)
+    counts = [
+        table.select(
+            cval.null_count().cast(pl.Int64).alias('null'),
+            cval.cast(pl.Float64).is_finite().not_().sum().cast(pl.Int64).alias('non_finite'),
+        )
+        for table in tables
+    ]
+    if not counts:
+        return pl.LazyFrame({'null': [0], 'non_finite': [0]})
+    return pl.concat(counts).select(pl.all().sum())
+
+
+def refuse_undefined_constants(
+    counts: pl.DataFrame,
+    divisors: Collection[str],
+    subject: str,
+    message: Callable[[str, int], str] = sparse_divisor_message,
+) -> None:
+    """[`refuse_null_constants`][] on the *counts* [`undefined_constants`][] read.
+
+    Raises:
+        DataError: Naming *divisors* and the count of undefined values.
+    """
+    _refuse_undefined(int(counts.item(0, 'null')), int(counts.item(0, 'non_finite')), divisors, subject, message)
 
 
 def _refuse_undefined(
@@ -110,13 +128,13 @@ def _refuse_undefined(
 def narrowed_to_rows(rows: pl.LazyFrame, terms: Sequence[Term]) -> list[pl.LazyFrame]:
     """Each constant term cut to the rows built, for [`refuse_null_constants`][].
 
-    A term that lost the row's dims to a reduction is asked whole, but only if
-    the declaration builds a row at all.
+    A term that lost the row's dimensions to a reduction is asked whole, but only
+    if the entry builds a row at all.
     """
     return [
-        p.frame.join(rows.select(*p.dims), on=list(p.dims), how='semi')
+        p.table.join(rows.select(*p.dims), on=list(p.dims), how='semi')
         if p.dims
-        else p.frame.join(rows.select('row').head(1), how='cross')
+        else p.table.join(rows.select(ROW).head(1), how='cross')
         for p in terms
     ]
 
@@ -126,51 +144,66 @@ def constant_side(
     rows: pl.LazyFrame,
     terms: Sequence[tuple[Term, float]],
     c: program.Constraint,
-) -> pl.LazyFrame:
-    """One constraint's rows as ``(row, sense, rhs)``, and where a constant term left a row uncovered.
+    subject: str,
+) -> pl.DataFrame:
+    """One constraint's rows as ``(row, sense, rhs)``, every constant term covering the rows it is given.
 
-    A coordinate a term has no row for contributes zero. Only a term with a
-    parameter under it is owed: one whose parameters all stand beside a
-    variable is a coefficient, and its zero is not a bound. A term built under
-    a ``cases:`` region is owed only inside it. The plan carries one gap column
-    per owed term, which [`refuse_uncovered`][] reads. A gap a reduction summed
-    away is one summand fewer, as it is for a ``missing: neutral`` row anywhere
-    inside a sum.
-    """
-    accumulated = pl.lit(0.0, dtype=pl.Float64)
-    gaps: list[str] = []
-    carrier = rows
-    for i, (p, sign) in enumerate(terms):
-        column = f'__const {i}__'
-        aggregated = constant_scalar(p).rename({'cval': column})
-        carrier = join_on(carrier, aggregated, p.dims, 'left')
-        accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
-        if not p.parameters:
-            continue
-        gap = pl.col(column).is_null()
-        if p.region is not None:
-            inside = f'__inside {i}__'
-            claimed = masked(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
-            carrier = join_on(carrier, claimed, c.dims, 'left')
-            gap = gap & pl.col(inside).fill_null(False)
-        carrier = carrier.with_columns(gap.alias(_gap_column(i)))
-        gaps.append(_gap_column(i))
-
-    return carrier.select(
-        'row',
-        pl.lit(c.sense, dtype=SENSE).alias('sense'),
-        accumulated.cast(pl.Float64).alias('rhs'),
-        *gaps,
-    )
-
-
-def refuse_uncovered(built: pl.DataFrame, terms: Sequence[tuple[Term, float]], subject: str) -> pl.DataFrame:
-    """*built*, a [`constant_side`][] read over *terms*, without its gap columns, once no row is left uncovered.
+    A coordinate a term has no row for contributes zero, and the coverage
+    check rides on the same pass. Only a term with a parameter under it is
+    owed: one whose parameters all stand beside a variable is a coefficient,
+    and its zero is not a bound. A term built under a ``cases:`` region is
+    owed only inside it. A gap a reduction summed away leaves the sum one term
+    fewer, as it is for a ``missing: 0`` row anywhere inside a sum.
 
     Raises:
         DataError: A constant term with no value at a row it is owed.
     """
-    gaps = {_gap_column(i): p.parameters for i, (p, _) in enumerate(terms) if p.parameters}
+    query, gaps = constant_side_planned(scope, rows, terms, c)
+    return covered(query.pipe(collected), gaps, subject)
+
+
+def constant_side_planned(
+    scope: Scope,
+    rows: pl.LazyFrame,
+    terms: Sequence[tuple[Term, float]],
+    c: program.Constraint,
+) -> tuple[pl.LazyFrame, dict[str, frozenset[str]]]:
+    """[`constant_side`][]'s query, and the parameters each of its gap columns owes, for [`covered`][]."""
+    accumulated = pl.lit(0.0, dtype=pl.Float64)
+    gaps: dict[str, frozenset[str]] = {}
+    carrier = rows
+    for i, (p, sign) in enumerate(terms):
+        column = f'__const {i}__'
+        aggregated = constant_scalar(p).rename({CONSTANT: column})
+        carrier = join_on(carrier, aggregated, p.dims, 'left')
+        accumulated = accumulated + sign * pl.col(column).fill_null(0.0)
+        owed = frozenset(name for name in p.parameters if missing_value(scope.program, name) is None)
+        if not owed:
+            continue
+        gap = pl.col(column).is_null()
+        if p.region is not None:
+            inside = f'__inside {i}__'
+            claimed = narrowed(scope, c.dims, p.region).select(*c.dims).with_columns(pl.lit(True).alias(inside))
+            carrier = join_on(carrier, claimed, c.dims, 'left')
+            gap = gap & pl.col(inside).fill_null(False)
+        carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
+        gaps[f'__gap {i}__'] = owed
+
+    query = carrier.select(
+        ROW,
+        pl.lit(c.sense, dtype=SENSE).alias('sense'),
+        accumulated.cast(pl.Float64).alias('rhs'),
+        *gaps,
+    )
+    return query, gaps
+
+
+def covered(built: pl.DataFrame, gaps: Mapping[str, frozenset[str]], subject: str) -> pl.DataFrame:
+    """*built*, [`constant_side_planned`][]'s query collected, without its gap columns once none holds a gap.
+
+    Raises:
+        DataError: A constant term with no value at a row it is owed.
+    """
     if not gaps:
         return built
     owed = [parameters for column, parameters in gaps.items() if built.get_column(column).any()]
@@ -179,8 +212,3 @@ def refuse_uncovered(built: pl.DataFrame, terms: Sequence[tuple[Term, float]], s
         names = ', '.join(sorted(frozenset[str]().union(*owed)))
         raise DataError(uncovered_constant_message(names, uncovered, subject))
     return built.drop(list(gaps))
-
-
-def _gap_column(i: int) -> str:
-    """The column [`constant_side`][] marks the rows term *i* leaves uncovered in."""
-    return f'__gap {i}__'
