@@ -7,8 +7,8 @@ driver above [`specsolve._api`][], built from the public verbs.
     myopic pathway      ``EachLabel('period', carry=...)``
     rolling horizon     ``EachWindow('snapshot', horizon=24, lookahead=24, carry=...)``
 
-The axes are [`specsolve._axes`][] and what a fold returns is
-[`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,
+The axes are [`specsolve._sweep.axes`][] and what a fold returns is
+[`specsolve._sweep.sweep`][]. [`build_slice`][] builds the model of one slice alone,
 as the driver builds it. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
@@ -26,17 +26,17 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 
 from specsolve import _parquet as parquet
+from specsolve._answer.outputs import checked_outputs
+from specsolve._answer.records import Metrics, Record
 from specsolve._api import build, check
 from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
-from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._inputs import as_spec, as_table
 from specsolve._names import VALUE, refuse_reserved
-from specsolve._outputs import checked_outputs
-from specsolve._records import Metrics, Record
 from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
-from specsolve._sweep import SliceAnswer, SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
+from specsolve._sweep.axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
+from specsolve._sweep.sweep import SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -45,12 +45,13 @@ if TYPE_CHECKING:
     from mathspec.program import Program
     from mathspec.spec import Spec
 
+    from specsolve._answer import Answer
+    from specsolve._answer.outputs import Output
+    from specsolve._answer.result import Result
     from specsolve._api import Model
-    from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
-    from specsolve._outputs import Output
-    from specsolve._result import Result
     from specsolve._start import Start
+    from specsolve._sweep.axes import CarryRule, Slice
 
 
 def solve_over(
@@ -103,7 +104,7 @@ def solve_over(
             ``.zip`` is packed into one file once the sweep ends, and the
             sweep returned then holds its answer in memory; an interrupted one
             leaves no file, and is not resumed. The sweep returned carries
-            the archived [`sources`][specsolve._sweep.Sweep.sources]: the
+            the archived [`sources`][specsolve._sweep.sweep.Sweep.sources]: the
             paths under ``sources/`` for a directory, the tables for a zip.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
             every slice. The sweep and its archive carry these and nothing
@@ -124,7 +125,7 @@ def solve_over(
             nothing.
 
     Returns:
-        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.Sweep.axis] that cut it.
+        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.sweep.Sweep.axis] that cut it.
 
     Raises:
         SpecsolveError: Before a slice is taken: an *over* that is no axis,
@@ -395,7 +396,7 @@ def _serially(
     plan: Mapping[str, CarryRule],
     on_disk: SliceFiles | None,
     starts: Sequence[Start | Literal['previous'] | None],
-) -> Generator[tuple[Label, SliceAnswer], None, None]:
+) -> Generator[tuple[Label, Answer], None, None]:
     """Each slice's answer, off one model updated in place.
 
     A generator, since a slice is built from what the one before it left;
@@ -404,7 +405,7 @@ def _serially(
     """
     model: Model | None = None
     carried = {rule.variable for rule in plan.values()}
-    last: tuple[int, SliceAnswer, Mapping[str, pl.DataFrame]] | None = None
+    last: tuple[int, Answer, Mapping[str, pl.DataFrame]] | None = None
 
     def left(before: Slice) -> Mapping[str, pl.DataFrame]:
         """The primal *before* left for the slice after it; a carried sweep stops at a slice that left none."""
@@ -431,7 +432,7 @@ def _serially(
                     else:
                         model.update(current.sources)
                     answer = _answers(model.solve(**solving, start=starts[position]))
-                primals = answer.tables.get('primal', {})
+                primals = {name: table.pipe(collected) for name, table in answer.tables.get('primal', {}).items()}
                 if on_disk is not None:
                     answer = on_disk.write(position, current.key, answer)
             last = (position, answer, primals)
@@ -458,7 +459,7 @@ def _pooled(
     solving: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     on_disk: SliceFiles | None,
     starts: Sequence[Start | Literal['previous'] | None],
-) -> Generator[tuple[Label, SliceAnswer], None, None]:
+) -> Generator[tuple[Label, Answer], None, None]:
     """The same, from slices built independently and possibly elsewhere.
 
     Yielded in slice order, never completion order. A built model cannot cross
@@ -488,11 +489,11 @@ def _pooled(
             continue
         with _named_slice(current.key, position, len(slices)):
             answer = future.result()
-        answer = replace(answer, tables={kind: _decode(named) for kind, named in answer.tables.items()})
+        answer = replace(answer, tables={kind: _decoded_tables(named) for kind, named in answer.tables.items()})
         yield current.key, on_disk.write(position, current.key, answer) if on_disk is not None else answer
 
 
-def _answers(result: Result) -> SliceAnswer:
+def _answers(result: Result) -> Answer:
     """One slice's answer as plain data, read out of *result*, every declared expression evaluated now.
 
     A slice with no primal, or with undefined duals, is not a failure: the
@@ -500,15 +501,10 @@ def _answers(result: Result) -> SliceAnswer:
     serial fold's model keeps summing across slices, and a result's row is
     already its own share.
     """
-    metrics = result.metrics
-    assert metrics is not None, 'a solve always hands back its metrics'
+    assert result.metrics is not None, 'a solve always hands back its metrics'
     if not result.has_primal:
-        return SliceAnswer(result.record, metrics)
-    held, no_expressions = result._all_tables()
-    tables = {
-        kind: {name: table.lazy().pipe(collected) for name, table in named.items()} for kind, named in held.items()
-    }
-    return SliceAnswer(result.record, metrics, tables, result._no_duals, no_expressions)
+        return replace(result._answer, tables={}, reasons={})
+    return result._whole().in_memory()
 
 
 def _run_slice(
@@ -517,7 +513,7 @@ def _run_slice(
     encode_out: bool,
     call: Mapping[str, Any],  # pyrefly: ignore[explicit-any] — the verb's own keywords, forwarded
     start: Start | Literal['previous'] | None,
-) -> SliceAnswer:
+) -> Answer:
     """One slice, start to finish, over plain data; module-level so a remote executor can pickle it."""
     sources = _decode(encoded)
     _refuse_a_path_the_worker_cannot_read(sources)
@@ -599,3 +595,8 @@ def _encode(
 def _decode(encoded: Mapping[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
     """The inverse of [`_encode`][]; anything not ``bytes`` passes through."""
     return {name: parquet.read(io.BytesIO(v)) if isinstance(v, bytes) else v for name, v in encoded.items()}
+
+
+def _decoded_tables(encoded: Mapping[str, Any]) -> dict[str, pl.LazyFrame]:  # pyrefly: ignore[explicit-any] — a table crosses as parquet bytes
+    """A slice's tables of one kind as its answer holds them, each read back where it crossed as ``bytes``."""
+    return {name: table.lazy() for name, table in _decode(encoded).items()}

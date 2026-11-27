@@ -67,7 +67,7 @@ def test_the_slack_is_the_distance_to_binding_however_the_row_is_written(solver_
 def test_an_equality_off_its_right_hand_side_reads_below_zero_either_way() -> None:
     """``==`` holds only at zero, so a residual of either sign is a violation of that size."""
     with sps.build(spec({'fixed': 'y == 2'}), {}) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         over = readback.slacks(tables, pl.Series('value', [2.5]))
         under = readback.slacks(tables, pl.Series('value', [1.5]))
     assert (over.item(), under.item()) == pytest.approx((-0.5, -0.5)), 'the residual, signed as a violation'

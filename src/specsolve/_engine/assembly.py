@@ -1,7 +1,7 @@
 """One build: every entry into rows of the model tables a sink drains.
 
-The variable and constraint index tables fill during a build, because an
-entry built later reads what earlier ones produced.
+[`build`][] is the whole of it. The variable and constraint index tables fill
+during a build, because an entry built later reads what earlier ones produced.
 """
 
 from __future__ import annotations
@@ -15,23 +15,24 @@ import polars as pl
 from mathspec import program
 
 from specsolve import _sinks as sinks
+from specsolve._answer.result import Diagnostics
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import rowless
+from specsolve._engine.specialize import is_empty, specialized
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from mathspec.program import ObjectiveSense
-    from polars._typing import MaintainOrderJoin
+    from polars._typing import MaintainOrderJoin, PolarsDataType
 
+    from specsolve._clock import Lap, Step
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._records import Lap, Step
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -90,6 +91,37 @@ class Measured:
     rows: int = 0
     nonzeros: int = 0
 
+    def diagnostics(self) -> Diagnostics:
+        """What the build did that the answer does not show, as the tables a caller reads."""
+        return Diagnostics(
+            omissions=_per_name('constraint', self.omitted, rows_not_built=pl.UInt32),
+            coefficient_range=_per_name('constraint', self.coefficients, smallest=pl.Float64, largest=pl.Float64),
+            bound_range=_per_name('variable', self.bounds, smallest=pl.Float64, largest=pl.Float64),
+            rhs_range=_per_name('constraint', self.rhs, smallest=pl.Float64, largest=pl.Float64),
+            sparse_parameters=_per_name(
+                'parameter',
+                {name: (reach, rows, reach - rows) for name, (reach, rows) in self.sparse.items()},
+                coordinates=pl.UInt64,
+                rows=pl.UInt64,
+                missing=pl.UInt64,
+            ),
+            objective_range=self.objective_range,
+        )
+
+
+def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
+    """One [`Diagnostics`][specsolve._answer.result.Diagnostics] table: a row per name in *measured*, in build order.
+
+    *kind* names the first column, and the remaining *columns* carry each
+    value in order — a scalar for one column, a tuple for several.
+    """
+    names = list(measured)
+    values = [v if isinstance(v, tuple) else (v,) for v in measured.values()]
+    schema = {kind: pl.String, **columns}
+    return pl.DataFrame(
+        {kind: names, **{column: [v[i] for v in values] for i, column in enumerate(columns)}}, schema=schema
+    )
+
 
 @dataclass(frozen=True)
 class BuiltModel:
@@ -102,6 +134,24 @@ class BuiltModel:
     variables: dict[str, indices.Indexed]
     constraints: dict[str, indices.Indexed]
     tables: sinks.SinkTables
+
+
+def build(program: program.Program, attached: AttachedSources, measured: Measured, lap: Lap) -> BuiltModel:
+    """Build every entry of *program* over *attached* into the model tables.
+
+    The program a build reads is [`specialized`][specsolve._engine.specialize.specialized]
+    to what the data settled, and the model it returns holds that one. A build
+    that raises returns no model rather than half of one.
+
+    Args:
+        program: The compiled program.
+        attached: Its data, as [`attach`][specsolve._engine.attaching.attach] returns it.
+        measured: Where the build writes what it measures about itself, as it
+            measures it, so a build that raises still reports what it got to.
+        lap: Ends a lap of ``build`` at each step, one per entry.
+    """
+    measured.sparse = short_parameters(program, attached)
+    return Assembly(specialized(program, attached), attached, measured, lap).run()
 
 
 class Assembly:
@@ -234,7 +284,7 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if rowless(v, self.attached):
+        if is_empty(v, self.attached):
             indexed = self._empty_table(v.dims, COL)
         else:
             indexed = indices.table(self.scope, v.dims, v.where, COL, start)
@@ -305,7 +355,7 @@ class Assembly:
         absence never meets the full product of its dimensions.
         """
         start = self.n_rows
-        if rowless(c, self.attached):
+        if is_empty(c, self.attached):
             return self._without_a_row(name, self._empty_table(c.dims, ROW), start)
         admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:

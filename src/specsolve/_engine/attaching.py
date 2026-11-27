@@ -1,7 +1,9 @@
 """What a caller's ``sources`` become: the tables the engine reads by name.
 
 [`tidy_sources`][specsolve._sources.tidy_sources] has already read and checked
-every source; this shapes each and encodes the string dimensions.
+every source; [`attach`][] shapes each, encodes the string dimensions, and
+checks the spec's ``assumptions:`` on them. It is the one way data reaches a
+build or a read.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import polars as pl
 from mathspec import program as program_module
 
 from specsolve._collect import collected, in_memory
+from specsolve._engine.assumptions import check_assumptions
 from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
 from specsolve._engine.specialize import settle
@@ -68,11 +71,13 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     [`in_memory`][], since every read holds one table whole. Each dimension's
     cast is built once and shared, since building a cast to an ``Enum`` of
     many labels costs a fixed time per expression. Every atom of a ``where``
-    is then read once ([`settle`][]), for the assumptions and the build both.
+    is then read once ([`settle`][]), for the assumptions and the build both,
+    and the assumptions are checked.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
-            at some coordinate.
+            at some coordinate, or an ``assumptions:`` entry the data does not
+            hold.
     """
     with in_memory():
         dimensions = {d: _position_table(d, sources[d]).pipe(collected) for d in program.dimensions}
@@ -122,7 +127,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
-    return replace(attached, settled=settle(program, attached))
+    attached = replace(attached, settled=settle(program, attached))
+    check_assumptions(program, attached)
+    return attached
 
 
 def filled_parameters(declared: program.Program) -> frozenset[str]:

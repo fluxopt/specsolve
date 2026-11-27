@@ -24,12 +24,19 @@ import polars as pl
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
+from specsolve._clock import untimed
+from specsolve._engine import readback
+from specsolve._engine.assembly import Measured, build
+from specsolve._engine.attaching import attach
 from specsolve._names import COL
+from specsolve._sinks import WRITERS
+from specsolve._sinks.highs import Highs
 from specsolve._sources import tidy_sources
 
 if TYPE_CHECKING:
     from mathspec.spec import Spec
+
+    from specsolve._engine.assembly import BuiltModel
 
 HERE = Path(__file__).parent
 SPEC = HERE / 'walkthrough.yaml'
@@ -75,10 +82,9 @@ def main() -> None:
     schema = validated_model()
     expanded_ast(schema)
     program = relational_ir(schema)
-    with Engine() as engine:
-        model_tables(engine, schema, program)
-        lp_file(engine)
-        solution(engine)
+    built = model_tables(program)
+    lp_file(built)
+    solution(built)
     refusals()
 
     print(f'\n{_dim("docs/development/architecture.md has the rules these stages enforce.")}')
@@ -136,18 +142,15 @@ def relational_ir(schema: Spec) -> Any:
     return program
 
 
-def model_tables(engine: Engine, schema: Spec, program: Any) -> None:
+def model_tables(program: Any) -> BuiltModel:
     """Stage 4 — plan plus data to the model tables, the first stage to see a number.
 
-    Sources are adapted to tidy tables (dims..., value) and the engine
-    assembles the model from them.
-
-    The tables are engine-private, so this is the one place the script reads
-    private attributes.
+    Sources are adapted to tidy tables (dims..., value), attached to the
+    program, and the engine assembles the model from them.
     """
-    banner(4, 'plan + data -> the model tables', '_engine/engine.py')
-    engine.build(program, tidy_sources(program, SOURCES))
-    tables = engine._model.tables
+    banner(4, 'plan + data -> the model tables', '_engine/assembly.py')
+    built = build(program, attach(program, tidy_sources(program, SOURCES)), Measured(), untimed)
+    tables = built.tables
     for name, table in (
         ('cols', tables.cols),
         ('obj', tables.obj),
@@ -159,14 +162,15 @@ def model_tables(engine: Engine, schema: Spec, program: Any) -> None:
     print('    a column is a bound and a cost, a row a sense and a rhs,')
     print('    and A is every nonzero coefficient as (row, col, coeff).')
 
-    variables = engine._model.variables['p'].table.collect()
+    variables = built.variables['p'].table.collect()
     n_full = 6 * 4
     print('\n    where "p_max > 0" is not a mask array — it is row absence:')
     print(f'    p has {variables.height} rows, not {n_full}: retired oil never becomes a column.')
     print(_indent(variables.sort(COL).head(4)))
+    return built
 
 
-def lp_file(engine: Engine) -> None:
+def lp_file(built: BuiltModel) -> None:
     """Stage 5 — the same tables, second sink.
 
     The other one (the ``highs`` solver, stage 6) hands COO batches to highspy
@@ -175,13 +179,13 @@ def lp_file(engine: Engine) -> None:
     banner(5, 'sink: stream the tables to an LP file', '_sinks/lp_file.py')
     with tempfile.TemporaryDirectory() as tmp:
         lp = Path(tmp) / 'model.lp'
-        engine.write(lp)
+        WRITERS['.lp'].write(built.tables, lp)
         text = lp.read_text().splitlines()
         print(_indent('\n'.join(text[:12])))
         print(f'    ... ({len(text)} lines total)')
 
 
-def solution(engine: Engine) -> None:
+def solution(built: BuiltModel) -> None:
     """Stage 6 — batches to highspy, and the solution read back by solver index.
 
     Never densified. ``primal()`` hands back a table, printed unsorted: index
@@ -192,7 +196,8 @@ def solution(engine: Engine) -> None:
     rather than at build.
     """
     banner(6, 'sink: batches -> highspy -> solution tables', '_sinks/highs.py')
-    result = engine.solve()
+    with Highs(built.tables) as solver:
+        result = readback.result(built, solver.run(built.tables), 'highs', None)
     print(f'    status     {result.status} ({result.termination_condition})')
     print(f'    objective  {result.objective:,.1f}')
     print(_indent(result.primal('p').head(6)))

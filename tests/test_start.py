@@ -46,7 +46,7 @@ def solved(spec: dict, given: dict, solver_name: str, **solve: Any) -> tuple[Res
     """One solve of *spec* on a fresh model, and the simplex iterations it took."""
     with sps.build(spec, given) as model:
         answer = model.solve(solver_name=solver_name, **solve)
-        return answer, SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        return answer, SIMPLEX_ITERATIONS[solver_name](model._solver)
 
 
 def test_an_unchanged_model_started_from_its_own_answer_does_no_simplex_work(solver_name: str) -> None:
@@ -649,7 +649,7 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
 def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
     monkeypatch: pytest.MonkeyPatch, start: Any, match: str
 ) -> None:
-    from specsolve import _solve_over as driver
+    from specsolve._sweep import solve_over as driver
 
     monkeypatch.setattr(driver, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
     with pytest.raises(SpecsolveError, match=match):
