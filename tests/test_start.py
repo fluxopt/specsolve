@@ -196,21 +196,20 @@ def _through_solve_over(start: dict[str, Any]) -> None:
     sps.solve_over(DISPATCH, snapshots(40), sps.EachWindow('snapshot', horizon=40, lookahead=0), start=start)
 
 
-_LANDS_INSIDE = pytest.mark.xfail(
-    strict=True, reason='a fixed stack level lands inside specsolve when a verb calls Model.solve'
-)
-
-
 @pytest.mark.parametrize(
     'call',
     [
         pytest.param(_through_model_solve, id='model-solve'),
-        pytest.param(_through_solve, id='solve', marks=_LANDS_INSIDE),
-        pytest.param(_through_solve_over, id='solve-over', marks=_LANDS_INSIDE),
+        pytest.param(_through_solve, id='solve'),
+        pytest.param(_through_solve_over, id='solve-over'),
     ],
 )
 def test_the_warning_of_a_start_with_no_gain_names_the_callers_line(call: Any) -> None:
-    """The warning points at the line that asked for the solve, whichever verb it called."""
+    """The warning points at the line that asked for the solve, whichever verb it called.
+
+    A fixed stack level counted from Model.solve, so a solve asked for through
+    sps.solve or solve_over named a line inside specsolve.
+    """
     primal = sps.solve(DISPATCH, snapshots(40)).primal('p')
     start = {'primal': {'p': primal.head(primal.height // 2)}}
     with warnings.catch_warnings(record=True) as caught:

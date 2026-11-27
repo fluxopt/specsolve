@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -777,5 +778,5 @@ def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.nd
                 f"answer solved with outputs={{'basis'}} starts an LP from its basis. If you see a start of "
                 f'values speed up a solve, please report it at https://github.com/fluxopt/specsolve/issues.',
                 SpecsolveWarning,
-                stacklevel=5,
+                skip_file_prefixes=(str(Path(__file__).parents[1]),),
             )
