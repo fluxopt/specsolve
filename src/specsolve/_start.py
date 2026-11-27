@@ -14,14 +14,14 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import polars as pl
 
+from specsolve._answer.result import Result
 from specsolve._collect import collected
 from specsolve._inputs import as_table
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
-from specsolve._result import Result
 from specsolve._sinks.solver import BASIS_STATUSES
 from specsolve._sources import read_values
-from specsolve._sweep import Sweep
+from specsolve._sweep.sweep import Sweep
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
     from mathspec.program import Constraint, Program, Variable
 
-    from specsolve._axes import Axis, Slice
     from specsolve._inputs import Label, Source
+    from specsolve._sweep.axes import Axis, Slice
 
 
 class Start(TypedDict, total=False):
@@ -41,7 +41,7 @@ class Start(TypedDict, total=False):
     ``variable_basis`` and ``constraint_basis`` give a basis status in
     [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
     earlier [`Result`][] is the same, from the tables it carries. Given to
-    [`solve_over`][specsolve._solve_over.solve_over], a table that carries the
+    [`solve_over`][specsolve._sweep.solve_over.solve_over], a table that carries the
     sliced dimension is cut per slice, as a source is.
 
     Example::

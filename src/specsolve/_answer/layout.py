@@ -1,10 +1,10 @@
 """The answer's layout on disk: what an archive holds of a result and of a sweep, and the writer that lands a file whole.
 
 Under a directory, ``<kind>/<name>`` for each of the
-[`KINDS`][specsolve._outputs.KINDS] the answer carries: one file per name from
+[`KINDS`][specsolve._answer.outputs.KINDS] the answer carries: one file per name from
 a result, one per slice from a sweep, read back as one. Beside them, the
-[`Record`][specsolve._records.Record] says how the solve terminated and the
-[`Metrics`][specsolve._records.Metrics] what it took, one row of each per
+[`Record`][specsolve._answer.records.Record] says how the solve terminated and the
+[`Metrics`][specsolve._answer.records.Metrics] what it took, one row of each per
 result or per slice, ``spec.yaml`` is the spec the answer came from, and
 ``reasons.parquet`` says why a kind or a name is deliberately not there. An
 archive holds this layout under its own ``answer/``
@@ -21,9 +21,9 @@ from mathspec import to_spec
 
 from specsolve import _parquet as parquet
 from specsolve._answer import WHOLE, Answer
+from specsolve._answer.outputs import is_output, kinds_of
+from specsolve._answer.records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record, installed_version
 from specsolve._names import RUN
-from specsolve._outputs import is_output, kinds_of
-from specsolve._records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record, installed_version
 from specsolve.errors import LayoutError
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer import Reasons
-    from specsolve._outputs import Output
+    from specsolve._answer.outputs import Output
 
 #: The layout of what an archive holds under its ``answer/``, a result's or a
 #: sweep's. A change to any of them raises it. Compared, never branched on.
@@ -42,7 +42,7 @@ FORMAT_FILE = 'format.json'
 
 
 def write_format(directory: Path, outputs: Iterable[Output] | None = None, layout: int = ANSWER_LAYOUT) -> None:
-    """Stamp *directory* with the layout its contents are in, the specsolve version that wrote them, and the [`OUTPUTS`][specsolve._outputs.OUTPUTS] an answer carries.
+    """Stamp *directory* with the layout its contents are in, the specsolve version that wrote them, and the [`OUTPUTS`][specsolve._answer.outputs.OUTPUTS] an answer carries.
 
     An archive's own stamp, over its spec and its data, names no *outputs*.
     """
@@ -54,7 +54,7 @@ def write_format(directory: Path, outputs: Iterable[Output] | None = None, layou
 
 
 def read_outputs(directory: Path) -> frozenset[Output]:
-    """The [`OUTPUTS`][specsolve._outputs.OUTPUTS] the answer under *directory* carries, as its stamp names them. Called once the stamp's layout is checked.
+    """The [`OUTPUTS`][specsolve._answer.outputs.OUTPUTS] the answer under *directory* carries, as its stamp names them. Called once the stamp's layout is checked.
 
     A name this package has no output for is dropped rather than refused: a
     later specsolve added it, it has no reader here, and the rest of the
@@ -80,7 +80,7 @@ def row_of[R](row_type: Callable[..., R], columns: Mapping[str, object], found: 
     """One row read off disk as the type that declares its columns.
 
     Args:
-        row_type: [`Record`][specsolve._records.Record] or [`Metrics`][specsolve._records.Metrics].
+        row_type: [`Record`][specsolve._answer.records.Record] or [`Metrics`][specsolve._answer.records.Metrics].
         columns: The row as read, ``name: value``.
         found: What to name in the message — the file or directory it came from.
 

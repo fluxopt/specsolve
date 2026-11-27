@@ -79,22 +79,7 @@ def _imported(
 
 
 #: The relational lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
-LANE = frozenset(
-    {
-        '_answer',
-        '_answer_layout',
-        '_clock',
-        '_collect',
-        '_engine',
-        '_names',
-        '_outputs',
-        '_parquet',
-        '_records',
-        '_result',
-        '_sinks',
-        '_status',
-    }
-)
+LANE = frozenset({'_answer', '_clock', '_collect', '_engine', '_names', '_parquet', '_sinks'})
 
 
 def _lane_modules() -> list[Path]:
@@ -637,7 +622,7 @@ def test_the_sources_argument_is_one_type_at_every_door():
     The linopy lane's two verbs are asked in ``tests/test_linopy_lane.py``.
     """
     import specsolve
-    from specsolve._solve_over import build_slice, solve_over
+    from specsolve._sweep.solve_over import build_slice, solve_over
 
     functions = {
         'build': specsolve.build,

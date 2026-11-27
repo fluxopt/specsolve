@@ -1,6 +1,6 @@
 """The phases a solve is clocked in add up to the call, and each step is clocked in the phase that names it.
 
-[`Metrics`][specsolve._records.Metrics] defines the phases. The model's own
+[`Metrics`][specsolve._answer.records.Metrics] defines the phases. The model's own
 clocks are held to the process's CPU time over a whole call; the archived row, written
 before the archive lands, to at most what the model kept. One test slows one
 step at a time and finds the delay in its own phase and nowhere else.
@@ -16,10 +16,10 @@ import yaml
 
 import specsolve as sps
 from specsolve import _api, _archive_layout, _clock
+from specsolve._answer.records import PHASES, Metrics
+from specsolve._answer.result import Result
 from specsolve._clock import Phase
 from specsolve._engine import assembly, attaching, readback
-from specsolve._records import PHASES, Metrics
-from specsolve._result import Result
 from specsolve._sinks.solver import Solver
 
 if TYPE_CHECKING:

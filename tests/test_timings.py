@@ -13,8 +13,8 @@ import pytest
 
 import specsolve as sps
 from specsolve import _clock
+from specsolve._answer.records import PHASES
 from specsolve._engine import assembly, readback
-from specsolve._records import PHASES
 from specsolve._sinks.highs import Highs
 from specsolve.types import Model
 

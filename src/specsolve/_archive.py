@@ -21,7 +21,8 @@ from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
 from specsolve._answer import whole_kind_reason
-from specsolve._answer_layout import ANSWER_LAYOUT, other_layout
+from specsolve._answer.layout import ANSWER_LAYOUT, other_layout
+from specsolve._answer.result import read_result
 from specsolve._api import build
 from specsolve._archive_layout import (
     ANSWER_DIR,
@@ -31,12 +32,11 @@ from specsolve._archive_layout import (
     SPEC_MEMBER,
     opened,
 )
-from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._result import read_result
-from specsolve._sweep import Sweep, read_sweep_answer, with_key
+from specsolve._sweep.axes import as_built, axis_from, carry_plan
+from specsolve._sweep.sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -45,9 +45,9 @@ if TYPE_CHECKING:
     from mathspec.program import Expression
     from mathspec.spec import Spec
 
-    from specsolve._axes import Axis
+    from specsolve._answer.result import Result
     from specsolve._inputs import Label, Source, SpecLike
-    from specsolve._result import Result
+    from specsolve._sweep.axes import Axis
 
 __all__ = ['ArchivedInputs', 'read_archive', 'read_inputs', 'scan_archive']
 
@@ -64,7 +64,7 @@ class ArchivedInputs:
         spec: The spec as written.
         sources: What was attached, keyed as the file declares it, as the
             tables [`tidy`][specsolve._api.tidy] returns. A sweep's are uncut,
-            as [`Sweep.sources`][specsolve._sweep.Sweep.sources] holds them.
+            as [`Sweep.sources`][specsolve._sweep.sweep.Sweep.sources] holds them.
         axis: What cut the sources, with the ``carry=`` it chained the slices
             with, or ``None`` for an archive of one solve.
     """
@@ -112,11 +112,11 @@ def read_archive(path: str | Path, into: str | Path | None = None) -> Result | S
 
     Returns:
         The [`Sweep`][] where the archive carries an axis, with its
-        [`sources`][specsolve._sweep.Sweep.sources] uncut and its
-        [`axis`][specsolve._sweep.Sweep.axis]; the
-        [`Result`][specsolve._result.Result] where it does not, with its
-        [`sources`][specsolve._result.Result.sources] and the
-        [`metrics`][specsolve._result.Result.metrics] reaching it took.
+        [`sources`][specsolve._sweep.sweep.Sweep.sources] uncut and its
+        [`axis`][specsolve._sweep.sweep.Sweep.axis]; the
+        [`Result`][specsolve._answer.result.Result] where it does not, with its
+        [`sources`][specsolve._answer.result.Result.sources] and the
+        [`metrics`][specsolve._answer.result.Result.metrics] reaching it took.
 
     Raises:
         LanguageError: A ``spec.yaml`` the language does not accept.
@@ -207,7 +207,7 @@ def _refuse_another_layout(saved: Path, archive: Path) -> None:
 
 
 def _attach_readers(answer: Result, spec: SpecLike, sources: Mapping[str, Source]) -> Result:
-    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._result.Result.evaluate].
+    """*answer* with an undeclared expression readable through [`evaluate`][specsolve._answer.result.Result.evaluate].
 
     *spec* is rebuilt over *sources* at the first undeclared read, never
     solved, and cached. *answer* comes back unchanged where the solve left no

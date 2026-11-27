@@ -13,11 +13,11 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Literal
 
 from specsolve._answer import Answer, named_reasons, whole_kind_reason
-from specsolve._answer_layout import read_answer, read_spec, write_answer, write_format, write_reasons, write_spec
+from specsolve._answer.layout import read_answer, read_spec, write_answer, write_format, write_reasons, write_spec
+from specsolve._answer.outputs import BASES, NO_BASIS, OUTPUT_KINDS, checked_kind, not_requested_message, outputs_of
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve._names import VALUE
-from specsolve._outputs import BASES, NO_BASIS, OUTPUT_KINDS, checked_kind, not_requested_message, outputs_of
 from specsolve.errors import NoSolutionError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer import Tables
-    from specsolve._answer_layout import TableWriter
+    from specsolve._answer.layout import TableWriter
+    from specsolve._answer.records import Metrics, Provenance, Record
     from specsolve._inputs import Source
-    from specsolve._records import Metrics, Provenance, Record
 
 
 #: What the bridges out say when the environment cannot serve them, ``{module}``
@@ -307,7 +307,7 @@ class Result:
     """
 
     #: The answer itself: its record, its metrics, and under ``primal``,
-    #: ``dual`` and each of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS]
+    #: ``dual`` and each of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS]
     #: the solve asked for, one lazy ``(dims…, value)`` table per entry in
     #: index order. The kinds its tables are keyed by are what it carries.
     #: [`close`][] leaves it no table.
@@ -410,7 +410,7 @@ class Result:
     def record(self) -> Record:
         """How this solve terminated, as the one row an archive writes for it, which adds the run.
 
-        A sweep keeps the same row per slice in [`records`][specsolve._sweep.Sweep.records].
+        A sweep keeps the same row per slice in [`records`][specsolve._sweep.sweep.Sweep.records].
         ``objective`` is ``None`` rather than ``nan`` where there are no
         values.
         """
@@ -626,15 +626,15 @@ class Result:
         return given
 
     def _output(self, kind: str, name: str) -> pl.DataFrame:
-        """*name*'s table of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS]: what each output's reader returns."""
+        """*name*'s table of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS]: what each output's reader returns."""
         return _named(self._carried(kind, name), name, OUTPUT_KINDS[kind].per).pipe(collected)
 
     def _carried(self, kind: str, name: str) -> Mapping[str, pl.LazyFrame]:
-        """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], or why they cannot be read.
+        """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS], or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
         that exists only where the duals do, the duals' reason, and for a basis,
-        [`NO_BASIS`][specsolve._outputs.NO_BASIS] where the
+        [`NO_BASIS`][specsolve._answer.outputs.NO_BASIS] where the
         solve ended on none.
         """
         what = f"the {kind.replace('_', ' ')} of '{name}'"
@@ -734,7 +734,7 @@ class Result:
     def _save(self, out: Path, write: TableWriter) -> Path:
         """Every kind this solve answered with, one file per name, into an archive's *out*, each table written with *write*.
 
-        The layout is [`specsolve._answer_layout`][]'s; a solve that left no
+        The layout is [`specsolve._answer.layout`][]'s; a solve that left no
         values writes the record and the spec alone. The metrics are the
         archive's to write, once every other member is.
         """

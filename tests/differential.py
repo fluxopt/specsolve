@@ -32,7 +32,7 @@ from tests.oracle import linopy, specsolve_linopy, xr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve._outputs import Output
+    from specsolve._answer.outputs import Output
     from specsolve.types import Model, Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.

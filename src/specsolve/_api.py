@@ -31,6 +31,9 @@ from mathspec import advice
 
 from specsolve import _parquet as parquet
 from specsolve import _sinks as sinks
+from specsolve._answer.outputs import checked_outputs
+from specsolve._answer.records import METRICS_SCHEMA, Metrics, Provenance, installed_version
+from specsolve._answer.result import Result
 from specsolve._archive_layout import carried_sources, check_the_target, write_archive
 from specsolve._clock import Clock, untimed
 from specsolve._collect import collected
@@ -39,9 +42,6 @@ from specsolve._engine.assembly import Measured
 from specsolve._engine.assembly import build as build_model
 from specsolve._engine.attaching import attach
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
-from specsolve._outputs import checked_outputs
-from specsolve._records import METRICS_SCHEMA, Metrics, Provenance, installed_version
-from specsolve._result import Result
 from specsolve._sinks.solver import Basis
 from specsolve._sources import refuse_unknown_sources, tidied, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
@@ -52,11 +52,11 @@ if TYPE_CHECKING:
 
     from mathspec.program import Expression, Program
 
+    from specsolve._answer.outputs import Output
+    from specsolve._answer.result import ConstraintRow, Diagnostics, InfeasibleSubsystem
+    from specsolve._answer.status import SolveStatus
     from specsolve._engine.assembly import BuiltModel
-    from specsolve._outputs import Output
-    from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem
     from specsolve._start import Start
-    from specsolve._status import SolveStatus
 
 __all__ = ['build', 'check', 'evaluate', 'solve', 'tidy', 'write']
 
@@ -152,7 +152,7 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
     A spec with only dimensions, parameters, relations and ``expressions:``
     is a calculation: each expression reads only the attached data. This
     attaches *sources* and values one expression, the way
-    [`evaluate`][specsolve._result.Result.evaluate] does at a
+    [`evaluate`][specsolve._answer.result.Result.evaluate] does at a
     solution. The spec is read as [`solve`][] reads it; one that declares
     variables belongs there.
 
@@ -269,13 +269,13 @@ class Model:
         whatever changed. Data that changes which coordinates a condition admits
         renumbers solver indices, so the model is rebuilt and solved cold rather
         than pushed onto a loaded solver;
-        [`solver_instances`][specsolve._records.Metrics.solver_instances] says which ran.
+        [`solver_instances`][specsolve._answer.records.Metrics.solver_instances] says which ran.
 
         Results taken before the update keep reading their own tables, and
         keep their build's index tables alive until dropped or until
-        [`close`][specsolve._result.Result.close] is called. A sweep, a
+        [`close`][specsolve._answer.result.Result.close] is called. A sweep, a
         rolling horizon or a myopic pathway is
-        [`solve_over`][specsolve._solve_over.solve_over], which runs this loop.
+        [`solve_over`][specsolve._sweep.solve_over.solve_over], which runs this loop.
 
         Args:
             sources: Only what changed; the rest keeps what [`build`][]
@@ -321,7 +321,7 @@ class Model:
                 ``timelimit``. Gurobi's are applied when its environment is
                 created, so ``ComputeServer``, ``TokenServer`` and
                 ``WLSAccessID`` reach it too. The result's
-                [`provenance`][specsolve._result.Result.provenance]
+                [`provenance`][specsolve._answer.result.Result.provenance]
                 records the value of an option that changes the answer, such
                 as a time limit or a gap, and the name alone of any other.
             also_record: Option names whose value the result records as
@@ -335,11 +335,11 @@ class Model:
                 ``.zip`` suffix packs it into one file; anything else is a
                 directory. What the build and its solves spent goes in beside
                 the answer, as
-                [`Metrics`][specsolve._records.Metrics]. Each
+                [`Metrics`][specsolve._answer.records.Metrics]. Each
                 source goes in as the table [`tidy`][] returns, with
                 ``specsolve_run`` added, and members are stored uncompressed.
                 The answer returned carries the archived
-                [`sources`][specsolve._result.Result.sources]: the paths
+                [`sources`][specsolve._answer.result.Result.sources]: the paths
                 under ``sources/`` for a directory, the tables for a zip.
             outputs: Each [`Output`][specsolve.types.Output] the answer
                 carries beside the primal, the duals and the declared
@@ -634,7 +634,7 @@ class Model:
     ) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
         """An ad-hoc expression reader over a *saved* solution, put back against this build.
 
-        What an archive and a sweep hand [`evaluate`][specsolve._result.Result.evaluate]
+        What an archive and a sweep hand [`evaluate`][specsolve._answer.result.Result.evaluate]
         for a quantity the file never named: the saved tables are laid back in
         this build's index order, and the reader is the one a live solve gives.
         A build, never a solve.

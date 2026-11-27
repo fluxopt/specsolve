@@ -16,10 +16,10 @@ from typing import Literal
 import numpy as np
 import polars as pl
 
-from specsolve._records import PHASES, Metrics
+from specsolve._answer.records import PHASES, Metrics
 
-#: A name in [`PHASES`][specsolve._records.PHASES], so a lap under a phase no
-#: [`Metrics`][specsolve._records.Metrics] column carries is refused by the
+#: A name in [`PHASES`][specsolve._answer.records.PHASES], so a lap under a phase no
+#: [`Metrics`][specsolve._answer.records.Metrics] column carries is refused by the
 #: type checker.
 Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
 
@@ -125,7 +125,7 @@ class Clock:
     def metrics(self, columns: int, rows: int, nonzeros: int, run: int | None = None) -> Metrics:
         """The sizes given, with the counters and clocks over the whole life, or over *run* alone.
 
-        The one place a [`Metrics`][specsolve._records.Metrics] is built from
+        The one place a [`Metrics`][specsolve._answer.records.Metrics] is built from
         a model: a result's, an archive's and a sweep slice's row is its
         run's. The clocks are the laps summed by phase.
         """

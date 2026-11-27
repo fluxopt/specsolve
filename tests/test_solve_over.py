@@ -26,11 +26,11 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import _archive_layout as archive_layout
-from specsolve import _solve_over as driver
-from specsolve import _sweep as sweep_module
-from specsolve._axes import CarryRule, Slice, as_built, axis_from
+from specsolve._answer.records import Metrics, Provenance, Record
 from specsolve._inputs import as_program
-from specsolve._records import Metrics, Provenance, Record
+from specsolve._sweep import solve_over as driver
+from specsolve._sweep import sweep as sweep_module
+from specsolve._sweep.axes import CarryRule, Slice, as_built, axis_from
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------

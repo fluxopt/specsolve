@@ -24,13 +24,13 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve._answer import whole_kind_reason
-from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
+from specsolve._answer.layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
+from specsolve._answer.outputs import KINDS
+from specsolve._answer.records import Metrics, Provenance, Record
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve._inputs import as_program
 from specsolve._names import RUN
-from specsolve._outputs import KINDS
-from specsolve._records import Metrics, Provenance, Record
 from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable, tidy_sources
 from tests.conftest import (
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
     from mathspec.spec import Spec
 
-    from specsolve._outputs import Output
+    from specsolve._answer.outputs import Output
 
 
 def _question(archive: sps.types.Result | sps.types.Sweep) -> tuple[Spec, Mapping[str, object]]:

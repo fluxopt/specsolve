@@ -19,7 +19,7 @@ from specsolve.errors import SpecsolveError
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
-    from specsolve._result import ConstraintRow
+    from specsolve._answer.result import ConstraintRow
 
 DATA = {
     'generator': pl.DataFrame({'generator': ['wind', 'gas']}),

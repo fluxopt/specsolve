@@ -1,9 +1,9 @@
 """One solve's answer as plain data: how it ended, what it took, its tables, and why a table is not there.
 
-A [`Result`][specsolve._result.Result] reads one, a sweep keeps one per slice,
+A [`Result`][specsolve._answer.result.Result] reads one, a sweep keeps one per slice,
 and an archive's ``answer/`` holds one
-([`write_answer`][specsolve._answer_layout.write_answer]). The tables are keyed
-by the [`KINDS`][specsolve._outputs.KINDS] and then by name, and so are the
+([`write_answer`][specsolve._answer.layout.write_answer]). The tables are keyed
+by the [`KINDS`][specsolve._answer.outputs.KINDS] and then by name, and so are the
 reasons.
 """
 
@@ -12,20 +12,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
+from specsolve._answer.outputs import PRICED
+from specsolve._answer.status import SolveStatus
 from specsolve._collect import collected
-from specsolve._outputs import PRICED
-from specsolve._status import SolveStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import polars as pl
 
+    from specsolve._answer.records import Metrics, Record
     from specsolve._inputs import Label
-    from specsolve._records import Metrics, Record
 
 #: ``{kind: {name: table}}``: one ``(dims…, value)`` table per name, under each
-#: of the [`KINDS`][specsolve._outputs.KINDS] an answer carries. A kind it
+#: of the [`KINDS`][specsolve._answer.outputs.KINDS] an answer carries. A kind it
 #: carries and has nothing of maps to nothing.
 type Tables = Mapping[str, Mapping[str, pl.LazyFrame]]
 

@@ -15,6 +15,7 @@ import polars as pl
 from mathspec import program
 
 from specsolve import _sinks as sinks
+from specsolve._answer.result import Diagnostics
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
@@ -22,7 +23,6 @@ from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import rowless, specialized
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
-from specsolve._result import Diagnostics
 from specsolve._sinks.tables import SENSE
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ class Measured:
 
 
 def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
-    """One [`Diagnostics`][specsolve._result.Diagnostics] table: a row per name in *measured*, in build order.
+    """One [`Diagnostics`][specsolve._answer.result.Diagnostics] table: a row per name in *measured*, in build order.
 
     *kind* names the first column, and the remaining *columns* carry each
     value in order — a scalar for one column, a tuple for several.

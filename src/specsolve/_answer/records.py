@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
 
 import polars as pl
 
-from specsolve._status import SolveStatus, status_of
+from specsolve._answer.status import SolveStatus, status_of
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

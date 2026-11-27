@@ -271,14 +271,14 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
 
     import specsolve as sps
     from specsolve._sinks.solver import SolveAnswer
-    from specsolve._status import SolveStatus
 
+    status = _named('SolveStatus', 'specsolve._answer.status', 'specsolve._status')
     spec, sources = prepared
     model = sps.build(spec, sources)
     tables = _tables(model)
     rows = pl.zeros(tables.row_count, dtype=pl.Float64, eager=True)
     answer = SolveAnswer(
-        SolveStatus('optimal'),
+        status('optimal'),
         0.0,
         primal=pl.zeros(tables.column_count, dtype=pl.Float64, eager=True),
         dual=None if _discrete(model) else rows,
@@ -312,6 +312,16 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     return _counts(_tables(model), nonzeros=False)
 
 
+def _named(name: str, *modules: str) -> Any:
+    """*name* out of the first of *modules* the checkout under test has, the newest home first."""
+    for module in modules[:-1]:
+        try:
+            return getattr(importlib.import_module(module), name)
+        except ModuleNotFoundError:
+            continue
+    return getattr(importlib.import_module(modules[-1]), name)
+
+
 def _discrete(model: Any) -> list[str]:
     """The variables *model* declares as anything but continuous, as the checkout under test names them."""
     if (engine := getattr(model, '_engine', None)) is not None:
@@ -337,9 +347,7 @@ def _write_answer(result: Any, out: Path) -> None:
     if (save := getattr(result, 'save', None)) is not None:
         save(out)
         return
-    from specsolve._answer_layout import write_whole
-
-    result._save(out, write_whole)
+    result._save(out, _named('write_whole', 'specsolve._answer.layout', 'specsolve._answer_layout'))
 
 
 def build_only(prepared: tuple[Path, dict[str, str]]) -> Counts:

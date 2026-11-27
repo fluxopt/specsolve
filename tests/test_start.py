@@ -649,7 +649,7 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
 def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
     monkeypatch: pytest.MonkeyPatch, start: Any, match: str
 ) -> None:
-    from specsolve import _solve_over as driver
+    from specsolve._sweep import solve_over as driver
 
     monkeypatch.setattr(driver, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
     with pytest.raises(SpecsolveError, match=match):

@@ -7,8 +7,8 @@ driver above [`specsolve._api`][], built from the public verbs.
     myopic pathway      ``EachLabel('period', carry=...)``
     rolling horizon     ``EachWindow('snapshot', horizon=24, lookahead=24, carry=...)``
 
-The axes are [`specsolve._axes`][] and what a fold returns is
-[`specsolve._sweep`][]. [`build_slice`][] builds the model of one slice alone,
+The axes are [`specsolve._sweep.axes`][] and what a fold returns is
+[`specsolve._sweep.sweep`][]. [`build_slice`][] builds the model of one slice alone,
 as the driver builds it. The caller-facing rules are [sweeps](https://specsolve.readthedocs.io/en/latest/reference/sweeps/).
 """
 
@@ -26,17 +26,17 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 
 from specsolve import _parquet as parquet
+from specsolve._answer.outputs import checked_outputs
+from specsolve._answer.records import Metrics, Record
 from specsolve._api import build, check
 from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
-from specsolve._axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._collect import collected
 from specsolve._inputs import as_spec, as_table
 from specsolve._names import VALUE, refuse_reserved
-from specsolve._outputs import checked_outputs
-from specsolve._records import Metrics, Record
 from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
-from specsolve._sweep import SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
+from specsolve._sweep.axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
+from specsolve._sweep.sweep import SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
 from specsolve.errors import DataError, SpecsolveError
 
 if TYPE_CHECKING:
@@ -46,12 +46,12 @@ if TYPE_CHECKING:
     from mathspec.spec import Spec
 
     from specsolve._answer import Answer
+    from specsolve._answer.outputs import Output
+    from specsolve._answer.result import Result
     from specsolve._api import Model
-    from specsolve._axes import CarryRule, Slice
     from specsolve._inputs import Label, Source, SpecLike
-    from specsolve._outputs import Output
-    from specsolve._result import Result
     from specsolve._start import Start
+    from specsolve._sweep.axes import CarryRule, Slice
 
 
 def solve_over(
@@ -104,7 +104,7 @@ def solve_over(
             ``.zip`` is packed into one file once the sweep ends, and the
             sweep returned then holds its answer in memory; an interrupted one
             leaves no file, and is not resumed. The sweep returned carries
-            the archived [`sources`][specsolve._sweep.Sweep.sources]: the
+            the archived [`sources`][specsolve._sweep.sweep.Sweep.sources]: the
             paths under ``sources/`` for a directory, the tables for a zip.
         outputs: As [`solve`][specsolve._api.Model.solve] takes them, reaching
             every slice. The sweep and its archive carry these and nothing
@@ -125,7 +125,7 @@ def solve_over(
             nothing.
 
     Returns:
-        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.Sweep.axis] that cut it.
+        The sweep, which reads its answer and carries the [`axis`][specsolve._sweep.sweep.Sweep.axis] that cut it.
 
     Raises:
         SpecsolveError: Before a slice is taken: an *over* that is no axis,

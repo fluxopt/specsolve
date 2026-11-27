@@ -11,6 +11,9 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._answer import WHOLE, Answer
+from specsolve._answer.outputs import kinds_of
+from specsolve._answer.records import Record
+from specsolve._answer.result import ConstraintRow, Expressions, InfeasibleSubsystem, Result
 from specsolve._collect import collected
 from specsolve._engine import coverage, indices
 from specsolve._engine.assembly import declares_quadratic
@@ -19,9 +22,6 @@ from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
-from specsolve._outputs import kinds_of
-from specsolve._records import Record
-from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem, Result
 from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, BASIS_STATUSES, Basis, seated
 from specsolve._sinks.tables import SENSE_CODES
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -29,12 +29,12 @@ from specsolve.errors import SpecsolveError, SpecsolveWarning
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from specsolve._answer.outputs import Output
+    from specsolve._answer.status import SolveStatus
     from specsolve._engine.assembly import BuiltModel
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._outputs import Output
     from specsolve._sinks.solver import InfeasibleSubsystemIndices, SolveAnswer
     from specsolve._sinks.tables import SinkTables
-    from specsolve._status import SolveStatus
 
 #: How an expression the caller writes becomes a program node. ``None``
 #: wherever one stands for a build with no spec as written to compile it
@@ -212,7 +212,7 @@ def reduced_costs(tables: SinkTables, primal: pl.Series, dual: pl.Series) -> pl.
     """Each column's reduced cost: the objective's gradient less the rows' gradients weighted by *dual*.
 
     Computed here rather than asked of each solver, so it carries
-    [`dual`][specsolve._result.Result.dual]'s one sign convention on
+    [`dual`][specsolve._answer.result.Result.dual]'s one sign convention on
     every sink. The gradients are taken at *primal*, which only a quadratic
     term reads.
     """
@@ -316,7 +316,7 @@ def _aligned(
 def expressions(
     builder: QueryBuilder, named: Mapping[str, program.NamedExpression], lower: Lower | None
 ) -> Expressions:
-    """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one builder.
+    """The reads [`evaluate`][specsolve._answer.result.Result.evaluate] is built from, over one builder.
 
     No query is built until a reader is called. Without *lower* there is no
     spec as written to compile against, so an undeclared expression has no reader.
@@ -514,8 +514,8 @@ def result(
         answer: What the solver returned.
         solver_name: The solver that returned it, for the reason it left no ray.
         lower: How an expression the caller writes becomes a program node, for
-            [`evaluate`][specsolve._result.Result.evaluate].
-        outputs: Which of [`OUTPUTS`][specsolve._outputs.OUTPUTS] the result
+            [`evaluate`][specsolve._answer.result.Result.evaluate].
+        outputs: Which of [`OUTPUTS`][specsolve._answer.outputs.OUTPUTS] the result
             carries, already checked.
     """
     assert answer.primal is not None or not answer.status.is_readable, (
@@ -565,7 +565,7 @@ def read_back(
 
 
 def _output(model: BuiltModel, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
-    """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+    """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
     match kind:
         case 'activity':
             return {} if answer.activity is None else _per_constraint(model, answer.activity)
@@ -607,7 +607,7 @@ def _per_variable(model: BuiltModel, values: pl.Series) -> dict[str, pl.LazyFram
 def _expressions(
     model: BuiltModel, primal: pl.Series | None, dual: pl.Series | None, no_duals: str | None, lower: Lower | None
 ) -> Expressions:
-    """What [`evaluate`][specsolve._result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
+    """What [`evaluate`][specsolve._answer.result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
 
     The readers close over a snapshot the result owns, including a copy of
     the variable registry, so they keep answering after an update or
