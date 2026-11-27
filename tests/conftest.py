@@ -3,7 +3,10 @@
 Everything here is linopy-free and pandas-free at import, so it loads on a bare
 install. A module that needs the linopy lane imports ``tests.oracle`` or
 ``tests.differential``, whose ``importorskip`` skips it. A fixture that hands
-out pandas objects imports pandas in its own body.
+out pandas objects imports pandas in its own body. A helper that drives the
+build below ``specsolve.build`` imports what it drives in its own body too:
+`bench.ab` loads this module against an older checkout's ``src`` for a port's
+spec and sources, and that checkout may not have those names.
 """
 
 from __future__ import annotations
@@ -23,9 +26,6 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
-from specsolve._api import attach_sources
-from specsolve._clock import untimed
-from specsolve._engine import assembly, readback
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
 from specsolve._sinks.highs import Highs
@@ -610,10 +610,16 @@ def solver_name(request: pytest.FixtureRequest) -> str:
 
 def build_program(program, sources) -> BuiltModel:
     """*program* built over *sources* with no spec behind it, which is what the engine takes below ``specsolve.build``."""
+    from specsolve._api import attach_sources
+    from specsolve._clock import untimed
+    from specsolve._engine import assembly
+
     return assembly.build(program, attach_sources(program, sources)[1], assembly.Measured(), untimed)
 
 
 def solve_built(built: BuiltModel) -> Result:
     """*built* solved by HiGHS and read back, with no model around it."""
+    from specsolve._engine import readback
+
     with Highs(built.tables) as solver:
         return readback.result(built, solver.run(built.tables), 'highs', None)
