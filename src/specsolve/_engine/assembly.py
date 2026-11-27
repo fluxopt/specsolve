@@ -225,22 +225,13 @@ class Assembly:
         self.small = self._reach() <= IN_MEMORY_REACH
         with in_memory(self.small):
             self.lap('build', 'setup', None)
-            bounds = [
-                self._timed('variable', name, self._index_variable, name, v)
-                for name, v in self.program.variables.items()
-            ]
-            cols = self._bounded([b for b in bounds if b is not None])
-            self.lap('build', 'bounds', None)
+            cols = self._variables()
             sets = [
                 self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
                 for name, s in self.program.sos.items()
             ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-            planned = [self._timed('constraint', name, self._planned_constraint, name, c) for name, c in ordered]
-            live = self._indexed([c for c in planned if c is not None])
-            self.lap('build', 'indices', None)
-            shares = self._terms(live)
-            self.lap('build', 'terms', None)
+            shares = self._constraints(ordered)
             o = self.program.objective
             objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
@@ -283,6 +274,32 @@ class Assembly:
             return build(*args, **kwargs)
         finally:
             self.lap('build', step, entry)
+
+    def _variables(self) -> list[pl.DataFrame]:
+        """Every variable indexed in its own row, then their bounds in the ``bounds`` pass: each one's share of ``cols``.
+
+        What an entry planned is let go when this returns, so no term of it
+        outlives the pass that read it.
+        """
+        bounds = [
+            self._timed('variable', name, self._index_variable, name, v) for name, v in self.program.variables.items()
+        ]
+        cols = self._bounded([b for b in bounds if b is not None])
+        self.lap('build', 'bounds', None)
+        return cols
+
+    def _constraints(self, ordered: list[tuple[str, program.Constraint]]) -> dict[str, _ConstraintShare]:
+        """Every constraint compiled in its own row, then the ``indices`` and ``terms`` passes: each one's shares by name.
+
+        As in [`_variables`][], a constraint's compiled terms are let go when
+        this returns, before the stacking holds every share twice.
+        """
+        planned = [self._timed('constraint', name, self._planned_constraint, name, c) for name, c in ordered]
+        live = self._indexed([c for c in planned if c is not None])
+        self.lap('build', 'indices', None)
+        shares = self._terms(live)
+        self.lap('build', 'terms', None)
+        return shares
 
     def _batches[T](self, entries: list[T]) -> list[list[T]]:
         """*entries* in the batches a shared pass reads: one batch within [`IN_MEMORY_REACH`][], one entry per batch above it.
