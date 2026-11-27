@@ -293,7 +293,9 @@ class Assembly:
         batch is read, checked and let go before the next is read, so a pass
         holds no more at once than one entry built alone does.
         """
-        return [entries] if self.small else [[entry] for entry in entries]
+        if self.small:
+            return [entries]
+        return [[entry] for entry in entries]
 
     def _together(self, queries: list[pl.LazyFrame]) -> list[pl.DataFrame]:
         """Every query of one batch: in one pass within [`IN_MEMORY_REACH`][], one after another above it.
@@ -301,9 +303,9 @@ class Assembly:
         Above the reach one pass would run an entry's queries side by side, each
         holding its working set at once.
         """
-        if not queries:
-            return []
-        return collected_all(queries) if self.small else [collected(query) for query in queries]
+        if self.small:
+            return collected_all(queries)
+        return [collected(query) for query in queries]
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.

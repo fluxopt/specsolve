@@ -228,3 +228,18 @@ def test_above_the_reach_a_pass_reads_one_entry_and_lets_it_go_before_the_next(m
     sps.build(TWO_ROWS, TWO_ROWS_DATA).close()
     assert events == order, f'the terms pass ran in the order {events}'
     assert any(n > 1 for n in batched) == shared, f'queries per collect_all: {batched}'
+
+
+def test_a_share_leaves_the_build_as_it_is_placed(monkeypatch):
+    """Each constraint's share is copied as it moves onto the model's rows; the unmoved one kept beside it is held twice through the stacking."""
+    left = []
+    placed = assembly.Assembly._placed
+
+    def spied(self, names, shares):
+        moved = placed(self, names, shares)
+        left.append(dict(shares))
+        return moved
+
+    monkeypatch.setattr(assembly.Assembly, '_placed', spied)
+    sps.build(TWO_ROWS, TWO_ROWS_DATA).close()
+    assert left == [{}], f'shares still held after they were placed: {list(left[0])}'
