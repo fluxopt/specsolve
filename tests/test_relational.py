@@ -1568,19 +1568,23 @@ class TestThePositionalHandoff:
         cost = pl.DataFrame({'n': ['a', 'b'], 'value': [1.0, 0.0]})
         data = {'t': t_labels, 'n': ['a', 'b'], 'avail': avail, 'cost': cost}
 
-        real = scope_module.Scope._position_key
-        decided = {}
+        real = scope_module.Scope.parameter_join
+        joined = {}
 
-        def spy(self, dims):
-            key = real(self, dims)
-            decided[dims] = key is not None
-            return key
+        def spy(self, table, parameter, table_dims, alias, *args, **kwargs):
+            out = real(self, table, parameter, table_dims, alias, *args, **kwargs)
+            on_the_key = scope_module._POSITION_KEY in out.explain(optimized=False)
+            only_the_value = out.collect_schema().names() == [*table.collect_schema().names(), alias]
+            joined[parameter] = (on_the_key, only_the_value)
+            return out
 
-        monkeypatch.setattr(scope_module.Scope, '_position_key', spy)
+        monkeypatch.setattr(scope_module.Scope, 'parameter_join', spy)
         with sps.build(spec, data) as model:
             model.write(tmp_path / 'built.lp')
-        assert decided.get(('n', 't')) is keyed, f'the (n, t) bound join chose {decided}'
-        assert decided.get(('n',)) is False, f'the where on cost over n alone chose {decided}'
+        assert joined == {'avail': (keyed, True), 'cost': (False, True)}, (
+            f'(joined on the key, added only the value) per parameter: {joined}'
+        )
+        monkeypatch.undo()
 
         monkeypatch.setattr(scope_module.Scope, '_position_key', lambda self, dims: None)
         with sps.build(spec, data) as model:
