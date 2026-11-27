@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _encoding
 from specsolve._engine import assumptions as _assumptions
-from specsolve._engine import conditions, indices, specialize
+from specsolve._engine import conditions, coverage, indices, specialize
 from specsolve._engine import queries as queries_module
 from specsolve._names import COL, ROW
 
@@ -513,3 +513,36 @@ def test_a_where_holds_where_its_parameter_has_no_row_and_the_missing_value_pass
     sources = EVERYWHERE_SOURCES | {'unset': pl.DataFrame(schema={'g': pl.String, 't': pl.Int64, 'value': pl.Float64})}
     with sps.build(spec, sources) as model:
         assert model.metrics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+
+
+def test_a_constraint_whose_where_the_index_finds_empty_reads_no_terms(monkeypatch):
+    """`low > 1` holds at `a` and `high > 1` at `b`, so neither settles, and together they admit no row.
+
+    The data leaves the `where` to the index, which finds it empty; the
+    constraint then holds no row, and a query of its terms would build nothing.
+    """
+    spec = {
+        'dimensions': {'g': {}},
+        'parameters': {'low': {'dims': ['g']}, 'high': {'dims': ['g']}},
+        'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {
+            'live': {'dims': ['g'], 'expression': 'x <= low + high'},
+            'never': {'dims': ['g'], 'where': 'low > 1 AND high > 1', 'expression': 'x >= low'},
+        },
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    sources = {
+        'g': ['a', 'b'],
+        'low': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 0.0]}),
+        'high': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 2.0]}),
+    }
+    planned, sides = coverage.constant_side_planned, []
+
+    def spied(scope, rows, terms, c):
+        sides.append(c)
+        return planned(scope, rows, terms, c)
+
+    monkeypatch.setattr(coverage, 'constant_side_planned', spied)
+    with sps.build(spec, sources) as model:
+        assert model.metrics().rows == 2, '`live` keeps both rows, `never` none'
+    assert len(sides) == 1, f'only `live` had its terms read, not {len(sides)} constraints'
