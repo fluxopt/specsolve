@@ -14,7 +14,15 @@ from typing import TYPE_CHECKING, Literal
 
 from specsolve._answer import Answer, named_reasons, whole_kind_reason
 from specsolve._answer.layout import read_answer, read_spec, write_answer, write_format, write_reasons, write_spec
-from specsolve._answer.outputs import BASES, NO_BASIS, OUTPUT_KINDS, checked_kind, not_requested_message, outputs_of
+from specsolve._answer.outputs import (
+    BASES,
+    ENTRIES,
+    NO_BASIS,
+    OUTPUT_KINDS,
+    checked_kind,
+    not_requested_message,
+    outputs_of,
+)
 from specsolve._collect import collected
 from specsolve._messages import coordinate_text, no_model_behind_this_answer_message, unknown_name_message
 from specsolve._names import VALUE
@@ -456,8 +464,7 @@ class Result:
             SpecsolveError: This result was closed.
             KeyError: No variable is called *name*.
         """
-        tables = self._readable('primal', f"the primal of '{name}'")
-        return _named(tables, name, 'variable').pipe(collected)
+        return self._read('primal', name)
 
     def dual(self, name: str) -> pl.DataFrame:
         """Shadow prices of constraint *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -480,10 +487,7 @@ class Result:
                 them.
             KeyError: No constraint is called *name*.
         """
-        tables = self._readable('dual', f"the dual of '{name}'")
-        if (no_duals := self._no_duals) is not None:
-            raise SpecsolveError(no_duals)
-        return _named(tables, name, 'constraint').pipe(collected)
+        return self._read('dual', name)
 
     def reduced_cost(self, name: str) -> pl.DataFrame:
         """Reduced costs of variable *name* — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -505,7 +509,7 @@ class Result:
                 [`dual`][] raises.
             KeyError: No variable is called *name*.
         """
-        return self._output('reduced_cost', name)
+        return self._read('reduced_cost', name)
 
     def dual_ray(self, name: str) -> pl.DataFrame:
         """Constraint *name*'s share of the certificate that this model has no solution — ``(dims…, value)``.
@@ -551,7 +555,7 @@ class Result:
                 for its activity.
             KeyError: No constraint is called *name*.
         """
-        return self._output('activity', name)
+        return self._read('activity', name)
 
     def slack(self, name: str) -> pl.DataFrame:
         """How far constraint *name* is from binding at the solution — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -570,7 +574,7 @@ class Result:
                 for its slack.
             KeyError: No constraint is called *name*.
         """
-        return self._output('slack', name)
+        return self._read('slack', name)
 
     def variable_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each column of variable *name* where the solve ended — ``(dims…, value)``, [`primal`][]'s shape and order.
@@ -587,7 +591,7 @@ class Result:
                 its basis, or it ended on none.
             KeyError: No variable is called *name*.
         """
-        return self._output('variable_basis', name)
+        return self._read('variable_basis', name)
 
     def constraint_basis(self, name: str) -> pl.DataFrame:
         """The basis status of each row of constraint *name* where the solve ended — ``(dims…, value)``, [`dual`][]'s shape and order.
@@ -605,7 +609,7 @@ class Result:
                 its basis, or it ended on none.
             KeyError: No constraint is called *name*.
         """
-        return self._output('constraint_basis', name)
+        return self._read('constraint_basis', name)
 
     @property
     def _no_duals(self) -> str | None:
@@ -625,21 +629,22 @@ class Result:
                 given[kind] = tables
         return given
 
-    def _output(self, kind: str, name: str) -> pl.DataFrame:
-        """*name*'s table of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS]: what each output's reader returns."""
-        return _named(self._carried(kind, name), name, OUTPUT_KINDS[kind].per).pipe(collected)
+    def _read(self, kind: str, name: str) -> pl.DataFrame:
+        """*name*'s table of *kind*: what the reader of every kind but an expression returns."""
+        return _named(self._carried(kind, name), name, ENTRIES[kind]).pipe(collected)
 
-    def _carried(self, kind: str, name: str) -> Mapping[str, pl.LazyFrame]:
-        """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._answer.outputs.OUTPUT_KINDS], or why they cannot be read.
+    def _carried(self, kind: str, name: str | None = None) -> Mapping[str, pl.LazyFrame]:
+        """The tables of *kind*, any of the [`KINDS`][specsolve._answer.outputs.KINDS] but ``expression``, or why they cannot be read.
 
         Closed first, then not asked for, then the status, then, for a kind
         that exists only where the duals do, the duals' reason, and for a basis,
         [`NO_BASIS`][specsolve._answer.outputs.NO_BASIS] where the
-        solve ended on none.
+        solve ended on none. *name* is the one table a refusal is about, where
+        there is one.
         """
-        what = f"the {kind.replace('_', ' ')} of '{name}'"
+        what = f'the {kind.replace("_", " ")}' + (f" of '{name}'" if name is not None else '')
         if kind not in self._unclosed(what):
-            raise SpecsolveError(not_requested_message(kind, name))
+            raise SpecsolveError(not_requested_message(kind, name or 'anything'))
         tables = self._readable(kind, what)
         if (absent := whole_kind_reason(self._answer.reasons, kind)) is not None:
             raise SpecsolveError(absent)
@@ -681,9 +686,7 @@ class Result:
     def _table(self, name: str, kind: str) -> pl.DataFrame:
         """*name* through the reader *kind* names — the dispatch every bridge shares."""
         kind = checked_kind(kind)
-        if kind in OUTPUT_KINDS:
-            return self._output(kind, name)
-        return {'primal': self.primal, 'dual': self.dual, 'expression': self.evaluate}[kind](name)
+        return self.evaluate(name) if kind == 'expression' else self._read(kind, name)
 
     def _names(self, kind: str) -> tuple[str, ...]:
         """Every name of *kind* this result can read — what a bridge takes by default.
@@ -694,15 +697,8 @@ class Result:
                 ``reduced_cost`` and the duals are undefined, or *kind* is an
                 output the solve was not asked for.
         """
-        if checked_kind(kind) == 'primal':
-            return tuple(self._readable('primal', 'the solution'))
-        if kind == 'dual':
-            tables = self._readable('dual', 'the duals')
-            if (no_duals := self._no_duals) is not None:
-                raise SpecsolveError(no_duals)
-            return tuple(tables)
-        if kind in OUTPUT_KINDS:
-            return tuple(self._carried(kind, 'anything'))
+        if checked_kind(kind) != 'expression':
+            return tuple(self._carried(kind))
         self._readable('primal', 'the expressions')
         return tuple(self._held_expressions().declared)
 

@@ -11,7 +11,6 @@ from collections import Counter, defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -38,7 +37,15 @@ from specsolve._answer.layout import (
     write_reasons,
     write_spec,
 )
-from specsolve._answer.outputs import BASES, KINDS, NO_BASIS, OUTPUT_KINDS, checked_kind, not_requested_message
+from specsolve._answer.outputs import (
+    BASES,
+    ENTRIES,
+    KINDS,
+    NO_BASIS,
+    OUTPUT_KINDS,
+    checked_kind,
+    not_requested_message,
+)
 from specsolve._answer.records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record
 from specsolve._answer.result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 from specsolve._collect import collected
@@ -58,17 +65,6 @@ if TYPE_CHECKING:
     from specsolve._answer.outputs import Output
     from specsolve._inputs import Label, Source
     from specsolve._sweep.axes import Axis
-
-
-#: What each of the [`KINDS`][specsolve._answer.outputs.KINDS] is a table of, as a message names it.
-_LABELS: Mapping[str, str] = MappingProxyType(
-    {
-        'primal': 'variable',
-        'dual': 'constraint',
-        'expression': 'named expression',
-        **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
-    }
-)
 
 
 def one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
@@ -448,7 +444,7 @@ class Sweep:
             absent = named_reasons(self._reasons, kind).get(name) or _whole_kind_absent(
                 kind, held, self._reasons, self.records
             )
-            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.records))
+            raise SpecsolveError(absent or _nothing_to_read(ENTRIES[kind], name, held, self.records))
         return self._answered(table, per_window=per_window)
 
     def _answered[F: (pl.DataFrame, pl.LazyFrame)](self, table: F, *, per_window: bool) -> F:
@@ -670,7 +666,7 @@ class Sweep:
         if not isinstance(expression, str):
             return no_model
         return (
-            f'{_nothing_to_read(_LABELS["expression"], expression, self._expression_names(), self.records)} {no_model}'
+            f'{_nothing_to_read(ENTRIES["expression"], expression, self._expression_names(), self.records)} {no_model}'
         )
 
     def _table(self, name: str, kind: str, *, per_window: bool) -> pl.DataFrame:
@@ -759,9 +755,9 @@ class Sweep:
         held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
             absent = _whole_kind_absent(kind, held, self._reasons, self.records) or _none_answered(
-                _LABELS[kind], left_out
+                ENTRIES[kind], left_out
             )
-            raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.records))
+            raise SpecsolveError(absent or _nothing_to_read(ENTRIES[kind], 'anything', held, self.records))
         return tuple(sorted(held))
 
     def _answerable(self, kind: str, *, per_window: bool) -> tuple[dict[str, object], dict[str, str]]:
