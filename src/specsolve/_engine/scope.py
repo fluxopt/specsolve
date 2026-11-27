@@ -113,8 +113,6 @@ class Scope:
         subject: str,
         how: JoinStrategy = 'left',
         maintain_order: MaintainOrderJoin | None = None,
-        *,
-        by_position: bool = True,
     ) -> pl.LazyFrame:
         """Join *parameter* onto *table*, its value column renamed to *alias*.
 
@@ -125,11 +123,11 @@ class Scope:
         parameter with a row at every coordinate, and enough of them to be
         [worth reading][specsolve._engine.dense.worth_reading], is read at
         each row's [`row_major_position`][Scope.row_major_position] instead, which is what a left
-        or an inner join of it finds, unless *by_position* is false.
+        or an inner join of it finds.
         """
         entry = self.program.parameters[parameter]
         assert not set(entry.dims) - set(table_dims), f'{subject} has dimensions outside {list(table_dims)}'
-        reads = by_position and how in ('left', 'inner') and dense.worth_reading(self, parameter)
+        reads = how in ('left', 'inner') and dense.worth_reading(self, parameter)
         position = self.row_major_position(entry.dims) if reads else None
         if position is not None:
             return table.with_columns(pl.lit(dense.column(self, parameter)).gather(position).alias(alias))

@@ -439,6 +439,37 @@ def test_a_condition_that_holds_everywhere_is_dropped_from_its_where(monkeypatch
     assert indexed == read, f'`probe` was indexed over {indexed}, where what is left of `{where}` reads {read}'
 
 
+@pytest.mark.parametrize(
+    ('where', 'joins'),
+    [
+        pytest.param('cap > 2', 0, id='a-comparison'),
+        pytest.param('active', 0, id='a-flag'),
+        pytest.param('filled', 1, id='a-filled-parameter-joins-the-rows-it-was-given'),
+    ],
+)
+def test_an_atom_is_counted_over_its_parameter_without_joining_it_onto_itself(monkeypatch, where, joins):
+    """Attach counts each atom of a `where` over its parameter's own table.
+
+    The count joined the parameter back onto that table's keys: 14 ms of the
+    24 ms a half mask's `attach` spends counting at 1.2M columns (#2132).
+    """
+    plans, real = [], specialize.passing
+
+    def planned(scope, atom):
+        query = real(scope, atom)
+        plans.append(query.explain(optimized=False).count('JOIN:'))
+        return query
+
+    monkeypatch.setattr(specialize, 'passing', planned)
+    spec = {
+        **TABLED_SPEC,
+        'parameters': {**EVERYWHERE_PARAMETERS, 'filled': {'dims': ['g', 't'], 'missing': 3.0}},
+        'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}},
+    }
+    sps.build(spec, EVERYWHERE_SOURCES | {'filled': EVERYWHERE_SOURCES['level']}).close()
+    assert plans == [joins], f'counting `{where}` took {plans} joins, where it needs {joins}'
+
+
 def test_a_where_that_holds_everywhere_builds_the_model_without_it(tmp_path: Path):
     spec = {**TABLED_SPEC, 'parameters': EVERYWHERE_PARAMETERS}
     gated = {**spec, 'constraints': {'probe': {'dims': ['g', 't'], 'where': 'active', 'expression': 'x <= 0.5'}}}
