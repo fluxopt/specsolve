@@ -231,11 +231,22 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
     at, column = held.get_column(ROW_MAJOR), held.get_column(VALUE)
     if at.len() == cells and (at == pl.int_range(cells, dtype=pl.Int64, eager=True)).all():
         return column
-    placed = pl.repeat(None, cells, dtype=column.dtype, eager=True).scatter(at, column)
+    placed = _written_at(cells, at, column)
     if at.len() != cells or placed.null_count():
         msg = f"parameter '{name}' is as tall as the product of its dimensions and does not cover it"
         raise SpecsolveError(msg)
     return placed.alias(column.name)
+
+
+def _written_at(cells: int, at: pl.Series, column: pl.Series) -> pl.Series:
+    """*column*'s values written at positions *at* of a null column *cells* long.
+
+    polars 1.33, the floor `pyproject.toml` declares, scatters into a Boolean
+    column only at sorted positions, so a Boolean is written as `UInt8`.
+    """
+    if column.dtype == pl.Boolean:
+        return _written_at(cells, at, column.cast(pl.UInt8)).cast(pl.Boolean)
+    return pl.repeat(None, cells, dtype=column.dtype, eager=True).scatter(at, column)
 
 
 def _columns_by_position(scope: Scope, name: str) -> pl.Series:
