@@ -367,8 +367,10 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None or presences:
-            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, presences)
+        if admitted is None:
+            indexed = indices.table(self.scope, c.dims, None, ROW, start, presences)
+        elif presences:
+            indexed = indices.narrowed_by(admitted, c.dims, ROW, start, presences)
         else:
             indexed = admitted
         if presences:

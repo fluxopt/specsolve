@@ -117,6 +117,24 @@ def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) 
     return narrowed(scope, read, where).join(scope.product(free), how='cross')
 
 
+def narrowed_by(
+    indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, presences: Sequence[Presence]
+) -> pl.DataFrame:
+    """*indexed*, as [`table`][] indexed a ``where`` without *presences*, narrowed by them and numbered again from *start*.
+
+    The table [`table`][] gives with the presences, without reading the
+    ``where`` a second time: both number the survivors in position order, and
+    *indexed*'s index already runs in it.
+    """
+    surviving = indexed.lazy()
+    for presence in presences:
+        surviving = presence.narrow(surviving, presence.joined_on or ())
+    kept = in_position_order(surviving.pipe(collected), index).drop(index)
+    return kept.with_row_index(index, offset=start).select(
+        *(dims or (UNIT,)), pl.col(index).cast(pl.Int64).set_sorted()
+    )
+
+
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
     """[`table`][]'s answer for an entry that holds no row, read without a query: no row, in its columns and dtypes.
 
