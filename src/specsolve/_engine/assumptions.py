@@ -1,9 +1,9 @@
 """The data-time check of a model's ``assumptions:``.
 
 A condition is read as a ``where:`` is, so it agrees with the rows that are
-built. [`attach`][specsolve._engine.attaching.attach] ends with it, so a build
-and [`tidy_sources`][specsolve._sources.tidy_sources], which both lanes read
-data through, pass through it.
+built. [`attach`][specsolve._engine.attaching.attach] ends with it, and
+nothing else asks it, so a build, a read and the linopy lane all pass through
+it there.
 """
 
 from __future__ import annotations

@@ -231,7 +231,7 @@ def _slowed(real: Callable[..., object], clock: Clock) -> Callable[..., object]:
 STEPS = [
     pytest.param([(_api, 'as_spec')], 'load', id='the spec read'),
     pytest.param([(_api, 'as_program')], 'load', id='the program compiled'),
-    pytest.param([(_api, 'tidied')], 'tidy', id='the sources read'),
+    pytest.param([(_api, 'tidy_sources')], 'tidy', id='the sources read'),
     pytest.param([(attaching, 'check_assumptions')], 'attach', id='the assumptions checked'),
     pytest.param([(_api, 'attach')], 'attach', id='the sources attached'),
     pytest.param([(assembly, 'short_parameters')], 'build', id='the sparse parameters counted'),

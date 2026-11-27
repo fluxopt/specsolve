@@ -1,8 +1,10 @@
-"""Attach runtime data to a compiled program: [`tidy_sources`][], the one function both lanes read data through.
+"""Read runtime data for a compiled program: [`tidy_sources`][], the one function both lanes read data through.
 
 Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
 plain-Python shape become the tidy tables both lanes read by name. Every check
-on whether that data is usable is made here, once.
+on whether a source is a table its entry can read is made here, once. Whether
+the data holds what the spec assumes of it is
+[`attach`][specsolve._engine.attaching.attach]'s.
 """
 
 from __future__ import annotations
@@ -18,7 +20,6 @@ from mathspec.program import Parameter
 
 from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
-from specsolve._engine.attaching import attach
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
@@ -49,7 +50,8 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
         raise DataError(_unknown_source_keys_message(unknown, known))
 
 
-def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+@in_memory()
+def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untimed) -> dict[str, pl.LazyFrame]:
     """Read the caller's ``sources`` into the tables both lanes build against.
 
     Every source comes back as an in-memory `polars.LazyFrame`: a parameter
@@ -61,6 +63,21 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
     datetime label is held in microseconds. A table with no rows reads each
     column over a dimension in that dimension's label type.
 
+    Every read holds one table whole, so it runs on polars' in-memory engine.
+    Whether the data holds the spec's ``assumptions:`` is not asked here:
+    [`attach`][specsolve._engine.attaching.attach] asks it, of the tables this
+    returns.
+
+    Args:
+        program: The compiled spec.
+        data: The caller's sources, by the name each is declared under.
+        lap: Ends a lap of ``tidy`` after each step: ``read``, every path read
+            at once; ``dimension`` and ``relation``, one per entry with labels
+            of its own; ``parameter``, one per parameter, checked and
+            collected; and ``check``, the refusal that needs every source
+            read. The checks of the relations' labels and the parameters' lazy
+            shaping run before the first parameter's check, and are in its row.
+
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
@@ -70,33 +87,9 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             coordinate, a label its dimension lacks, a null or NaN value, or a
             column of another type than it declares; a relation with a null, a
             row twice, or a label its column's dimension lacks; a column over a
-            dimension holding another kind of label than its labels; a datetime
-            label finer than a microsecond, or in another time zone than its
-            dimension's labels; or an
-            ``assumptions:`` entry the data does not hold, a ``piecewise:``
-            method's conditions on its breakpoints among them.
-    """
-    sources = tidied(program, data, untimed)
-    if program.assumptions:
-        attach(program, sources)
-    return sources
-
-
-@in_memory()
-def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
-    """[`tidy_sources`][] short of the assumptions, which [`attach`][specsolve._engine.attaching.attach] checks for a build.
-
-    On polars' in-memory engine: every read here holds one table whole.
-
-    *lap* ends a lap of ``tidy`` after each step: ``read``, every path read at
-    once; ``dimension`` and ``relation``, one per entry with labels of its
-    own; ``parameter``, one per parameter, checked and collected; and
-    ``check``, the refusal that needs every source read. The checks of the
-    relations' labels and the parameters' lazy shaping run before the first
-    parameter's check, and are in its row.
-
-    Raises:
-        DataError: As [`tidy_sources`][] raises, but for an assumption.
+            dimension holding another kind of label than its labels; or a
+            datetime label finer than a microsecond, or in another time zone
+            than its dimension's labels.
     """
     refuse_unknown_sources(program, data)
     _refuse_unsupplied_or_misplaced_relations(program, data)

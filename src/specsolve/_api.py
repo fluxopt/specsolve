@@ -35,7 +35,7 @@ from specsolve._answer.outputs import checked_outputs
 from specsolve._answer.records import METRICS_SCHEMA, Metrics, Provenance, installed_version
 from specsolve._answer.result import Result
 from specsolve._archive_layout import carried_sources, check_the_target, write_archive
-from specsolve._clock import Clock, untimed
+from specsolve._clock import Clock
 from specsolve._collect import collected
 from specsolve._engine import readback
 from specsolve._engine.assembly import Measured
@@ -43,7 +43,7 @@ from specsolve._engine.assembly import build as build_model
 from specsolve._engine.attaching import attach
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
 from specsolve._sinks.solver import Basis
-from specsolve._sources import refuse_unknown_sources, tidied, tidy_sources, with_positions
+from specsolve._sources import refuse_unknown_sources, tidy_sources, with_positions
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -122,9 +122,9 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         DataError: As [`build`][] refuses the sources.
     """
     program = as_program(spec)
-    return {
-        name: table.pipe(collected) for name, table in with_positions(program, tidy_sources(program, sources)).items()
-    }
+    tables = tidy_sources(program, sources)
+    attach(program, tables)
+    return {name: table.pipe(collected) for name, table in with_positions(program, tables).items()}
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -178,7 +178,7 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
     spec = as_spec(spec)
     program = as_program(spec)
     _refuse_a_decision(program)
-    attached = attach(program, tidied(program, sources, untimed))
+    attached = attach(program, tidy_sources(program, sources))
     return readback.expressions_of(program, attached, lambda written: expression_node(spec, written)).value(expression)
 
 
@@ -244,7 +244,7 @@ class Model:
         """
         lap = self._clock.lap
         try:
-            self._tidied = tidied(self._program, self._sources, lap)
+            self._tidied = tidy_sources(self._program, self._sources, lap)
             attached = attach(self._program, self._tidied)
             lap('attach')
             if self._solver is not None:

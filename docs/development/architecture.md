@@ -81,11 +81,11 @@ flowchart TB
   to a `Program`. It cannot import anything here.
 - **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
-  accepts into tidy polars tables, and checks a spec's assumptions there, on
-  the tables attached.
+  accepts into tidy polars tables, and refuses a source that is not one.
 - **Data reaches a build through one more.** `attaching.attach` takes those
   tables, and a build and a read take nothing but what it returns. It ends with
-  the assumptions' check (`_engine/assumptions.py`).
+  the check of a spec's assumptions (`_engine/assumptions.py`), which is the
+  only place they are checked: the linopy lane calls it too.
 - **One function decides what either lane builds.** `_inputs.as_program`, which
   every verb compiles a spec through, returns a `Program` or raises
   `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises

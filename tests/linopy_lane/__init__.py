@@ -48,6 +48,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
+from specsolve._engine.attaching import attach
 from specsolve._inputs import as_program, as_spec, expression_node
 from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
@@ -100,6 +101,7 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> linopy.Model:
         refuse_relations_the_lane_does_not_build(program)
 
         tidy = tidy_sources(program, sources)
+        attach(program, tidy)
         master_coords, relations = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
 
@@ -147,6 +149,7 @@ def evaluate(
         program = as_program(written)
         refuse_relations_the_lane_does_not_build(program)
         tidy = tidy_sources(program, sources)
+        attach(program, tidy)
         master_coords, relations = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
         given = given_rows(program, tidy, master_coords)
