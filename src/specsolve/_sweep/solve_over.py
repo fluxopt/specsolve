@@ -28,12 +28,11 @@ import polars as pl
 from specsolve import _parquet as parquet
 from specsolve._answer.outputs import checked_outputs
 from specsolve._answer.records import Metrics, Record
-from specsolve._api import build, check
+from specsolve._api import build, check, checked_sources
 from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
 from specsolve._collect import collected
 from specsolve._inputs import as_spec, as_table
 from specsolve._names import VALUE, refuse_reserved
-from specsolve._sources import tidy_sources, with_positions
 from specsolve._start import slice_starts
 from specsolve._sweep.axes import Axis, EachWindow, as_built, axis_from, carry_plan, sources_with_column
 from specsolve._sweep.sweep import SliceFiles, Sweep, one_key_type, refuse_another_sweep, sweep_manifest
@@ -332,11 +331,15 @@ def _archived_sources(
 
     A windowed sweep's sources are the ones a single solve attaches, so they
     are tidied whole. An [`EachLabel`][] sweep's are tidied from *one_slice*, except
-    the ones the axis cut, which [`_uncut`][] gives.
+    the ones the axis cut, which [`_uncut`][] gives. Either is refused here
+    where a build would refuse it, before the archive is written from it.
+
+    Raises:
+        DataError: As [`build`][] refuses the sources.
     """
     if isinstance(axis, EachWindow):
-        return with_positions(program, tidy_sources(program, sources))
-    tidied = with_positions(program, tidy_sources(program, one_slice))
+        return checked_sources(program, sources)
+    tidied = checked_sources(program, one_slice)
     cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
     held = {**tidied, **cut}
     return {name: held[name] for name in sources}

@@ -121,10 +121,18 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         LanguageError: A construct outside the language.
         DataError: As [`build`][] refuses the sources.
     """
-    program = as_program(spec)
+    return {name: table.pipe(collected) for name, table in checked_sources(as_program(spec), sources).items()}
+
+
+def checked_sources(program: Program, sources: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+    """*sources* read as a build reads them, and refused where it refuses them: the tables [`tidy`][] and an archive hold.
+
+    Raises:
+        DataError: As [`build`][] refuses the sources.
+    """
     tables = tidy_sources(program, sources)
     attach(program, tables)
-    return {name: table.pipe(collected) for name, table in with_positions(program, tables).items()}
+    return with_positions(program, tables)
 
 
 def _refuse_a_decision(program: Program) -> None:
