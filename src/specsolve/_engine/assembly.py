@@ -7,7 +7,7 @@ during a build, because an entry built later reads what earlier ones produced.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ParamSpec, TypeVar, get_args
 
 import numpy as np
@@ -20,13 +20,13 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import is_empty, specialized
+from specsolve._engine.specialize import is_empty, specialized, specialized_on
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Collection, Mapping
 
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin, PolarsDataType
@@ -292,15 +292,19 @@ class Assembly:
         self.variables[name] = indices.Indexed(indexed.lazy(), start, indexed.height)
         if not indexed.height:
             return _stack([], _COLS)
+        return self._columns(name, v, indexed.lazy())
 
+    def _columns(self, name: str, v: program.Variable, table: pl.LazyFrame) -> pl.DataFrame:
+        """The share of ``cols`` for the variable indexed by *table*, its bounds read off the data attached now."""
         lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
         if v.domain != 'continuous':
             lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.builder.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
+            bounds = self.builder.bounds(table, name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
             bounded = indices.in_position_order(bounds.pipe(collected), COL)
         cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
 
+        self.measured.bounds.pop(name, None)
         if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
             self.measured.bounds[name] = spread
         return cols
@@ -360,12 +364,7 @@ class Assembly:
         admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
-        admits = declares_quadratic(c)
-        lhs = self.builder.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
-        rhs = self.builder.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
-        linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
-        quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
-        constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
+        linear, quadratic, constant = self._terms(name, c)
         presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
         if admitted is None or presences:
             indexed = indices.table(self.scope, c.dims, c.where, ROW, start, presences)
@@ -382,12 +381,7 @@ class Assembly:
         self.constraints[name] = indices.Indexed(table, start, indexed.height)
 
         subject = f"constraint '{name}'"
-        coverage.refuse_null_constants(
-            coverage.narrowed_to_rows(table, [p for p, _ in constant]),
-            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
-            subject,
-        )
-        rows = coverage.constant_side(self.scope, table, constant, c, subject)
+        rows = self._constant_side(name, c, table, constant)
 
         if not linear and not quadratic:
             none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
@@ -446,6 +440,33 @@ class Assembly:
         """
         self.constraints[name] = indices.Indexed(indexed.lazy(), start, 0)
         return _stack([], _ROWS), None, None
+
+    def _terms(
+        self, name: str, c: program.Constraint
+    ) -> tuple[list[tuple[Term, float]], list[tuple[Term, float]], list[tuple[Term, float]]]:
+        """*c* as its linear, quadratic and constant terms, each signed for ``lhs - rhs``.
+
+        A linear or a quadratic term keeps the side it was written on; a constant term moves to the right.
+        """
+        admits = declares_quadratic(c)
+        lhs = self.builder.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
+        rhs = self.builder.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
+        linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
+        quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
+        constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
+        return linear, quadratic, constant
+
+    def _constant_side(
+        self, name: str, c: program.Constraint, table: pl.LazyFrame, constant: list[tuple[Term, float]]
+    ) -> pl.DataFrame:
+        """The rows of *table* as ``(ROW, sense, rhs)``, every constant term checked where the rows ask for it."""
+        subject = f"constraint '{name}'"
+        coverage.refuse_null_constants(
+            coverage.narrowed_to_rows(table, [p for p, _ in constant]),
+            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
+            subject,
+        )
+        return coverage.constant_side(self.scope, table, constant, c, subject)
 
     def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
         """The row a coordinate lands on in an entry indexed over the whole product of *dims* from *start*.
@@ -580,6 +601,182 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
         if rows < reach:
             short[name] = (reach, rows)
     return short
+
+
+def numbers_only(
+    compiled: program.Program,
+    built: BuiltModel,
+    measured: Measured,
+    attached: AttachedSources,
+    changed: Collection[str],
+) -> bool:
+    """Whether *changed* changes only numbers [`spliced_model`][] can read again, so *built* keeps its indices and matrix.
+
+    Every name must be a parameter that no build reads for which columns, rows
+    or coefficients exist ([`_structural_parameters`][]), nor one *compiled*
+    is [`specialized_on`][], attached now at exactly the coordinates *built*
+    attached it at. Both are asked of *compiled*, the program as written:
+    *built* keeps the program the data specialized, which no longer names a
+    condition the old data settled. A constraint it feeds must have built
+    every row it indexed: its checks ran on rows the stored table no longer
+    holds once a row is dropped.
+    """
+    plan = built.program
+    structural = _structural_parameters(compiled) | specialized_on(compiled)
+    if not set(changed) <= set(plan.parameters) or set(changed) & structural:
+        return False
+    if any(name in measured.omitted for name in _entries_reading(plan.constraints, changed, _constraint_parameters)):
+        return False
+    return all(_same_coordinates(built.attached, attached, name, plan.parameters[name].dims) for name in changed)
+
+
+def spliced_model(
+    built: BuiltModel,
+    attached: AttachedSources,
+    changed: Collection[str],
+    measured: Measured,
+    lap: Lap,
+) -> BuiltModel:
+    """*built* with every bound, constant side and objective that reads a name in *changed* read again off *attached*.
+
+    The tables a full build of the same data gives, where [`numbers_only`][]
+    holds: the indices, the matrix, the quadratic rows and the sets are
+    *built*'s, and each recomputed share is spliced over the run of indices its
+    entry owns. An entry that owns no index has no share to read, so it is not
+    queried. *measured* is *built*'s, updated for what was read. *lap* logs
+    the steps a full build logs, for the entries read again: ``setup``, one
+    ``variable`` or ``constraint`` row per entry, the ``objective``, then
+    ``tables``. No ``matrix`` row, since the matrix is *built*'s.
+
+    Raises:
+        DataError: A bound, constant side or objective the new data leaves
+            without a value, as a full build would.
+    """
+    plan, tables = built.program, built.tables
+    assembly = Assembly(plan, attached, measured, lap)
+    assembly.variables.update(built.variables)
+    assembly.constraints.update(built.constraints)
+    assembly.n_cols, assembly.n_rows = tables.column_count, tables.row_count
+    cols, rows = tables.cols, tables.rows
+    obj, quad, constant = tables.obj, tables.quad, tables.objective_constant
+
+    def variable(name: str) -> None:
+        nonlocal cols
+        held = built.variables[name]
+        share = assembly._columns(name, plan.variables[name], held.table)
+        cols = _spliced(cols, held.start, held.start + held.height, share)
+
+    def constraint(name: str) -> None:
+        nonlocal rows
+        held, c = built.constraints[name], plan.constraints[name]
+        share = indices.in_position_order(
+            assembly._constant_side(name, c, held.table, assembly._terms(name, c)[2]), ROW
+        )
+        measured.rhs.pop(name, None)
+        if (sides := _magnitude_range(share, 'rhs')) is not None:
+            measured.rhs[name] = sides
+        at = rows.get_column(ROW)
+        lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
+        rows = _spliced(rows, lo, hi, share)
+
+    def objective(o: program.Objective) -> None:
+        nonlocal obj, quad, constant
+        measured.objective_range = None
+        terms = assembly._build_objective(o)
+        obj = _stack([terms] if terms is not None else [], _OBJ)
+        quad = _stack([] if assembly.quad is None else [assembly.quad], _QUAD)
+        constant = assembly.obj_const
+
+    with in_memory(assembly._reach() <= IN_MEMORY_REACH):
+        lap('build', 'setup', None)
+        for name in _entries_reading(plan.variables, changed, _bound_parameters):
+            if built.variables[name].height:
+                assembly._timed('variable', name, variable, name)
+        for name in _entries_reading(plan.constraints, changed, _constraint_parameters):
+            if built.constraints[name].height:
+                assembly._timed('constraint', name, constraint, name)
+        o = plan.objective
+        if o is not None and program.parameters_of(o.expression) & set(changed):
+            assembly._timed('objective', None, objective, o)
+
+    measured.bounds = _in_build_order(measured.bounds, built.variables)
+    measured.rhs = _in_build_order(measured.rhs, built.constraints)
+    refreshed = replace(tables, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
+    model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
+    lap('build', 'tables', None)
+    return model
+
+
+def _structural_parameters(plan: program.Program) -> frozenset[str]:
+    """The parameters a build reads for which columns, rows or coefficients exist, or where a coefficient is.
+
+    Those a ``where`` reads, or a ``cases`` region's condition, or a shift or a
+    window as its amount, decide which coordinates exist. Inside a constraint
+    a parameter that scales a variable is a matrix coefficient. Every other use
+    is a bound, a constant side or the objective, which a sink takes by value.
+    """
+    names: set[str] = set()
+    for entry in (*plan.variables.values(), *plan.constraints.values()):
+        if entry.where is not None:
+            names |= entry.where.names_read
+    for c in plan.constraints.values():
+        for node in program.walk(c.lhs, c.rhs):
+            if isinstance(node, program.Cases):
+                names.update(*(region.when.names_read for region in node.regions))
+            elif isinstance(node, (program.Translate, program.WindowSum)):
+                amount = node.offset if isinstance(node, program.Translate) else node.width
+                if isinstance(amount, str):
+                    names.add(amount)
+            elif isinstance(node, program.Multiply):
+                for side, other in ((node.left, node.right), (node.right, node.left)):
+                    if program.carries_variable(other):
+                        names |= program.parameters_of(side)
+            elif isinstance(node, program.Divide) and program.carries_variable(node.numerator):
+                names |= program.parameters_of(node.divisor)
+    return frozenset(names)
+
+
+def _bound_parameters(v: program.Variable) -> frozenset[str]:
+    """The parameters *v*'s bounds read."""
+    return program.parameters_of(*(side for side in (v.lower, v.upper) if side is not None))
+
+
+def _constraint_parameters(c: program.Constraint) -> frozenset[str]:
+    """The parameters either side of *c* reads."""
+    return program.parameters_of(c.lhs, c.rhs)
+
+
+def _entries_reading[D](
+    entries: Mapping[str, D], changed: Collection[str], reads: Callable[[D], frozenset[str]]
+) -> list[str]:
+    """The names of *entries* that *reads* says read a name in *changed*, in the order they are written."""
+    return [name for name, d in entries.items() if reads(d) & set(changed)]
+
+
+def _same_coordinates(before: AttachedSources, now: AttachedSources, name: str, dims: tuple[str, ...]) -> bool:
+    """Whether parameter *name* is attached at the coordinates it was, a filled one at the coordinates it was filled to.
+
+    [`tidy_sources`][specsolve._sources.tidy_sources] refuses a repeated
+    coordinate, so equal heights and nothing new is the same set.
+    """
+    if before.parameter_rows[name] != now.parameter_rows[name]:
+        return False
+    if not dims:
+        return True
+    new = now.parameters[name].select(*dims).join(before.parameters[name].select(*dims), on=list(dims), how='anti')
+    return new.select(pl.len()).pipe(collected).item() == 0
+
+
+def _in_build_order(
+    ranges: dict[str, tuple[float, float]], built: Mapping[str, object]
+) -> dict[str, tuple[float, float]]:
+    """*ranges* keyed as *built* is ordered: a range read again goes back to its entry's place in the diagnostics."""
+    return {name: ranges[name] for name in built if name in ranges}
+
+
+def _spliced(table: pl.DataFrame, lo: int, hi: int, share: pl.DataFrame) -> pl.DataFrame:
+    """*table* with its rows ``[lo, hi)`` replaced by *share*."""
+    return pl.concat([table.slice(0, lo), share, table.slice(hi)])
 
 
 def declares_quadratic(c: program.Constraint) -> bool:

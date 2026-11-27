@@ -20,6 +20,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
 - perf(data): a model as large as PyPSA's checks and attaches its data faster ([#2249](https://github.com/fluxopt/specsolve/pull/2249))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
+- perf(engine): an update that gives a bound, a right-hand side or a cost new numbers at the coordinates it had skips most of the build ([#2070](https://github.com/fluxopt/specsolve/pull/2070))
 
 ## 0.13.0 (2026-11-25)
 

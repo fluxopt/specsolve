@@ -231,7 +231,9 @@ constant term. An absent coordinate is a missing row, and broadcasting is a join
 **Solver indices are contiguous `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
-onto a loaded solver by position.
+onto a loaded solver by position. Where an update changes only such numbers,
+at the coordinates they had, the engine keeps the indices and the matrix and
+reads again only the entries they feed (`assembly.spliced_model`).
 
 **The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
