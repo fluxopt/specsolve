@@ -65,9 +65,10 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
-    [`in_memory`][], since every read holds one table whole. Every atom of a
-    ``where`` is then read once ([`settle`][]), for the assumptions
-    and the build both.
+    [`in_memory`][], since every read holds one table whole. Each dimension's
+    cast is built once and shared, since building a cast to an ``Enum`` of
+    many labels costs a fixed time per expression. Every atom of a ``where``
+    is then read once ([`settle`][]), for the assumptions and the build both.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -85,9 +86,10 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
         if casts:
             relations[name] = relations[name].with_columns(casts)
+    to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
     for name, p in program.parameters.items():
         table = _plain_strings(parameters[name], p.dims)
-        casts = [pl.col(d).cast(enums[d]) for d in p.dims if d in enums]
+        casts = [to_enum[d] for d in p.dims if d in to_enum]
         if p.dtype == 'float':
             casts.append(pl.col(VALUE).cast(pl.Float64))
         parameters[name] = table.with_columns(casts) if casts else table

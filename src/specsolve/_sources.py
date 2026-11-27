@@ -7,6 +7,7 @@ on whether that data is usable is made here, once.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -115,9 +116,11 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
     data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)
     sources: dict[str, pl.LazyFrame] = {}
+    labels_by_dimension: dict[str, pl.Series] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
+            labels_by_dimension[dname] = _labels_of(dname, sources[dname])
             lap('tidy', 'dimension', dname)
     relations: dict[str, pl.LazyFrame] = {}
     for name, relation in program.relations.items():
@@ -126,7 +129,7 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
-    _refuse_unknown_labels_in_relations(program, relations, sources)
+    _refuse_unknown_labels_in_relations(program, relations, labels_by_dimension)
     sources |= relations
 
     for pname, pdef in program.parameters.items():
@@ -134,7 +137,7 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
             raise DataError(_no_parameter_source_message(pname))
         sources[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources)
+        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels_by_dimension)
         lap('tidy', 'parameter', pname)
 
     for dname in program.dimensions:
@@ -487,7 +490,7 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
 
 
 def _refuse_unknown_labels_in_relations(
-    program: Program, relations: Mapping[str, pl.LazyFrame], labels: Mapping[str, pl.LazyFrame]
+    program: Program, relations: Mapping[str, pl.LazyFrame], labels_by_dimension: Mapping[str, pl.Series]
 ) -> None:
     """Every column of every relation holds labels of its dimension.
 
@@ -496,7 +499,7 @@ def _refuse_unknown_labels_in_relations(
     """
     for name, relation in program.relations.items():
         for role, dim in relation.columns:
-            _refuse_unknown_labels_in_column(relations[name], name, role, dim, _labels_of(dim, labels[dim]))
+            _refuse_unknown_labels_in_column(relations[name], name, role, dim, labels_by_dimension[dim])
 
 
 def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
@@ -629,7 +632,10 @@ def read_values(
         DataError: A table a parameter over the same dimensions would be refused for.
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    return _checked_parameter(name, declared, parameter_table(name, declared, obj, labels, kind), labels, kind)
+    table = parameter_table(name, declared, obj, labels, kind)
+    return _checked_parameter(
+        name, declared, table, labels, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind
+    )
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -736,9 +742,13 @@ def _checked_parameter(
     p: Parameter,
     table: pl.LazyFrame,
     sources: Mapping[str, pl.LazyFrame],
+    labels_by_dimension: Mapping[str, pl.Series],
     kind: str = 'parameter',
 ) -> pl.LazyFrame:
     """*table* held to what its entry claims, collected once.
+
+    *labels_by_dimension* holds the labels of each dimension read so far,
+    read once for every table checked against them.
 
     The collect is the one model-sized materialisation on the way in.
 
@@ -760,19 +770,20 @@ def _checked_parameter(
         table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
     )
     checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
-    _refuse_unknown_or_repeated_coordinates(name, p, checked, sources, kind)
+    _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
     return checked.lazy()
 
 
 def _refuse_unknown_or_repeated_coordinates(
-    name: str, p: Parameter, table: pl.DataFrame, sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str, p: Parameter, table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series], kind: str
 ) -> None:
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
 
     Labels are checked against the dimensions whose labels have been read; one
-    still missing is refused once every source is in.
+    still missing is refused once every source is in. A table with no row over
+    its dimensions has neither to check, and is not queried.
     """
     if not p.dims:
         if table.height > 1 or (table.height == 0 and p.missing == 'refused'):
@@ -783,39 +794,88 @@ def _refuse_unknown_or_repeated_coordinates(
                 f'`missing:` to say what no row means.'
             )
         return
+    if not table.height:
+        return
 
-    known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
-    answers: dict[str, bool] = (
-        table.select(_is_label(d, labels).all().alias(d) for d, labels in known.items()).row(0, named=True)
-        if known
-        else {}
+    positions = _coordinate_positions(p.dims, table, labels_by_dimension)
+    _refuse_unknown_labels(name, kind, table, p.dims, labels_by_dimension, positions)
+    _refuse_repeated_coordinates(name, kind, table, p.dims, positions)
+
+
+def _coordinate_positions(
+    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series]
+) -> pl.Series | None:
+    """Each row's coordinate position: where its coordinate sits in the product of its dimensions' labels.
+
+    A coordinate's position is built from its labels' positions, row-major, so
+    two rows share one exactly when they share a coordinate, and a row with a
+    label its dimension lacks has none and reads as null. Counting distinct
+    positions replaces hashing every key column, which is the check's cost on a
+    large dense table. ``None`` asks the caller to hash instead: for one key
+    column, which hashes once either way, for a table under 50,000 rows, and
+    where a position cannot be formed — a dimension whose labels are not read
+    yet, a column of another dtype than its labels, a product past 63 bits.
+    """
+    if len(dims) < 2 or table.height < 50_000:
+        return None
+    if any(d not in labels_by_dimension or table.schema[d] != labels_by_dimension[d].dtype for d in dims):
+        return None
+    if math.prod(labels_by_dimension[d].len() for d in dims) >= 2**63:
+        return None
+    position = pl.lit(0, dtype=pl.UInt64)
+    for d in dims:
+        labels = labels_by_dimension[d]
+        label_position = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        position = position * labels.len() + pl.col(d).replace_strict(labels, label_position, default=None)
+    return table.select(position).to_series()
+
+
+def _refuse_unknown_labels(
+    name: str,
+    kind: str,
+    table: pl.DataFrame,
+    dims: tuple[str, ...],
+    labels_by_dimension: Mapping[str, pl.Series],
+    positions: pl.Series | None,
+) -> None:
+    """Refuse the first of *dims* holding a label it does not have; positions without a null prove there is none."""
+    read = [d for d in dims if d in labels_by_dimension]
+    if not read or (positions is not None and not positions.null_count()):
+        return
+    all_known = table.select(_is_label(d, labels_by_dimension[d]).all().alias(d) for d in read).row(0, named=True)
+    dim = next((d for d in read if not all_known[d]), None)
+    if dim is None:
+        return
+    labels = labels_by_dimension[dim]
+    unknown = table.filter(~_is_label(dim, labels)).select(pl.col(dim).unique())[dim].to_list()
+    shown = ', '.join(repr(s) for s in unknown[:5])
+    more = f' (and {len(unknown) - 5} more)' if len(unknown) > 5 else ''
+    raise DataError(
+        f"{kind} '{name}' has label(s) in dimension '{dim}' that are not labels "
+        f'of it: {shown}{more}.\n'
+        f'  {dim} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
+        f'A missing row means no value there, but a label the dimension does not have is a '
+        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
+        f'as absent. Fix the label, or add it to the labels of {dim}.'
     )
 
-    for d, labels in known.items():
-        if not answers[d]:
-            strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
-            shown = ', '.join(repr(s) for s in strangers[:5])
-            more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
-            raise DataError(
-                f"{kind} '{name}' has label(s) in dimension '{d}' that are not labels "
-                f'of it: {shown}{more}.\n'
-                f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-                f'A missing row means no value there, but a label the dimension does not have is a '
-                f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-                f'as absent. Fix the label, or add it to the labels of {d}.'
-            )
 
-    if not table.select(p.dims).is_duplicated().any():
+def _refuse_repeated_coordinates(
+    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], positions: pl.Series | None
+) -> None:
+    """Refuse a coordinate that has more than one row, naming the first three."""
+    repeated = table.select(dims).is_duplicated().any() if positions is None else positions.n_unique() < table.height
+    if not repeated:
         return
-    duplicated = table.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
+    duplicated = table.group_by(dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
-        f'{coordinate_text({d: row[d] for d in p.dims})} ({row["#rows"]} rows)'
+        f'{coordinate_text({d: row[d] for d in dims})} ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(
         f"{kind} '{name}' has more than one row for a coordinate: {shown}. "
         f'It holds one value per coordinate, so which value applies is undefined — '
-        f'aggregate the source to one row per {list(p.dims)} before attaching it.'
+        f'aggregate the source to one row per {list(dims)} before attaching it.'
     )
 
 
