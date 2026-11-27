@@ -35,8 +35,11 @@ BUILD = [
     ('setup', None),
     ('variable', 'p'),
     ('variable', 'q'),
+    ('bounds', None),
     ('constraint', 'balance'),
     ('constraint', 'cap'),
+    ('indices', None),
+    ('terms', None),
     ('objective', None),
     ('matrix', None),
     ('tables', None),
@@ -53,8 +56,8 @@ def _clocks(metrics: sps.types.Metrics) -> dict[str, float]:
     return {phase: getattr(metrics, f'{phase}_seconds') for phase in PHASES}
 
 
-def test_a_build_logs_its_setup_each_entry_and_its_stacking_in_build_order():
-    """The build phase's rows name the step: the setup, each entry, then the two stacking steps."""
+def test_a_build_logs_its_setup_each_entry_its_shared_passes_and_its_stacking_in_build_order():
+    """The build phase's rows name the step: the setup, each entry, each pass the entries share, then the two stacking steps."""
     with sps.build(SPEC, DATA) as model:
         build = model.timings().filter(phase='build')
     assert build.select('step', 'entry').rows() == BUILD, 'every step once, in the order the build takes them'
@@ -118,17 +121,17 @@ def test_laps_after_the_last_result_are_the_next_run():
 
 
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
-    """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
+    """Ten seconds added to one constraint's planning land in that constraint's row and in no other."""
     added = [0.0]
     monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
-    real = assembly.Assembly._build_constraint
+    real = assembly.Assembly._planned_constraint
 
     def slow(self, name, c):
         if name == 'cap':
             added[0] += 10.0
         return real(self, name, c)
 
-    monkeypatch.setattr(assembly.Assembly, '_build_constraint', slow)
+    monkeypatch.setattr(assembly.Assembly, '_planned_constraint', slow)
     with sps.build(SPEC, DATA) as model:
         took = dict(model.timings().filter(phase='build').select(pl.coalesce('entry', 'step'), 'seconds').iter_rows())
     assert took['cap'] >= 10.0, 'the slowed constraint carries its delay'
@@ -139,6 +142,9 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     ('module', 'slowed', 'row'),
     [
         pytest.param('assembly', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('Assembly', '_bounded', 'bounds', id='bounds-the-variables-share'),
+        pytest.param('Assembly', '_indexed', 'indices', id='indices-the-constraints-share'),
+        pytest.param('Assembly', '_terms', 'terms', id='terms-the-constraints-share'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
         pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
         pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
@@ -146,7 +152,7 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
     """What the build does around its entries is timed too: ten seconds added to a step land in its row."""
-    owner = {'assembly': assembly}[module]
+    owner = {'assembly': assembly, 'Assembly': assembly.Assembly}[module]
     added = [0.0]
     monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = getattr(owner, slowed)
@@ -165,7 +171,7 @@ def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, modul
 
 def test_a_build_that_raises_keeps_the_laps_it_reached(monkeypatch):
     """The entry that raised has its row; nothing after it does."""
-    real = assembly.Assembly._build_constraint
+    real = assembly.Assembly._planned_constraint
 
     def fails(self, name, c):
         if name == 'cap':
@@ -173,11 +179,11 @@ def test_a_build_that_raises_keeps_the_laps_it_reached(monkeypatch):
         return real(self, name, c)
 
     with sps.build(SPEC, DATA) as model:
-        monkeypatch.setattr(assembly.Assembly, '_build_constraint', fails)
+        monkeypatch.setattr(assembly.Assembly, '_planned_constraint', fails)
         with pytest.raises(RuntimeError, match='the build fails here'):
             model.update(DATA)
         rebuilt = model.timings().filter(phase='build', run=0).select('step', 'entry').rows()[len(BUILD) :]
-    assert rebuilt == BUILD[:5], 'the second build logs up to the entry that raised, it included, and nothing after'
+    assert rebuilt == BUILD[:6], 'the second build logs up to the entry that raised, it included, and nothing after'
 
 
 def test_a_model_with_no_objective_logs_no_objective_row():

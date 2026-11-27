@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from mathspec import program
 
-from specsolve._collect import collected, collected_all
+from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import join_on, missing_value
 from specsolve._engine.terms import constant_scalar
@@ -33,7 +33,7 @@ from specsolve._sinks.tables import SENSE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
     from specsolve._engine.scope import Scope
     from specsolve._engine.terms import Term
@@ -77,20 +77,37 @@ def refuse_null_constants(
     Raises:
         DataError: Naming *divisors* and the count of undefined values.
     """
-    if not divisors:
-        return
+    if divisors:
+        refuse_undefined_constants(undefined_constants(tables).pipe(collected), divisors, subject, message)
+
+
+def undefined_constants(tables: Sequence[pl.LazyFrame]) -> pl.LazyFrame:
+    """How many constant values of *tables* are null, and how many are not finite: one row, for [`refuse_undefined_constants`][]."""
     cval = pl.col(CONSTANT)
-    counts = collected_all(
-        [
-            table.select(
-                cval.null_count().alias('null'), cval.cast(pl.Float64).is_finite().not_().sum().alias('non_finite')
-            )
-            for table in tables
-        ]
-    )
-    undefined = sum(int(count.item(0, 'null')) for count in counts)
-    non_finite = sum(int(count.item(0, 'non_finite')) for count in counts)
-    _refuse_undefined(undefined, non_finite, divisors, subject, message)
+    counts = [
+        table.select(
+            cval.null_count().cast(pl.Int64).alias('null'),
+            cval.cast(pl.Float64).is_finite().not_().sum().cast(pl.Int64).alias('non_finite'),
+        )
+        for table in tables
+    ]
+    if not counts:
+        return pl.LazyFrame({'null': [0], 'non_finite': [0]})
+    return pl.concat(counts).select(pl.all().sum())
+
+
+def refuse_undefined_constants(
+    counts: pl.DataFrame,
+    divisors: Collection[str],
+    subject: str,
+    message: Callable[[str, int], str] = sparse_divisor_message,
+) -> None:
+    """[`refuse_null_constants`][] on the *counts* [`undefined_constants`][] read.
+
+    Raises:
+        DataError: Naming *divisors* and the count of undefined values.
+    """
+    _refuse_undefined(int(counts.item(0, 'null')), int(counts.item(0, 'non_finite')), divisors, subject, message)
 
 
 def _refuse_undefined(
@@ -141,6 +158,17 @@ def constant_side(
     Raises:
         DataError: A constant term with no value at a row it is owed.
     """
+    query, gaps = constant_side_planned(scope, rows, terms, c)
+    return covered(query.pipe(collected), gaps, subject)
+
+
+def constant_side_planned(
+    scope: Scope,
+    rows: pl.LazyFrame,
+    terms: Sequence[tuple[Term, float]],
+    c: program.Constraint,
+) -> tuple[pl.LazyFrame, dict[str, frozenset[str]]]:
+    """[`constant_side`][]'s query, and the parameters each of its gap columns owes, for [`covered`][]."""
     accumulated = pl.lit(0.0, dtype=pl.Float64)
     gaps: dict[str, frozenset[str]] = {}
     carrier = rows
@@ -161,12 +189,21 @@ def constant_side(
         carrier = carrier.with_columns(gap.alias(f'__gap {i}__'))
         gaps[f'__gap {i}__'] = owed
 
-    built = carrier.select(
+    query = carrier.select(
         ROW,
         pl.lit(c.sense, dtype=SENSE).alias('sense'),
         accumulated.cast(pl.Float64).alias('rhs'),
         *gaps,
-    ).pipe(collected)
+    )
+    return query, gaps
+
+
+def covered(built: pl.DataFrame, gaps: Mapping[str, frozenset[str]], subject: str) -> pl.DataFrame:
+    """*built*, [`constant_side_planned`][]'s query collected, without its gap columns once none holds a gap.
+
+    Raises:
+        DataError: A constant term with no value at a row it is owed.
+    """
     if not gaps:
         return built
     owed = [parameters for column, parameters in gaps.items() if built.get_column(column).any()]

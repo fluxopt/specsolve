@@ -2,6 +2,8 @@
 
 [`build`][] is the whole of it. The variable and constraint index tables fill
 during a build, because an entry built later reads what earlier ones produced.
+Each entry plans its queries alone, and a shared pass runs one kind of query
+for every entry at once.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from mathspec import program
 
 from specsolve import _sinks as sinks
 from specsolve._answer.result import Diagnostics
-from specsolve._collect import collected, in_memory
+from specsolve._collect import collected, collected_all, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
@@ -43,6 +45,28 @@ _Args = ParamSpec('_Args')
 
 #: One constraint's ``rows``, its share of the matrix, and its quadratic share.
 _ConstraintShare = tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]
+
+#: One variable with a column, as [`Assembly._bounded`][] reads it: its name, its domain and the query of its bounds.
+_Bounds = tuple[str, program.VariableDomain, pl.LazyFrame]
+
+
+@dataclass(frozen=True)
+class _Planned:
+    """One constraint between its compile and the shared passes that read it."""
+
+    name: str
+    c: program.Constraint
+    linear: list[tuple[Term, float]]
+    quadratic: list[tuple[Term, float]]
+    constant: list[tuple[Term, float]]
+    #: Whether a variable's presence narrows its rows, so the rows it removed are counted as not built.
+    narrowed: bool
+    #: The query of its rows, numbered from 0, and what their table becomes.
+    query: pl.LazyFrame
+    finish: Callable[[pl.DataFrame], pl.DataFrame]
+    #: How many rows its ``where`` admits before a presence narrows them; ``None`` without both.
+    admitted: pl.LazyFrame | None
+
 
 #: The tables a sink reads, as schemas.
 _COLS = ('lb', 'ub', 'vtype')
@@ -175,6 +199,7 @@ class Assembly:
         self.builder = QueryBuilder(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
+        self.small = False
         #: How many special-ordered sets have been numbered, contiguous ``0..n-1`` across the model.
         self.n_sets = 0
         self.quad: pl.DataFrame | None = None
@@ -185,27 +210,41 @@ class Assembly:
     def run(self) -> BuiltModel:
         """Build every entry, then freeze what they produced.
 
+        Each entry plans its queries, and a shared pass runs every entry's
+        queries of one kind together: the variables' ``bounds``, then the
+        constraints' ``indices`` and their ``terms``. A constraint numbers its
+        rows from 0 while it builds, and [`_placed`][] moves each onto the
+        model's rows once every constraint knows how many it kept.
+
         Quadratic constraints build last, so their rows are a contiguous tail
         a sink takes as a slice; the sort is stable, so file order survives in
         each half. The matrix and ``rows`` leave in ``(row, col)`` order, as
         ``SinkTables`` promises its sinks. A build whose [`_reach`][] is at most
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
-        with in_memory(self._reach() <= IN_MEMORY_REACH):
+        self.small = self._reach() <= IN_MEMORY_REACH
+        with in_memory(self.small):
             self.lap('build', 'setup', None)
-            cols = [
-                self._timed('variable', name, self._build_variable, name, v)
+            bounds = [
+                self._timed('variable', name, self._index_variable, name, v)
                 for name, v in self.program.variables.items()
             ]
+            cols = self._bounded([b for b in bounds if b is not None])
+            self.lap('build', 'bounds', None)
             sets = [
                 self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
                 for name, s in self.program.sos.items()
             ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
-            built = [self._timed('constraint', name, self._build_constraint, name, c) for name, c in ordered]
+            planned = [self._timed('constraint', name, self._planned_constraint, name, c) for name, c in ordered]
+            live = self._indexed([c for c in planned if c is not None])
+            self.lap('build', 'indices', None)
+            shares = self._terms(live)
+            self.lap('build', 'terms', None)
             o = self.program.objective
             objective = None if o is None else self._timed('objective', None, self._build_objective, o)
 
+        built = self._placed([name for name, _ in ordered], shares)
         stacked = indices.in_position_order(_stack([m for _, m, _ in built if m is not None], _MATRIX), ROW)
         matrix_starts = _row_starts(stacked, self.n_rows)
         matrix = stacked.select(COL, COEFF).rechunk()
@@ -236,13 +275,28 @@ class Assembly:
     ) -> _Built:
         """*build* on *args*, then a lap of the build as *step* of *entry*, even if it raises.
 
-        Each entry collects its own share before it returns, so the seconds are
-        its own and do not move with the order entries build in.
+        What an entry does alone is its own, so its seconds do not move with
+        the order entries build in; the queries it plans for a shared pass are
+        that pass's.
         """
         try:
             return build(*args, **kwargs)
         finally:
             self.lap('build', step, entry)
+
+    def _together(self, queries: list[pl.LazyFrame]) -> list[pl.DataFrame]:
+        """Every query of one shared pass collected: together within [`IN_MEMORY_REACH`][], one at a time above it.
+
+        A query costs polars a fixed time however few rows it reads, and one
+        pass pays it once; in a port model that was about 15% of a build
+        (#2022). Above the reach each query is large, and one pass would hold
+        every one's working set at once.
+        """
+        if not queries:
+            return []
+        if self.small:
+            return collected_all(queries)
+        return [collected(query) for query in queries]
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
@@ -258,31 +312,27 @@ class Assembly:
 
     def _matrix_share(
         self, tables: list[pl.LazyFrame], name: str, *expressions: program.Expression
-    ) -> tuple[pl.DataFrame, pl.Series]:
-        """One constraint's share: in ``(row, col)`` order, repeated cells summed.
+    ) -> tuple[pl.LazyFrame, Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]]:
+        """One constraint's share, as the query of its terms and what their table becomes: in ``(row, col)`` order, repeated cells summed.
 
-        Returns:
-            The share, and the rows that had any term, read before the prune: a
-            row whose every coefficient is zero is not a row with no terms.
+        The finish returns the share, and the rows that had any term, read
+        before the prune: a row whose every coefficient is zero is not a row
+        with no terms.
         """
-        stacked = pl.concat(tables).pipe(collected)
-        coverage.refuse_null_coefficients(stacked, name, *expressions)
-        share, dropped = _collapsed(stacked, (ROW, COL), ordered=True)
-        return share, stacked.get_column(ROW).unique() if dropped else _ordered_rows(share)
+
+        def share(stacked: pl.DataFrame) -> tuple[pl.DataFrame, pl.Series]:
+            coverage.refuse_null_coefficients(stacked, name, *expressions)
+            collapsed, dropped = _collapsed(stacked, (ROW, COL), ordered=True)
+            return collapsed, stacked.get_column(ROW).unique() if dropped else _ordered_rows(collapsed)
+
+        return pl.concat(tables), share
 
     # ------------------------------------------------------------------
     # entries
     # ------------------------------------------------------------------
 
-    def _build_variable(self, name: str, v: program.Variable) -> pl.DataFrame:
-        """One variable's indexed table, and its share of ``cols``.
-
-        The share leaves in index order: ``cols`` carries no ``COL``, so a row's
-        position is its solver column index. The bounds are collected in memory:
-        they are parameters looked up onto column indices already in memory, and polars
-        2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
-        than its in-memory one on the nodal benchmark at sizes m and l (#1857).
-        """
+    def _index_variable(self, name: str, v: program.Variable) -> _Bounds | None:
+        """One variable's indexed table, and the query of its bounds for [`_bounded`][]; ``None`` for one without a column."""
         start = self.n_cols
         if is_empty(v, self.attached):
             indexed = self._empty_table(v.dims, COL)
@@ -291,18 +341,32 @@ class Assembly:
         self.n_cols = start + indexed.height
         self.variables[name] = indices.Indexed(indexed.lazy(), start, indexed.height)
         if not indexed.height:
-            return _stack([], _COLS)
+            return None
 
         lb, ub = pl.col('lb').cast(pl.Float64), pl.col('ub').cast(pl.Float64)
         if v.domain != 'continuous':
             lb, ub = _whole(lb, lb.ceil()), _whole(ub, ub.floor())
         with in_memory():
-            bounds = self.builder.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
-            bounded = indices.in_position_order(bounds.pipe(collected), COL)
-        cols = bounded.select('lb', 'ub', pl.lit(v.domain, dtype=_DTYPES['vtype']).alias('vtype'))
+            query = self.builder.bounds(indexed.lazy(), name, v).select(COL, lb.alias('lb'), ub.alias('ub'))
+        return name, v.domain, query
 
-        if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
-            self.measured.bounds[name] = spread
+    def _bounded(self, bounds: list[_Bounds]) -> list[pl.DataFrame]:
+        """Every variable's share of ``cols``, its bounds read in one shared pass.
+
+        A share leaves in index order: ``cols`` carries no ``COL``, so a row's
+        position is its solver column index. The bounds are collected in memory:
+        they are parameters looked up onto column indices already in memory, and polars
+        2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
+        than its in-memory one on the nodal benchmark at sizes m and l (#1857).
+        """
+        with in_memory():
+            read = self._together([query for _, _, query in bounds])
+        cols = []
+        for (name, domain, _), table in zip(bounds, read, strict=True):
+            bounded = indices.in_position_order(table, COL)
+            cols.append(bounded.select('lb', 'ub', pl.lit(domain, dtype=_DTYPES['vtype']).alias('vtype')))
+            if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
+                self.measured.bounds[name] = spread
         return cols
 
     def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
@@ -344,22 +408,16 @@ class Assembly:
             self.n_sets = built.item(-1, 'set') + 1
         return built
 
-    def _build_constraint(self, name: str, c: program.Constraint) -> _ConstraintShare:
-        """One constraint as its ``rows``, its share of the matrix, and its quadratic share.
+    def _planned_constraint(self, name: str, c: program.Constraint) -> _Planned | None:
+        """One constraint's terms compiled, and the query of its rows for [`_indexed`][]; ``None`` for one without a row.
 
-        The [`coverage`][] checks run in its table's order, before an aggregate
-        can hide a hole. A row is built where either matrix has a term, and the
-        entry's index narrows to the rows that survived. A constraint whose
-        ``where`` admits no row has no query built. One without a ``where`` is
-        indexed only once the presences that narrow it are known, so a sparse
-        absence never meets the full product of its dimensions.
+        Its rows are numbered from 0. One without a ``where`` is indexed only
+        inside the presences that narrow it, so a sparse absence never meets the
+        full product of its dimensions.
         """
-        start = self.n_rows
         if is_empty(c, self.attached):
-            return self._without_a_row(name, self._empty_table(c.dims, ROW), start)
-        admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
-        if admitted is not None and not admitted.height:
-            return self._without_a_row(name, admitted, start)
+            self._without_a_row(name, self._empty_table(c.dims, ROW))
+            return None
         admits = declares_quadratic(c)
         lhs = self.builder.expression(c.lhs, f"constraint '{name}' lhs", admits_quadratic=admits)
         rhs = self.builder.expression(c.rhs, f"constraint '{name}' rhs", admits_quadratic=admits)
@@ -367,41 +425,73 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None or presences:
-            indexed = indices.table(self.scope, c.dims, c.where, ROW, start, presences)
-        else:
-            indexed = admitted
-        if presences:
-            declared = (
-                math.prod(self.attached.dimensions[d].size for d in c.dims) if admitted is None else admitted.height
-            )
-            if declared > indexed.height:
-                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
-        self.n_rows = start + indexed.height
-        table = indexed.lazy()
-        self.constraints[name] = indices.Indexed(table, start, indexed.height)
+        query, finish = indices.planned(self.scope, c.dims, c.where, ROW, 0, presences)
+        admitted = None if c.where is None or not presences else indices.counted(self.scope, c.dims, c.where)
+        return _Planned(name, c, linear, quadratic, constant, bool(presences), query, finish, admitted)
 
-        subject = f"constraint '{name}'"
-        coverage.refuse_null_constants(
-            coverage.narrowed_to_rows(table, [p for p, _ in constant]),
-            program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
-            subject,
-        )
-        rows = coverage.constant_side(self.scope, table, constant, c, subject)
+    def _indexed(self, planned: list[_Planned]) -> list[_Planned]:
+        """Every constraint's rows, read in one shared pass; the constraints that hold a row.
 
-        if not linear and not quadratic:
-            none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
-            rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
-            return rows, None, None
+        A presence narrows the rows the ``where`` admits, and the rows it
+        removed are counted as not built.
+        """
+        read = self._together([p.query for p in planned] + [p.admitted for p in planned if p.admitted is not None])
+        admitted = iter(read[len(planned) :])
+        live = []
+        for p, table in zip(planned, read, strict=False):
+            indexed = p.finish(table)
+            if p.narrowed:
+                declared = (
+                    math.prod(self.attached.dimensions[d].size for d in p.c.dims)
+                    if p.admitted is None
+                    else next(admitted).item()
+                )
+                if declared > indexed.height:
+                    self.measured.omitted[p.name] = self.measured.omitted.get(p.name, 0) + declared - indexed.height
+            if not indexed.height:
+                self._without_a_row(p.name, indexed)
+                continue
+            self.constraints[p.name] = indices.Indexed(indexed.lazy(), 0, indexed.height)
+            live.append(p)
+        return live
 
+    def _terms(self, live: list[_Planned]) -> dict[str, _ConstraintShare]:
+        """Every constraint's constant side and matrix shares, read in one shared pass and checked in build order.
+
+        The [`coverage`][] checks run on each table before an aggregate can
+        hide a hole. A row is built where either matrix has a term.
+        """
+        queries: dict[tuple[str, str], pl.LazyFrame] = {}
+        finishes: dict[tuple[str, str], Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]] = {}
+        sides: dict[str, dict[str, frozenset[str]]] = {}
+        for p in live:
+            table = self.constraints[p.name].table
+            subject = f"constraint '{p.name}'"
+            if program.parameters_of(*coverage.divisors_of(p.c.lhs, p.c.rhs)):
+                narrowed = coverage.narrowed_to_rows(table, [t for t, _ in p.constant])
+                queries[p.name, 'undefined'] = coverage.undefined_constants(narrowed)
+            queries[p.name, 'side'], sides[p.name] = coverage.constant_side_planned(self.scope, table, p.constant, p.c)
+            if p.linear:
+                queries[p.name, 'matrix'], finishes[p.name, 'matrix'] = self._matrix_share(
+                    self._linear_tables(p, table), subject, p.c.lhs, p.c.rhs
+                )
+            if p.quadratic:
+                queries[p.name, 'quadratic'], finishes[p.name, 'quadratic'] = self._quadratic_share(
+                    table, p.quadratic, p.name, p.c
+                )
+        read = dict(zip(queries, self._together(list(queries.values())), strict=True))
+        return {p.name: self._shares(p, read, finishes, sides[p.name]) for p in live}
+
+    def _linear_tables(self, p: _Planned, table: pl.LazyFrame) -> list[pl.LazyFrame]:
+        """Each linear term of *p* placed on its rows as ``(row, col, coeff)``, by its own coordinate where it can."""
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(p.linear) == 1 else None
+        dense = p.c.where is None and not p.narrowed
         tables = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not presences
-        for p, sign in linear:
-            if dense and set(p.dims) == set(c.dims):
-                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
+        for term, sign in p.linear:
+            if dense and set(term.dims) == set(p.c.dims):
+                placed = term.table.with_columns(self._dense_row(p.c.dims).alias(ROW))
             else:
-                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
+                placed = join_on(table, term.table, term.dims, 'inner', maintain_order=carried_order)
             tables.append(
                 placed.select(
                     ROW,
@@ -409,21 +499,68 @@ class Assembly:
                     (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
                 )
             )
+        return tables
+
+    def _shares(
+        self,
+        p: _Planned,
+        read: dict[tuple[str, str], pl.DataFrame],
+        finishes: Mapping[tuple[str, str], Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]],
+        gaps: Mapping[str, frozenset[str]],
+    ) -> _ConstraintShare:
+        """One constraint's ``rows``, matrix share and quadratic share, from the tables [`_terms`][] read for it.
+
+        Each table is let go once its share is made, so the raw terms of every
+        constraint are not held to the end of the pass.
+        """
+        subject = f"constraint '{p.name}'"
+        if (undefined := read.pop((p.name, 'undefined'), None)) is not None:
+            divisors = program.parameters_of(*coverage.divisors_of(p.c.lhs, p.c.rhs))
+            coverage.refuse_undefined_constants(undefined, divisors, subject)
+        rows = coverage.covered(read.pop((p.name, 'side')), gaps, subject)
+        none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
+        if not p.linear and not p.quadratic:
+            rows, _, _, _ = self._drop_termless_rows(p.name, rows, _stack([], _MATRIX), None, none)
+            return rows, None, None
         matrix, term_rows = (
-            self._matrix_share(tables, subject, c.lhs, c.rhs)
-            if tables
-            else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
+            finishes[p.name, 'matrix'](read.pop((p.name, 'matrix'))) if p.linear else (_stack([], _MATRIX), none)
         )
-        qmatrix, quadratic_rows = self._quadratic_share(table, quadratic, name, c)
-        if qmatrix is not None:
+        qmatrix = None
+        if p.quadratic:
+            qmatrix, quadratic_rows = finishes[p.name, 'quadratic'](read.pop((p.name, 'quadratic')))
             term_rows = pl.concat([term_rows, quadratic_rows]).unique()
-        rows, matrix, qmatrix, self.n_rows = self._drop_termless_rows(name, rows, matrix, qmatrix, term_rows, start)
+        rows, matrix, qmatrix, _ = self._drop_termless_rows(p.name, rows, matrix, qmatrix, term_rows)
         spread = _magnitude_range(matrix, COEFF)
         if spread is not None:
-            self.measured.coefficients[name] = spread
+            self.measured.coefficients[p.name] = spread
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
-            self.measured.rhs[name] = sides
+            self.measured.rhs[p.name] = sides
         return rows, matrix, qmatrix
+
+    def _placed(self, names: list[str], shares: Mapping[str, _ConstraintShare]) -> list[_ConstraintShare]:
+        """Every constraint's shares, in build order, moved from its own rows onto the model's.
+
+        A constraint's rows follow the ones every constraint before it kept, and
+        a constraint keeps its rows only once its terms are read, so the move
+        waits for the last one.
+        """
+        placed = []
+        for name in names:
+            held = self.constraints[name]
+            offset = self.n_rows
+            self.constraints[name] = indices.Indexed(_moved(held.table, offset), offset, held.height)
+            self.n_rows = offset + held.height
+            if name not in shares:
+                continue
+            rows, matrix, qmatrix = shares[name]
+            placed.append(
+                (
+                    _moved(rows, offset),
+                    None if matrix is None else _moved(matrix, offset),
+                    None if qmatrix is None else _moved(qmatrix, offset),
+                )
+            )
+        return placed
 
     def _empty_table(self, dims: tuple[str, ...], index: str) -> pl.DataFrame:
         """What an empty entry gets in place of its indexed table: its columns, no rows.
@@ -435,20 +572,17 @@ class Assembly:
             self._empty_tables[dims, index] = indices.nothing(self.scope, dims, index)
         return self._empty_tables[dims, index]
 
-    def _without_a_row(
-        self, name: str, indexed: pl.DataFrame, start: int
-    ) -> tuple[pl.DataFrame, pl.DataFrame | None, pl.DataFrame | None]:
+    def _without_a_row(self, name: str, indexed: pl.DataFrame) -> None:
         """A constraint that holds no row, with no query built for its terms.
 
         Its terms could only narrow its rows further, so querying them would
         change nothing but the cost: each query planned costs a fixed
         time that an entry without a row never earns back.
         """
-        self.constraints[name] = indices.Indexed(indexed.lazy(), start, 0)
-        return _stack([], _ROWS), None, None
+        self.constraints[name] = indices.Indexed(indexed.lazy(), 0, 0)
 
-    def _dense_row(self, dims: tuple[str, ...], start: int) -> pl.Expr:
-        """The row a coordinate lands on in an entry indexed over the whole product of *dims* from *start*.
+    def _dense_row(self, dims: tuple[str, ...]) -> pl.Expr:
+        """The row a coordinate lands on in an entry indexed over the whole product of *dims*, numbered from 0.
 
         Such an entry numbers its rows row-major over the positions
         ([`indices.table`][specsolve._engine.indices.table]), so a term
@@ -456,23 +590,18 @@ class Assembly:
         [`tidy_sources`][specsolve._sources.tidy_sources] admits no label outside its dimension, so every coordinate a
         term carries is a row of the entry, as the join would find.
         """
-        return pl.lit(start, dtype=pl.Int64) + self.scope.row_major(dims, self.scope.position_of)
+        return self.scope.row_major(dims, self.scope.position_of).cast(pl.Int64)
 
     def _quadratic_share(
         self, table: pl.LazyFrame, quadratic: list[tuple[Term, float]], name: str, c: program.Constraint
-    ) -> tuple[pl.DataFrame | None, pl.Series]:
-        """One constraint's quadratic coefficients as ``(row, col_l, col_r, coeff)``, in that order.
+    ) -> tuple[pl.LazyFrame, Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]]:
+        """One constraint's quadratic coefficients, as their query and what their table becomes: ``(row, col_l, col_r, coeff)``.
 
         Pairs are ordered by column index for [`_objective_quadratic`][]'s
-        reason.
-
-        Returns:
-            The share, ``None`` without a quadratic term, and the rows that had
-            any quadratic term, read before the prune as
-            [`_matrix_share`][] reads its own.
+        reason. The finish returns the share and the rows that had any
+        quadratic term, read before the prune as [`_matrix_share`][] reads its
+        own.
         """
-        if not quadratic:
-            return None, pl.Series(ROW, [], dtype=_DTYPES[ROW])
         tables = [
             join_on(table, p.table, p.dims, 'inner').select(
                 ROW,
@@ -481,10 +610,13 @@ class Assembly:
             )
             for p, sign in quadratic
         ]
-        stacked = pl.concat(tables).pipe(collected)
-        coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
-        share, dropped = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
-        return share, (stacked if dropped else share).get_column(ROW).unique()
+
+        def share(stacked: pl.DataFrame) -> tuple[pl.DataFrame, pl.Series]:
+            coverage.refuse_null_coefficients(stacked, f"constraint '{name}'", c.lhs, c.rhs)
+            collapsed, dropped = _collapsed(stacked, (ROW, COL_L, COL_R), ordered=True)
+            return collapsed, (stacked if dropped else collapsed).get_column(ROW).unique()
+
+        return pl.concat(tables), share
 
     def _drop_termless_rows(
         self,
@@ -493,20 +625,19 @@ class Assembly:
         matrix: pl.DataFrame,
         qmatrix: pl.DataFrame | None,
         kept: pl.Series,
-        start: int,
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None, int]:
-        """Rows that kept no variable term are not built, and the entry's rows close up.
+        """Rows that kept no variable term are not built, and the entry's rows close up from 0.
 
         *kept* is read before zeros are pruned, so a row whose every term is
-        zero stays: ``0 >= 10`` is infeasible. Survivors renumber from *start*,
-        because the dual read-back reads an entry's rows by position. Every row either
+        zero stays: ``0 >= 10`` is infeasible. Survivors renumber, because the
+        dual read-back reads an entry's rows by position. Every row either
         share holds is in *kept*, so each of its coefficients moves with its row.
         """
         if kept.len() == rows.height:
-            return rows, matrix, qmatrix, start + rows.height
+            return rows, matrix, qmatrix, rows.height
 
         surviving = rows.filter(pl.col(ROW).is_in(kept)).sort(ROW)
-        renumber = surviving.select(ROW).with_row_index('__new__', offset=start)
+        renumber = surviving.select(ROW).with_row_index('__new__')
         self.measured.omitted[name] = self.measured.omitted.get(name, 0) + rows.height - surviving.height
         remap = dict(zip(renumber.get_column(ROW), renumber.get_column('__new__'), strict=True))
         rows = surviving.with_columns(pl.col(ROW).replace_strict(remap))
@@ -516,8 +647,8 @@ class Assembly:
         kept_table = (
             self.constraints[name].table.filter(pl.col(ROW).is_in(kept)).with_columns(pl.col(ROW).replace_strict(remap))
         )
-        self.constraints[name] = indices.Indexed(kept_table, start, surviving.height)
-        return rows, matrix, qmatrix, start + surviving.height
+        self.constraints[name] = indices.Indexed(kept_table, 0, surviving.height)
+        return rows, matrix, qmatrix, surviving.height
 
     def _build_objective(self, o: program.Objective | None) -> pl.DataFrame | None:
         """The objective as ``(col, coeff)``, or ``None`` if it has no terms.
@@ -733,3 +864,8 @@ def _stack(tables: list[pl.DataFrame], columns: tuple[str, ...]) -> pl.DataFrame
     if tables:
         return pl.concat(tables)
     return pl.DataFrame(schema={name: _DTYPES[name] for name in columns})
+
+
+def _moved[F: (pl.DataFrame, pl.LazyFrame)](table: F, offset: int) -> F:
+    """*table* with its ``ROW`` *offset* rows on: an entry's rows, numbered from 0 while it built, among the model's."""
+    return table if not offset else table.with_columns(pl.col(ROW) + offset)

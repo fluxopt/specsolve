@@ -686,11 +686,15 @@ class Model:
         the results handed back before the lap: ``0`` up to the first.
         ``step`` says what a lap did inside a phase that has steps, and
         ``entry`` names the entry it built. The build's steps are ``setup``;
-        ``variable``, ``set`` and ``constraint``, one row per entry; the
-        ``objective``, which has no name; ``matrix``, every constraint's share
-        stacked into one matrix in row order; and ``tables``, the rest of what
-        a solver is handed. An entry's seconds are its own: they hold when the
-        entries build in another order. The tidy's steps are ``read``, every
+        ``variable``, ``set`` and ``constraint``, one row per entry, what the
+        entry does alone; ``bounds``, ``indices`` and ``terms``, one row per
+        pass that reads the queries every entry planned for it, the
+        variables' bounds, the constraints' rows and the constraints' terms
+        and constant sides, checks included; the ``objective``, which has no
+        name; ``matrix``, every constraint's share stacked into one matrix in
+        row order; and ``tables``, the rest of what a solver is handed. An
+        entry's seconds are its own: they hold when the entries build in
+        another order. A slow query shows in its pass, not in its entry. The tidy's steps are ``read``, every
         path read at once, and ``shape``, one row per dimension, relation and
         parameter, each held to its columns and their types, the first
         parameter's also holding every parameter's shaping, and a last row

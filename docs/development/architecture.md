@@ -233,6 +233,13 @@ So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position.
 
+**A build reads in passes.** Each entry compiles its terms and plans its
+queries alone; then one pass reads every variable's bounds, one every
+constraint's rows, and one every constraint's terms and constant side, in one
+`collect_all` within `IN_MEMORY_REACH` and one query at a time above it. A
+constraint numbers its rows from 0 until every constraint has kept its rows,
+and then moves onto the model's, in build order.
+
 **The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
 a formulation out.
