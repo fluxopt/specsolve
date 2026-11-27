@@ -21,6 +21,7 @@ from mathspec.program import Parameter
 
 from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
+from specsolve._dimensions import row_major
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
@@ -793,12 +794,12 @@ def _coordinate_positions(
         return None
     if math.prod(labels_by_dimension[d].len() for d in dims) >= 2**63:
         return None
-    position = pl.lit(0, dtype=pl.UInt64)
-    for d in dims:
-        labels = labels_by_dimension[d]
-        label_position = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, label_position, default=None)
-    return table.select(position).to_series()
+    held = [labels_by_dimension[d] for d in dims]
+    of_labels = [
+        pl.col(d).replace_strict(labels, pl.int_range(labels.len(), dtype=pl.UInt64, eager=True), default=None)
+        for d, labels in zip(dims, held, strict=True)
+    ]
+    return table.select(row_major((labels.len() for labels in held), of_labels, pl.UInt64)).to_series()
 
 
 def _refuse_unknown_labels(

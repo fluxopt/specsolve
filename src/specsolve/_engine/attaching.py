@@ -12,11 +12,11 @@ import math
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
 from mathspec import program as program_module
 
 from specsolve._collect import collected
+from specsolve._dimensions import Dimension
 from specsolve._engine.assumptions import check_assumptions
 from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
@@ -37,30 +37,22 @@ class AttachedSources:
 
     ``parameters`` are tidy ``(dims…, value)``, a ``float`` parameter's value
     a ``Float64`` whatever column it arrived in, and a parameter that declares
-    a value for a missing row filled with it; ``dimensions`` are ``(LABEL, POSITION)``;
+    a value for a missing row filled with it; ``dimensions`` hold each
+    dimension's labels and what turns one into its position;
     ``relations`` hold no row for a key that maps nowhere. ``given`` holds the
     coordinates the data gave for each filled parameter, which a bare name in
-    a ``where`` still asks about. ``cardinality`` and ``parameter_rows`` are
-    cached table heights.
-    ``consecutive`` maps each dimension whose labels are the integers
-    ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its position. ``settled`` is each atom of a ``where`` that the
+    a ``where`` still asks about. ``parameter_rows`` are cached table heights.
+    ``settled`` is each atom of a ``where`` that the
     data settles: ``True`` where it holds everywhere, ``False`` where
     nowhere ([`settle`][]).
     """
 
     parameters: Mapping[str, pl.LazyFrame]
-    dimensions: Mapping[str, pl.LazyFrame]
+    dimensions: Mapping[str, Dimension]
     relations: Mapping[str, pl.LazyFrame]
-    cardinality: Mapping[str, int]
     parameter_rows: Mapping[str, int]
-    consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
-
-    def is_enum_encoded(self, dim: str) -> bool:
-        """Whether *dim* was given an ``Enum``."""
-        return self.dimensions[dim].collect_schema()[LABEL] == pl.Enum
 
 
 def attach(program: program.Program, sources: Mapping[str, pl.DataFrame]) -> AttachedSources:
@@ -78,21 +70,21 @@ def attach(program: program.Program, sources: Mapping[str, pl.DataFrame]) -> Att
             at some coordinate, or an ``assumptions:`` entry the data does not
             hold.
     """
-    dimensions = {d: sources[d].rename({d: LABEL}) for d in program.dimensions}
+    dimensions = {d: Dimension.of(d, sources[d][d]) for d in program.dimensions}
     relations = {name: sources[name] for name in program.relations}
     parameters = {name: sources[name] for name in program.parameters}
 
-    enums = {d: pl.Enum(f[LABEL]) for d, f in dimensions.items() if f.schema[LABEL] == pl.String}
-    for d, enum in enums.items():
-        dimensions[d] = dimensions[d].with_columns(pl.col(LABEL).cast(enum))
     for name, relation in program.relations.items():
-        casts = [pl.col(role).cast(enums[dim]) for role, dim in relation.columns if dim in enums]
+        casts = [
+            pl.col(role).cast(dimensions[dim].dtype)
+            for role, dim in relation.columns
+            if dimensions[dim].encoding is not None
+        ]
         if casts:
             relations[name] = relations[name].with_columns(casts)
-    to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
     for name, p in program.parameters.items():
         table = _plain_strings(parameters[name], p.dims)
-        casts = [to_enum[d] for d in p.dims if d in to_enum]
+        casts = [cast for d in p.dims if (cast := dimensions[d].encoding) is not None]
         if p.dtype == 'float':
             casts.append(pl.col(VALUE).cast(pl.Float64))
         parameters[name] = table.with_columns(casts) if casts else table
@@ -112,17 +104,15 @@ def attach(program: program.Program, sources: Mapping[str, pl.DataFrame]) -> Att
             _refuse_a_missing_row('parameter', name, parameters[name], p.dims, lambda d: d, dimensions)
             continue
         table = parameters[name]
-        if table.height < math.prod(dimensions[d].height for d in p.dims):
+        if table.height < math.prod(dimensions[d].size for d in p.dims):
             given[name] = table.select(*p.dims).lazy()
             parameters[name] = _filled(table, p.dims, p.missing, dimensions)
 
     attached = AttachedSources(
         parameters={name: f.lazy() for name, f in parameters.items()},
-        dimensions={d: f.lazy() for d, f in dimensions.items()},
+        dimensions=dimensions,
         relations={name: f.lazy() for name, f in relations.items()},
-        cardinality={d: f.height for d, f in dimensions.items()},
         parameter_rows={name: f.height for name, f in parameters.items()},
-        consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
     attached = replace(attached, settled=settle(program, attached))
@@ -152,11 +142,9 @@ def refuse_a_negative_window(data: AttachedSources, name: str) -> None:
         raise DataError(negative_window_message(name, negative[VALUE].to_list()))
 
 
-def _product(
-    columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, pl.DataFrame]
-) -> pl.LazyFrame:
+def _product(columns: tuple[str, ...], dim: Callable[[str], str], dimensions: Mapping[str, Dimension]) -> pl.LazyFrame:
     """Every combination of the labels of the dimension under each of *columns*, one column per name."""
-    tables = [dimensions[dim(column)].lazy().select(pl.col(LABEL).alias(column)) for column in columns]
+    tables = [dimensions[dim(column)].table.select(pl.col(LABEL).alias(column)) for column in columns]
     product = tables[0]
     for table in tables[1:]:
         product = product.join(table, how='cross', maintain_order='left_right')
@@ -169,7 +157,7 @@ def _refuse_a_missing_row(
     rows: pl.DataFrame,
     columns: tuple[str, ...],
     dim: Callable[[str], str],
-    dimensions: Mapping[str, pl.DataFrame],
+    dimensions: Mapping[str, Dimension],
 ) -> None:
     """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
 
@@ -178,7 +166,7 @@ def _refuse_a_missing_row(
     """
     if not columns:
         return
-    missing = math.prod(dimensions[dim(column)].height for column in columns) - rows.height
+    missing = math.prod(dimensions[dim(column)].size for column in columns) - rows.height
     if missing <= 0:
         return
     gaps = _product(columns, dim, dimensions).join(rows.lazy().select(*columns), on=list(columns), how='anti')
@@ -187,7 +175,7 @@ def _refuse_a_missing_row(
 
 
 def _filled(
-    table: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, pl.DataFrame]
+    table: pl.DataFrame, dims: tuple[str, ...], value: bool | float, dimensions: Mapping[str, Dimension]
 ) -> pl.DataFrame:
     """*table* with a row at every coordinate of *dims*, *value* where the data has none.
 
@@ -201,15 +189,6 @@ def _filled(
         pl.col(VALUE).fill_null(value)
     )
     return filled.select(*dims, pl.col(VALUE).cast(table.schema[VALUE])).pipe(collected)
-
-
-def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
-    """The first label of a dimension whose labels are consecutive ascending integers, else ``None``."""
-    labels = dimension.get_column(LABEL)
-    if not labels.dtype.is_integer() or labels.is_empty():
-        return None
-    first = int(labels[0])
-    return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
 
 
 def _plain_strings(table: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:

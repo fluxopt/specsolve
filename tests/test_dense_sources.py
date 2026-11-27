@@ -110,7 +110,7 @@ def test_a_dimension_is_cast_into_its_enum_by_one_expression_however_many_tables
     }
     sps.build(spec, sources).close()
     casts = sum(1 for categories in built if categories == tuple(GENERATORS))
-    assert casts == 2, f'`g` was cast by {casts} expressions: one for its labels and one shared by its three tables'
+    assert casts == 1, f'`g` was cast by {casts} expressions, where the one its three tables share is enough'
 
 
 def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():

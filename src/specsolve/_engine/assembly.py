@@ -250,9 +250,9 @@ class Assembly:
         A constraint over dimensions no variable spans has more rows than there are
         columns, so the rows count too.
         """
-        cardinality = self.attached.cardinality
+        sizes = {d: held.size for d, held in self.attached.dimensions.items()}
         return max(
-            sum(math.prod(cardinality[d] for d in declared.dims) for declared in entries.values())
+            sum(math.prod(sizes[d] for d in declared.dims) for declared in entries.values())
             for entries in (self.program.variables, self.program.constraints)
         )
 
@@ -315,9 +315,9 @@ class Assembly:
         row.
         """
         held = self.variables[s.variable]
-        cardinality = self.scope.data.cardinality
-        stride = math.prod(cardinality[d] for d in v.dims[v.dims.index(s.along) + 1 :])
-        span = cardinality[s.along] * stride
+        sizes = {d: held.size for d, held in self.scope.data.dimensions.items()}
+        stride = math.prod(sizes[d] for d in v.dims[v.dims.index(s.along) + 1 :])
+        span = sizes[s.along] * stride
 
         if v.where is None:
             table = pl.select(pl.int_range(held.height, dtype=pl.Int64).alias('#position')).lazy()
@@ -327,7 +327,7 @@ class Assembly:
             place, col = self.scope.row_major(v.dims, self.scope.position_of), pl.col(COL)
         placed = table.select(
             ((place // span) * stride + place % stride).alias('#set position'),
-            ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
+            ((place // stride) % sizes[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES[COL]).alias(COL),
         ).pipe(collected)
 
@@ -372,7 +372,9 @@ class Assembly:
         else:
             indexed = admitted
         if presences:
-            declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
+            declared = (
+                math.prod(self.attached.dimensions[d].size for d in c.dims) if admitted is None else admitted.height
+            )
             if declared > indexed.height:
                 self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
         self.n_rows = start + indexed.height
@@ -573,7 +575,7 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
     for name, p in program.parameters.items():
         if not p.dims:
             continue
-        reach = math.prod(attached.cardinality[d] for d in p.dims)
+        reach = math.prod(attached.dimensions[d].size for d in p.dims)
         rows = attached.parameter_rows[name]
         if rows < reach:
             short[name] = (reach, rows)

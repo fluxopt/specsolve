@@ -55,7 +55,7 @@ def _a_coordinate_it_fails_at(scope: Scope, assumption: Assumption) -> str | Non
     if assumption.where is not None:
         failing = failing & assumption.where
     dims = scope.in_dimension_order(failing.dims)
-    if any(not scope.data.cardinality[d] for d in dims):
+    if any(not scope.data.dimensions[d].size for d in dims):
         return None
     offending = narrowed(scope, dims, failing).head(1).pipe(collected)
     if not offending.height:

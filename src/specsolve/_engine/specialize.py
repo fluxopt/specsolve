@@ -59,7 +59,7 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     out: dict[program.Condition, bool] = {}
     queried: list[program.ParameterDefined | program.ParameterComparison] = []
     for atom in atoms:
-        if isinstance(atom, program.CountComparison) and not scope.data.cardinality[atom.over]:
+        if isinstance(atom, program.CountComparison) and not scope.data.dimensions[atom.over].size:
             out[atom] = counted_over_nothing(atom)
         elif isinstance(atom, program.ParameterDefined | program.ParameterComparison):
             if scope.data.parameter_rows[atom.name]:
@@ -69,7 +69,7 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     with in_memory():
         counts = collected_all(passing(scope, atom) for atom in queried)
     for atom, passed in zip(queried, counts, strict=True):
-        everywhere = math.prod(scope.data.cardinality[d] for d in atom.dims)
+        everywhere = math.prod(scope.data.dimensions[d].size for d in atom.dims)
         count = passed.item()
         if passes_without_a_row(scope, atom):
             count += everywhere - scope.data.parameter_rows[atom.name]
@@ -132,7 +132,7 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
 
 def is_empty(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
     """Whether *entry* holds nothing whatever its terms, no column or no row: it spans a dimension without a label, or its ``where`` is ruled out."""
-    return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
+    return any(not attached.dimensions[d].size for d in entry.dims) or rules_out(entry.where, attached)
 
 
 def _specialized_mask(mask: program.Mask, settled: Mapping[program.Condition, bool]) -> program.Mask:

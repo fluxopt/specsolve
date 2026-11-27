@@ -120,9 +120,9 @@ class Grouping:
     @classmethod
     def whole(cls, data: AttachedSources, dimension: str) -> Grouping:
         """*dimension* as one group, so an unpartitioned call reads the same table shape."""
-        table = data.dimensions[dimension].with_columns(
+        table = data.dimensions[dimension].table.with_columns(
             pl.col(POSITION).alias(GROUP_RANK),
-            pl.lit(data.cardinality[dimension], dtype=pl.Int64).alias(GROUP_SIZE),
+            pl.lit(data.dimensions[dimension].size, dtype=pl.Int64).alias(GROUP_SIZE),
         )
         return cls(dimension, (), (), (), table)
 
@@ -140,7 +140,7 @@ class Grouping:
         key = [*joined, *groups]
         table = (
             data.dimensions[dimension]
-            .join(rows, on=LABEL, how='inner')
+            .table.join(rows, on=LABEL, how='inner')
             .with_columns(
                 (pl.col(POSITION).rank('ordinal').over(key) - 1).cast(pl.Int64).alias(GROUP_RANK),
                 pl.len().over(key).cast(pl.Int64).alias(GROUP_SIZE),

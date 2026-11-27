@@ -139,7 +139,9 @@ def query_condition(
         return carrier.once(
             f'__where position {dimension}__',
             lambda f, alias: f.join(
-                scope.data.dimensions[dimension].select(pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)),
+                scope.data.dimensions[dimension].table.select(
+                    pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)
+                ),
                 on=dimension,
                 how='left',
             ),
@@ -205,7 +207,7 @@ def query_condition(
             )
             return _COLUMN_COMPARISONS[p.op](pl.col(columns[0]), pl.col(columns[1]))
         if isinstance(p, program.CountComparison):
-            if not scope.data.cardinality[p.over]:
+            if not scope.data.dimensions[p.over].size:
                 return _COLUMN_COMPARISONS[p.op](pl.lit(0), pl.lit(p.value))
             keys = scope.in_dimension_order(p.dims)
             alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
@@ -224,7 +226,7 @@ def query_condition(
         if isinstance(p, program.DimensionPosition):
             if p.partition is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
-            at = _resolved_position(p, scope.data.cardinality[p.name])
+            at = _resolved_position(p, scope.data.dimensions[p.name].size)
             return _COLUMN_COMPARISONS[p.op](pl.col(join_position(p.name)), pl.lit(at))
         if isinstance(p, program.RelationComparison):
             column = pl.col(join_relation(p.name, p.dims, p.column))

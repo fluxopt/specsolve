@@ -262,7 +262,7 @@ def _as_strings[F: (pl.DataFrame, pl.LazyFrame)](table: F, attached: AttachedSou
     A caller joins a dimension column against its own data, and polars refuses
     ``Enum`` against ``String``.
     """
-    return table.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.is_enum_encoded(d))
+    return table.with_columns(pl.col(d).cast(pl.String) for d in dims if attached.dimensions[d].dtype == pl.Enum)
 
 
 def reordered(

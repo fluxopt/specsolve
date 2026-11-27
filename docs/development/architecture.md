@@ -253,6 +253,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_names.py` | the columns specsolve writes beside a spec's own |
+| `_dimensions.py` | a dimension's labels in order, and what turns a label into its position: `Dimension` and the one row-major rule |
 | `_messages.py` | a wording two modules raise |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
@@ -282,7 +283,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 
 **The lane imports nothing else from the package but `errors.py` and
 `_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer/`, `_clock.py`,
-`_collect.py`, `_names.py` and `_parquet.py` (`LANE`). No module imports
+`_collect.py`, `_dimensions.py`, `_names.py` and `_parquet.py` (`LANE`). No module imports
 linopy, and none imports xarray at module level.
 
 ## Internal names
