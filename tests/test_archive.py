@@ -81,7 +81,7 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     )
     before = tidy_sources(program, sources)
     after = tidy_sources(to_spec(spec).program, unpacked)
-    differing = [key for key in before if not before[key].collect().equals(after[key].collect())]
+    differing = [key for key in before if not before[key].equals(after[key])]
     assert not differing, (
         f'tables that came back changed: {differing} — the archive carries the labels, values and dtypes'
     )

@@ -59,7 +59,7 @@ class Start(TypedDict, total=False):
 
 
 def read_start(
-    start: Start, program: Program, labels: Mapping[str, pl.LazyFrame]
+    start: Start, program: Program, labels: Mapping[str, pl.DataFrame]
 ) -> dict[str, dict[str, pl.LazyFrame]]:
     """*start*'s tables, each read and checked as a parameter's source is, over its entry's dimensions.
 
@@ -82,7 +82,7 @@ def read_start(
         read[reader] = {}
         for name, obj in tables.items():
             kind = _kind(reader, per)
-            table = read_values(kind, name, declared[name].dims, obj, labels, dtype)
+            table = read_values(kind, name, declared[name].dims, obj, labels, dtype).lazy()
             if reader != 'primal':
                 _refuse_unknown_statuses(kind, name, table)
             read[reader][name] = table

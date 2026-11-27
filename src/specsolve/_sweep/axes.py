@@ -507,7 +507,7 @@ def _tables_over(
         DataError: A label finer than a microsecond, which the cast that
             matches it to the labels would round onto another label.
     """
-    listed = {dim: pl.LazyFrame({dim: labels})}
+    listed = {dim: pl.DataFrame({dim: labels})}
     found: dict[str, tuple[pl.LazyFrame, tuple[str, ...], str]] = {}
     for name, parameter in program.parameters.items():
         if dim in parameter.dims and name in sources and not isinstance(sources[name], (bool, int, float)):

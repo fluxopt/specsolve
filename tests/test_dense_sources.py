@@ -68,13 +68,13 @@ def test_a_dimension_is_read_once_however_many_parameters_and_relations_are_over
     """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
     from specsolve import _sources as reading
 
-    reads, real = [], reading._labels_of
+    reads, real = [], reading._labels_table
 
-    def counted(dim, table):
+    def counted(source, dim, dtype):
         reads.append(dim)
-        return real(dim, table)
+        return real(source, dim, dtype)
 
-    monkeypatch.setattr(reading, '_labels_of', counted)
+    monkeypatch.setattr(reading, '_labels_table', counted)
     spec = {
         **SPEC,
         'dimensions': {**SPEC['dimensions'], 'site': {}},

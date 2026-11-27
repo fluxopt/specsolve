@@ -100,7 +100,7 @@ def _staging_for(out: Path) -> Path:
 def write_archive(
     out: Path,
     spec: Spec,
-    tables: Mapping[str, pl.LazyFrame],
+    tables: Mapping[str, pl.DataFrame | pl.LazyFrame],
     *,
     answer: Callable[[Path, TableWriter], object],
     metrics: Callable[[], pl.DataFrame],
@@ -148,7 +148,7 @@ def write_archive(
 
 @contextmanager
 def sweep_archive(
-    out: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
+    out: Path, spec: Spec, tables: Mapping[str, pl.DataFrame | pl.LazyFrame], axis: Mapping[str, object]
 ) -> Generator[tuple[Path, TableWriter], None, None]:
     """A sweep's archive at *out*, open for its answer to be written into slice by slice.
 
@@ -196,7 +196,7 @@ def _writer_for(run: str) -> TableWriter:
 def _write_inputs(
     tree: Path,
     spec: Spec,
-    tables: Mapping[str, pl.LazyFrame],
+    tables: Mapping[str, pl.DataFrame | pl.LazyFrame],
     axis: Mapping[str, object] | None,
     write: TableWriter,
 ) -> None:
@@ -210,7 +210,9 @@ def _write_inputs(
         (tree / AXIS_MEMBER).write_text(json.dumps(axis))
 
 
-def carried_sources(out: Path, tables: Mapping[str, pl.LazyFrame]) -> dict[str, Path] | dict[str, pl.LazyFrame]:
+def carried_sources(
+    out: Path, tables: Mapping[str, pl.DataFrame | pl.LazyFrame]
+) -> dict[str, Path] | dict[str, pl.DataFrame | pl.LazyFrame]:
     """The sources an answer archived at *out* carries: the path to each member of a directory, *tables* for a zip.
 
     A zip has no member a path reaches, so its answer holds the tables it was
@@ -222,7 +224,7 @@ def carried_sources(out: Path, tables: Mapping[str, pl.LazyFrame]) -> dict[str, 
 
 
 def _refuse_other_inputs(
-    tree: Path, spec: Spec, tables: Mapping[str, pl.LazyFrame], axis: Mapping[str, object]
+    tree: Path, spec: Spec, tables: Mapping[str, pl.DataFrame | pl.LazyFrame], axis: Mapping[str, object]
 ) -> None:
     """Refuse a resume of the sweep archived at *tree* from another spec, axis or sources than it holds.
 
@@ -247,7 +249,7 @@ def _refuse_other_inputs(
         for name in sorted(held.keys() | tables.keys())
         if name not in held
         or name not in tables
-        or not parquet.read(held[name]).drop(RUN, strict=False).equals(tables[name].pipe(collected))
+        or not parquet.read(held[name]).drop(RUN, strict=False).equals(tables[name].lazy().pipe(collected))
     ]
     if differ:
         raise SpecsolveError(

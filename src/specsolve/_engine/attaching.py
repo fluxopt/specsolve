@@ -16,13 +16,13 @@ import numpy as np
 import polars as pl
 from mathspec import program as program_module
 
-from specsolve._collect import collected, in_memory
+from specsolve._collect import collected
 from specsolve._engine.assumptions import check_assumptions
 from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
 from specsolve._engine.specialize import settle
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
-from specsolve._names import LABEL, POSITION, VALUE
+from specsolve._names import LABEL, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -63,12 +63,11 @@ class AttachedSources:
         return self.dimensions[dim].collect_schema()[LABEL] == pl.Enum
 
 
-def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
+def attach(program: program.Program, sources: Mapping[str, pl.DataFrame]) -> AttachedSources:
     """Shape the tables ``tidy_sources`` returns into what *program* is written against.
 
     A dimension's ``Enum`` is built from its labels, then every table that
-    carries the dimension is re-encoded against it. Each table is read
-    [`in_memory`][], since every read holds one table whole. Each dimension's
+    carries the dimension is re-encoded against it. Each dimension's
     cast is built once and shared, since building a cast to an ``Enum`` of
     many labels costs a fixed time per expression. Every atom of a ``where``
     is then read once ([`settle`][]), for the assumptions and the build both,
@@ -79,10 +78,9 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             at some coordinate, or an ``assumptions:`` entry the data does not
             hold.
     """
-    with in_memory():
-        dimensions = {d: _position_table(d, sources[d]).pipe(collected) for d in program.dimensions}
-        relations = {name: sources[name].pipe(collected) for name in program.relations}
-        parameters = {name: sources[name].pipe(collected) for name in program.parameters}
+    dimensions = {d: sources[d].rename({d: LABEL}) for d in program.dimensions}
+    relations = {name: sources[name] for name in program.relations}
+    parameters = {name: sources[name] for name in program.parameters}
 
     enums = {d: pl.Enum(f[LABEL]) for d, f in dimensions.items() if f.schema[LABEL] == pl.String}
     for d, enum in enums.items():
@@ -212,11 +210,6 @@ def _first_of_a_run(dimension: pl.DataFrame) -> int | None:
         return None
     first = int(labels[0])
     return first if np.array_equal(labels.to_numpy(), np.arange(first, first + labels.len())) else None
-
-
-def _position_table(d: str, labels: pl.LazyFrame) -> pl.LazyFrame:
-    """A dimension's ``(LABEL, POSITION)`` from its labels, a label's position being its row."""
-    return labels.with_row_index(POSITION).select(pl.col(d).alias(LABEL), pl.col(POSITION).cast(pl.Int64))
 
 
 def _plain_strings(table: pl.DataFrame, dims: tuple[str, ...]) -> pl.DataFrame:

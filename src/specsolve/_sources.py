@@ -52,13 +52,15 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
 
 
 @in_memory()
-def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untimed) -> dict[str, pl.LazyFrame]:
+def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untimed) -> dict[str, pl.DataFrame]:
     """Read the caller's ``sources`` into the tables both lanes build against.
 
-    Every source comes back as an in-memory `polars.LazyFrame`: a parameter
-    as tidy ``(dims…, value)``, a dimension's labels as one column
-    under its own name in the order they arrived, a relation as one column
-    per declared column. A dimension's labels are of its declared ``dtype``,
+    Every source comes back as a table in memory: a parameter as tidy
+    ``(dims…, value)``, a dimension as ``(dim, specsolve_position)``, its labels
+    in the order they arrived beside the ``Int64`` position from 0 that
+    ``shift`` counts, and a relation as one column per declared column. They
+    are the tables [`tidy`][specsolve._api.tidy] returns and an archive holds
+    under ``sources/``. A dimension's labels are of its declared ``dtype``,
     ``str`` unless declared, and so is every column over it; the one conversion
     is a date under ``datetime``, held as the microsecond its day starts on. A
     datetime label is held in microseconds. A table with no rows reads each
@@ -96,14 +98,14 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
     _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)
-    sources: dict[str, pl.LazyFrame] = {}
+    sources: dict[str, pl.DataFrame] = {}
     labels_by_dimension: dict[str, pl.Series] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
-            labels_by_dimension[dname] = _labels_of(dname, sources[dname])
+            labels_by_dimension[dname] = sources[dname][dname]
             lap('tidy', 'dimension', dname)
-    relations: dict[str, pl.LazyFrame] = {}
+    relations: dict[str, pl.DataFrame] = {}
     for name, relation in program.relations.items():
         relations[name] = _read_relation(data[name], name, relation, labels_by_dimension)
         lap('tidy', 'relation', name)
@@ -113,12 +115,13 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
     _refuse_unknown_labels_in_relations(program, relations, labels_by_dimension)
     sources |= relations
 
+    shaped: dict[str, pl.LazyFrame] = {}
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = parameter_table(pname, pdef, data[pname], sources)
+        shaped[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], labels_by_dimension)
+        sources[pname] = _checked_parameter(pname, pdef, shaped[pname], labels_by_dimension)
         lap('tidy', 'parameter', pname)
 
     for dname in program.dimensions:
@@ -151,19 +154,6 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
         ):
             scans[name] = table.select(wanted[name])
     return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
-
-
-def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
-    """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
-
-    A dimension comes back as ``(dim, specsolve_position)``, the position an
-    ``Int64`` from 0 in label order; a parameter and a relation unchanged.
-    Nothing is read again, so a model archives what its build read.
-    """
-    tables = dict(tidied)
-    for dim in program.dimensions:
-        tables[dim] = tables[dim].with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
-    return tables
 
 
 def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
@@ -209,8 +199,8 @@ def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
-    """One dimension's labels, read once and held in memory as one column in the order they arrived.
+def _labels_table(source: Source, dim: str, dtype: str) -> pl.DataFrame:
+    """One dimension as ``(dim, specsolve_position)``: its labels in the order they arrived, each beside its row.
 
     Raises:
         DataError: A table with no column named after the dimension, labels
@@ -233,7 +223,7 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     _refuse_null_labels(dim, labels[dim])
     labels = _of_declared_dtype(dim, labels, dtype)
     _refuse_repeated_labels(dim, labels[dim], given_as_table=given is not None)
-    return labels.lazy()
+    return labels.with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
 
 
 def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
@@ -245,7 +235,7 @@ def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> 
     if dim not in data:
         raise DataError(_no_labels_source_message(dim))
     _refuse_a_relation_on_the_labels(program, dim, data[dim])
-    return _labels_of(dim, _labels_table(data[dim], dim, program.dimensions[dim].dtype))
+    return _labels_table(data[dim], dim, program.dimensions[dim].dtype)[dim]
 
 
 def _refuse_null_labels(dim: str, labels: pl.Series) -> None:
@@ -475,7 +465,7 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
 
 
 def _refuse_unknown_labels_in_relations(
-    program: Program, relations: Mapping[str, pl.LazyFrame], labels_by_dimension: Mapping[str, pl.Series]
+    program: Program, relations: Mapping[str, pl.DataFrame], labels_by_dimension: Mapping[str, pl.Series]
 ) -> None:
     """Every column of every relation holds labels of its dimension.
 
@@ -487,14 +477,14 @@ def _refuse_unknown_labels_in_relations(
             _refuse_unknown_labels_in_column(relations[name], name, role, dim, labels_by_dimension[dim])
 
 
-def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
+def _refuse_unknown_labels_in_column(rows: pl.DataFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
     """Refuse a relation column holding a value that is not a label of its dimension.
 
     Offenders keep their own type — a python native off polars, never a numpy
     scalar — because the message reprs them.
     """
     known = set(labels.to_list())
-    strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
+    strays: dict[object, None] = {v: None for v in rows[role].to_list() if v not in known}
     if not strays:
         return
     shown = ', '.join(repr(v) for v in list(strays)[:5]) + (' …' if len(strays) > 5 else '')
@@ -507,14 +497,9 @@ def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, d
     )
 
 
-def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
-    """One dimension's labels."""
-    return table.select(dim).pipe(collected)[dim]
-
-
 def _read_relation(
     source: Source, name: str, relation: Relation, labels_by_dimension: Mapping[str, pl.Series]
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """One supplied relation as the table both lanes read: one column per declared column, under its own name.
 
     A column is read in its dimension's label type, from *labels_by_dimension*.
@@ -574,7 +559,7 @@ def _read_relation(
             f'A relation holds each row at most once, so drop the repeats.'
         )
 
-    return rows.lazy()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +568,7 @@ def _read_relation(
 
 
 def parameter_table(
-    name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+    name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.DataFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy table, whatever shape it took.
 
@@ -609,8 +594,8 @@ def parameter_table(
 
 
 def read_values(
-    kind: str, name: str, dims: Sequence[str], obj: Source, labels: Mapping[str, pl.LazyFrame], dtype: str
-) -> pl.LazyFrame:
+    kind: str, name: str, dims: Sequence[str], obj: Source, labels: Mapping[str, pl.DataFrame], dtype: str
+) -> pl.DataFrame:
     """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
 
     For values that are no parameter's, such as a start's. *kind* and *name*
@@ -622,7 +607,7 @@ def read_values(
     """
     declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
     table = parameter_table(name, declared, obj, labels, kind)
-    return _checked_parameter(name, declared, table, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind)
+    return _checked_parameter(name, declared, table, {d: labels[d][d] for d in dims if d in labels}, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -646,7 +631,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
 
 
 def _spread(
-    name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+    name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.DataFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dimensions it declares.
 
@@ -698,7 +683,7 @@ def _wrong_rank(name: str, said: str, dims: Sequence[str], kind: str) -> str:
 
 
 def _broadcast(
-    name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.DataFrame], kind: str
 ) -> pl.LazyFrame:
     """One number over every coordinate of *dims*."""
     table = pl.LazyFrame({'__one__': [0]})
@@ -707,7 +692,7 @@ def _broadcast(
     return table.drop('__one__').with_columns(value.alias(VALUE))
 
 
-def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str) -> list[Label]:
+def _labels(name: str, dim: str, sources: Mapping[str, pl.DataFrame], kind: str) -> list[Label]:
     """*dim*'s labels, in label order, for a shape that has none of its own.
 
     Raises:
@@ -721,7 +706,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str)
             f"of '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
         )
-    return source.select(dim).pipe(collected)[dim].to_list()
+    return source[dim].to_list()
 
 
 def _checked_parameter(
@@ -730,7 +715,7 @@ def _checked_parameter(
     table: pl.LazyFrame,
     labels_by_dimension: Mapping[str, pl.Series],
     kind: str = 'parameter',
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """*table* held to what its entry claims, collected once.
 
     *labels_by_dimension* holds the labels of each dimension read so far,
@@ -759,7 +744,7 @@ def _checked_parameter(
     _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
-    return checked.lazy()
+    return checked
 
 
 def _refuse_unknown_or_repeated_coordinates(

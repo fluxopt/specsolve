@@ -243,7 +243,6 @@ STEPS = [
     pytest.param([(Solver, 'run')], 'solve', id='the solver run'),
     pytest.param([(readback, 'result')], 'readback', id='the vectors laid out'),
     pytest.param([(_api.Model, '_with_record_fields')], 'readback', id='the record filled'),
-    pytest.param([(_api, 'with_positions')], 'archive', id='the sources positioned for the archive'),
     pytest.param([(Result, '_save')], 'archive', id='the answer written'),
     pytest.param([(_archive_layout, '_write_catalogs')], 'archive', id='the catalog written'),
     pytest.param([(_archive_layout, '_pack')], 'archive', id='the zip packed'),

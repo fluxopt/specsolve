@@ -326,7 +326,7 @@ def _archived_sources(
     axis: Axis,
     sources: Mapping[str, Source],
     one_slice: Mapping[str, Source],
-) -> dict[str, pl.LazyFrame]:
+) -> dict[str, pl.DataFrame | pl.LazyFrame]:
     """The tidy table each source of the sweep is archived as, keyed as *sources* are.
 
     A windowed sweep's sources are the ones a single solve attaches, so they
@@ -338,7 +338,7 @@ def _archived_sources(
         DataError: As [`build`][] refuses the sources.
     """
     if isinstance(axis, EachWindow):
-        return checked_sources(program, sources)
+        return dict(checked_sources(program, sources))
     tidied = checked_sources(program, one_slice)
     cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
     held = {**tidied, **cut}

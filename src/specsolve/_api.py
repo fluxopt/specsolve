@@ -36,14 +36,13 @@ from specsolve._answer.records import METRICS_SCHEMA, Metrics, Provenance, insta
 from specsolve._answer.result import Result
 from specsolve._archive_layout import carried_sources, check_the_target, write_archive
 from specsolve._clock import Clock
-from specsolve._collect import collected
 from specsolve._engine import readback
 from specsolve._engine.assembly import Measured
 from specsolve._engine.assembly import build as build_model
 from specsolve._engine.attaching import attach
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
 from specsolve._sinks.solver import Basis
-from specsolve._sources import refuse_unknown_sources, tidy_sources, with_positions
+from specsolve._sources import refuse_unknown_sources, tidy_sources
 from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
@@ -121,10 +120,10 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         LanguageError: A construct outside the language.
         DataError: As [`build`][] refuses the sources.
     """
-    return {name: table.pipe(collected) for name, table in checked_sources(as_program(spec), sources).items()}
+    return checked_sources(as_program(spec), sources)
 
 
-def checked_sources(program: Program, sources: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+def checked_sources(program: Program, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
     """*sources* read as a build reads them, and refused where it refuses them: the tables [`tidy`][] and an archive hold.
 
     Raises:
@@ -132,7 +131,7 @@ def checked_sources(program: Program, sources: Mapping[str, Source]) -> dict[str
     """
     tables = tidy_sources(program, sources)
     attach(program, tables)
-    return with_positions(program, tables)
+    return tables
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -210,7 +209,7 @@ class Model:
         self._clock.lap('load')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
-        self._tidied: dict[str, pl.LazyFrame] = {}
+        self._tidied: dict[str, pl.DataFrame] = {}
         #: The build, or ``None`` where there is not one — closed, released by
         #: an update that raised, or never run.
         self._built: BuiltModel | None = None
@@ -513,7 +512,7 @@ class Model:
             recorded = self._share()
             return pl.DataFrame([recorded._asdict()], schema_overrides=METRICS_SCHEMA)
 
-        tables = with_positions(self._program, self._tidied)
+        tables = self._tidied
         write_archive(out, self._spec, tables, answer=answered._save, metrics=metrics)
         landed = replace(answered._taking(recorded), _sources=carried_sources(out, tables))
         self._clock.lap('archive')
