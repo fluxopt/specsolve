@@ -117,9 +117,12 @@ def test_a_solve_that_found_an_answer_has_nothing_to_certify() -> None:
             answer.dual_ray('demand')
 
 
-@pytest.mark.xfail(strict=True, reason='an archived answer reaches an internal assertion')
 def test_an_archived_answer_says_it_holds_no_ray(tmp_path) -> None:
-    """A ray is live only, so an answer read back from an archive refuses it and says how to get one."""
+    """A ray is live only, so an answer read back from an archive refuses it and says how to get one.
+
+    The archived answer carried neither a ray nor a reason for having none, so
+    the read reached an internal assertion.
+    """
     sps.solve(SHORT, SOURCES, archive=tmp_path / 'short')
     with sps.read_archive(tmp_path / 'short') as answer:
         assert answer.termination_condition == 'infeasible'

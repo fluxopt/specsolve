@@ -527,9 +527,10 @@ class Result:
         archive holds none.
 
         Raises:
-            SpecsolveError: This result was closed; the solve was not
-                infeasible; or the sink produced no ray, in which case the
-                message names the solver option that would have.
+            SpecsolveError: This result was closed; it was read out of an
+                archive; the solve was not infeasible; or the sink produced no
+                ray, in which case the message names the solver option that
+                would have.
             KeyError: No constraint is called *name*.
         """
         self._unclosed(f"the dual ray of '{name}'")
@@ -797,7 +798,8 @@ def read_result(out: Path, *, eager: bool) -> Result:
     """The result an archive holds under *out*, its tables read into memory now where *eager*, else scanned.
 
     Scanned, *out* has to outlive the result. A declared expression is read
-    off its saved table, or refused with the reason the solve left.
+    off its saved table, or refused with the reason the solve left. A dual ray
+    is refused: an archive holds none.
     """
     answer = read_answer(out, eager=eager)
     expressions: dict[str, Callable[[], pl.DataFrame]] = {
@@ -805,4 +807,14 @@ def read_result(out: Path, *, eager: bool) -> Result:
     }
     expressions.update({name: _absent(why) for name, why in named_reasons(answer.reasons, 'expression').items()})
     tables = {kind: named for kind, named in answer.tables.items() if kind != 'expression'}
-    return Result(replace(answer, tables=tables), Expressions(expressions), _spec=read_spec(out))
+    return Result(
+        replace(answer, tables=tables), Expressions(expressions), _no_dual_ray=_NO_ARCHIVED_RAY, _spec=read_spec(out)
+    )
+
+
+#: Why an answer read out of an archive has no dual ray.
+_NO_ARCHIVED_RAY = (
+    'a dual ray certifies that a model has no solution, and only the solver that found it infeasible holds one: '
+    'an archive holds none. Solve the archived spec and sources again, sps.solve(result.spec, result.sources), '
+    'and read dual_ray() off that answer.'
+)
