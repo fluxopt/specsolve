@@ -25,7 +25,7 @@ from specsolve._sources import checked_parameter, parameter_table
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
     from mathspec.program import Program, Relation
 
@@ -36,13 +36,7 @@ if TYPE_CHECKING:
 POSITIONS_FROM = 50_000
 
 
-def encoded(
-    program: Program,
-    tidy: Mapping[str, pl.DataFrame],
-    lap: Lap = untimed,
-    last: AttachedSources | None = None,
-    kept: Collection[str] = (),
-) -> AttachedSources:
+def encoded(program: Program, tidy: Mapping[str, pl.DataFrame], lap: Lap = untimed) -> AttachedSources:
     """The tidy tables of *program* in its dimensions' own types, refused where they do not fit what it declares.
 
     A dimension's labels become its [`Dimension`][specsolve._attached.Dimension],
@@ -54,11 +48,6 @@ def encoded(
         tidy: Its sources, as [`tidy_sources`][specsolve._sources.tidy_sources] returns them.
         lap: Ends a lap of ``attach`` after each step: ``encode`` and
             ``content``, one of each per relation and per parameter.
-        last: What an earlier [`attach`][specsolve._engine.attaching.attach] returned.
-        kept: Parameters taken from *last* as it left them, filled and with
-            the coordinates the data gave: a kept parameter is neither encoded
-            nor checked again, and has no lap. Every one of its dimensions is
-            to hold the labels it held in *last*.
 
     Raises:
         DataError: A relation or a parameter holding a label its dimension
@@ -72,29 +61,20 @@ def encoded(
         lap('attach', 'encode', name)
         _refuse_a_relation_that_does_not_fit(name, relation, tidy[name], relations[name], dimensions)
         lap('attach', 'content', name)
-    parameters: dict[str, pl.LazyFrame] = {}
-    rows: dict[str, int] = {}
-    given: dict[str, pl.LazyFrame] = {}
+    parameters: dict[str, pl.DataFrame] = {}
     for name, p in program.parameters.items():
-        if last is not None and name in kept:
-            parameters[name], rows[name] = last.parameters[name], last.parameter_rows[name]
-            if name in last.given:
-                given[name] = last.given[name]
-            continue
         table = _in_dimension_types(tidy[name], [(d, d) for d in p.dims], dimensions)
-        table = table.with_columns(pl.col(VALUE).cast(pl.Float64)) if p.dtype == 'float' else table
+        parameters[name] = table.with_columns(pl.col(VALUE).cast(pl.Float64)) if p.dtype == 'float' else table
         lap('attach', 'encode', name)
-        _refuse_unknown_or_repeated_coordinates(name, 'parameter', p.dims, tidy[name], table, dimensions)
+        _refuse_unknown_or_repeated_coordinates(name, 'parameter', p.dims, tidy[name], parameters[name], dimensions)
         if p.missing == 'refused':
-            _refuse_a_missing_row('parameter', name, table, {d: dimensions[d] for d in p.dims})
+            _refuse_a_missing_row('parameter', name, parameters[name], {d: dimensions[d] for d in p.dims})
         lap('attach', 'content', name)
-        parameters[name], rows[name] = table.lazy(), table.height
     return AttachedSources(
-        parameters=parameters,
+        parameters={name: table.lazy() for name, table in parameters.items()},
         dimensions=dimensions,
         relations={name: table.lazy() for name, table in relations.items()},
-        parameter_rows=rows,
-        given=given,
+        parameter_rows={name: table.height for name, table in parameters.items()},
     )
 
 

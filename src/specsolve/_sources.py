@@ -51,13 +51,7 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
 
 
 @in_memory()
-def tidy_sources(
-    program: Program,
-    data: Mapping[str, Source],
-    lap: Lap = untimed,
-    last: Mapping[str, pl.DataFrame] | None = None,
-    kept: Collection[str] = (),
-) -> dict[str, pl.DataFrame]:
+def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untimed) -> dict[str, pl.DataFrame]:
     """Read the caller's ``sources`` into the tables both lanes build against.
 
     Every source comes back as a table in memory: a parameter as tidy
@@ -86,9 +80,6 @@ def tidy_sources(
             and a last one for the refusal that needs every source read. The
             parameters' lazy shaping runs before the first parameter's check,
             and is in its row.
-        last: What an earlier call returned.
-        kept: Parameters taken from *last* as they are: a kept parameter's
-            source is neither read nor shaped, and it has no lap.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
@@ -101,10 +92,9 @@ def tidy_sources(
             datetime label finer than a microsecond, or in another time zone
             than its dimension's labels.
     """
-    earlier = last or {}
     refuse_unknown_sources(program, data)
     _refuse_unsupplied_or_misplaced_relations(program, data)
-    data = _read_paths_at_once(program, {name: source for name, source in data.items() if name not in kept})
+    data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)
     sources: dict[str, pl.DataFrame] = {}
     labels_by_dimension: dict[str, pl.Series] = {}
@@ -124,15 +114,10 @@ def tidy_sources(
 
     shaped: dict[str, pl.LazyFrame] = {}
     for pname, pdef in program.parameters.items():
-        if pname in kept:
-            continue
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
         shaped[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        if pname in kept:
-            sources[pname] = earlier[pname]
-            continue
         sources[pname] = checked_parameter(pname, pdef, shaped[pname], labels_by_dimension)
         lap('tidy', 'shape', pname)
 

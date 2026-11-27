@@ -19,7 +19,6 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
 - perf(data): a model as large as PyPSA's checks and attaches its data faster ([#2249](https://github.com/fluxopt/specsolve/pull/2249))
-- perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
 - perf(sinks): a loaded solver takes a linear constraint's new coefficients in place rather than loading the model again ([#2072](https://github.com/fluxopt/specsolve/pull/2072))
 
 ## 0.13.0 (2026-11-25)

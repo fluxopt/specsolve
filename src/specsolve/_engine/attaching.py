@@ -39,9 +39,7 @@ def attach(program: program.Program, data: AttachedSources, lap: Lap = untimed) 
     """*data* as *program* reads it: missing rows filled, the conditions the data decides settled, the assumptions held.
 
     A parameter that declares a value for a missing row has it written in
-    where a divisor reads it; one [`encoded`][specsolve._encoding.encoded]
-    kept from an earlier attach is whole already, and keeps the coordinates
-    the data gave it. Every atom of a ``where`` is then read once
+    where a divisor reads it. Every atom of a ``where`` is then read once
     ([`settle`][]), for the assumptions and the build both, and the
     assumptions are checked.
 
@@ -56,7 +54,7 @@ def attach(program: program.Program, data: AttachedSources, lap: Lap = untimed) 
     """
     parameters = dict(data.parameters)
     rows = dict(data.parameter_rows)
-    given = dict(data.given)
+    given: dict[str, pl.LazyFrame] = {}
     filled = filled_parameters(program)
     for name, p in program.parameters.items():
         if isinstance(p.missing, str) or p.missing is None or (reads_as_zero(p.missing) and name not in filled):
