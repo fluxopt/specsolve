@@ -77,3 +77,25 @@ def test_an_empty_labels_table_takes_the_declared_dtype():
     sources = {'d': pl.DataFrame({'d': []}), 'cap': pl.DataFrame(schema={'d': pl.Int64, 'value': pl.Float64})}
     tables = sps.tidy(spec, sources)
     assert tables['d'].schema['d'] == pl.Int64, 'the empty labels are read as the declared int'
+
+
+@pytest.mark.xfail(strict=True, reason='a str dimension whose labels are encoded is held encoded, its tables as strings')
+@pytest.mark.parametrize(
+    'labels',
+    [
+        pytest.param(pl.Series(['a', 'b'], dtype=pl.Categorical), id='categorical'),
+        pytest.param(pl.Series(['a', 'b'], dtype=pl.Enum(['b', 'a'])), id='enum'),
+    ],
+)
+def test_encoded_string_labels_build_under_a_where_as_plain_strings_do(labels):
+    """Labels in a polars string encoding read as the same strings, where a `where` joins them to a parameter."""
+    spec = _spec('str') | {
+        'parameters': {'cap': {'dims': ['d']}, 'on': {'dims': ['d'], 'dtype': 'bool'}},
+        'variables': {'x': {'dims': ['d'], 'where': 'on', 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    }
+
+    def solved(series: pl.Series) -> float:
+        sources = _sources(series) | {'on': pl.DataFrame({'d': series, 'value': [True, False]})}
+        return sps.solve(spec, sources).objective
+
+    assert solved(labels) == solved(labels.cast(pl.String)) == 1.0, 'only `a` is on, and its cap is 1'
