@@ -20,6 +20,7 @@ from mathspec import to_spec
 from mathspec.program import parameters_of
 
 from specsolve import _parquet as parquet
+from specsolve._answer import whole_kind_reason
 from specsolve._answer_layout import ANSWER_LAYOUT, other_layout
 from specsolve._api import build
 from specsolve._archive_layout import (
@@ -34,7 +35,7 @@ from specsolve._axes import as_built, axis_from, carry_plan
 from specsolve._collect import collected
 from specsolve._inputs import as_program, expression_node
 from specsolve._names import RUN
-from specsolve._result import read_answer
+from specsolve._result import read_result
 from specsolve._sweep import Sweep, read_sweep_answer, with_key
 from specsolve.errors import LayoutError, SpecsolveError
 
@@ -173,7 +174,7 @@ def _read(under: Path, archive: Path, *, eager: bool) -> Result | Sweep:
     spec, sources = inputs.spec, inputs.sources
     saved = under / ANSWER_DIR
     if inputs.axis is None:
-        answer = _attach_readers(read_answer(saved, eager=eager), spec, sources)
+        answer = _attach_readers(read_result(saved, eager=eager), spec, sources)
         return replace(answer, _spec=spec, _sources=sources)
     answer = _attach_sweep_readers(read_sweep_answer(saved, eager=eager), spec, sources, inputs.axis)
     return replace(answer, spec=spec, sources=sources, axis=inputs.axis)
@@ -264,7 +265,10 @@ def _per_slice(
         if not tables.get('primal'):
             continue
         model = build(spec, current.sources)
-        yield current.key, model._evaluator(tables['primal'], tables['dual'] or None, sweep._no_duals)
+        yield (
+            current.key,
+            model._evaluator(tables['primal'], tables['dual'] or None, whole_kind_reason(sweep._reasons, 'dual')),
+        )
 
 
 def _refuse_carried(carried: set[str], nodes: Iterable[Expression]) -> None:

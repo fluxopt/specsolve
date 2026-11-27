@@ -364,7 +364,7 @@ class Model:
         )
         answered = self._with_record_fields(solved, solver_name, solver_options, also_record or ())
         self._engine.lap('readback')
-        answered = replace(answered, _metrics=self._share())
+        answered = answered._taking(self._share())
         if out is not None:
             answered = self._archive(out, answered)
         self._engine.next_run()
@@ -389,12 +389,9 @@ class Model:
         so the read benchmark, which builds an answer without a solver, pays
         what a solve pays.
         """
-        return replace(
-            answer,
-            _spec=self._spec,
-            _solved_at=datetime.now(UTC),
-            _provenance=_provenance(solver_name, solver_options, also_record),
-        )
+        provenance = _provenance(solver_name, solver_options, also_record)
+        record = answer._answer.record._replace(solved_at=datetime.now(UTC), **provenance._asdict())
+        return replace(answer, _spec=self._spec, _answer=replace(answer._answer, record=record))
 
     def _read_start(self, start: Start) -> dict[str, dict[str, pl.LazyFrame]]:
         """*start*'s tables read against this build, as [`read_start`][] reads them.
@@ -412,7 +409,7 @@ class Model:
         the sources the archive carries, are in its run of [`timings`][] and in
         [`metrics`][], not in the row.
         """
-        recorded = answered.metrics
+        recorded = self._share()
 
         def metrics() -> pl.DataFrame:
             nonlocal recorded
@@ -422,7 +419,7 @@ class Model:
 
         tables = with_positions(self._program, self._tidied)
         write_archive(out, self._spec, tables, answer=answered._save, metrics=metrics)
-        landed = replace(answered, _metrics=recorded, _sources=carried_sources(out, tables))
+        landed = replace(answered._taking(recorded), _sources=carried_sources(out, tables))
         self._engine.lap('archive')
         return landed
 

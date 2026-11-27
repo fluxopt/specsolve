@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from specsolve import _parquet as parquet
+from specsolve._answer import Answer, merged_reasons, named_reasons, whole_kind_reason
 from specsolve._answer_layout import (
     ANSWER_LAYOUT,
     HORIZON_FILE,
@@ -29,7 +30,10 @@ from specsolve._answer_layout import (
     read_outputs,
     read_reasons,
     read_spec,
+    row_file,
     row_of,
+    table_file,
+    write_answer,
     write_format,
     write_reasons,
     write_spec,
@@ -37,7 +41,7 @@ from specsolve._answer_layout import (
 from specsolve._axes import Stitch, bulleted
 from specsolve._collect import collected
 from specsolve._names import RUN
-from specsolve._outputs import BASES, KINDS, NO_BASIS, OUTPUT_KINDS, PRICED, checked_kind, not_requested_message
+from specsolve._outputs import BASES, KINDS, NO_BASIS, OUTPUT_KINDS, checked_kind, not_requested_message
 from specsolve._records import METRICS_SCHEMA, RECORD_SCHEMA, Metrics, Record
 from specsolve._result import tidy_to_dataarray, tidy_to_dataset, tidy_to_pandas
 from specsolve.errors import LayoutError, SpecsolveError
@@ -49,6 +53,7 @@ if TYPE_CHECKING:
     import xarray as xr
     from mathspec.spec import Spec
 
+    from specsolve._answer import Reasons
     from specsolve._answer_layout import TableWriter
     from specsolve._axes import Axis
     from specsolve._inputs import Label, Source
@@ -64,33 +69,6 @@ _LABELS: Mapping[str, str] = MappingProxyType(
         **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
     }
 )
-
-
-@dataclass(frozen=True)
-class SliceAnswer:
-    """One slice, solved and read out; plain data only, so it can cross a process."""
-
-    record: Record
-    #: This slice's row of [`Sweep.metrics`][].
-    metrics: Metrics
-    #: ``{kind: {name: table}}`` over [`KINDS`][specsolve._outputs.KINDS]:
-    #: every variable, every constraint's dual, every declared named
-    #: expression evaluated at this slice's solution, and each output the
-    #: sweep was asked for. A kind the slice produced nothing of is absent.
-    tables: dict[str, dict[str, pl.DataFrame]] = field(default_factory=dict)
-    #: Why this slice has no duals, when it has none.
-    no_duals: str | None = None
-    #: Per expression, why this slice could not evaluate it.
-    no_expressions: dict[str, str] = field(default_factory=dict)
-
-    def sliced(self, key_name: str, key: Label) -> SliceAnswer:
-        """This answer with its record and metrics rows naming the slice they are."""
-        text = str(key)
-        return replace(
-            self,
-            record=self.record._replace(slice_axis=key_name, slice=text),
-            metrics=self.metrics._replace(slice_axis=key_name, slice=text),
-        )
 
 
 def one_key_type(keys: Sequence[Label], key_name: str) -> pl.DataType:
@@ -124,7 +102,7 @@ def _one_slice_per_text(keys: Sequence[Label]) -> None:
         )
 
 
-def with_key(table: pl.DataFrame, key_name: str, key: Label, dtype: pl.DataType) -> pl.DataFrame:
+def with_key[F: (pl.DataFrame, pl.LazyFrame)](table: F, key_name: str, key: Label, dtype: pl.DataType) -> F:
     """*table* with the slice key prepended as *dtype*, the whole sweep's type rather than ``pl.lit``'s."""
     return table.select(pl.lit(key, dtype=dtype).alias(key_name), pl.all())
 
@@ -229,23 +207,19 @@ class SliceFiles:
             record.write_text(json.dumps(manifest))
         return files
 
-    def _file(self, kind: str, position: int, name: str | None = None) -> Path:
-        under = self.directory / kind if name is None else self.directory / kind / name
-        return under / f'{position:06d}.parquet'
-
     def done(self, position: int) -> bool:
-        return self._file('record', position).exists()
+        return row_file(self.directory, RECORD_FILE, position).exists()
 
-    def write(self, position: int, key: Label, answer: SliceAnswer) -> SliceAnswer:
-        """*answer*'s tables and record on disk, and the answer with the tables released."""
+    def write(self, position: int, key: Label, answer: Answer) -> Answer:
+        """*answer*'s tables, keyed, and its rows on disk, and the answer with the tables released."""
         answer = answer.sliced(self.key_name, key)
         self._clear(position)
-        self._keep_reasons(answer)
-        for kind, produced in answer.tables.items():
-            for name, table in produced.items():
-                self._write(with_key(table, self.key_name, key, self.key_dtype), self._file(kind, position, name))
-        self._write(pl.DataFrame([answer.metrics._asdict()], schema=METRICS_SCHEMA), self._file('metrics', position))
-        self._write(pl.DataFrame([answer.record._asdict()], schema=RECORD_SCHEMA), self._file('record', position))
+        self._keep_reasons(answer.reasons)
+        keyed = {
+            kind: {name: with_key(table, self.key_name, key, self.key_dtype) for name, table in produced.items()}
+            for kind, produced in answer.tables.items()
+        }
+        write_answer(self.directory, replace(answer, tables=keyed), self._write, position)
         return replace(answer, tables={})
 
     def _clear(self, position: int) -> None:
@@ -258,33 +232,31 @@ class SliceFiles:
         for kind in KINDS:
             under = self.directory / kind
             for named in under.iterdir() if under.is_dir() else []:
-                self._file(kind, position, named.name).unlink(missing_ok=True)
+                table_file(self.directory, kind, named.name, position).unlink(missing_ok=True)
 
-    def _keep_reasons(self, answer: SliceAnswer) -> None:
-        """*answer*'s reasons for what it lacks, added to the sweep's on disk before its record lands.
+    def _keep_reasons(self, reasons: Reasons) -> None:
+        """A slice's *reasons* for what it lacks, added to the sweep's on disk before its record lands.
 
         A slice read back on resume gives no reason again, so one written
         only when the fold ends is lost to a sweep that stopped before then.
         The first slice to give a reason keeps it.
         """
-        if answer.no_duals is None and not answer.no_expressions:
+        if not reasons:
             return
-        no_duals, absent = read_reasons(self.directory)
-        known = absent.get('expression', {})
-        if (answer.no_duals is None or no_duals is not None) and set(answer.no_expressions) <= set(known):
-            return
-        gathered = {**absent, 'expression': {**answer.no_expressions, **known}}
-        write_reasons(self.directory, no_duals or answer.no_duals, gathered, self._write)
+        known = read_reasons(self.directory)
+        gathered = merged_reasons(known, reasons)
+        if gathered != known:
+            write_reasons(self.directory, gathered, self._write)
 
-    def read_back(self, position: int) -> SliceAnswer:
-        """A done slice's record, with no tables, and with no run, as one solved now has none."""
-        row = {**parquet.read(self._file('record', position)).row(0, named=True), RUN: None}
-        held = {**parquet.read(self._file('metrics', position)).row(0, named=True), RUN: None}
-        return SliceAnswer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory))
+    def read_back(self, position: int) -> Answer:
+        """A done slice's record and metrics, with no tables, and with no run, as one solved now has none."""
+        row = {**parquet.read(row_file(self.directory, RECORD_FILE, position)).row(0, named=True), RUN: None}
+        held = {**parquet.read(row_file(self.directory, METRICS_FILE, position)).row(0, named=True), RUN: None}
+        return Answer(row_of(Record, row, self.directory), row_of(Metrics, held, self.directory))
 
     def written(self, kind: str, position: int, names: Iterable[str]) -> dict[str, pl.DataFrame]:
         """The named tables of *kind* a done slice wrote; a name it did not write is absent."""
-        found = {name: self._file(kind, position, name) for name in names}
+        found = {name: table_file(self.directory, kind, name, position) for name in names}
         return {name: parquet.read(path).drop(self.key_name) for name, path in found.items() if path.exists()}
 
     def tables(self, *, eager: bool) -> dict[str, dict[str, pl.LazyFrame]]:
@@ -359,9 +331,9 @@ class Sweep:
     #: ``{kind: {name: table}}``, every slice's table of a name as one, keyed,
     #: in memory or scanned off disk; a kind no slice produced is absent.
     _slices: dict[str, dict[str, pl.LazyFrame]] = field(repr=False, default_factory=dict)
-    _no_duals: str | None = field(repr=False, default=None)
-    #: ``{kind: {name: reason}}`` for a name some slice could not produce.
-    _absent: dict[str, dict[str, str]] = field(repr=False, default_factory=dict)
+    #: ``{kind: {name: reason}}`` for what some slice could not produce: a
+    #: name, or the whole kind, as the duals of a mixed-integer slice.
+    _reasons: Reasons = field(repr=False, default_factory=dict)
     _stitch: Stitch | None = field(repr=False, default=None)
     #: Each [`Output`][specsolve._outputs.Output] the sweep was
     #: asked for, and so carries.
@@ -375,7 +347,7 @@ class Sweep:
         cls,
         key_name: str,
         stitch: Stitch | None,
-        answered: Generator[tuple[Label, SliceAnswer], None, None],
+        answered: Generator[tuple[Label, Answer], None, None],
         on_disk: SliceFiles | None,
         key_dtype: pl.DataType,
         outputs: frozenset[Output],
@@ -392,15 +364,13 @@ class Sweep:
         keys: list[Label] = []
         rows: list[Record] = []
         taken: list[Metrics] = []
-        tables: defaultdict[str, defaultdict[str, list[pl.DataFrame]]] = defaultdict(lambda: defaultdict(list))
-        no_duals: str | None = None
-        no_expressions: dict[str, str] = {}
+        tables: defaultdict[str, defaultdict[str, list[pl.LazyFrame]]] = defaultdict(lambda: defaultdict(list))
+        reasons: Reasons = {}
         with closing(answered) as stream:
             for key, answer in stream:
-                no_duals = no_duals or answer.no_duals
-                for name, reason in answer.no_expressions.items():
-                    no_expressions.setdefault(name, reason)
+                reasons = merged_reasons(reasons, answer.reasons)
                 named = answer.sliced(key_name, key)
+                assert named.metrics is not None, 'a slice is solved, and a solve always hands back its metrics'
                 keys.append(key)
                 rows.append(named.record)
                 taken.append(named.metrics)
@@ -409,13 +379,13 @@ class Sweep:
                         tables[kind][name].append(with_key(table, key_name, key, key_dtype))
         keyed = pl.Series(key_name, keys, dtype=key_dtype)
         texts = [str(key) for key in keys]
-        absent: dict[str, dict[str, str]] = {'expression': no_expressions} if no_expressions else {}
         if on_disk is not None:
             slices = on_disk.tables(eager=False)
-            no_duals, absent = read_reasons(on_disk.directory)
+            reasons = read_reasons(on_disk.directory)
         else:
             slices = {
-                kind: {name: pl.concat(held).lazy() for name, held in named.items()} for kind, named in tables.items()
+                kind: {name: pl.concat(held).pipe(collected).lazy() for name, held in named.items()}
+                for kind, named in tables.items()
             }
         return cls(
             key_name=key_name,
@@ -423,8 +393,7 @@ class Sweep:
             metrics=_rekeyed(pl.DataFrame([row._asdict() for row in taken], schema=METRICS_SCHEMA), keyed, texts),
             spec=spec,
             _slices=slices,
-            _no_duals=no_duals,
-            _absent=absent,
+            _reasons=reasons,
             _stitch=stitch,
             _outputs=outputs,
         )
@@ -476,8 +445,8 @@ class Sweep:
         held = self._slices.get(kind, {})
         table = held.get(name)
         if table is None:
-            absent = self._absent.get(kind, {}).get(name) or _whole_kind_absent(
-                kind, held, self._no_duals, self.records
+            absent = named_reasons(self._reasons, kind).get(name) or _whole_kind_absent(
+                kind, held, self._reasons, self.records
             )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], name, held, self.records))
         return self._answered(table, per_window=per_window)
@@ -683,7 +652,7 @@ class Sweep:
 
     def _holds_expression(self, name: str) -> bool:
         """Whether *name* is a declared expression the sweep holds, or one it says why it lacks."""
-        return name in self._expression_names() or name in self._absent.get('expression', {})
+        return name in self._expression_names() or name in named_reasons(self._reasons, 'expression')
 
     def _nothing_to_evaluate(self, expression: str | Mapping[str, object]) -> str:
         """Why a sweep with no model behind it cannot value *expression*; a string is also answered as a name.
@@ -789,7 +758,7 @@ class Sweep:
             self._refuse_per_window_without_windows()
         held, left_out = self._answerable(kind, per_window=per_window)
         if not held:
-            absent = _whole_kind_absent(kind, held, self._no_duals, self.records) or _none_answered(
+            absent = _whole_kind_absent(kind, held, self._reasons, self.records) or _none_answered(
                 _LABELS[kind], left_out
             )
             raise SpecsolveError(absent or _nothing_to_read(_LABELS[kind], 'anything', held, self.records))
@@ -797,7 +766,7 @@ class Sweep:
 
     def _answerable(self, kind: str, *, per_window: bool) -> tuple[dict[str, object], dict[str, str]]:
         """Every name of *kind* there is an answer for, and why each name left out of the answer is."""
-        left_out = dict(self._absent.get(kind, {}))
+        left_out = named_reasons(self._reasons, kind)
         held: dict[str, object] = {}
         for name, table in self._slices.get(kind, {}).items():
             if not per_window and (why := self._unstitchable(table)):
@@ -810,12 +779,10 @@ class Sweep:
         return self.records.height
 
 
-def _whole_kind_absent(
-    kind: str, held: Mapping[str, object], no_duals: str | None, records: pl.DataFrame
-) -> str | None:
-    """Why no slice holds *kind*: the duals' reason for a priced kind, or [`NO_BASIS`][] where slices solved and none ended on a basis."""
-    if kind in PRICED:
-        return no_duals
+def _whole_kind_absent(kind: str, held: Mapping[str, object], reasons: Reasons, records: pl.DataFrame) -> str | None:
+    """Why no slice holds *kind*: the reason a slice gave, or [`NO_BASIS`][] where slices solved and none ended on a basis."""
+    if (why := whole_kind_reason(reasons, kind)) is not None:
+        return why
     if kind in BASES and not held and records['has_primal'].any():
         return NO_BASIS
     return None
@@ -878,7 +845,6 @@ def _opened_sweep(under: Path) -> Sweep:
         )
     found = json.loads(manifest.read_text())
     stitch = found['stitch']
-    no_duals, absent = read_reasons(under)
     key_name = found['key_name']
     keys = parquet.read(under / KEYS_FILE, columns=[key_name]).to_series()
     return Sweep(
@@ -886,8 +852,7 @@ def _opened_sweep(under: Path) -> Sweep:
         records=_rekeyed(consolidated(under, RECORD_FILE), keys, found['keys']),
         metrics=_rekeyed(consolidated(under, METRICS_FILE), keys, found['keys']),
         spec=read_spec(under),
-        _no_duals=no_duals,
-        _absent=absent,
+        _reasons=read_reasons(under),
         _outputs=read_outputs(under),
         _stitch=None
         if stitch is None

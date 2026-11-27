@@ -21,6 +21,7 @@ import numpy as np
 import polars as pl
 
 from specsolve import _sinks as sinks
+from specsolve._answer import WHOLE, Answer
 from specsolve._engine import readback
 from specsolve._engine.assembly import (
     Assembly,
@@ -35,7 +36,7 @@ from specsolve._engine.scope import Scope
 from specsolve._engine.specialize import specialized
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
-from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase, Step
+from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase, Record, Step
 from specsolve._result import ConstraintRow, Diagnostics, Expressions, Result
 from specsolve._sinks.solver import BASIS, BASIS_STATUSES, Basis
 from specsolve.errors import SpecsolveError, SpecsolveWarning
@@ -368,16 +369,21 @@ class Engine:
                 quadratic_rows=self._quadratic_constraints(),
             )
         )
+        status = answer.status
         return Result(
-            _status=answer.status,
-            _objective=answer.objective,
-            _tables={
-                'primal': primals,
-                'dual': duals,
-                **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
-            },
+            Answer(
+                Record.of(
+                    status.termination_condition, answer.objective, has_primal=status.is_readable, solved_at=None
+                ),
+                tables={
+                    'primal': primals,
+                    'dual': duals,
+                    **{kind: self._output(kind, answer) for kind in kinds_of(outputs)},
+                },
+                reasons={} if no_duals is None else {'dual': {WHOLE: no_duals}},
+                wording=status.solver_wording,
+            ),
             _expressions=self._expressions(answer.primal, answer.dual, no_duals, lower),
-            _no_duals=no_duals,
             _dual_rays=rays,
             _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(answer.status, solver_name),
         )

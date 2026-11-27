@@ -263,17 +263,18 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/coverage.py` | is the data there where an entry reads it |
 | `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
 | `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned, written into an archive and read back out of one |
+| `_answer.py` | one solve's answer as plain data: its record, its metrics, its tables and why a table is not there |
+| `_result.py` | what a caller reads an answer through: `Result`, and what a build says of itself |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
 | `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
-| `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
+| `_answer_layout.py` | an answer on disk, written and read back, and the `ANSWER_LAYOUT` stamp |
 | `_names.py` | the columns specsolve writes beside a spec's own |
 | `_sinks/tables.py` | what every sink reads |
 | `_sinks/capabilities.py` | what a sink can ingest |
 | `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
 
 **The lane imports nothing else from the package but `errors.py` and
-`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer_layout.py`,
+`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer.py`, `_answer_layout.py`,
 `_collect.py`, `_names.py`, `_outputs.py`, `_parquet.py`, `_records.py`,
 `_result.py` and `_status.py` (`LANE`). No module imports linopy, and none imports xarray at module
 level.
@@ -347,6 +348,12 @@ The names the code uses for its own parts. The names a caller meets are in
 : A digest of everything a re-solve may not change. A loaded solver keeps its
   model while the digest holds and every coefficient is within 1e-12 relative
   of the one it holds (`tables.py`).
+
+**Answer**
+: What one solve answered, as plain data: its record, its metrics, its tables
+  by kind and name, and the reason a table is not there (`Answer`,
+  `_answer.py`). A `Result` reads one, a sweep keeps one per slice, and an
+  archive's `answer/` holds one.
 
 **Kind**
 : One table family of an answer: `primal`, `dual`, `expression`, and each

@@ -81,6 +81,7 @@ def _imported(
 #: The relational lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
 LANE = frozenset(
     {
+        '_answer',
         '_answer_layout',
         '_collect',
         '_engine',
