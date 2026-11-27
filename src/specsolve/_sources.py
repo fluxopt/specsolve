@@ -1,13 +1,15 @@
-"""Attach runtime data to a compiled program: [`tidy_sources`][], the one function both lanes read data through.
+"""Read runtime data for a compiled program: [`tidy_sources`][], the one function both lanes read data through.
 
 Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
 plain-Python shape become the tidy tables both lanes read by name. Every check
-on whether that data is usable is made here, once.
+on whether a source is a table its entry can read is made here, once. Whether
+its labels and coordinates fit the dimensions is
+[`encoded`][specsolve._encoding.encoded]'s, and what the model makes of the
+data [`attach`][specsolve._engine.attaching.attach]'s.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,22 +17,21 @@ from typing import TYPE_CHECKING
 import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
-from mathspec.program import Parameter
 
-from specsolve._assumptions import validate_assumptions
+from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
-from specsolve._messages import coordinate_text, coordinates_text
+from specsolve._messages import coordinates_text
 from specsolve._names import POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from mathspec.program import Dimension, Program, Relation
+    from mathspec.program import Dimension, Parameter, Program, Relation
 
+    from specsolve._clock import Lap
     from specsolve._inputs import Label, Source
-    from specsolve._records import Lap, Phase, Step
 
 
 def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
@@ -49,101 +50,81 @@ def refuse_unknown_sources(program: Program, data: Mapping[str, object]) -> None
         raise DataError(_unknown_source_keys_message(unknown, known))
 
 
-def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.LazyFrame]:
+@in_memory()
+def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untimed) -> dict[str, pl.DataFrame]:
     """Read the caller's ``sources`` into the tables both lanes build against.
 
-    Every source comes back as an in-memory `polars.LazyFrame`: a parameter
-    as tidy ``(dims…, value)``, a dimension's labels as one column
-    under its own name in the order they arrived, a relation as one column
-    per declared column. A dimension's labels are of its declared ``dtype``,
+    Every source comes back as a table in memory: a parameter as tidy
+    ``(dims…, value)``, a dimension as ``(dim, specsolve_position)``, its labels
+    in the order they arrived beside the ``Int64`` position from 0 that
+    ``shift`` counts, and a relation as one column per declared column. They
+    are the tables [`tidy`][specsolve._api.tidy] returns and an archive holds
+    under ``sources/``. A dimension's labels are of its declared ``dtype``,
     ``str`` unless declared, and so is every column over it; the one conversion
     is a date under ``datetime``, held as the microsecond its day starts on. A
     datetime label is held in microseconds. A table with no rows reads each
     column over a dimension in that dimension's label type.
+
+    Every read holds one table whole, so it runs on polars' in-memory engine.
+    Each table is held to its shape here: its columns, their types, no null.
+    Whether its labels are its dimensions' and its coordinates each have one
+    row is [`encoded`][specsolve._encoding.encoded]'s to ask, and whether the
+    data holds the spec's ``assumptions:`` is
+    [`attach`][specsolve._engine.attaching.attach]'s.
+
+    Args:
+        program: The compiled spec.
+        data: The caller's sources, by the name each is declared under.
+        lap: Ends a lap of ``tidy`` after each step: ``read``, every path read
+            at once, and ``shape``, one per dimension, relation and parameter
+            and a last one for the refusal that needs every source read. The
+            parameters' lazy shaping runs before the first parameter's check,
+            and is in its row.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
             accepts or short of the columns its entry needs; a dimension's
             labels of another type than its ``dtype``, or holding one twice; a
-            parameter with two rows for one
-            coordinate, a label its dimension lacks, a null or NaN value, or a
-            column of another type than it declares; a relation with a null, a
-            row twice, or a label its column's dimension lacks; a column over a
-            dimension holding another kind of label than its labels; a datetime
-            label finer than a microsecond, or in another time zone than its
-            dimension's labels; or an
-            ``assumptions:`` entry the data does not hold, a ``piecewise:``
-            method's conditions on its breakpoints among them.
-    """
-    sources = tidied(program, data, _untimed)
-    validate_assumptions(program, sources)
-    return sources
-
-
-def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
-    """[`tidy_sources`][] short of the assumptions, which a build checks where it clocks the attach they share.
-
-    *lap* ends a lap of ``tidy`` at each step, as [`_read`][] names them.
-
-    Raises:
-        DataError: As [`tidy_sources`][] raises, but for an assumption.
+            parameter with a null or NaN value, or a column of another type
+            than it declares; a relation with a null; a column over a
+            dimension holding another kind of label than its labels; or a
+            datetime label finer than a microsecond, or in another time zone
+            than its dimension's labels.
     """
     refuse_unknown_sources(program, data)
-    return _read(program, data, lap)
-
-
-def _untimed(phase: Phase, step: Step | None, entry: str | None) -> None:
-    """A lap no engine clocks: [`tidy_sources`][] read outside a model."""
-
-
-@in_memory()
-def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
-    """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
-
-    [`validate_assumptions`][] runs
-    after it. It attaches in memory too, and checks each assumption over the
-    dimensions on the default engine.
-
-    *lap* ends a lap of ``tidy`` after each step: ``read``, every path read at
-    once; ``dimension`` and ``relation``, one per entry with labels of its
-    own; ``parameter``, one per parameter, checked and collected; and
-    ``check``, the refusal that needs every source read. The checks of the
-    relations' labels and the parameters' lazy shaping run before the first
-    parameter's check, and are in its row.
-    """
     _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)
-    sources: dict[str, pl.LazyFrame] = {}
+    sources: dict[str, pl.DataFrame] = {}
     labels_by_dimension: dict[str, pl.Series] = {}
     for dname, declared in program.dimensions.items():
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
-            labels_by_dimension[dname] = _labels_of(dname, sources[dname])
-            lap('tidy', 'dimension', dname)
-    relations: dict[str, pl.LazyFrame] = {}
+            labels_by_dimension[dname] = sources[dname][dname]
+            lap('tidy', 'shape', dname)
+    relations: dict[str, pl.DataFrame] = {}
     for name, relation in program.relations.items():
-        relations[name] = _read_relation(data[name], name, relation, sources)
-        lap('tidy', 'relation', name)
+        relations[name] = _read_relation(data[name], name, relation, labels_by_dimension)
+        lap('tidy', 'shape', name)
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
-    _refuse_unknown_labels_in_relations(program, relations, labels_by_dimension)
     sources |= relations
 
+    shaped: dict[str, pl.LazyFrame] = {}
     for pname, pdef in program.parameters.items():
         if pname not in data:
             raise DataError(_no_parameter_source_message(pname))
-        sources[pname] = parameter_table(pname, pdef, data[pname], sources)
+        shaped[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, sources[pname], sources, labels_by_dimension)
-        lap('tidy', 'parameter', pname)
+        sources[pname] = checked_parameter(pname, pdef, shaped[pname], labels_by_dimension)
+        lap('tidy', 'shape', pname)
 
     for dname in program.dimensions:
         if dname not in sources:
             raise DataError(_no_labels_source_message(dname))
-    lap('tidy', 'check', None)
+    lap('tidy', 'shape', None)
 
     return sources
 
@@ -170,19 +151,6 @@ def _read_paths_at_once(program: Program, data: Mapping[str, Source]) -> dict[st
         ):
             scans[name] = table.select(wanted[name])
     return {**data, **dict(zip(scans, collected_all(scans.values()), strict=True))}
-
-
-def with_positions(program: Program, tidied: Mapping[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
-    """*tidied*, as [`tidy_sources`][] gave it, with each dimension's labels numbered.
-
-    A dimension comes back as ``(dim, specsolve_position)``, the position an
-    ``Int64`` from 0 in label order; a parameter and a relation unchanged.
-    Nothing is read again, so a model archives what its build read.
-    """
-    tables = dict(tidied)
-    for dim in program.dimensions:
-        tables[dim] = tables[dim].with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
-    return tables
 
 
 def _unknown_source_keys_message(keys: Iterable[str], known: Iterable[str]) -> str:
@@ -228,8 +196,8 @@ def _relation_needs_labels_message(dim: str, authors: Iterable[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
-    """One dimension's labels, read once and held in memory as one column in the order they arrived.
+def _labels_table(source: Source, dim: str, dtype: str) -> pl.DataFrame:
+    """One dimension as ``(dim, specsolve_position)``: its labels in the order they arrived, each beside its row.
 
     Raises:
         DataError: A table with no column named after the dimension, labels
@@ -252,7 +220,7 @@ def _labels_table(source: Source, dim: str, dtype: str) -> pl.LazyFrame:
     _refuse_null_labels(dim, labels[dim])
     labels = _of_declared_dtype(dim, labels, dtype)
     _refuse_repeated_labels(dim, labels[dim], given_as_table=given is not None)
-    return labels.lazy()
+    return labels.with_row_index(POSITION).select(dim, pl.col(POSITION).cast(pl.Int64))
 
 
 def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> pl.Series:
@@ -264,7 +232,7 @@ def dimension_labels(program: Program, data: Mapping[str, Source], dim: str) -> 
     if dim not in data:
         raise DataError(_no_labels_source_message(dim))
     _refuse_a_relation_on_the_labels(program, dim, data[dim])
-    return _labels_of(dim, _labels_table(data[dim], dim, program.dimensions[dim].dtype))
+    return _labels_table(data[dim], dim, program.dimensions[dim].dtype)[dim]
 
 
 def _refuse_null_labels(dim: str, labels: pl.Series) -> None:
@@ -416,18 +384,22 @@ def in_microseconds(table: pl.DataFrame, owner: str, midnight: Collection[str] =
     )
 
 
-def _over_datetimes(columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]) -> list[str]:
+def _over_datetimes(columns: Iterable[tuple[str, str]], labels_by_dimension: Mapping[str, pl.Series]) -> list[str]:
     """The columns of *columns*, ``(column, dimension)`` pairs, whose dimension's labels are datetimes.
 
     The labels are read first and follow their entry, so a column follows
     the labels rather than the entry: a date beside labels that are dates
     stays a date.
     """
-    return [c for c, dim in columns if dim in labels and isinstance(labels[dim].collect_schema()[dim], pl.Datetime)]
+    return [
+        c
+        for c, dim in columns
+        if dim in labels_by_dimension and isinstance(labels_by_dimension[dim].dtype, pl.Datetime)
+    ]
 
 
 def _typed_as_labels(
-    owner: str, table: pl.DataFrame, columns: Iterable[tuple[str, str]], labels: Mapping[str, pl.LazyFrame]
+    owner: str, table: pl.DataFrame, columns: Iterable[tuple[str, str]], labels_by_dimension: Mapping[str, pl.Series]
 ) -> pl.DataFrame:
     """*table* with each label column, ``(column, dimension)`` in *columns*, of a type its dimension's labels compare with.
 
@@ -442,9 +414,9 @@ def _typed_as_labels(
     """
     casts = []
     for column, dim in columns:
-        if dim not in labels:
+        if dim not in labels_by_dimension:
             continue
-        given, listed = table.schema[column], labels[dim].collect_schema()[dim]
+        given, listed = table.schema[column], labels_by_dimension[dim].dtype
         if table.height == 0 or given == pl.Null:
             if given != listed:
                 casts.append(pl.col(column).cast(listed))
@@ -489,48 +461,12 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
-def _refuse_unknown_labels_in_relations(
-    program: Program, relations: Mapping[str, pl.LazyFrame], labels_by_dimension: Mapping[str, pl.Series]
-) -> None:
-    """Every column of every relation holds labels of its dimension.
-
-    Raises:
-        DataError: A column holding a label its dimension lacks.
-    """
-    for name, relation in program.relations.items():
-        for role, dim in relation.columns:
-            _refuse_unknown_labels_in_column(relations[name], name, role, dim, labels_by_dimension[dim])
-
-
-def _refuse_unknown_labels_in_column(rows: pl.LazyFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
-    """Refuse a relation column holding a value that is not a label of its dimension.
-
-    Offenders keep their own type — a python native off polars, never a numpy
-    scalar — because the message reprs them.
-    """
-    known = set(labels.to_list())
-    strays: dict[object, None] = {v: None for v in rows.select(role).pipe(collected)[role].to_list() if v not in known}
-    if not strays:
-        return
-    shown = ', '.join(repr(v) for v in list(strays)[:5]) + (' …' if len(strays) > 5 else '')
-    spelled = [str(x) for x in labels.to_list()]
-    raise DataError(
-        f"relation '{name}' has value(s) in '{role}' that are not '{dim}' labels: {shown}. '{dim}' takes "
-        f'its labels from the data here, and they are {spelled[:8]}{" …" if len(spelled) > 8 else ""}. A '
-        f'relation relates the labels that exist — a value matching none of them would place its terms '
-        f'nowhere, so it is a typo on one side or a label missing from the other.'
-    )
-
-
-def _labels_of(dim: str, table: pl.LazyFrame) -> pl.Series:
-    """One dimension's labels."""
-    return table.select(dim).pipe(collected)[dim]
-
-
-def _read_relation(source: Source, name: str, relation: Relation, labels: Mapping[str, pl.LazyFrame]) -> pl.LazyFrame:
+def _read_relation(
+    source: Source, name: str, relation: Relation, labels_by_dimension: Mapping[str, pl.Series]
+) -> pl.DataFrame:
     """One supplied relation as the table both lanes read: one column per declared column, under its own name.
 
-    A column is read in its dimension's label type, from *labels*.
+    A column is read in its dimension's label type, from *labels_by_dimension*.
 
     Raises:
         DataError: A source no reader accepts, a table short of a column,
@@ -556,8 +492,10 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
             f'{list(available)}). {keyed}, and every column is over a dimension of its own.'
         )
     owner = f"relation '{name}'"
-    rows = in_microseconds(table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, labels))
-    rows = _typed_as_labels(owner, rows, relation.columns, labels)
+    rows = in_microseconds(
+        table.select(*roles).pipe(collected), owner, _over_datetimes(relation.columns, labels_by_dimension)
+    )
+    rows = _typed_as_labels(owner, rows, relation.columns, labels_by_dimension)
 
     holes = rows.filter(pl.any_horizontal(pl.col(c).is_null() for c in roles))
     if holes.height:
@@ -571,21 +509,7 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
             f'means by it.'
         )
 
-    key = list(relation.key)
-    twice = rows.group_by(key).len().filter(pl.col('len') > 1).sort(key)
-    if twice.height:
-        shown = coordinates_text(key, twice.select(key).head(5).rows())
-        if relation.values:
-            raise DataError(
-                f"relation '{name}' maps {twice.height} key(s) more than once: {shown}. "
-                f'{key} is the declared key, so each key it maps takes exactly one row.'
-            )
-        raise DataError(
-            f"relation '{name}' relates {twice.height} tuple(s) more than once: {shown}. "
-            f'A relation holds each row at most once, so drop the repeats.'
-        )
-
-    return rows.lazy()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -594,7 +518,7 @@ def _read_relation(source: Source, name: str, relation: Relation, labels: Mappin
 
 
 def parameter_table(
-    name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+    name: str, p: Parameter, obj: Source, sources: Mapping[str, pl.DataFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """The caller's object for one parameter as a lazy table, whatever shape it took.
 
@@ -619,25 +543,6 @@ def parameter_table(
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
 
 
-def read_values(
-    kind: str, name: str, dims: Sequence[str], obj: Source, labels: Mapping[str, pl.LazyFrame], dtype: str
-) -> pl.LazyFrame:
-    """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
-
-    For values that are no parameter's, such as a start's. *kind* and *name*
-    say whose they are in a refusal, and *labels* holds each dimension's
-    labels under its own name.
-
-    Raises:
-        DataError: A table a parameter over the same dimensions would be refused for.
-    """
-    declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    table = parameter_table(name, declared, obj, labels, kind)
-    return _checked_parameter(
-        name, declared, table, labels, {d: _labels_of(d, labels[d]) for d in dims if d in labels}, kind
-    )
-
-
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
     """The least value parameter *name*'s source holds, read without any labels; ``0`` where it holds no rows.
 
@@ -659,7 +564,7 @@ def least_value(program: Program, sources: Mapping[str, Source], name: str) -> i
 
 
 def _spread(
-    name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str = 'parameter'
+    name: str, obj: Source, dims: Sequence[str], sources: Mapping[str, pl.DataFrame], kind: str = 'parameter'
 ) -> pl.LazyFrame:
     """A parameter written as plain Python, spread over the dimensions it declares.
 
@@ -711,7 +616,7 @@ def _wrong_rank(name: str, said: str, dims: Sequence[str], kind: str) -> str:
 
 
 def _broadcast(
-    name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.LazyFrame], kind: str
+    name: str, value: pl.Expr, dims: Sequence[str], sources: Mapping[str, pl.DataFrame], kind: str
 ) -> pl.LazyFrame:
     """One number over every coordinate of *dims*."""
     table = pl.LazyFrame({'__one__': [0]})
@@ -720,7 +625,7 @@ def _broadcast(
     return table.drop('__one__').with_columns(value.alias(VALUE))
 
 
-def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str) -> list[Label]:
+def _labels(name: str, dim: str, sources: Mapping[str, pl.DataFrame], kind: str) -> list[Label]:
     """*dim*'s labels, in label order, for a shape that has none of its own.
 
     Raises:
@@ -734,17 +639,16 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.LazyFrame], kind: str)
             f"of '{dim}'. Pass '{dim}': [...] in sources, or pass '{name}' as a table "
             f"carrying its own '{dim}' column."
         )
-    return source.select(dim).pipe(collected)[dim].to_list()
+    return source[dim].to_list()
 
 
-def _checked_parameter(
+def checked_parameter(
     name: str,
     p: Parameter,
     table: pl.LazyFrame,
-    sources: Mapping[str, pl.LazyFrame],
     labels_by_dimension: Mapping[str, pl.Series],
     kind: str = 'parameter',
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """*table* held to what its entry claims, collected once.
 
     *labels_by_dimension* holds the labels of each dimension read so far,
@@ -753,9 +657,10 @@ def _checked_parameter(
     The collect is the one model-sized materialisation on the way in.
 
     Raises:
-        DataError: The table lacks a declared dimension or ``value``, holds two rows
-            for one coordinate or a label its dimension lacks, carries a null
-            or NaN value, or types the column differently from the entry.
+        DataError: The table lacks a declared dimension or ``value``, carries
+            a null or NaN value, types a column differently from the entry or
+            from its dimension's labels, or holds more than one row over no
+            dimension.
     """
     wanted = [*p.dims, VALUE]
     available = table.collect_schema().names()
@@ -767,121 +672,24 @@ def _checked_parameter(
         )
     owner = f"{kind} '{name}'"
     checked = in_microseconds(
-        table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
+        table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), labels_by_dimension)
     )
-    checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
-    _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
+    checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), labels_by_dimension)
+    _refuse_rows_over_no_dimension(name, p, checked, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
-    return checked.lazy()
+    return checked
 
 
-def _refuse_unknown_or_repeated_coordinates(
-    name: str, p: Parameter, table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series], kind: str
-) -> None:
-    """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
-
-    Labels are checked against the dimensions whose labels have been read; one
-    still missing is refused once every source is in. A table with no row over
-    its dimensions has neither to check, and is not queried.
-    """
-    if not p.dims:
-        if table.height > 1 or (table.height == 0 and p.missing == 'refused'):
-            raise DataError(
-                f"{kind} '{name}' is declared with no dimensions, which means one value "
-                f'broadcast everywhere — but its source has {table.height} rows. '
-                f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
-                f'`missing:` to say what no row means.'
-            )
-        return
-    if not table.height:
-        return
-
-    positions = _coordinate_positions(p.dims, table, labels_by_dimension)
-    _refuse_unknown_labels(name, kind, table, p.dims, labels_by_dimension, positions)
-    _refuse_repeated_coordinates(name, kind, table, p.dims, positions)
-
-
-def _coordinate_positions(
-    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series]
-) -> pl.Series | None:
-    """Each row's coordinate position: where its coordinate sits in the product of its dimensions' labels.
-
-    A coordinate's position is built from its labels' positions, row-major, so
-    two rows share one exactly when they share a coordinate, and a row with a
-    label its dimension lacks has none and reads as null. Counting distinct
-    positions replaces hashing every key column, which is the check's cost on a
-    large dense table. ``None`` asks the caller to hash instead: for one key
-    column, which hashes once either way, for a table under 50,000 rows, and
-    where a position cannot be formed — a dimension whose labels are not read
-    yet, a column of another dtype than its labels, a product past 63 bits.
-    """
-    if len(dims) < 2 or table.height < 50_000:
-        return None
-    if any(d not in labels_by_dimension or table.schema[d] != labels_by_dimension[d].dtype for d in dims):
-        return None
-    if math.prod(labels_by_dimension[d].len() for d in dims) >= 2**63:
-        return None
-    position = pl.lit(0, dtype=pl.UInt64)
-    for d in dims:
-        labels = labels_by_dimension[d]
-        label_position = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, label_position, default=None)
-    return table.select(position).to_series()
-
-
-def _refuse_unknown_labels(
-    name: str,
-    kind: str,
-    table: pl.DataFrame,
-    dims: tuple[str, ...],
-    labels_by_dimension: Mapping[str, pl.Series],
-    positions: pl.Series | None,
-) -> None:
-    """Refuse the first of *dims* holding a label it does not have; positions without a null prove there is none."""
-    read = [d for d in dims if d in labels_by_dimension]
-    if not read or (positions is not None and not positions.null_count()):
-        return
-    all_known = table.select(_is_label(d, labels_by_dimension[d]).all().alias(d) for d in read).row(0, named=True)
-    dim = next((d for d in read if not all_known[d]), None)
-    if dim is None:
-        return
-    labels = labels_by_dimension[dim]
-    unknown = table.filter(~_is_label(dim, labels)).select(pl.col(dim).unique())[dim].to_list()
-    shown = ', '.join(repr(s) for s in unknown[:5])
-    more = f' (and {len(unknown) - 5} more)' if len(unknown) > 5 else ''
-    raise DataError(
-        f"{kind} '{name}' has label(s) in dimension '{dim}' that are not labels "
-        f'of it: {shown}{more}.\n'
-        f'  {dim} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-        f'A missing row means no value there, but a label the dimension does not have is a '
-        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-        f'as absent. Fix the label, or add it to the labels of {dim}.'
-    )
-
-
-def _refuse_repeated_coordinates(
-    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], positions: pl.Series | None
-) -> None:
-    """Refuse a coordinate that has more than one row, naming the first three."""
-    repeated = table.select(dims).is_duplicated().any() if positions is None else positions.n_unique() < table.height
-    if not repeated:
-        return
-    duplicated = table.group_by(dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
-    shown = '; '.join(
-        f'{coordinate_text({d: row[d] for d in dims})} ({row["#rows"]} rows)'
-        for row in duplicated.iter_rows(named=True)
-    )
-    raise DataError(
-        f"{kind} '{name}' has more than one row for a coordinate: {shown}. "
-        f'It holds one value per coordinate, so which value applies is undefined — '
-        f'aggregate the source to one row per {list(dims)} before attaching it.'
-    )
-
-
-def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
-    """Whether each row's *dim* is one of *labels*: false for a null, which ``is_in`` leaves null and ``all`` skips."""
-    return pl.col(dim).is_in(labels.implode()).fill_null(False)
+def _refuse_rows_over_no_dimension(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
+    """Refuse a parameter over no dimension that holds more than its one value, or none where it refuses that."""
+    if not p.dims and (table.height > 1 or (table.height == 0 and p.missing == 'refused')):
+        raise DataError(
+            f"{kind} '{name}' is declared with no dimensions, which means one value "
+            f'broadcast everywhere — but its source has {table.height} rows. '
+            f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
+            f'`missing:` to say what no row means.'
+        )
 
 
 def _refuse_absent_values(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:

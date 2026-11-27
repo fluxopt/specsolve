@@ -48,8 +48,8 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(msg) from exc
 
 
+from specsolve._api import attach_sources
 from specsolve._inputs import as_program, as_spec, expression_node
-from specsolve._sources import tidy_sources
 from tests.linopy_lane._notes import note
 from tests.linopy_lane.builder import _eval, build_model
 from tests.linopy_lane.coverage import check_read_divisors_cover
@@ -99,7 +99,7 @@ def build(spec: SpecLike, sources: Mapping[str, Source]) -> linopy.Model:
         program = as_program(spec)
         refuse_relations_the_lane_does_not_build(program)
 
-        tidy = tidy_sources(program, sources)
+        tidy, _ = attach_sources(program, sources)
         master_coords, relations = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
 
@@ -146,7 +146,7 @@ def evaluate(
         node = expression_node(written, expression)
         program = as_program(written)
         refuse_relations_the_lane_does_not_build(program)
-        tidy = tidy_sources(program, sources)
+        tidy, _ = attach_sources(program, sources)
         master_coords, relations = dimension_coords(program, tidy)
         dataset = load_parameters(program, tidy, master_coords)
         given = given_rows(program, tidy, master_coords)

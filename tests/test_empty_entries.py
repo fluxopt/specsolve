@@ -1,4 +1,4 @@
-"""An entry that holds no row is not queried, and the model is the one without it.
+"""An entry that holds nothing is not queried, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
 most entries span a dimension without a label or a `where` that admits
@@ -13,7 +13,8 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import _assumptions, _sources
+from specsolve import _encoding
+from specsolve._engine import assumptions as _assumptions
 from specsolve._engine import conditions, indices, specialize
 from specsolve._engine import queries as queries_module
 from specsolve._names import COL, ROW
@@ -321,18 +322,17 @@ def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypa
 
 
 def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
-    """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
-    from specsolve._engine import engine as engine_module
+    """The assumptions are checked on the attach a build reads, rather than on one of their own."""
+    from specsolve import _api
 
     calls = []
-    real = engine_module.attach
+    real = _api.attach
 
-    def counted(program, sources):
+    def counted(*args):
         calls.append(1)
-        return real(program, sources)
+        return real(*args)
 
-    monkeypatch.setattr(engine_module, 'attach', counted)
-    monkeypatch.setattr(_assumptions, 'attach', counted)
+    monkeypatch.setattr(_api, 'attach', counted)
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
@@ -391,13 +391,13 @@ def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table
 def test_a_parameter_table_with_no_row_is_not_checked_for_its_coordinates(monkeypatch):
     """`flag` over `g` and `on` over `g` and `e` arrive with no row, so there is no coordinate of theirs to refuse; `cap` over `g` has rows."""
     checked = []
-    real = _sources._coordinate_positions
+    real = _encoding._coordinate_positions
 
     def counted(dims, *args):
         checked.append(dims)
         return real(dims, *args)
 
-    monkeypatch.setattr(_sources, '_coordinate_positions', counted)
+    monkeypatch.setattr(_encoding, '_coordinate_positions', counted)
     sps.build(TABLED_SPEC, TABLED_SOURCES).close()
     assert checked == [('g',)], f'the coordinates of tables over {checked} were checked, where only cap has a row'
 

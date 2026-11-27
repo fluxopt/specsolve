@@ -26,8 +26,8 @@ from specsolve import errors as errors
 from specsolve import types as types
 from specsolve._api import build, check, evaluate, solve, tidy, write
 from specsolve._archive import read_archive, read_inputs, scan_archive
-from specsolve._axes import EachLabel, EachWindow
-from specsolve._solve_over import build_slice, solve_over
+from specsolve._sweep.axes import EachLabel, EachWindow
+from specsolve._sweep.solve_over import build_slice, solve_over
 
 __all__ = [
     'EachLabel',

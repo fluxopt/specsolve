@@ -68,13 +68,13 @@ def test_a_dimension_is_read_once_however_many_parameters_and_relations_are_over
     """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
     from specsolve import _sources as reading
 
-    reads, real = [], reading._labels_of
+    reads, real = [], reading._labels_table
 
-    def counted(dim, table):
+    def counted(source, dim, dtype):
         reads.append(dim)
-        return real(dim, table)
+        return real(source, dim, dtype)
 
-    monkeypatch.setattr(reading, '_labels_of', counted)
+    monkeypatch.setattr(reading, '_labels_table', counted)
     spec = {
         **SPEC,
         'dimensions': {**SPEC['dimensions'], 'site': {}},
@@ -110,7 +110,7 @@ def test_a_dimension_is_cast_into_its_enum_by_one_expression_however_many_tables
     }
     sps.build(spec, sources).close()
     casts = sum(1 for categories in built if categories == tuple(GENERATORS))
-    assert casts == 2, f'`g` was cast by {casts} expressions: one for its labels and one shared by its three tables'
+    assert casts == 1, f'`g` was cast by {casts} expressions, where the one its three tables share is enough'
 
 
 def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
@@ -118,10 +118,11 @@ def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
 
     #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
     """
-    from specsolve._sources import _coordinate_positions
+    from specsolve._attached import Dimension
+    from specsolve._encoding import _coordinate_positions
 
     labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
     table = pl.DataFrame({'g': labels, 'value': 1.0})
-    assert _coordinate_positions(('g',), table, {'g': labels}) is None, (
+    assert _coordinate_positions(('g',), table, {'g': Dimension.of('g', labels)}) is None, (
         'one column is hashed, not turned into positions'
     )
