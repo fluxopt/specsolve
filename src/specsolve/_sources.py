@@ -291,12 +291,16 @@ def _dtype_holding(column: pl.DataType) -> str | None:
 def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFrame:
     """*labels* if their type is one *dtype* holds; an empty table, holding no label to misread, takes it.
 
+    Strings come back as plain ``String``, since a ``Categorical`` or an
+    ``Enum`` holds them in a dictionary of the caller's, and a dimension is
+    encoded in its own.
+
     Raises:
         DataError: Labels of another type than the one declared.
     """
     given = labels.schema[dim]
     if _HOLDS[dtype](given):
-        return labels
+        return labels.with_columns(pl.col(dim).cast(pl.String)) if dtype == 'str' else labels
     if labels.height == 0:
         return labels.with_columns(pl.col(dim).cast(_DECLARED[dtype]))
     own = _dtype_holding(given) or ('datetime' if given == pl.Date else None)

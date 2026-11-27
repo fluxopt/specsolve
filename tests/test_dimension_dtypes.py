@@ -58,6 +58,7 @@ def test_labels_of_another_type_than_the_declared_dtype_are_refused(dtype, label
         pytest.param('datetime', pl.Series(DAYS), id='dates-under-datetime'),
         pytest.param('int', pl.Series([1, 2], dtype=pl.Int32), id='a-narrower-integer'),
         pytest.param('str', pl.Series(['a', 'b'], dtype=pl.Categorical), id='categorical-strings'),
+        pytest.param('str', pl.Series(['a', 'b'], dtype=pl.Enum(['a', 'b'])), id='enum-strings'),
         pytest.param(
             'datetime',
             pl.Series([dt.datetime(2030, 1, 1), dt.datetime(2030, 1, 2)]).dt.cast_time_unit('ns'),
@@ -69,6 +70,27 @@ def test_labels_the_declared_dtype_holds_build(dtype, labels):
     """Within a dtype any width, encoding or unit builds; a date under `datetime` is its day's first microsecond."""
     with sps.build(_spec(dtype), _sources(labels)) as model:
         assert model.metrics().columns == 2, 'one column per label'
+
+
+@pytest.mark.parametrize(
+    'encoding',
+    [
+        pytest.param(pl.Categorical, id='categorical'),
+        pytest.param(pl.Enum(['a', 'b', 'c']), id='an-enum-in-another-order-with-a-category-to-spare'),
+    ],
+)
+def test_string_labels_with_a_dictionary_of_their_own_are_read_as_plain_strings(encoding):
+    """A `Categorical` or an `Enum` is an encoding of strings, and the labels are the strings, in the order of their rows.
+
+    The labels were held in the dictionary they arrived in. `Categorical` labels left a result as `Categorical`,
+    which a caller's `String` column does not join, and `Enum` labels failed the build with a polars error (#2255).
+    """
+    labels = pl.Series('d', ['b', 'a'], dtype=encoding)
+    cap = pl.DataFrame({'d': ['a', 'b'], 'value': [1.0, 2.0]})
+    with sps.solve(_spec(None), {'d': labels, 'cap': cap}) as result:
+        primal = result.primal('x')
+    assert primal.schema['d'] == pl.String, 'what leaves is what a caller can join against'
+    assert primal.rows() == [('b', 2.0), ('a', 1.0)], 'each label in the order of its row, at its own cap'
 
 
 def test_an_empty_labels_table_takes_the_declared_dtype():

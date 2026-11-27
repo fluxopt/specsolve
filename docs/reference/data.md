@@ -48,6 +48,9 @@ names the fix.
 
 A table with no rows takes the declared type.
 
+A `Categorical` or an `Enum` is read as its strings. The labels are in the order
+of their rows, not of the categories, and a result returns them as `String`.
+
 **A dimension's labels list each label once, in order.** On a dimension the
 spec declares `ordered: true`,
 [`shift`](https://mathspec.readthedocs.io/en/latest/reference/language/operators/#shift),
