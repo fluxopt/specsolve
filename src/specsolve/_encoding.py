@@ -243,18 +243,22 @@ def _coordinate_positions(
     positions replaces hashing every key column, which is the check's cost on a
     large dense table. ``None`` asks the caller to hash instead: for one key
     column, which hashes once either way, for a table under
-    [`POSITIONS_FROM`][] rows, and where a position cannot be formed — a
-    column of another type than its dimension's, a product past 63 bits.
-    Every label is one its dimension has by the time this is asked.
+    [`POSITIONS_FROM`][] rows, and for a product past 63 bits, where a
+    position cannot be formed. Every label is one its dimension has by the
+    time this is asked, so a column of another width than its dimension's is
+    read in the dimension's.
     """
     if len(dims) < 2 or table.height < POSITIONS_FROM:
-        return None
-    if any(table.schema[d] != dimensions[d].dtype for d in dims):
         return None
     if math.prod(dimensions[d].size for d in dims) >= 2**63:
         return None
     sizes = (dimensions[d].size for d in dims)
-    return table.select(row_major(sizes, (dimensions[d].position(pl.col(d)) for d in dims))).to_series()
+    labels = (
+        pl.col(d) if table.schema[d] == dimensions[d].dtype else pl.col(d).cast(dimensions[d].dtype) for d in dims
+    )
+    return table.select(
+        row_major(sizes, (dimensions[d].position(label) for d, label in zip(dims, labels, strict=True)))
+    ).to_series()
 
 
 def _refuse_a_missing_row(kind: str, name: str, rows: pl.DataFrame, columns: Mapping[str, Dimension]) -> None:

@@ -60,9 +60,11 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
     ``shift`` counts, and a relation as one column per declared column. They
     are the tables [`tidy`][specsolve._api.tidy] returns and an archive holds
     under ``sources/``. A dimension's labels are of its declared ``dtype``,
-    ``str`` unless declared, and so is every column over it; the one conversion
-    is a date under ``datetime``, held as the microsecond its day starts on. A
-    datetime label is held in microseconds. A table with no rows reads each
+    ``str`` unless declared, and so is every column over it. The labels are
+    held in the one type the ``dtype`` names: ``Int64``, ``Float64``,
+    ``String``, or a ``Datetime`` in microseconds, a date as the microsecond
+    its day starts on. A column over the dimension stays in the type it
+    arrived in, a datetime in microseconds. A table with no rows reads each
     column over a dimension in that dimension's label type.
 
     Every read holds one table whole, so it runs on polars' in-memory engine.
@@ -289,18 +291,19 @@ def _dtype_holding(column: pl.DataType) -> str | None:
 
 
 def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFrame:
-    """*labels* if their type is one *dtype* holds; an empty table, holding no label to misread, takes it.
+    """*labels* in the one type *dtype* names ([`_DECLARED`][]), whatever width or encoding of it they arrived in.
 
-    Strings come back as plain ``String``, since a ``Categorical`` or an
-    ``Enum`` holds them in a dictionary of the caller's, and a dimension is
-    encoded in its own.
+    A dimension is then one type wherever it is read: in a position, in a
+    join, in a result. A datetime is in microseconds by now and keeps its
+    time zone. An empty table, holding no label to misread, takes the type.
 
     Raises:
-        DataError: Labels of another type than the one declared.
+        DataError: Labels of another type than the one declared, or an
+            integer label past the range of an ``Int64``.
     """
     given = labels.schema[dim]
     if _HOLDS[dtype](given):
-        return labels.with_columns(pl.col(dim).cast(pl.String)) if dtype == 'str' else labels
+        return labels if dtype == 'datetime' else _cast_labels(dim, labels, _DECLARED[dtype])
     if labels.height == 0:
         return labels.with_columns(pl.col(dim).cast(_DECLARED[dtype]))
     own = _dtype_holding(given) or ('datetime' if given == pl.Date else None)
@@ -310,6 +313,18 @@ def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFra
         f'{" (`str` unless it says otherwise)" if dtype == "str" else ""}. {instead} the labels to '
         f'{_DECLARED[dtype]} before attaching.'
     )
+
+
+def _cast_labels(dim: str, labels: pl.DataFrame, held: pl.DataType) -> pl.DataFrame:
+    """*labels* as *held*, refused where a label does not fit it."""
+    try:
+        return labels.with_columns(pl.col(dim).cast(held))
+    except pl.exceptions.InvalidOperationError:
+        past = labels[dim].filter(labels[dim].cast(held, strict=False).is_null())
+        raise DataError(
+            f"the labels of dimension '{dim}' hold {past.len()} label(s) that do not fit {held}, such as {past[0]}. "
+            f'A label is held as {held}, so renumber the labels within its range before attaching.'
+        ) from None
 
 
 def _labels_from_sequence(dim: str, values: Source, dtype: str) -> pl.LazyFrame:

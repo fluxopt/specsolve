@@ -64,6 +64,25 @@ def test_a_dense_table_is_refused_as_a_small_one_is(cap, refusal):
         sps.build(SPEC, _sources(cap))
 
 
+def test_a_dense_column_narrower_than_its_labels_is_placed_among_them():
+    """A column of a narrower integer than its dimension's labels is read in the labels' type before it is placed.
+
+    The hours run to 598 and the column is a `UInt8`, which holds the first 128 of them: the labels
+    do not fit the column, so the column is the one to convert.
+    """
+    spec = {**SPEC, 'parameters': {'cap': {'dims': ['g', 't'], 'missing': 0}}}
+    generators = [f'g{i}' for i in range(400)]
+    early = pl.DataFrame({'g': generators}).join(
+        pl.DataFrame({'t': pl.Series(list(range(0, 255, 2)), dtype=pl.UInt8)}), how='cross'
+    )
+    sources = {'g': generators, 't': list(range(0, 600, 2)), 'cap': early.with_columns(value=1.0)}
+    with sps.build(spec, sources) as model:
+        assert model.metrics().columns == 120_000, 'one column per generator and hour, whether `cap` has its row'
+    twice = pl.concat([early, early.tail(1)]).with_columns(value=1.0)
+    with pytest.raises(sps.errors.DataError, match='more than one row for a coordinate'):
+        sps.build(spec, sources | {'cap': twice})
+
+
 def test_a_dimension_is_read_once_however_many_parameters_and_relations_are_over_it(monkeypatch):
     """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
     from specsolve import _sources as reading

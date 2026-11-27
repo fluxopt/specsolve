@@ -115,9 +115,12 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
 
     Returns:
         Each dimension as ``(dim, specsolve_position)``: its labels once each,
-        and the ``Int64`` position from 0 that ``shift`` counts. Each
-        parameter as ``(dims…, value)``. Each relation as the columns it
-        declares.
+        and the ``Int64`` position from 0 that ``shift`` counts. The labels
+        are in the one type the dimension's ``dtype`` names: ``Int64``,
+        ``Float64``, ``String``, or a ``Datetime`` in microseconds. Each
+        parameter as ``(dims…, value)`` and each relation as the columns it
+        declares, every column in the type it arrived in, a datetime in
+        microseconds.
 
     Raises:
         LanguageError: A construct outside the language.

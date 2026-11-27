@@ -39,17 +39,25 @@ labels. Other columns of the table are ignored.
 `dtype`, `str` unless it declares one.** Another type is refused, and the message
 names the fix.
 
-| `dtype` | Labels it takes |
-|---|---|
-| `int` | an integer of any width |
-| `float` | a float of any width |
-| `str` | `String`, `Categorical` or `Enum` |
-| `datetime` | a datetime in any unit or time zone; **a date, as the microsecond its day starts on**, the one conversion |
+| `dtype` | Labels it takes | Held as |
+|---|---|---|
+| `int` | an integer of any width | `Int64` |
+| `float` | a float of any width | `Float64` |
+| `str` | `String`, `Categorical` or `Enum` | `String` |
+| `datetime` | a datetime in any unit or time zone, or a date | a `Datetime` in microseconds, in its time zone |
 
-A table with no rows takes the declared type.
+**The labels are held in one type per `dtype`.** [`tidy`](api.md#specsolve.tidy)
+returns them in that type, and a result names each label in it.
 
-A `Categorical` or an `Enum` is read as its strings. The labels are in the order
-of their rows, not of the categories, and a result returns them as `String`.
+- **A date is read as the microsecond its day starts on.**
+- **A `Categorical` or an `Enum` is read as its strings.** The labels are in the
+  order of their rows, not of the categories.
+- **An integer label past the range of `Int64` is refused.**
+- **A table with no rows takes the type.**
+
+**A column over the dimension stays as it arrived.** An `Int32` column of a
+parameter is an `Int32` column in what `tidy` returns. A datetime column is the
+exception: it is read in microseconds, as the labels are.
 
 **A dimension's labels list each label once, in order.** On a dimension the
 spec declares `ordered: true`,
