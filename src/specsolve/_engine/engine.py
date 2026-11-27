@@ -32,6 +32,7 @@ from specsolve._engine.assembly import (
 from specsolve._engine.attaching import AttachedSources, attach
 from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
+from specsolve._engine.specialize import specialized
 from specsolve._names import VALUE
 from specsolve._outputs import kinds_of
 from specsolve._records import PHASES, TIMINGS_SCHEMA, Metrics, Phase, Step
@@ -180,7 +181,7 @@ class Engine:
             attached = attach(program, sources)
             self.lap('attach')
         self._measured.sparse = short_parameters(program, attached)
-        self._built = Assembly(program, attached, self._measured, self.lap).run()
+        self._built = Assembly(specialized(program, attached), attached, self._measured, self.lap).run()
 
     # ------------------------------------------------------------------
     # sinks — see _sinks/; the engine only supplies the tables

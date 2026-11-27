@@ -64,7 +64,7 @@ def test_a_dense_table_is_refused_as_a_small_one_is(cap, refusal):
         sps.build(SPEC, _sources(cap))
 
 
-def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatch):
+def test_a_dimension_is_read_once_however_many_parameters_and_relations_are_over_it(monkeypatch):
     """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
     from specsolve import _sources as reading
 
@@ -77,14 +77,20 @@ def test_a_dimension_is_read_once_however_many_parameters_are_over_it(monkeypatc
     monkeypatch.setattr(reading, '_labels_of', counted)
     spec = {
         **SPEC,
+        'dimensions': {**SPEC['dimensions'], 'site': {}},
+        'relations': {'sited': {'key': 'g', 'values': 'site'}},
         'parameters': {**SPEC['parameters'], 'cost': {'dims': ['g']}, 'floor': {'dims': ['g', 't']}},
     }
     sources = _sources(_dense()) | {
+        'site': ['north', 'south'],
+        'sited': pl.DataFrame({'g': GENERATORS, 'site': ['north', 'south'] * (len(GENERATORS) // 2)}),
         'cost': pl.DataFrame({'g': GENERATORS, 'value': 1.0}),
         'floor': _dense().with_columns(value=0.0),
     }
     sps.build(spec, sources).close()
-    assert sorted(reads) == ['g', 't'], f'the labels were read as {sorted(reads)}, where each dimension once is enough'
+    assert sorted(reads) == ['g', 'site', 't'], (
+        f'the labels were read as {sorted(reads)}, where each dimension once is enough'
+    )
 
 
 def test_a_dimension_is_cast_into_its_enum_by_one_expression_however_many_tables_carry_it(monkeypatch):
@@ -112,8 +118,10 @@ def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
 
     #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
     """
-    from specsolve._sources import _row_major_positions
+    from specsolve._sources import _coordinate_positions
 
     labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
     table = pl.DataFrame({'g': labels, 'value': 1.0})
-    assert _row_major_positions(('g',), table, {'g': labels}) is None, 'one column is hashed, not turned into positions'
+    assert _coordinate_positions(('g',), table, {'g': labels}) is None, (
+        'one column is hashed, not turned into positions'
+    )
