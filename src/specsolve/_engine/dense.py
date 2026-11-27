@@ -215,7 +215,9 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
     """Parameter *name*'s value column in the row-major order of its dimensions, the table having a row at every coordinate.
 
     A table whose rows already stand in that order is read as it is, with no
-    copy beside it; any other order is moved into one in a single pass.
+    copy beside it; any other order is moved into one in a single pass, each
+    value written at its row's position. [`tidy_sources`][specsolve._sources.tidy_sources]
+    refuses a null value, so a null left after it is a coordinate with no row.
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
@@ -228,13 +230,11 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
     at, column = held.get_column(ROW_MAJOR), held.get_column(VALUE)
     if at.len() == cells and (at == pl.int_range(cells, dtype=pl.Int64, eager=True)).all():
         return column
-    row = pl.repeat(-1, cells, dtype=pl.Int64, eager=True).scatter(
-        at, pl.int_range(at.len(), dtype=pl.Int64, eager=True)
-    )
-    if at.len() != cells or (row < 0).any():
+    placed = pl.repeat(None, cells, dtype=column.dtype, eager=True).scatter(at, column)
+    if at.len() != cells or placed.null_count():
         msg = f"parameter '{name}' is as tall as the product of its dimensions and does not cover it"
         raise SpecsolveError(msg)
-    return column.gather(row)
+    return placed.alias(column.name)
 
 
 def _columns_by_position(scope: Scope, name: str) -> pl.Series:
