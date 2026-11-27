@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from mathspec import program as program_module
 
-from specsolve._collect import collected, collected_all, in_memory
+from specsolve._collect import collected, in_memory
 from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
 from specsolve._engine.specialize import settle
@@ -60,10 +60,6 @@ class AttachedSources:
         return self.dimensions[dim].collect_schema()[LABEL] == pl.Enum
 
 
-#: A float parameter's value column, whatever numeric type it arrived in.
-_AS_FLOAT = pl.col(VALUE).cast(pl.Float64)
-
-
 def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> AttachedSources:
     """Shape the tables ``tidy_sources`` returns into what *program* is written against.
 
@@ -71,9 +67,8 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
     carries the dimension is re-encoded against it. Each table is read
     [`in_memory`][], since every read holds one table whole. Each dimension's
     cast is built once and shared, since building a cast to an ``Enum`` of
-    many labels costs a fixed time per expression, and the parameters are
-    cast in one batch. Every atom of a ``where`` is then read once
-    ([`settle`][]), for the assumptions and the build both.
+    many labels costs a fixed time per expression. Every atom of a ``where``
+    is then read once ([`settle`][]), for the assumptions and the build both.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -92,12 +87,12 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         if casts:
             relations[name] = relations[name].with_columns(casts)
     to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
-    cast: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        casts = [to_enum[d] for d in p.dims if d in to_enum] + ([_AS_FLOAT] if p.dtype == 'float' else [])
-        cast[name] = _plain_strings(parameters[name], p.dims).lazy().with_columns(casts)
-    with in_memory():
-        parameters = dict(zip(cast, collected_all(cast.values()), strict=True))
+        table = _plain_strings(parameters[name], p.dims)
+        casts = [to_enum[d] for d in p.dims if d in to_enum]
+        if p.dtype == 'float':
+            casts.append(pl.col(VALUE).cast(pl.Float64))
+        parameters[name] = table.with_columns(casts) if casts else table
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
