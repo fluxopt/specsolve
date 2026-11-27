@@ -18,7 +18,7 @@ from specsolve._engine.relations import GROUP_RANK, GROUP_SIZE, Grouping, mappin
 from specsolve._engine.scope import join_on, missing_value
 from specsolve._engine.shifts import translate_rows
 from specsolve._messages import position_out_of_range_message, short_groups_message
-from specsolve._names import CONSTANT, LABEL, POSITION
+from specsolve._names import CONSTANT, LABEL, POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
@@ -31,11 +31,11 @@ if TYPE_CHECKING:
 
 
 class Carrier:
-    """A table a walk joins onto, each attachment made at most once."""
+    """A table a walk joins onto, each attachment made at most once, *attached* already made."""
 
-    def __init__(self, table: pl.LazyFrame) -> None:
+    def __init__(self, table: pl.LazyFrame, attached: tuple[str, ...] = ()) -> None:
         self.table = table
-        self._attached: set[str] = set()
+        self._attached: set[str] = set(attached)
 
     def once(self, alias: str, attach: Callable[[pl.LazyFrame, str], pl.LazyFrame]) -> str:
         """Join *attach* onto the table under *alias*, unless it already is, and return *alias*."""
@@ -80,10 +80,39 @@ def narrowed(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) ->
     return carrier.filter(falsy_if_null(condition))
 
 
+def passing(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> pl.LazyFrame:
+    """How many rows of *atom*'s parameter it holds at, as a one-cell table; a missing row reads as false."""
+    keys = tuple(atom.dims)
+    if not keys:
+        carrier, condition = query_condition(scope, scope.product(()), program.Mask(atom), keys)
+    else:
+        own = scope.data.parameters[atom.name].rename({VALUE: _parameter_alias(atom.name)})
+        carrier, condition = query_condition(scope, own, program.Mask(atom), keys, (atom.name,))
+    return carrier.filter(falsy_if_null(condition)).select(pl.len())
+
+
+def passes_without_a_row(scope: Scope, atom: program.ParameterDefined | program.ParameterComparison) -> bool:
+    """Whether *atom* holds where its parameter has no row: the parameter's missing value passes it."""
+    return not _false_without_a_row(program.Mask(atom), atom.name, scope)
+
+
+def counted_over_nothing(atom: program.CountComparison) -> bool:
+    """Whether *atom* holds where the dimension it counts along has no label: its count is zero."""
+    return pl.select(_COLUMN_COMPARISONS[atom.op](pl.lit(0), pl.lit(atom.value))).item()
+
+
+def _parameter_alias(parameter: str) -> str:
+    """The column a parameter's value is read from once it is joined onto a walk's table."""
+    return f'__where {parameter}__'
+
+
 def query_condition(
-    scope: Scope, table: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...]
+    scope: Scope, table: pl.LazyFrame, mask: program.Mask, dims: tuple[str, ...], carried: tuple[str, ...] = ()
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """The table with the condition's parameters joined, and the boolean expression.
+
+    A parameter in *carried* is not joined: *table* already holds its value
+    under its alias, one value per row.
 
     Walking joins the parameters, so the condition is built before the table is
     read. A name *mask* is certain of ([`_certain_names`][]) is inner- or
@@ -91,13 +120,13 @@ def query_condition(
     that reads the table verifies it ([`indices.in_position_order`][]).
     """
     certain = {name for name in _certain_names(mask) if _false_without_a_row(mask, name, scope)}
-    carrier = Carrier(table)
+    carrier = Carrier(table, tuple(_parameter_alias(name) for name in carried))
     serial = itertools.count()
 
     def join_parameter(parameter: str) -> str:
         how: JoinStrategy = 'inner' if parameter in certain else 'left'
         return carrier.once(
-            f'__where {parameter}__',
+            _parameter_alias(parameter),
             lambda f, alias: scope.parameter_join(f, parameter, dims, alias, f"where-parameter '{parameter}'", how),
         )
 
@@ -110,7 +139,9 @@ def query_condition(
         return carrier.once(
             f'__where position {dimension}__',
             lambda f, alias: f.join(
-                scope.data.dimensions[dimension].select(pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)),
+                scope.data.dimensions[dimension].table.select(
+                    pl.col(LABEL).alias(dimension), pl.col(POSITION).alias(alias)
+                ),
                 on=dimension,
                 how='left',
             ),
@@ -176,7 +207,7 @@ def query_condition(
             )
             return _COLUMN_COMPARISONS[p.op](pl.col(columns[0]), pl.col(columns[1]))
         if isinstance(p, program.CountComparison):
-            if not scope.data.cardinality[p.over]:
+            if not scope.data.dimensions[p.over].size:
                 return _COLUMN_COMPARISONS[p.op](pl.lit(0), pl.lit(p.value))
             keys = scope.in_dimension_order(p.dims)
             alias = join_reduction('count', lambda a: _counted(scope, p, a), keys)
@@ -195,7 +226,7 @@ def query_condition(
         if isinstance(p, program.DimensionPosition):
             if p.partition is not None:
                 return falsy_if_null(_COLUMN_COMPARISONS[p.op](pl.col(join_group_offset(p)), pl.lit(0)))
-            at = _resolved_position(p, scope.data.cardinality[p.name])
+            at = _resolved_position(p, scope.data.dimensions[p.name].size)
             return _COLUMN_COMPARISONS[p.op](pl.col(join_position(p.name)), pl.lit(at))
         if isinstance(p, program.RelationComparison):
             column = pl.col(join_relation(p.name, p.dims, p.column))

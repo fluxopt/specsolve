@@ -23,13 +23,14 @@ import yaml as pyyaml
 from mathspec import to_spec
 
 import specsolve as sps
-from specsolve._answer_layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
+from specsolve._answer import whole_kind_reason
+from specsolve._answer.layout import ANSWER_LAYOUT, METRICS_FILE, read_reasons, write_reasons, write_whole
+from specsolve._answer.outputs import KINDS
+from specsolve._answer.records import Metrics, Provenance, Record
 from specsolve._api import _provenance
 from specsolve._archive_layout import ANSWER_DIR, INPUTS_LAYOUT, _staging_for
 from specsolve._inputs import as_program
 from specsolve._names import RUN
-from specsolve._outputs import KINDS
-from specsolve._records import Metrics, Provenance, Record
 from specsolve._sinks import SOLVERS
 from specsolve._sources import attachable, tidy_sources
 from tests.conftest import (
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
 
     from mathspec.spec import Spec
 
-    from specsolve._outputs import Output
+    from specsolve._answer.outputs import Output
 
 
 def _question(archive: sps.types.Result | sps.types.Sweep) -> tuple[Spec, Mapping[str, object]]:
@@ -80,7 +81,7 @@ def test_what_attaches_from_the_archive_is_what_attached_from_the_tables(name: s
     )
     before = tidy_sources(program, sources)
     after = tidy_sources(to_spec(spec).program, unpacked)
-    differing = [key for key in before if not before[key].collect().equals(after[key].collect())]
+    differing = [key for key in before if not before[key].equals(after[key])]
     assert not differing, (
         f'tables that came back changed: {differing} — the archive carries the labels, values and dtypes'
     )
@@ -1366,10 +1367,10 @@ def test_a_sweep_read_off_its_archive_names_its_run_in_the_metrics_as_in_the_rec
 
 def test_a_reason_for_one_dual_is_not_a_reason_for_every_dual(tmp_path: Path) -> None:
     """A dual left out by name reads back under its name, never as the reason the whole kind is absent."""
-    write_reasons(tmp_path, None, {'dual': {'cap_limit': 'not over the window'}}, write_whole)
-    assert read_reasons(tmp_path) == (None, {'dual': {'cap_limit': 'not over the window'}}), (
-        'the whole kind keeps its duals, and the one name left out keeps its reason'
-    )
+    write_reasons(tmp_path, {'dual': {'cap_limit': 'not over the window'}}, write_whole)
+    read = read_reasons(tmp_path)
+    assert read == {'dual': {'cap_limit': 'not over the window'}}, 'the one name left out keeps its reason'
+    assert whole_kind_reason(read, 'dual') is None, 'and the whole kind keeps its duals'
 
 
 def test_a_label_sweep_archive_evaluates_an_undeclared_expression_per_slice(

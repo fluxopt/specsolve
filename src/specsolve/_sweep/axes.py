@@ -127,7 +127,7 @@ class EachLabel:
         object.__setattr__(self, 'carry', dict(self.carry))
 
     def to_dict(self) -> dict[str, object]:
-        """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
+        """This axis as plain data, which [`solve_over`][specsolve._sweep.solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds ``carry`` and ``key_name`` only where the axis sets them.
@@ -240,7 +240,7 @@ class EachWindow:
         object.__setattr__(self, 'carry', dict(self.carry))
 
     def to_dict(self) -> dict[str, object]:
-        """This axis as plain data, which [`solve_over`][specsolve._solve_over.solve_over] takes in its place.
+        """This axis as plain data, which [`solve_over`][specsolve._sweep.solve_over.solve_over] takes in its place.
 
         ``json.dumps`` writes it, and an archive's ``axis.json`` is this. It
         holds ``carry`` and ``key_name`` only where the axis sets them.
@@ -507,7 +507,7 @@ def _tables_over(
         DataError: A label finer than a microsecond, which the cast that
             matches it to the labels would round onto another label.
     """
-    listed = {dim: pl.LazyFrame({dim: labels})}
+    listed = {dim: pl.DataFrame({dim: labels})}
     found: dict[str, tuple[pl.LazyFrame, tuple[str, ...], str]] = {}
     for name, parameter in program.parameters.items():
         if dim in parameter.dims and name in sources and not isinstance(sources[name], (bool, int, float)):

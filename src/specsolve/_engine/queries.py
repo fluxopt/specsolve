@@ -120,11 +120,15 @@ class QueryBuilder:
     """Turn program nodes into polars queries over the model's tidy tables.
 
     ``solution`` is set on the builder a read makes and on no other: with it
-    every variable and every ``dual(c)`` turns into a value.
+    every variable and every ``dual(c)`` turns into a value. ``builds`` is set
+    on the builder of a build and on no other: a build places each term on an
+    entry's rows by the term's own dimensions, so a term that holds nothing
+    can be left out, where a read takes its dimensions from the terms it is given.
     """
 
     scope: Scope
     solution: Solution | None = None
+    builds: bool = False
 
     # ------------------------------------------------------------------
     # bounds
@@ -173,7 +177,7 @@ class QueryBuilder:
         if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
 
-        expected = math.prod(self.scope.data.cardinality[d] for d in v.dims)
+        expected = math.prod(self.scope.data.dimensions[d].size for d in v.dims)
         values = self.scope.data.parameters[parameter]
         if values.select(pl.len()).pipe(collected).item() != expected:
             return None
@@ -291,9 +295,20 @@ class QueryBuilder:
             return map_terms(inner, rewrite)
 
         def region(r: program.Region) -> ExpressionTerms:
-            """One region's value, kept only where that region applies."""
+            """One region's value, kept only where that region applies.
+
+            The coordinates it claims are read once, over the dimensions its
+            condition reads. In a build, a region that claims none builds no
+            term: each term would carry presences over the full product of its
+            dimensions, read only to be cut away. A read keeps it, since a read
+            takes its dimensions from its terms and the region may be the only
+            one over a dimension.
+            """
             on = tuple(d for d in self.scope.program.dimensions if d in r.when.dims)
-            truth = narrowed(self.scope, on, r.when).select(*on) if on else None
+            truth = narrowed(self.scope, on, r.when).select(*on).pipe(collected) if on else None
+            if truth is not None and not truth.height and self.builds:
+                return ExpressionTerms((), ())
+            truth = truth.lazy() if truth is not None else None
 
             def relaxed(x: Presence, dims: tuple[str, ...]) -> Presence:
                 """A region's presence, silent about the coordinates the region does not claim.
@@ -618,7 +633,7 @@ class QueryBuilder:
         if not p.dims:
             zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
             return replace(p, table=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
-        first = self.scope.data.dimensions[p.dims[0]].select(pl.col(LABEL).alias(p.dims[0]))
+        first = self.scope.data.dimensions[p.dims[0]].table.select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.table.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
@@ -649,7 +664,7 @@ class QueryBuilder:
         table = mapping(self.scope.data.relations, a)
         reachable = landed(table, a).unique()
         if not p.presences:
-            total = math.prod(self.scope.data.cardinality[d] for d in fine)
+            total = math.prod(self.scope.data.dimensions[d].size for d in fine)
             reached = reachable.select(pl.len()).pipe(collected).item()
             return () if reached == total else (Presence(reachable, fine),)
 

@@ -33,7 +33,7 @@ def test_a_row_with_no_terms_is_not_built_and_is_reported(solver_name):
     }
     data = {'t': [0, 1, 2], 'g': ['a', 'b'], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
     with sps.build(spec, data) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         occupied = sorted(set(tables.matrix_chunk(0, tables.row_count)[ROW].to_list()))
         assert occupied == [0, 1], "the constraint's rows close up around the gap"
         assert model.diagnostics().omissions.to_dicts() == [{'constraint': 'balance', 'rows_not_built': 1}]
@@ -360,7 +360,7 @@ def test_the_largest_magnitude_agrees_with_the_oracle():
     comparable.
     """
     with differential(SCALING, SCALING_SOURCES) as run:
-        ours = {row['constraint']: row['largest'] for row in run.engine.diagnostics().coefficient_range.to_dicts()}
+        ours = {row['constraint']: row['largest'] for row in run.relational.diagnostics().coefficient_range.to_dicts()}
         theirs = run.model.constraints.coefficientrange
 
     for name, largest in ours.items():

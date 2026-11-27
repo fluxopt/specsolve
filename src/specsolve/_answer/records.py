@@ -6,15 +6,14 @@ writes them: a result, a sweep's slice, or an archive.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Literal, NamedTuple, get_args, get_type_hints
+from typing import TYPE_CHECKING, NamedTuple, get_args, get_type_hints
 
 import polars as pl
 
-from specsolve._status import SolveStatus, status_of
+from specsolve._answer.status import SolveStatus, status_of
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -271,45 +270,5 @@ class Metrics(NamedTuple):
 #: [`Metrics`][] column is less ``_seconds``.
 PHASES = tuple(field.removesuffix('_seconds') for field in Metrics._fields if field.endswith('_seconds'))
 
-#: A name in [`PHASES`][], so a lap under a phase no [`Metrics`][] column
-#: carries is refused by the type checker.
-Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
-
-#: What a lap did inside its phase: a step of ``tidy``, ``build`` or
-#: ``handoff``, as [`Model.timings`][specsolve._api.Model.timings] names them.
-#: A step is not checked against its phase.
-Step = Literal[
-    'read',
-    'dimension',
-    'relation',
-    'parameter',
-    'check',
-    'setup',
-    'variable',
-    'set',
-    'constraint',
-    'objective',
-    'matrix',
-    'tables',
-    'digest',
-    'start',
-    'push',
-    'instance',
-    'warm',
-]
-
-#: How a step ends a lap: ``(phase, step, entry)``, as
-#: [`Engine.lap`][specsolve._engine.engine.Engine.lap] takes them.
-Lap = Callable[[Phase, Step | None, str | None], None]
-
 #: [`Metrics`][]'s columns as they are written, as [`RECORD_SCHEMA`][].
 METRICS_SCHEMA = _column_types(Metrics)
-
-#: The columns of [`Model.timings`][specsolve._api.Model.timings]: one row per lap.
-TIMINGS_SCHEMA = {
-    'run': pl.UInt32,
-    'phase': pl.String,
-    'step': pl.String,
-    'entry': pl.String,
-    'seconds': pl.Float64,
-}

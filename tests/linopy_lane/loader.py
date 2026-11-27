@@ -97,7 +97,7 @@ def _positions(mask: program.Mask | None) -> Iterator[program.DimensionPosition]
 
 def dimension_coords(
     program: program.Program,
-    tidy: Mapping[str, pl.LazyFrame],
+    tidy: Mapping[str, pl.DataFrame],
 ) -> tuple[dict[str, pd.Index], dict[tuple[str, str], xr.DataArray]]:
     """Every dimension's labels, and each relation's value columns as arrays over the dimensions it is keyed by.
 
@@ -112,7 +112,7 @@ def dimension_coords(
         DataError: A relation that refuses a missing row has none at some
             combination of its key's labels.
     """
-    master = {d: pd.Index(to_pandas(tidy[d].select(d).collect())[d], name=d) for d in program.dimensions}
+    master = {d: pd.Index(to_pandas(tidy[d].select(d))[d], name=d) for d in program.dimensions}
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
             key = relation.key or relation.roles
@@ -123,10 +123,10 @@ def dimension_coords(
 def _refuse_a_missing_row(
     kind: str,
     name: str,
-    rows: pl.LazyFrame,
+    rows: pl.DataFrame,
     columns: tuple[str, ...],
     dim: Callable[[str], str],
-    tidy: Mapping[str, pl.LazyFrame],
+    tidy: Mapping[str, pl.DataFrame],
 ) -> None:
     """Refuse *rows* that hold no row at some combination of *columns*' labels, naming the first.
 
@@ -139,16 +139,16 @@ def _refuse_a_missing_row(
     product = labels[0]
     for table in labels[1:]:
         product = product.join(table, how='cross')
-    schema = product.collect_schema()
+    schema = product.schema
     held = rows.select(pl.col(column).cast(schema[column]) for column in columns)
-    gaps = product.join(held, on=list(columns), how='anti').collect()
+    gaps = product.join(held, on=list(columns), how='anti')
     if gaps.height:
         raise DataError(missing_row_message(kind, name, coordinate_text(gaps.row(0, named=True)), gaps.height))
 
 
 def _relation_arrays(
     program: program.Program,
-    tidy: Mapping[str, pl.LazyFrame],
+    tidy: Mapping[str, pl.DataFrame],
     master: Mapping[str, pd.Index],
 ) -> dict[tuple[str, str], xr.DataArray]:
     """Each value column as an array over the dimensions its relation's key names.
@@ -163,7 +163,7 @@ def _relation_arrays(
     out: dict[tuple[str, str], xr.DataArray] = {}
     for name, relation in program.relations.items():
         dims = [relation.dim(role) for role in relation.key]
-        table = to_pandas(tidy[name].collect())
+        table = to_pandas(tidy[name])
         keys = [table[role].to_numpy() for role in relation.key]
         keyed = pd.Index(keys[0], name=dims[0]) if len(dims) == 1 else pd.MultiIndex.from_arrays(keys, names=dims)
         index = pd.MultiIndex.from_product([master[d] for d in dims], names=dims) if len(dims) > 1 else master[dims[0]]
@@ -193,7 +193,7 @@ def _membership(relation: Any, table: pd.DataFrame, master: Mapping[str, pd.Inde
 
 def load_parameters(
     program: program.Program,
-    tidy: Mapping[str, pl.LazyFrame],
+    tidy: Mapping[str, pl.DataFrame],
     master_coords: Mapping[str, pd.Index],
 ) -> xr.Dataset:
     """Every declared parameter as the dataset this lane builds against, its ``missing:`` applied.
@@ -214,7 +214,7 @@ def load_parameters(
     """
     arrays: dict[str, xr.DataArray] = {}
     for pname, pdef in program.parameters.items():
-        table = tidy[pname].collect()
+        table = tidy[pname]
         if not pdef.dims and table.is_empty():
             arrays[pname] = xr.DataArray(_fill(pdef, pdef.dtype == 'bool'))
             continue
@@ -228,7 +228,7 @@ def load_parameters(
 
 
 def given_rows(
-    program: program.Program, tidy: Mapping[str, pl.LazyFrame], master_coords: Mapping[str, pd.Index]
+    program: program.Program, tidy: Mapping[str, pl.DataFrame], master_coords: Mapping[str, pd.Index]
 ) -> dict[str, xr.DataArray]:
     """Where the data gave a row, for each numeric parameter that a value fills where it gave none.
 
@@ -240,11 +240,11 @@ def given_rows(
         if pdef.dtype == 'bool' or isinstance(pdef.missing, str) or pdef.missing is None:
             continue
         product = math.prod(len(master_coords[d]) for d in pdef.dims)
-        if tidy[pname].select(pl.len()).collect().item() < product:
+        if tidy[pname].height < product:
             if not pdef.dims:
                 given[pname] = xr.DataArray(False)
                 continue
-            held = _from_tidy(tidy[pname].collect(), pdef.dims).reindex({d: master_coords[d] for d in pdef.dims})
+            held = _from_tidy(tidy[pname], pdef.dims).reindex({d: master_coords[d] for d in pdef.dims})
             given[pname] = held.notnull()
     return given
 

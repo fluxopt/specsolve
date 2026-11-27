@@ -2,7 +2,7 @@
 
 Three-way differential on examples/transport.yaml:
   1. specsolve_linopy.build + solve (sum via linopy groupby)
-  2. compiled Program -> Engine -> the `highs` solver, plus the LP file
+  2. compiled Program -> the engine -> the `highs` solver, plus the LP file
   3. hand-built indicator-matrix linopy model (an independent oracle that
      involves no sum at all)
 
@@ -29,9 +29,7 @@ from mathspec.program import (
 )
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
 from specsolve._names import COEFF, COL, ROW
-from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
 from tests.conftest import EXAMPLES_DIR, override, schema_of
 from tests.differential import RTOL, differential
@@ -110,10 +108,7 @@ def test_sum_lowers_to_one_node_per_injection_term():
 
 
 def _relationally(data):
-    schema = schema_of(TRANSPORT_YAML)
-    program = schema.program
-    with Engine() as engine:
-        engine.build(program, tidy_sources(program, data))
+    sps.build(schema_of(TRANSPORT_YAML), data).close()
 
 
 def test_a_mistyped_coordinate_is_refused_on_both_lanes(transport_data):
@@ -329,7 +324,7 @@ def test_sum_over_a_broadcast_dim_still_collapses_its_terms():
     is entitled to refuse the whole model, and HiGHS does.
     """
     with sps.build(BROADCAST_GROUP_SUM, BROADCAST_SOURCES) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
         assert matrix.height == 4, 'a column appears twice on a row'
         assert matrix[COEFF].to_list() == [3.0, 3.0, 5.0, 5.0], (
@@ -352,7 +347,7 @@ def test_sum_over_a_declared_dim_needs_no_such_collapse():
         },
     )
     with sps.build(spec, BROADCAST_SOURCES) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         matrix = tables.matrix_chunk(0, tables.row_count).sort(ROW, COL)
         assert matrix.height == 6, 'one coefficient per (row, generator-on-that-bus), not one per bus'
         assert model.solve().termination_condition == 'optimal'
@@ -392,7 +387,7 @@ def test_an_objective_term_carrying_dims_is_still_summed_per_column():
     several rows per column.
     """
     with sps.build(BROADCAST_OBJECTIVE, BROADCAST_OBJECTIVE_SOURCES) as model:
-        obj = model._engine._model.tables.obj.sort(COL)
+        obj = model._built.tables.obj.sort(COL)
         assert obj.height == 3, 'one row per column, not one per (bus, snapshot)'
         assert obj[COEFF].to_list() == [1111.0] * 3, 'sum(w), not w[-1]'
 
@@ -417,7 +412,7 @@ def test_an_objective_over_the_variables_own_dims_keeps_its_coefficients():
     """
     spec = override(BROADCAST_OBJECTIVE, **{'objective.expression': 'sum(y * floor)'})
     with sps.build(spec, BROADCAST_OBJECTIVE_SOURCES) as model:
-        obj = model._engine._model.tables.obj.sort(COL)
+        obj = model._built.tables.obj.sort(COL)
         assert obj.height == 3
         assert obj[COEFF].to_list() == [1.0, 2.0, 3.0], 'floor itself, un-summed'
 

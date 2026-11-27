@@ -12,8 +12,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, engine
-from specsolve._records import PHASES
+from specsolve import _clock, _encoding, _sources
+from specsolve._answer.records import PHASES
+from specsolve._engine import assembly, attaching, readback
+from specsolve._sinks.highs import Highs
+from specsolve.types import Model
 
 SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -117,7 +120,7 @@ def test_laps_after_the_last_result_are_the_next_run():
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = assembly.Assembly._build_constraint
 
     def slow(self, name, c):
@@ -135,7 +138,7 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 @pytest.mark.parametrize(
     ('module', 'slowed', 'row'),
     [
-        pytest.param('engine', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('assembly', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
         pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
         pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
@@ -143,9 +146,9 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
     """What the build does around its entries is timed too: ten seconds added to a step land in its row."""
-    owner = {'engine': engine, 'assembly': assembly}[module]
+    owner = {'assembly': assembly}[module]
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = getattr(owner, slowed)
 
     def slow(*args, **kwargs):
@@ -232,26 +235,22 @@ def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expe
 @pytest.mark.parametrize(
     ('owner', 'slowed', 'step'),
     [
-        pytest.param('engine', 'Engine._matched_start', 'start', id='matching-a-start'),
-        pytest.param('engine', 'Engine.check_sink', 'check', id='checking-the-solver'),
-        pytest.param('sinks', 'Highs._load', 'instance', id='loading-a-new-solver'),
+        pytest.param(readback, 'matched_start', 'start', id='matching-a-start'),
+        pytest.param(Model, 'check_sink', 'check', id='checking-the-solver'),
+        pytest.param(Highs, '_load', 'instance', id='loading-a-new-solver'),
     ],
 )
 def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowed, step):
     """Ten seconds added to one step of a handoff land in that step's row and in no other."""
-    from specsolve._sinks.highs import Highs
-
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
-    cls = {'engine': engine.Engine, 'sinks': Highs}[owner]
-    name = slowed.split('.')[1]
-    real = getattr(cls, name)
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(owner, slowed)
 
     def slow(*args, **kwargs):
         added[0] += 10.0
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(cls, name, slow)
+    monkeypatch.setattr(owner, slowed, slow)
     with sps.build(SPEC, DATA) as model:
         model.solve(start=model.solve() if step == 'start' else 'previous')
         took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
@@ -285,40 +284,72 @@ def _tidy_steps(model: sps.types.Model) -> list[tuple[str, str | None]]:
     return model.timings().filter(phase='tidy').select('step', 'entry').rows()
 
 
-def test_a_tidy_logs_the_read_each_source_and_its_check_in_order():
-    """The paths read at once, each dimension and relation, each parameter checked, then the check over them all."""
+def _attach_steps(model: sps.types.Model) -> list[tuple[str, str | None]]:
+    return model.timings().filter(phase='attach').select('step', 'entry').rows()
+
+
+def test_a_tidy_logs_the_read_and_each_source_held_to_its_shape_in_order():
+    """The paths read at once, each dimension, relation and parameter held to its shape, then the check over them all."""
     with sps.build(GROUPED, GROUPED_DATA) as model:
         steps = _tidy_steps(model)
         tidy = model.timings().filter(phase='tidy').get_column('seconds').sum()
         whole = model.metrics().tidy_seconds
     assert steps == [
         ('read', None),
-        ('dimension', 'bus'),
-        ('dimension', 'generator'),
-        ('relation', 'gen_bus'),
-        ('parameter', 'load'),
-        ('parameter', 'p_max'),
-        ('check', None),
-    ], 'every step once, in the order the tidy takes them: each kind by name'
+        ('shape', 'bus'),
+        ('shape', 'generator'),
+        ('shape', 'gen_bus'),
+        ('shape', 'load'),
+        ('shape', 'p_max'),
+        ('shape', None),
+    ], 'every step once, in the order the tidy takes them: each entry by name'
     assert tidy == pytest.approx(whole, rel=1e-12), 'and the tidy still adds up'
 
 
+def test_an_attach_logs_each_table_encoded_and_checked_then_what_the_model_makes_of_it():
+    """Each relation and parameter encoded and held to its content, then the fill, the settling and the assumptions."""
+    with sps.build(GROUPED, GROUPED_DATA) as model:
+        steps = _attach_steps(model)
+        attach = model.timings().filter(phase='attach').get_column('seconds').sum()
+        whole = model.metrics().attach_seconds
+    assert steps == [
+        ('encode', 'gen_bus'),
+        ('content', 'gen_bus'),
+        ('encode', 'load'),
+        ('content', 'load'),
+        ('encode', 'p_max'),
+        ('content', 'p_max'),
+        ('fill', None),
+        ('settle', None),
+        ('assume', None),
+    ], 'every step once, in the order the attach takes them: each entry by name'
+    assert attach == pytest.approx(whole, rel=1e-12), 'and the attach adds up'
+
+
 @pytest.mark.parametrize(
-    ('slowed', 'step', 'entry'),
+    ('owner', 'slowed', 'row'),
     [
-        pytest.param('_read_paths_at_once', 'read', None, id='reading-the-paths'),
-        pytest.param('_labels_table', 'dimension', 'bus', id='a-dimension-s-labels'),
-        pytest.param('_read_relation', 'relation', 'gen_bus', id='a-relation'),
-        pytest.param('_checked_parameter', 'parameter', 'load', id='checking-a-parameter'),
+        pytest.param(_sources, '_read_paths_at_once', ('tidy', 'read', None), id='reading-the-paths'),
+        pytest.param(_sources, '_labels_table', ('tidy', 'shape', 'bus'), id='a-dimension-s-labels'),
+        pytest.param(_sources, '_read_relation', ('tidy', 'shape', 'gen_bus'), id='a-relation'),
+        pytest.param(_sources, 'checked_parameter', ('tidy', 'shape', 'load'), id='a-parameter-s-shape'),
+        pytest.param(_encoding, '_in_dimension_types', ('attach', 'encode', 'gen_bus'), id='encoding-a-table'),
+        pytest.param(
+            _encoding,
+            '_refuse_unknown_or_repeated_coordinates',
+            ('attach', 'content', 'load'),
+            id='a-parameter-s-content',
+        ),
+        pytest.param(attaching, 'filled_parameters', ('attach', 'fill', None), id='the-fill'),
+        pytest.param(attaching, 'settle', ('attach', 'settle', None), id='the-settling'),
+        pytest.param(attaching, 'check_assumptions', ('attach', 'assume', None), id='the-assumptions'),
     ],
 )
-def test_a_slow_step_of_a_tidy_lands_in_its_own_row(monkeypatch, slowed, step, entry):
-    """Ten seconds added to one step of a tidy land in that step's row and in no other."""
-    from specsolve import _sources
-
+def test_a_slow_step_of_a_tidy_or_an_attach_lands_in_its_own_row(monkeypatch, owner, slowed, row):
+    """Ten seconds added to one step of a tidy or an attach land in that step's row and in no other."""
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
-    real = getattr(_sources, slowed)
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(owner, slowed)
     seen = []
 
     def slow(*args, **kwargs):
@@ -327,45 +358,54 @@ def test_a_slow_step_of_a_tidy_lands_in_its_own_row(monkeypatch, slowed, step, e
             added[0] += 10.0
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(_sources, slowed, slow)
+    monkeypatch.setattr(owner, slowed, slow)
     with sps.build(GROUPED, GROUPED_DATA) as model:
-        took = model.timings().filter(phase='tidy').select('step', 'entry', 'seconds').rows()
-    slowest = [(s, e) for s, e, seconds in took if seconds >= 10.0]
-    assert slowest == [(step, entry)], 'the slowed step, the first of its kind, holds the ten seconds alone'
+        took = model.timings().select('phase', 'step', 'entry', 'seconds').rows()
+    slowest = [(phase, step, entry) for phase, step, entry, seconds in took if seconds >= 10.0]
+    assert slowest == [row], 'the slowed step, the first of its kind, holds the ten seconds alone'
 
 
 def test_an_update_logs_only_the_parameters_it_reads_again():
-    """A parameter an update keeps from the last build is neither read nor checked, so it has no row."""
+    """A parameter an update keeps from the last build is neither shaped, encoded nor checked, so it has no row."""
     with sps.build(GROUPED, GROUPED_DATA) as model:
-        first = len(_tidy_steps(model))
+        tidied, attached = len(_tidy_steps(model)), len(_attach_steps(model))
         model.update({'load': GROUPED_DATA['load']})
-        second = _tidy_steps(model)[first:]
-    assert second == [
+        tidy, attach = _tidy_steps(model)[tidied:], _attach_steps(model)[attached:]
+    assert tidy == [
         ('read', None),
-        ('dimension', 'bus'),
-        ('dimension', 'generator'),
-        ('relation', 'gen_bus'),
-        ('parameter', 'load'),
-        ('check', None),
-    ], 'every step but the kept p_max, in order'
+        ('shape', 'bus'),
+        ('shape', 'generator'),
+        ('shape', 'gen_bus'),
+        ('shape', 'load'),
+        ('shape', None),
+    ], 'every tidy step but the kept p_max, in order'
+    assert attach == [
+        ('encode', 'gen_bus'),
+        ('content', 'gen_bus'),
+        ('encode', 'load'),
+        ('content', 'load'),
+        ('fill', None),
+        ('settle', None),
+        ('assume', None),
+    ], 'every attach step but the kept p_max, in order'
 
 
-def test_a_refused_source_keeps_the_tidy_laps_it_reached():
-    """A parameter with a label its dimension lacks is refused at its check; the steps before it keep their rows.
+def test_a_refused_source_keeps_the_laps_it_reached():
+    """A parameter with a label its dimension lacks is refused at its content; the steps before it keep their rows.
 
     The update replaces `p_max` alone, so `load` is kept from the build and has no row.
     """
     with sps.build(GROUPED, GROUPED_DATA) as model:
+        first = len(_attach_steps(model))
         stray = pl.DataFrame({'generator': ['g1', 'g3'], 'value': [10.0, 10.0]})
         with pytest.raises(sps.errors.DataError):
             model.update({'p_max': stray})
-        second = model.timings().filter(phase='tidy').select('step', 'entry').rows()[7:]
+        second = _attach_steps(model)[first:]
     assert second == [
-        ('read', None),
-        ('dimension', 'bus'),
-        ('dimension', 'generator'),
-        ('relation', 'gen_bus'),
-    ], 'the rows up to the refused parameter, and none for it or for the kept load'
+        ('encode', 'gen_bus'),
+        ('content', 'gen_bus'),
+        ('encode', 'p_max'),
+    ], 'the rows up to the refused content check, none for it or after it, and none for the kept load'
 
 
 @pytest.mark.parametrize(
@@ -375,16 +415,24 @@ def test_a_refused_source_keeps_the_tidy_laps_it_reached():
         pytest.param({0: (0.3, 0.2, 0.1), 1: (0.1, 0.2, 0.3)}, id='two runs'),
     ],
 )
-def test_a_runs_clocks_never_exceed_the_whole_life(laps):
+def test_a_runs_clocks_never_exceed_the_whole_life(monkeypatch, laps):
     """A result's row is its run's laps summed; its clocks never pass the model's, which are every run's.
 
     Three laps of 0.3, 0.2 and 0.1 s summed from the last come to one unit in the
     last place more than the same three summed in the order they ran, which is
     how a run's row used to pass its model's.
     """
-    log = engine._Laps()
-    for run, seconds in laps.items():
+    now = [0.0]
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: now[0])
+    clock = _clock.Clock()
+    for seconds in laps.values():
         for took in seconds:
-            log.append(run, 'build', 'constraint', None, took)
-    whole = log.clocks()['build']
-    assert all(log.clocks(run)['build'] <= whole for run in laps), "each run's share is no more than the whole"
+            now[0] = 0.0
+            clock.start()
+            now[0] = took
+            clock.lap('build', 'constraint')
+        clock.next_run()
+    whole = clock.metrics(0, 0, 0).build_seconds
+    assert all(clock.metrics(0, 0, 0, run).build_seconds <= whole for run in laps), (
+        "each run's share is no more than the whole"
+    )

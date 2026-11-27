@@ -29,10 +29,11 @@ flowchart TB
 
     SPEC -->|"the entries to attach against"| SRC
     SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>tidy_sources, the one function both lanes read data through</i>"]
+    SRC --> ENC["<b>_encoding.py</b> — flat<br/>the tidy tables in their dimensions' own types<br/><i>labels known, no coordinate twice, no row refused missing</i>"]
 
     PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the program"| QUERIES
-    SRC --> ATTACH
+    ENC --> ATTACH
     PLAN -->|"the program, the same one"| BUILD
     SRC --> LOAD
 
@@ -41,13 +42,13 @@ flowchart TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             QUERIES["queries.py<br/>program → lazy queries · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
+            ATTACH["attaching.py<br/>fill · settle · assume<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/tables.py<br/>cols · obj · rows · A · sos"]
         TABLES --> LPS["_sinks/, a writer<br/>a file, chosen by suffix<br/>lp_file · mps_file"]
         TABLES --> DIRECT["_sinks/, a solver<br/>the matrix in one call → the solver, chosen by name<br/>highs (ships) · gurobi · xpress (extras)"]
-        DIRECT --> SOL["_result.py<br/>joined by label, never dense"]
+        DIRECT --> SOL["_answer/result.py<br/>joined by label, never dense"]
     end
 
     SOL --> ANS["<b>Result</b> — the lane runs to the answer<br/>objective · primal · dual · activity · evaluate<br/>polars tables you can join"]
@@ -72,7 +73,7 @@ flowchart TB
     class LIN laneE
     class TS laneT
     class PLAN waist
-    class SRC flat
+    class SRC,ENC flat
     class DATA data
     class ANS,MODEL out
 ```
@@ -81,8 +82,18 @@ flowchart TB
   to a `Program`. It cannot import anything here.
 - **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
-  accepts into tidy polars tables, and `_assumptions.py` checks a spec's
-  assumptions there.
+  accepts into tidy polars tables, and refuses a source that is not one.
+- **Data reaches a build through one function, in seven steps.**
+  `_api.attach_sources` reads a caller's sources and returns them twice: as
+  the tidy tables, and as a build reads them. `tidy_sources` reads each
+  source and holds it to its shape. `_encoding.encoded` turns each label into
+  its dimension's own type and holds each table to its content: every label
+  one its dimension has, no coordinate twice, and a row wherever the spec
+  refuses to lack one. `attaching.attach` fills the missing rows a divisor
+  reads, settles the conditions the data decides, and checks the spec's
+  assumptions (`_engine/assumptions.py`). The first two need only what the
+  spec declares and sit outside the engine. The last needs the program's
+  expressions and conditions. The linopy lane calls `attach_sources` too.
 - **One function decides what either lane builds.** `_inputs.as_program`, which
   every verb compiles a spec through, returns a `Program` or raises
   `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
@@ -94,10 +105,11 @@ flowchart TB
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
 phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
 draws what each hands to the next. The clock
-is one mark: each public call starts it with `Engine.start()`, and
-`Engine.lap(phase)` adds the time since the mark to that phase and moves the
-mark, so the laps tile the call and a step between two named ones is in the
-phase of the one after it. `lap` refuses a name that has no `Metrics` column.
+is one mark (`Clock`, `_clock.py`): each public call starts it with
+`Clock.start()`, and `Clock.lap(phase)` adds the time since the mark to that
+phase and moves the mark, so the laps tile the call and a step between two
+named ones is in the phase of the one after it. `lap` refuses a name that has
+no `Metrics` column.
 `tests/test_phases.py` holds the phases' sum to the wall time of a call, within
 the return from one call and the entry into the next (50–110 µs, #2180), and
 slows each step to find it in its own phase.
@@ -105,18 +117,18 @@ slows each step to find it in its own phase.
 | phase | lapped in |
 | --- | --- |
 | `load` | `Model.__init__` |
-| `tidy` | `Model._fill` |
-| `attach` | `Model._fill`, or `Engine.build` where no assumption attached the tables |
-| `build` | `Engine.build` |
-| `handoff` | `Engine.handoff`; `Engine.build` for the held solver's digest |
-| `solve` | `Engine.solve` |
+| `tidy` | `_sources.tidy_sources`: `read`, `shape` |
+| `attach` | `_encoding.encoded`: `encode`, `content`; `attaching.attach`: `fill`, `settle`, `assume` |
+| `build` | `assembly.build` |
+| `handoff` | `Model._handoff`; `Model._fill` for the held solver's digest |
+| `solve` | `Model.solve` |
 | `readback` | `Model.solve` |
-| `write` | `Engine.write` |
+| `write` | `Model.write` |
 | `archive` | `Model._archive` |
 
-**A result's metrics row is its share of the model's clocks**: `Engine.metrics`
-builds the one `Metrics`, and `Model.solve` takes the difference from where
-the previous result was handed back. A sweep slice's row is its result's.
+**A result's metrics row is its share of the model's clocks**: `Clock.metrics`
+builds the one `Metrics`, and `Model.solve` takes the laps since the previous
+result was handed back. A sweep slice's row is its result's.
 **The row is the archive's last member**, written after the zip is packed, so
 `archive_seconds` covers every other member, and the result handed back
 carries that row. Writing the row and landing the archive are in
@@ -147,9 +159,11 @@ the dependency claims.*
    program that crosses is fully resolved: macros and named expressions without
    `cases:` are substituted, and `Spec.expand` expands `piecewise:` first.
    Every `mathspec` import names the package, never a module inside it.
-2. **The engine knows nothing about linopy, xarray or YAML.** It imports
-   nothing from the package but `errors.py` and `_messages.py`
+2. **The engine knows nothing about linopy, xarray or YAML, and holds no state.**
+   It imports nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
+   `_engine/` is functions over frozen values: `attach`, `build` and the
+   read-back. `Model` holds the build, the solver and the clock between calls.
 3. **One language, two builds, and linopy only in the linopy lane.** Both pass
    `_inputs.as_program`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
@@ -202,8 +216,9 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 ## The relational lane
 
 **The spine is one module per box**: `attaching.py`, `specialize.py`,
-`queries.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
-lifecycle. `scope.py` sits under them all.
+`queries.py`, `assembly.py`, `_sinks/`, and `readback.py`, which lays a
+solve's vectors out as a `Result`. `scope.py` sits under them all. `Model`
+(`_api.py`) runs the lifecycle over them.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
 leaves no model.
@@ -234,49 +249,51 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language |
-| `_api.py` | the functions that take a spec, and `Model` |
-| `_archive_layout.py` | what an archive holds |
-| `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
-| `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
-| `_collect.py` | how polars materialises a lazy table |
-| `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
-| `_sources.py` | `tidy_sources`: caller data into tidy tables |
-| `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
-| `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
+| `_api.py` | the functions that take a spec, and `Model`, which holds a build and its solver and runs the lifecycle |
+| `_clock.py` | the clock a model's life is timed on: its laps, its runs, and the solves each run took |
+| `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
+| `_sources.py` | `tidy_sources`: caller data into tidy tables, each held to its shape |
+| `_encoding.py` | `encoded`: the tidy tables in their dimensions' own types, each held to its labels and coordinates |
+| `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
+| `_archive_layout.py` | what an archive holds |
+| `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
+| `_collect.py` | how polars materialises a lazy table |
+| `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
+| `_names.py` | the columns specsolve writes beside a spec's own |
+| `_attached.py` | the data a program is built against: `AttachedSources`, a `Dimension` per dimension with what turns a label into its position, and the one row-major rule |
 | `_messages.py` | a wording two modules raise |
-| `_solve_over.py` | a sweep's driver: one plan per slice, folded |
-| `_axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
-| `_sweep.py` | `Sweep`, and its answer as an archive holds it, written slice by slice and read back |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
 | `_engine/relations.py` | a relation's table as a walk reads it |
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
-| `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
-| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources` |
+| `_engine/attaching.py` | what a model makes of its data: missing rows filled, conditions settled, assumptions checked |
+| `_engine/assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the attached data |
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
-| `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
-| `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
-| `_result.py` | what a solve returned, written into an archive and read back out of one |
-| `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
-| `_records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
-| `_answer_layout.py` | an answer on disk, and the `ANSWER_LAYOUT` stamp |
-| `_names.py` | the columns specsolve writes beside a spec's own |
+| `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate, and a start laid onto a build |
 | `_sinks/tables.py` | what every sink reads |
 | `_sinks/capabilities.py` | what a sink can ingest |
 | `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
+| `_answer/` | one solve's answer as plain data, `Answer`: its record, its metrics, its tables and why a table is not there |
+| `_answer/outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
+| `_answer/records.py` | the rows an answer records: `Record`, `Metrics` and `Provenance` |
+| `_answer/status.py` | solve outcome on two axes |
+| `_answer/layout.py` | an answer on disk, written and read back, and the `ANSWER_LAYOUT` stamp |
+| `_answer/result.py` | what a caller reads an answer through: `Result`, and what a build says of itself |
+| `_sweep/axes.py` | how a sweep cuts its sources, what each slice is built from, and the stitch back |
+| `_sweep/solve_over.py` | a sweep's driver: one plan per slice, folded |
+| `_sweep/sweep.py` | `Sweep`, and its answer as an archive holds it, written slice by slice and read back |
 
 **The lane imports nothing else from the package but `errors.py` and
-`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer_layout.py`,
-`_collect.py`, `_names.py`, `_outputs.py`, `_parquet.py`, `_records.py`,
-`_result.py` and `_status.py` (`LANE`). No module imports linopy, and none imports xarray at module
-level.
+`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer/`, `_clock.py`,
+`_collect.py`, `_attached.py`, `_names.py` and `_parquet.py` (`LANE`). No module imports
+linopy, and none imports xarray at module level.
 
 ## Internal names
 
@@ -316,8 +333,16 @@ The names the code uses for its own parts. The names a caller meets are in
   of a reload.
 
 **Attached sources**
-: The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
-  label column as an `Enum` in declared order.
+: The tidy tables as every query reads them: a `Dimension` per dimension, a
+  column of string labels as an `Enum` in the labels' order. They also hold
+  each settled atom of a `where` or a `cases:` region, read once for the
+  assumptions and the build both (`_attached.py`).
+
+**Shape** and **content**
+: The two halves of what a source is held to. Its shape is its columns, their
+  types and no null, asked of the table as it arrived. Its content is that its
+  labels are its dimensions', that no coordinate has two rows and that none
+  lacks one where the spec refuses that, asked once the labels are encoded.
 
 **Term**, **presence** and **region**
 : One additive term of an expression, over its own dimensions: linear,
@@ -346,6 +371,12 @@ The names the code uses for its own parts. The names a caller meets are in
   model while the digest holds and every coefficient is within 1e-12 relative
   of the one it holds (`tables.py`).
 
+**Answer**
+: What one solve answered, as plain data: its record, its metrics, its tables
+  by kind and name, and the reason a table is not there (`Answer`,
+  `_answer/`). A `Result` reads one, a sweep keeps one per slice, and an
+  archive's `answer/` holds one.
+
 **Kind**
 : One table family of an answer: `primal`, `dual`, `expression`, and each
   output `outputs=` asked for (`OUTPUT_KINDS`).
@@ -356,15 +387,15 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Slice** and **stitch**
 : One model of a sweep; windowed tables put back over the dimension they cut
-  (`_axes.py`).
+  (`_sweep/axes.py`).
 
 **Slice files**
 : A sweep's answer on disk, one file per slice and name, written into its
-  archive as the fold goes (`SliceFiles`, `_sweep.py`).
+  archive as the fold goes (`SliceFiles`, `_sweep/sweep.py`).
 
 **Carry** and **the wire**
 : One slice's answer copied into the next slice's data; how a slice's sources
-  cross to a worker (`_solve_over.py`).
+  cross to a worker (`_sweep/solve_over.py`).
 
 ## Extension checklists
 

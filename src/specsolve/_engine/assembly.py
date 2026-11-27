@@ -1,7 +1,7 @@
 """One build: every entry into rows of the model tables a sink drains.
 
-The variable and constraint index tables fill during a build, because an
-entry built later reads what earlier ones produced.
+[`build`][] is the whole of it. The variable and constraint index tables fill
+during a build, because an entry built later reads what earlier ones produced.
 """
 
 from __future__ import annotations
@@ -15,23 +15,24 @@ import polars as pl
 from mathspec import program
 
 from specsolve import _sinks as sinks
+from specsolve._answer.result import Diagnostics
 from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import rowless
+from specsolve._engine.specialize import is_empty, specialized
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from mathspec.program import ObjectiveSense
-    from polars._typing import MaintainOrderJoin
+    from polars._typing import MaintainOrderJoin, PolarsDataType
 
-    from specsolve._engine.attaching import AttachedSources
-    from specsolve._records import Lap, Step
+    from specsolve._attached import AttachedSources
+    from specsolve._clock import Lap, Step
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.
@@ -90,6 +91,37 @@ class Measured:
     rows: int = 0
     nonzeros: int = 0
 
+    def diagnostics(self) -> Diagnostics:
+        """What the build did that the answer does not show, as the tables a caller reads."""
+        return Diagnostics(
+            omissions=_per_name('constraint', self.omitted, rows_not_built=pl.UInt32),
+            coefficient_range=_per_name('constraint', self.coefficients, smallest=pl.Float64, largest=pl.Float64),
+            bound_range=_per_name('variable', self.bounds, smallest=pl.Float64, largest=pl.Float64),
+            rhs_range=_per_name('constraint', self.rhs, smallest=pl.Float64, largest=pl.Float64),
+            sparse_parameters=_per_name(
+                'parameter',
+                {name: (reach, rows, reach - rows) for name, (reach, rows) in self.sparse.items()},
+                coordinates=pl.UInt64,
+                rows=pl.UInt64,
+                missing=pl.UInt64,
+            ),
+            objective_range=self.objective_range,
+        )
+
+
+def _per_name(kind: str, measured: Mapping[str, object], **columns: PolarsDataType) -> pl.DataFrame:
+    """One [`Diagnostics`][specsolve._answer.result.Diagnostics] table: a row per name in *measured*, in build order.
+
+    *kind* names the first column, and the remaining *columns* carry each
+    value in order — a scalar for one column, a tuple for several.
+    """
+    names = list(measured)
+    values = [v if isinstance(v, tuple) else (v,) for v in measured.values()]
+    schema = {kind: pl.String, **columns}
+    return pl.DataFrame(
+        {kind: names, **{column: [v[i] for v in values] for i, column in enumerate(columns)}}, schema=schema
+    )
+
 
 @dataclass(frozen=True)
 class BuiltModel:
@@ -104,6 +136,24 @@ class BuiltModel:
     tables: sinks.SinkTables
 
 
+def build(program: program.Program, attached: AttachedSources, measured: Measured, lap: Lap) -> BuiltModel:
+    """Build every entry of *program* over *attached* into the model tables.
+
+    The program a build reads is [`specialized`][specsolve._engine.specialize.specialized]
+    to what the data settled, and the model it returns holds that one. A build
+    that raises returns no model rather than half of one.
+
+    Args:
+        program: The compiled program.
+        attached: Its data, as [`attach`][specsolve._engine.attaching.attach] returns it.
+        measured: Where the build writes what it measures about itself, as it
+            measures it, so a build that raises still reports what it got to.
+        lap: Ends a lap of ``build`` at each step, one per entry.
+    """
+    measured.sparse = short_parameters(program, attached)
+    return Assembly(specialized(program, attached), attached, measured, lap).run()
+
+
 class Assembly:
     """One build in progress: the mutable half, discarded once [`run`][] has frozen it."""
 
@@ -114,6 +164,7 @@ class Assembly:
         measured: Measured,
         lap: Lap,
     ) -> None:
+        """Start a build of *program*, [`specialized`][specsolve._engine.specialize.specialized] to *attached*."""
         self.program = program
         self.lap = lap
         self.attached = attached
@@ -121,7 +172,7 @@ class Assembly:
         self.variables: dict[str, indices.Indexed] = {}
         self.constraints: dict[str, indices.Indexed] = {}
         self.scope = Scope(program, attached, self.variables)
-        self.builder = QueryBuilder(self.scope)
+        self.builder = QueryBuilder(self.scope, builds=True)
         self.n_cols = 0
         self.n_rows = 0
         #: How many special-ordered sets have been numbered, contiguous ``0..n-1`` across the model.
@@ -129,6 +180,7 @@ class Assembly:
         self.quad: pl.DataFrame | None = None
         self.obj_const = 0.0
         self.obj_sense: ObjectiveSense | None = None
+        self._empty_tables = {}
 
     def run(self) -> BuiltModel:
         """Build every entry, then freeze what they produced.
@@ -198,9 +250,9 @@ class Assembly:
         A constraint over dimensions no variable spans has more rows than there are
         columns, so the rows count too.
         """
-        cardinality = self.attached.cardinality
+        sizes = {d: held.size for d, held in self.attached.dimensions.items()}
         return max(
-            sum(math.prod(cardinality[d] for d in declared.dims) for declared in entries.values())
+            sum(math.prod(sizes[d] for d in declared.dims) for declared in entries.values())
             for entries in (self.program.variables, self.program.constraints)
         )
 
@@ -232,8 +284,8 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if rowless(v, self.attached):
-            indexed = indices.nothing(self.scope, v.dims, COL)
+        if is_empty(v, self.attached):
+            indexed = self._empty_table(v.dims, COL)
         else:
             indexed = indices.table(self.scope, v.dims, v.where, COL, start)
         self.n_cols = start + indexed.height
@@ -263,9 +315,9 @@ class Assembly:
         row.
         """
         held = self.variables[s.variable]
-        cardinality = self.scope.data.cardinality
-        stride = math.prod(cardinality[d] for d in v.dims[v.dims.index(s.along) + 1 :])
-        span = cardinality[s.along] * stride
+        sizes = {d: held.size for d, held in self.scope.data.dimensions.items()}
+        stride = math.prod(sizes[d] for d in v.dims[v.dims.index(s.along) + 1 :])
+        span = sizes[s.along] * stride
 
         if v.where is None:
             table = pl.select(pl.int_range(held.height, dtype=pl.Int64).alias('#position')).lazy()
@@ -275,7 +327,7 @@ class Assembly:
             place, col = self.scope.row_major(v.dims, self.scope.position_of), pl.col(COL)
         placed = table.select(
             ((place // span) * stride + place % stride).alias('#set position'),
-            ((place // stride) % cardinality[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
+            ((place // stride) % sizes[s.along] + 1).cast(_DTYPES['weight']).alias('weight'),
             col.cast(_DTYPES[COL]).alias(COL),
         ).pipe(collected)
 
@@ -303,8 +355,8 @@ class Assembly:
         absence never meets the full product of its dimensions.
         """
         start = self.n_rows
-        if rowless(c, self.attached):
-            return self._without_a_row(name, indices.nothing(self.scope, c.dims, ROW), start)
+        if is_empty(c, self.attached):
+            return self._without_a_row(name, self._empty_table(c.dims, ROW), start)
         admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
             return self._without_a_row(name, admitted, start)
@@ -320,7 +372,9 @@ class Assembly:
         else:
             indexed = admitted
         if presences:
-            declared = math.prod(self.attached.cardinality[d] for d in c.dims) if admitted is None else admitted.height
+            declared = (
+                math.prod(self.attached.dimensions[d].size for d in c.dims) if admitted is None else admitted.height
+            )
             if declared > indexed.height:
                 self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
         self.n_rows = start + indexed.height
@@ -370,6 +424,16 @@ class Assembly:
         if (sides := _magnitude_range(rows, 'rhs')) is not None:
             self.measured.rhs[name] = sides
         return rows, matrix, qmatrix
+
+    def _empty_table(self, dims: tuple[str, ...], index: str) -> pl.DataFrame:
+        """What an empty entry gets in place of its indexed table: its columns, no rows.
+
+        One per dimensions and index column, shared, since building it is most
+        of what such an entry costs.
+        """
+        if (dims, index) not in self._empty_tables:
+            self._empty_tables[dims, index] = indices.nothing(self.scope, dims, index)
+        return self._empty_tables[dims, index]
 
     def _without_a_row(
         self, name: str, indexed: pl.DataFrame, start: int
@@ -511,7 +575,7 @@ def short_parameters(program: program.Program, attached: AttachedSources) -> dic
     for name, p in program.parameters.items():
         if not p.dims:
             continue
-        reach = math.prod(attached.cardinality[d] for d in p.dims)
+        reach = math.prod(attached.dimensions[d].size for d in p.dims)
         rows = attached.parameter_rows[name]
         if rows < reach:
             short[name] = (reach, rows)
