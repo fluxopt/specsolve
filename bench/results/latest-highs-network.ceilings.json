@@ -9,7 +9,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 28.6 s on network/s5, so the next rung projects to 57.2 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 30.6 s on network/s5, over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -33,7 +33,7 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 8.65 s on network/m, so the next rung projects to 86.5 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 9.07 s on network/m, so the next rung projects to 90.7 s \u2014 over the 30 s budget"
  },
  {
   "record": "ceiling",
@@ -45,6 +45,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "gurobipy-loop took 7.44 s on network/m, so the next rung projects to 74.4 s \u2014 over the 30 s budget"
+  "reason": "gurobipy-loop took 8.3 s on network/m, so the next rung projects to 83 s \u2014 over the 30 s budget"
  }
 ]

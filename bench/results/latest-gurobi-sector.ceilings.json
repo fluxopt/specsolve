@@ -9,6 +9,6 @@
   "budget": 30.0,
   "memory_budget": 16.0,
   "stopped_by": "time",
-  "reason": "pyomo took 12 s on sector/m, so the next rung projects to 60.1 s \u2014 over the 30 s budget"
+  "reason": "pyomo took 12.4 s on sector/m, so the next rung projects to 61.8 s \u2014 over the 30 s budget"
  }
 ]

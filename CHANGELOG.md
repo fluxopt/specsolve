@@ -7,7 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
-- docs(benchmarks): the benchmarks page shows numbers measured after 0.13.0 ([#2242](https://github.com/fluxopt/specsolve/pull/2242))
+- docs(benchmarks): the benchmarks page shows numbers measured on 0.13.0 ([#2242](https://github.com/fluxopt/specsolve/pull/2242))
 - perf(data): large models build up to a third faster on polars 2.2.0 ([#2232](https://github.com/fluxopt/specsolve/pull/2232))
 - fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
 - fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
