@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 
     import numpy as np
 
+    from specsolve._answer.status import SolveStatus
     from specsolve._sinks.capabilities import Capabilities
     from specsolve._sinks.tables import Ints, SinkTables
-    from specsolve._status import SolveStatus
 
 
 #: A basis status in the one vocabulary every solver's is read into, each at

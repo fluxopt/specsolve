@@ -93,7 +93,7 @@ the tables because a constant has no column to attach to.
 
 A sink never learns how the tables were filled, and the engine never learns
 how it is drained. That is the point: `mps_file.py` is a module beside
-`lp_file.py`, not another method on `Engine`.
+`lp_file.py`, not another branch of the build.
 
 The one thing sinks may share is a *projection* of those tables, never a step
 of the work — `SinkTables.dense_columns`, which every solver reads — or a

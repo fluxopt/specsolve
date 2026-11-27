@@ -12,6 +12,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve._answer.status import SolveStatus
 from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
@@ -29,7 +30,6 @@ from specsolve._sinks.solver import (
     solver_vector,
 )
 from specsolve._sinks.tables import SENSE_CODES
-from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:

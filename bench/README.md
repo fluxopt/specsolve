@@ -717,7 +717,7 @@ takes them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `sto
 name one; the other cases skip it. A `start=` changes only what the solver
 begins from, which moves the solve and not anything timed here.
 
-The clock stops at `Engine.handoff`, the half of `Engine.solve` before the run, so
+The clock stops at `Model._handoff`, the half of `Model.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The
 arm reports whether its window reloaded and the test holds that to the change,
 so a rung cannot quietly measure the other path; `test_harness.py` checks the

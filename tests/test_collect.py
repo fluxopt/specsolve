@@ -68,7 +68,7 @@ def test_a_coordinate_product_arrives_in_index_order():
         'objective': {'sense': 'minimize', 'expression': 'sum(x)'},
     }
     with sps.build(spec, {'a': list(range(2)), 'b': list(range(50))}) as model:
-        built = model._engine._model
+        built = model._built
         product = Scope(built.program, built.attached, built.variables).product(('a', 'b')).pipe(collected)
     positions = product.select(position_column('a'), position_column('b')).rows()
     assert positions == sorted(positions), 'row-major: `a` varies slowest'

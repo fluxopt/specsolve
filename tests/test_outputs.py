@@ -18,7 +18,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._outputs import OUTPUT_KINDS, OUTPUTS
+from specsolve._answer.outputs import OUTPUT_KINDS, OUTPUTS
 from tests.test_solve_over import DISPATCH, STATIC, WINDOW, WINDOW_AXIS, scenario_sources, span_sources
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ def test_a_request_that_names_no_output_is_refused(verb: Callable[[object], obje
             'specsolve._api', lambda: sps.solve(DISPATCH, ONE, outputs={'activty'}), id='solve-before-the-build'
         ),
         pytest.param(
-            'specsolve._solve_over',
+            'specsolve._sweep.solve_over',
             lambda: sps.solve_over(DISPATCH, scenario_sources(), SCENARIO, outputs={'activty'}),
             id='sweep-before-a-slice',
         ),

@@ -15,7 +15,6 @@ import polars as pl
 from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import UNIT, position_column
-from specsolve._names import LABEL
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
@@ -119,8 +118,11 @@ def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) 
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
-    """[`table`][]'s answer over dimensions one of which has no label, read without a query: no row, in its columns and dtypes."""
-    schema = {d: scope.data.dimensions[d].collect_schema()[LABEL] for d in dims}
+    """[`table`][]'s answer for an entry that holds no row, read without a query: no row, in its columns and dtypes.
+
+    With no dimensions that is ``([`UNIT`][], index)``, as [`table`][] keys a scalar.
+    """
+    schema = {d: scope.data.dimensions[d].dtype for d in dims} if dims else {UNIT: pl.Int64}
     return pl.DataFrame(schema=schema | {index: pl.Int64})
 
 

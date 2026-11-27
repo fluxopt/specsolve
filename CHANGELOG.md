@@ -7,11 +7,18 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(api): an archived answer says it holds no dual ray, and a start's warning names the caller's line ([#2253](https://github.com/fluxopt/specsolve/pull/2253))
+- refactor(api): tidy refuses the data a build refuses, and timings name each step of reading it ([#2250](https://github.com/fluxopt/specsolve/pull/2250))
+- docs(benchmarks): the benchmarks page shows numbers measured on 0.13.0 ([#2242](https://github.com/fluxopt/specsolve/pull/2242))
 - perf(data): large models build up to a third faster on polars 2.2.0 ([#2232](https://github.com/fluxopt/specsolve/pull/2232))
 - fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
 - fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
 - fix(sinks): HiGHS keeps coefficients down to 1e-12 and warns when it drops one ([#2226](https://github.com/fluxopt/specsolve/pull/2226))
 - feat!: specsolve requires mathspec 0.5.0a1, where a missing row reads as the value `missing:` names and a piecewise entry names its links ([#2199](https://github.com/fluxopt/specsolve/pull/2199))
+- perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
+- perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
+- perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
+- perf(data): a model as large as PyPSA's checks and attaches its data faster ([#2249](https://github.com/fluxopt/specsolve/pull/2249))
 - perf(api): an update reads and checks again only the parameters its new sources can change ([#2069](https://github.com/fluxopt/specsolve/pull/2069))
 - perf(sinks): a loaded solver takes a linear constraint's new coefficients in place rather than loading the model again ([#2072](https://github.com/fluxopt/specsolve/pull/2072))
 

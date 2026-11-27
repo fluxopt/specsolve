@@ -17,6 +17,7 @@ import pytest
 from mathspec import program
 
 import specsolve as sps
+from specsolve._api import attach_sources
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
 from tests.conftest import EXAMPLES_DIR, expanded, schema_of
@@ -256,7 +257,7 @@ class TestLoadParameters:
     def test_refused_shapes(self, dims, params, data, match):
         s = _schema(dims=dims, params=params)
         with pytest.raises(ValueError, match=match):
-            tidy = tidy_sources(_program(s), data)
+            tidy, _ = attach_sources(_program(s), data)
             loader.load_parameters(_program(s), tidy, loader.dimension_coords(_program(s), tidy)[0])
 
 
