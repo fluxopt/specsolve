@@ -5,7 +5,7 @@ same pass, every atom of a ``where`` or a ``cases:`` region ([`settle`][]).
 What that read settles is answered here: the program a build reads is
 [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
-already ruled out ([`rowless`][]). Every such decision lives in this module, so
+already ruled out ([`is_empty`][]). Every such decision lives in this module, so
 a build's shortcuts are one list rather than a check in each place that takes
 one.
 """
@@ -26,7 +26,7 @@ from specsolve._engine.scope import Scope
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
 
 
 def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
@@ -59,7 +59,7 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     out: dict[program.Condition, bool] = {}
     queried: list[program.ParameterDefined | program.ParameterComparison] = []
     for atom in atoms:
-        if isinstance(atom, program.CountComparison) and not scope.data.cardinality[atom.over]:
+        if isinstance(atom, program.CountComparison) and not scope.data.dimensions[atom.over].size:
             out[atom] = counted_over_nothing(atom)
         elif isinstance(atom, program.ParameterDefined | program.ParameterComparison):
             if scope.data.parameter_rows[atom.name]:
@@ -69,7 +69,7 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     with in_memory():
         counts = collected_all(passing(scope, atom) for atom in queried)
     for atom, passed in zip(queried, counts, strict=True):
-        everywhere = math.prod(scope.data.cardinality[d] for d in atom.dims)
+        everywhere = math.prod(scope.data.dimensions[d].size for d in atom.dims)
         count = passed.item()
         if passes_without_a_row(scope, atom):
             count += everywhere - scope.data.parameter_rows[atom.name]
@@ -86,7 +86,7 @@ def specialized(compiled: program.Program, attached: AttachedSources) -> program
     A variable's or constraint's ``where`` the data settles true is dropped, so
     the entry takes the path of one without a ``where``: dense labels,
     and terms placed on their rows without a join. One it settles false is
-    kept as that literal, for [`rowless`][] to skip. A region it settles
+    kept as that literal, for [`is_empty`][] to skip. A region it settles
     false is dropped from its ``cases:``, and one left alone holding true
     stands for its ``cases:``: a build places a term on its rows by the
     term's own dimensions, and a sum spreads a term along what it sums, so
@@ -130,9 +130,9 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     return where is not None and _holds(_specialized_mask(where, attached.settled), value=False)
 
 
-def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
-    """Whether *entry* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
-    return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
+def is_empty(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
+    """Whether *entry* holds nothing whatever its terms, no column or no row: it spans a dimension without a label, or its ``where`` is ruled out."""
+    return any(not attached.dimensions[d].size for d in entry.dims) or rules_out(entry.where, attached)
 
 
 def _specialized_mask(mask: program.Mask, settled: Mapping[program.Condition, bool]) -> program.Mask:

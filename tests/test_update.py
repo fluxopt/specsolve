@@ -355,7 +355,7 @@ def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch
 def _tables(spec: Any) -> Any:
     """*model*'s solver tables, read off it built on the reach data."""
     with sps.build(spec, reach_sources()) as built:
-        return built._engine._model.tables
+        return built._built.tables
 
 
 #: The three fields of the digest **no rung above can reach**: a variable's
@@ -458,7 +458,7 @@ def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     between the rebuild and the next solve**, the only window where it shows.
     """
     model.solve()
-    released = weakref.ref(model._engine._model.tables.matrix)
+    released = weakref.ref(model._built.tables.matrix)
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [12.0, 22.0, 32.0, 42.0]})})
     gc.collect()
     assert released() is None, "the rebuilt-over model's matrix is still reachable, so the solver kept a whole model"
@@ -677,15 +677,13 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     given = reach_sources()
     with sps.build(REACH, given) as model:
         model.solve()
-        before = model._engine._model.tables.obj.height
+        before = model._built.tables.obj.height
         assert model.metrics().solver_instances == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
         updated = model.update({'cost': zeroed}).solve()
 
-        assert model._engine._model.tables.obj.height == before - 1, (
-            'the zero cost should have left the objective table'
-        )
+        assert model._built.tables.obj.height == before - 1, 'the zero cost should have left the objective table'
         assert model.metrics().solver_instances == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 
     with sps.build(REACH, {**given, 'cost': zeroed}) as fresh:

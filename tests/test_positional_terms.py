@@ -15,12 +15,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._attached import AttachedSources, Dimension
 from specsolve._engine import assembly, coverage, dense
-from specsolve._engine.attaching import AttachedSources
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Presence, Term
-from specsolve._names import LABEL, POSITION
 from specsolve.errors import DataError, SpecsolveError
 from tests.conftest import nothing_by_position
 
@@ -332,7 +331,7 @@ def test_a_coefficient_that_is_not_finite_is_refused_by_position_as_by_join(monk
 
 
 def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_whole() -> None:
-    """`tidy_sources` refuses a repeated row, so only a caller of the engine can hold one; unchecked, the gap would read as whatever the array held."""
+    """`encoded` refuses a repeated coordinate, so only a caller of the engine can hold one; unchecked, the gap would read as whatever the array held."""
     program = sps.check(
         {
             'dimensions': {'i': {'dtype': 'int'}},
@@ -341,19 +340,17 @@ def test_a_table_as_tall_as_its_product_that_misses_a_coordinate_is_not_read_as_
             'objective': {'sense': 'minimize', 'expression': 'sum(a * x)'},
         }
     )
+    i = Dimension.of('i', pl.Series('i', [0, 1, 2]))
     data = AttachedSources(
         parameters={'a': pl.LazyFrame({'i': [0, 0, 2], 'value': [1.0, 2.0, 3.0]})},
-        dimensions={'i': pl.LazyFrame({LABEL: [0, 1, 2], POSITION: [0, 1, 2]})},
+        dimensions={'i': i},
         relations={},
-        cardinality={'i': 3},
         parameter_rows={'a': 3},
-        consecutive={'i': 0},
-        given={},
     )
     values = dense.parameter(Scope(program, data, {}), 'a')
     assert values is not None, 'a table of three rows over three labels is taken for whole'
     with pytest.raises(SpecsolveError, match='does not cover'):
-        values(dense.CoordinatePositions(('i',), {'i': 3}))
+        values(dense.CoordinatePositions(('i',), {'i': i}))
 
 
 def test_a_term_given_a_presence_its_body_does_not_hold_is_placed_by_join(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -643,7 +643,7 @@ class QueryBuilder:
         if not p.dims:
             zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
             return replace(p, body=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
-        first = self.scope.data.dimensions[p.dims[0]].select(pl.col(LABEL).alias(p.dims[0]))
+        first = self.scope.data.dimensions[p.dims[0]].table.select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.table.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
@@ -674,7 +674,7 @@ class QueryBuilder:
         table = mapping(self.scope.data.relations, a)
         reachable = landed(table, a).unique()
         if not p.presences:
-            total = math.prod(self.scope.data.cardinality[d] for d in fine)
+            total = math.prod(self.scope.data.dimensions[d].size for d in fine)
             reached = reachable.select(pl.len()).pipe(collected).item()
             return () if reached == total else (Presence(reachable, fine),)
 

@@ -219,7 +219,7 @@ def test_a_gurobi_search_stopped_short_is_refused(minimal: int | None) -> None:
         pytest.skip('gurobi is not installed here')
     with sps.build(SHORT, SOURCES) as model:
         model.solve('gurobi')
-        held = model._engine._solver
+        held = model._solver
         held._m = _StoppedShort(held._m, minimal)
         with pytest.raises(SpecsolveError, match='found no subsystem'):
             model.infeasible_subsystem()

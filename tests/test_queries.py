@@ -28,12 +28,12 @@ import polars as pl
 import pytest
 from mathspec import program
 
-from specsolve._engine.attaching import AttachedSources
+from specsolve._attached import AttachedSources, Dimension
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.indices import Indexed
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
-from specsolve._names import COEFF, COL, CONSTANT, LABEL, POSITION
+from specsolve._names import COEFF, COL, CONSTANT
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:
@@ -67,12 +67,11 @@ LOAD = program.ParameterReference('load', dims=('snapshot',))
 #: The join every grouping case here reads: out of `generator`, into `bus`.
 GEN_BUS_JOIN = program.JoinColumns('gen_bus', GEN_BUS, joined=('generator',), grouped=('bus',))
 
-CARDINALITY = {'snapshot': 24, 'generator': 3, 'bus': 2}
-
+#: Each dimension's labels as they arrived, held uncast, so every table over one stays the plain type its schema names.
 DIMENSIONS = {
-    'snapshot': pl.LazyFrame(schema={LABEL: pl.Int64, POSITION: pl.Int64}),
-    'generator': pl.LazyFrame(schema={LABEL: pl.String, POSITION: pl.Int64}),
-    'bus': pl.LazyFrame(schema={LABEL: pl.String, POSITION: pl.Int64}),
+    'snapshot': Dimension('snapshot', pl.Series(range(24), dtype=pl.Int64), None),
+    'generator': Dimension('generator', pl.Series(['g0', 'g1', 'g2']), None),
+    'bus': Dimension('bus', pl.Series(['b0', 'b1']), None),
 }
 RELATIONS = {'gen_bus': pl.LazyFrame(schema={'generator': pl.String, 'bus': pl.String})}
 PARAMETERS = {
@@ -89,9 +88,7 @@ def attached() -> AttachedSources:
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         relations=RELATIONS,
-        cardinality=CARDINALITY,
-        parameter_rows={},
-        consecutive={},
+        parameter_rows=dict.fromkeys(PARAMETERS, 0),
         given={},
     )
 
@@ -425,14 +422,11 @@ def test_a_zero_edge_writes_its_rows_like_any_other_fill():
     row for it. Over a term there is nothing to write: the vacated slot
     contributes no term.
     """
-    snapshots = pl.LazyFrame({LABEL: [0, 1, 2], POSITION: [0, 1, 2]})
     sources = AttachedSources(
         parameters={'load': pl.LazyFrame({'snapshot': [0, 1, 2], 'value': [10.0, 20.0, 30.0]})},
-        dimensions={'snapshot': snapshots},
+        dimensions={'snapshot': Dimension.of('snapshot', pl.Series([0, 1, 2]))},
         relations={},
-        cardinality={'snapshot': 3},
         parameter_rows={'load': 3},
-        consecutive={'snapshot': 0},
         given={},
     )
     q = QueryBuilder(Scope(PROGRAM, sources, VARIABLES))

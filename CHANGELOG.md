@@ -7,6 +7,9 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- fix(api): an archived answer says it holds no dual ray, and a start's warning names the caller's line ([#2253](https://github.com/fluxopt/specsolve/pull/2253))
+- refactor(api): tidy refuses the data a build refuses, and timings name each step of reading it ([#2250](https://github.com/fluxopt/specsolve/pull/2250))
+- docs(benchmarks): the benchmarks page shows numbers measured on 0.13.0 ([#2242](https://github.com/fluxopt/specsolve/pull/2242))
 - perf(data): large models build up to a third faster on polars 2.2.0 ([#2232](https://github.com/fluxopt/specsolve/pull/2232))
 - fix(api): a result's clocks never pass its model's, even in the last place ([#2229](https://github.com/fluxopt/specsolve/pull/2229))
 - fix(api): a solve into an archive clocks every step up to handing back its answer ([#2228](https://github.com/fluxopt/specsolve/pull/2228))
@@ -15,6 +18,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
+- perf(data): a model as large as PyPSA's checks and attaches its data faster ([#2249](https://github.com/fluxopt/specsolve/pull/2249))
 - perf(engine): a constraint with a where reads it once when a parameter of its expression is absent at some rows ([#2161](https://github.com/fluxopt/specsolve/pull/2161))
 - perf(engine): a constraint, a where or a bound over data with a value at every coordinate reads it by position rather than by a join ([#2162](https://github.com/fluxopt/specsolve/pull/2162))
 

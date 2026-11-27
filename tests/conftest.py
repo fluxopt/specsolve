@@ -3,7 +3,10 @@
 Everything here is linopy-free and pandas-free at import, so it loads on a bare
 install. A module that needs the linopy lane imports ``tests.oracle`` or
 ``tests.differential``, whose ``importorskip`` skips it. A fixture that hands
-out pandas objects imports pandas in its own body.
+out pandas objects imports pandas in its own body. A helper that drives the
+build below ``specsolve.build`` imports what it drives in its own body too:
+`bench.ab` loads this module against an older checkout's ``src`` for a port's
+spec and sources, and that checkout may not have those names.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ import yaml as pyyaml
 
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
+from specsolve._sinks.highs import Highs
 from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
@@ -37,6 +41,9 @@ from tools import constructs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from specsolve._engine.assembly import BuiltModel
+    from specsolve.types import Result
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -435,7 +442,7 @@ def transport_data():
     return gens, lines, load
 
 
-def recomputed_row_values(engine, result) -> Any:
+def recomputed_row_values(built, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
@@ -443,9 +450,9 @@ def recomputed_row_values(engine, result) -> Any:
     purely quadratic row owns no linear coefficients, and ``reduceat`` repeats the
     previous row on an empty span.
     """
-    tables = engine._model.tables
+    tables = built.tables
     x = np.zeros(tables.column_count)
-    for name, indexed in engine._model.variables.items():
+    for name, indexed in built.variables.items():
         x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)
@@ -623,3 +630,20 @@ def solver_name(request: pytest.FixtureRequest) -> str:
     if not SOLVERS[request.param].is_available():
         pytest.skip(f'{request.param} is not installed here')
     return str(request.param)
+
+
+def build_program(program, sources) -> BuiltModel:
+    """*program* built over *sources* with no spec behind it, which is what the engine takes below ``specsolve.build``."""
+    from specsolve._api import attach_sources
+    from specsolve._clock import untimed
+    from specsolve._engine import assembly
+
+    return assembly.build(program, attach_sources(program, sources)[1], assembly.Measured(), untimed)
+
+
+def solve_built(built: BuiltModel) -> Result:
+    """*built* solved by HiGHS and read back, with no model around it."""
+    from specsolve._engine import readback
+
+    with Highs(built.tables) as solver:
+        return readback.result(built, solver.run(built.tables), 'highs', None)

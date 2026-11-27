@@ -32,6 +32,7 @@ from specsolve.errors import SpecsolveError
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from specsolve._attached import Dimension
     from specsolve._engine.scope import Scope
     from specsolve._engine.terms import Presence
 
@@ -61,9 +62,9 @@ class CoordinatePositions:
     dimensions reads them through [`over`][CoordinatePositions.over].
     """
 
-    def __init__(self, dims: tuple[str, ...], cardinality: Mapping[str, int]) -> None:
+    def __init__(self, dims: tuple[str, ...], dimensions: Mapping[str, Dimension]) -> None:
         self.dims = dims
-        self._cardinality = cardinality
+        self._dimensions = dimensions
 
     def over(self, dims: tuple[str, ...]) -> pl.Expr:
         """Each coordinate's position in the product of *dims*, which are among this one's, in the order given."""
@@ -71,14 +72,14 @@ class CoordinatePositions:
             return pl.col(ROW_MAJOR)
         position: pl.Expr = pl.lit(0, dtype=pl.Int64)
         for d in dims:
-            position = position * self._cardinality[d] + self.position_of(d)
+            position = position * self._dimensions[d].size + self.position_of(d)
         return position
 
     def position_of(self, dim: str) -> pl.Expr:
         """Each coordinate's position along *dim*, one of this one's dimensions."""
         after = self.dims[self.dims.index(dim) + 1 :]
-        stride = math.prod(self._cardinality[d] for d in after)
-        return (pl.col(ROW_MAJOR) // stride) % self._cardinality[dim]
+        stride = math.prod(self._dimensions[d].size for d in after)
+        return (pl.col(ROW_MAJOR) // stride) % self._dimensions[dim].size
 
 
 class DenseTerm:
@@ -130,14 +131,14 @@ def constant(value: float) -> Values | None:
 
 
 def readable(scope: Scope, name: str) -> bool:
-    """Whether parameter *name* can be read by position: it [covers][specsolve._engine.attaching.AttachedSources.covers] its dimensions."""
+    """Whether parameter *name* can be read by position: it [covers][specsolve._attached.AttachedSources.covers] its dimensions."""
     return scope.data.covers(name, scope.program.parameters[name].dims)
 
 
 def worth_reading(scope: Scope, name: str) -> bool:
     """Whether parameter *name* is [`readable`][] and spans [`READ_BY_POSITION_FROM`][] coordinates or more."""
     dims = scope.program.parameters[name].dims
-    return readable(scope, name) and math.prod(scope.data.cardinality[d] for d in dims) >= READ_BY_POSITION_FROM
+    return readable(scope, name) and scope.data.size(dims) >= READ_BY_POSITION_FROM
 
 
 def column(scope: Scope, name: str) -> pl.Series:
@@ -170,7 +171,7 @@ def variable(scope: Scope, name: str) -> Columns | None:
     dims = entry.dims
     if entry.where is None:
         return lambda at: held.start + at.over(dims)
-    cells = math.prod(scope.data.cardinality[d] for d in dims)
+    cells = scope.data.size(dims)
     if not held.height or cells > COORDINATES_PER_COLUMN * held.height:
         return None
     return lambda at: _read(_read_once(scope, ('variable', name), _columns_by_position), at, dims)
@@ -221,10 +222,10 @@ def _column_by_position(scope: Scope, name: str) -> pl.Series:
 
     Raises:
         SpecsolveError: The table is as tall as the product and still misses
-            a coordinate, which [`tidy_sources`][specsolve._sources.tidy_sources]'s refusal of a repeated row rules out.
+            a coordinate, which [`encoded`][specsolve._encoding.encoded]'s refusal of a repeated coordinate rules out.
     """
     dims = scope.program.parameters[name].dims
-    cells = math.prod(scope.data.cardinality[d] for d in dims)
+    cells = scope.data.size(dims)
     position = scope.row_major(dims, scope.position_of).alias(ROW_MAJOR)
     held = scope.data.parameters[name].select(position, VALUE).pipe(collected)
     at, column = held.get_column(ROW_MAJOR), held.get_column(VALUE)
@@ -242,7 +243,7 @@ def _columns_by_position(scope: Scope, name: str) -> pl.Series:
     dims = scope.program.variables[name].dims
     position = scope.row_major(dims, scope.position_of)
     held = scope.variables[name].table.select(position.alias(ROW_MAJOR), pl.col(COL).cast(pl.Int32)).pipe(collected)
-    cells = math.prod(scope.data.cardinality[d] for d in dims)
+    cells = scope.data.size(dims)
     return pl.repeat(-1, cells, dtype=pl.Int32, eager=True).scatter(held.get_column(ROW_MAJOR), held.get_column(COL))
 
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from bench import results as bench_results
-from specsolve._records import PHASES
+from specsolve._answer.records import PHASES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

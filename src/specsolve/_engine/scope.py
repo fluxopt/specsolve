@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve._collect import collected
+from specsolve._attached import row_major
 from specsolve._engine import dense
 from specsolve._names import LABEL, POSITION, VALUE
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
     from specsolve._engine.indices import Indexed
     from specsolve._engine.terms import Term
 
@@ -98,7 +98,9 @@ class Scope:
         """
         out: pl.LazyFrame | None = None
         for d in dims:
-            table = self.data.dimensions[d].select(pl.col(LABEL).alias(d), pl.col(POSITION).alias(position_column(d)))
+            table = self.data.dimensions[d].table.select(
+                pl.col(LABEL).alias(d), pl.col(POSITION).alias(position_column(d))
+            )
             out = table if out is None else out.join(table, how='cross', maintain_order='left_right')
         if out is None:
             return pl.LazyFrame({UNIT: [0]})
@@ -144,7 +146,7 @@ class Scope:
         consecutive integers: their positions are then a lookup per row, which
         is the join this is offered in place of.
         """
-        if not all(self.data.is_enum_encoded(d) or d in self.data.consecutive for d in dims):
+        if not all(self.data.dimensions[d].positioned for d in dims):
             return None
         return self.row_major(dims, self.position_of)
 
@@ -155,10 +157,7 @@ class Scope:
         builds of one model agree on every index. *positions* reads a dimension's
         position off the table in hand.
         """
-        position: pl.Expr = pl.lit(0, dtype=pl.Int64)
-        for d in dims:
-            position = position * self.data.cardinality[d] + positions(d)
-        return position.cast(pl.Int64)
+        return row_major((self.data.dimensions[d].size for d in dims), (positions(d) for d in dims))
 
     def position_of(self, dim: str) -> pl.Expr:
         """A *dim* value column as that dimension's position.
@@ -166,13 +165,7 @@ class Scope:
         Attaching encodes an ``Enum`` in label order, so its physical code is the
         position, and a run of consecutive integers is its own position less its first.
         """
-        column = pl.col(dim)
-        if self.data.is_enum_encoded(dim):
-            return column.to_physical().cast(pl.Int64)
-        if (first := self.data.consecutive.get(dim)) is not None:
-            return column.cast(pl.Int64) - first
-        positions = self.data.dimensions[dim].pipe(collected)
-        return column.replace_strict(positions.get_column(LABEL), positions.get_column(POSITION), return_dtype=pl.Int64)
+        return self.data.dimensions[dim].position(pl.col(dim))
 
     def widen(self, presence: pl.LazyFrame, have: tuple[str, ...], want: tuple[str, ...]) -> pl.LazyFrame:
         """*presence* over every dimension in *want*, saying the same thing.
@@ -185,7 +178,7 @@ class Scope:
     def spread(self, table: pl.LazyFrame, dims: Iterable[str]) -> pl.LazyFrame:
         """*table* repeated at every label of each of *dims*, which it does not carry."""
         for d in dims:
-            table = table.join(self.data.dimensions[d].select(pl.col(LABEL).alias(d)), how='cross')
+            table = table.join(self.data.dimensions[d].table.select(pl.col(LABEL).alias(d)), how='cross')
         return table
 
     def spanned(self, terms: Sequence[Term]) -> tuple[str, ...]:

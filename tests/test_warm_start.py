@@ -87,7 +87,7 @@ def capped_sources() -> dict[str, pl.DataFrame]:
 def _tables(spec: dict[str, Any], given: dict[str, Any]) -> Any:
     """*model*'s solver tables, read off it built on *given*."""
     with sps.build(spec, given) as built:
-        return built._engine._model.tables
+        return built._built.tables
 
 
 #: Each member's own iteration counter — the noise-free observable of warmth.
@@ -176,12 +176,12 @@ def test_a_re_solve_with_no_start_begins_from_nothing_on_the_solver_still_loaded
     """The solver kept shows up as `solver_instances`, the work forgotten as the iteration count."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
-        scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        scratch = SIMPLEX_ITERATIONS[solver_name](model._solver)
         assert scratch > 0, 'the model must make the simplex work, or none of this is observable'
 
         again = model.solve(solver_name=solver_name, start=None)
         assert model.metrics().solver_instances == 1, 'the loaded solver is kept'
-        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) == scratch, (
+        assert SIMPLEX_ITERATIONS[solver_name](model._solver) == scratch, (
             'it forgets the work it did, so it repeats the first solve iteration for iteration'
         )
         assert again.objective == pytest.approx(first.objective)
@@ -191,11 +191,11 @@ def test_a_re_solve_carries_on_in_the_solver_by_default(solver_name, monkeypatch
     """Nothing is read or matched: the solver still holds where the last solve ended."""
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
         first = model.solve(solver_name=solver_name)
-        scratch = SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        scratch = SIMPLEX_ITERATIONS[solver_name](model._solver)
         matched = _matched(monkeypatch)
 
         carried = model.solve(solver_name=solver_name)
-        assert SIMPLEX_ITERATIONS[solver_name](model._engine._solver) < scratch, (
+        assert SIMPLEX_ITERATIONS[solver_name](model._solver) < scratch, (
             'carrying the last solve on must cost less work than starting over, or it buys nothing'
         )
         assert model.metrics().solver_instances == 1, 'carrying on keeps the solver too'

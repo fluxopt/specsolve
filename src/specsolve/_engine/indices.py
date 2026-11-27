@@ -7,7 +7,6 @@ builds of one model must agree on every solver index
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -16,7 +15,6 @@ import polars as pl
 from specsolve._collect import collected
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import UNIT, position_column
-from specsolve._names import LABEL, POSITION
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
@@ -139,13 +137,11 @@ def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, in
     """
     assert dims, 'an entry over no dimensions is one row, which table() indexes'
     columns: list[pl.Series] = []
-    stride = math.prod(scope.data.cardinality[d] for d in dims)
+    stride = scope.data.size(dims)
     for d in dims:
-        stride //= scope.data.cardinality[d]
-        position = (positions // stride) % scope.data.cardinality[d]
-        columns.append(
-            scope.data.dimensions[d].pipe(collected).sort(POSITION).get_column(LABEL).gather(position).alias(d)
-        )
+        held = scope.data.dimensions[d]
+        stride //= held.size
+        columns.append(held.labels.gather((positions // stride) % held.size).alias(d))
     numbered = pl.int_range(start, start + positions.len(), dtype=pl.Int64, eager=True).alias(index)
     return pl.DataFrame([*columns, numbered.set_sorted()])
 
@@ -170,7 +166,7 @@ def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:
 
     With no dimensions that is ``([`UNIT`][], index)``, as [`table`][] keys a scalar.
     """
-    schema = {d: scope.data.dimensions[d].collect_schema()[LABEL] for d in dims} if dims else {UNIT: pl.Int64}
+    schema = {d: scope.data.dimensions[d].dtype for d in dims} if dims else {UNIT: pl.Int64}
     return pl.DataFrame(schema=schema | {index: pl.Int64})
 
 
