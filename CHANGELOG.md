@@ -16,10 +16,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
 - perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
-- perf(data): a dense parameter table is checked for a repeated coordinate and a stray label in one pass over its positions ([#2154](https://github.com/fluxopt/specsolve/pull/2154))
-- perf(data): a build reads each dimension's labels once and shares one empty table per set of dimensions rather than one per parameter or entry ([#2155](https://github.com/fluxopt/specsolve/pull/2155))
-- perf(data): each dimension's cast into its Enum is built once and the parameters are cast in one batch ([#2156](https://github.com/fluxopt/specsolve/pull/2156))
-- perf(data): an empty parameter table is checked for its types alone ([#2240](https://github.com/fluxopt/specsolve/pull/2240))
+- perf(data): a model as large as PyPSA's checks and attaches its data faster ([#2249](https://github.com/fluxopt/specsolve/pull/2249))
 
 ## 0.13.0 (2026-11-25)
 
