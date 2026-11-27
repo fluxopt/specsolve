@@ -32,9 +32,10 @@ from specsolve._sinks.solver import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    import numpy as np
     import polars as pl
 
-    from specsolve._sinks.tables import SinkTables
+    from specsolve._sinks.tables import Ints, SinkTables
 
 
 #: Xpress solution status -> termination condition, copied from linopy's
@@ -102,7 +103,13 @@ class Xpress(Solver):
     def handle(self) -> Any:
         return self._p
 
-    def push(self, tables: SinkTables) -> None:
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """``chgMCoef``, every coefficient in one call."""
+        self._p.chgMCoef(rows, cols, values)
+
+    def _push(self, tables: SinkTables) -> None:
         """Whole vectors by index, in three calls; ``chgBounds`` takes both bounds, a letter per element."""
         import numpy as np
 

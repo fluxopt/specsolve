@@ -100,8 +100,10 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
 #: gates ``where: p_max > 0`` *and* bounds the variable, so whether it is
 #: structural depends on its values.
 #:
-#: The four `reach` rungs move **one field of the digest each**, and each
-#: changes the answer.
+#: The `reach` rungs move the objective constant, a coefficient, a coefficient's
+#: column and a coefficient's row, and each changes the answer. A coefficient at
+#: 0.8 leaves `a` alone cheapest in the north: at 0.5 it would tie `b`, and a
+#: warm solve and a cold one may stop at either optimum.
 RUNGS = [
     pytest.param(
         Rung('dispatch', {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True),
@@ -123,8 +125,8 @@ RUNGS = [
     pytest.param(
         Rung(
             'reach',
-            {'reach': reaching(('north', 'a', 0.5), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
-            False,
+            {'reach': reaching(('north', 'a', 0.8), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+            True,
         ),
         id='a coefficient moved',
     ),
@@ -799,3 +801,65 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         assert updated.objective == fresh.solve().objective, (
             'the pushed cost vector disagrees with the one a cold build hands over'
         )
+
+
+#: One price per generator, a shared demand, and `eff` free to scale `p`.
+ROLES = {
+    'dimensions': {'generator': {'dtype': 'str'}},
+    'parameters': {
+        'cap': {'dims': ['generator']},
+        'eff': {'dims': ['generator']},
+        'price': {'dims': ['generator']},
+        'demand': {'dims': []},
+    },
+    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=generator) >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price)'},
+}
+ROLE_GENERATORS = ['a', 'b']
+ROLE_DATA = {
+    'generator': ROLE_GENERATORS,
+    'cap': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [10.0, 10.0]}),
+    'eff': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 1.0]}),
+    'price': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 2.0]}),
+    'demand': pl.DataFrame({'value': [8.0]}),
+}
+
+
+#: `eff` scales `p` on each generator's own row, after `meet`'s, so a changed
+#: coefficient sits in a row the matrix does not start with.
+PER_ROW = override(
+    ROLES,
+    **{
+        'constraints.meet.expression': 'sum(p, over=generator) >= demand',
+        'constraints.limit': {'dims': ['generator'], 'expression': 'eff * p <= cap'},
+    },
+)
+
+
+def test_a_changed_coefficient_is_taken_in_place_and_taken_back(solver_name):
+    """A changed coefficient reaches the loaded solver in place, and so does the change undone.
+
+    `eff` of `a` doubles, so `a` reaches half its capacity and `b`, dearer,
+    covers the rest. Each answer is a fresh build's on the same solver.
+    """
+    doubled = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [2.0, 1.0]))}
+    with sps.build(PER_ROW, ROLE_DATA) as model:
+        model.solve(solver_name)
+        for data in (ROLE_DATA | doubled, ROLE_DATA):
+            with sps.build(PER_ROW, data) as reference:
+                got = model.update({'eff': data['eff']}).solve(solver_name).objective
+                assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
+        assert model.metrics().solver_instances == 1, 'the coefficients changed in place, so the solver stayed loaded'
+
+
+def test_a_quadratic_constraint_whose_linear_part_changed_loads_again():
+    """A quadratic row goes to the solver whole, so a coefficient of its linear part loads the model again."""
+    pytest.importorskip('gurobipy', reason='only the gurobi sink takes a quadratic constraint')
+    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p + p * p, over=generator) >= demand'})
+    changed = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 4.0]))}
+    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | changed) as reference:
+        model.solve('gurobi')
+        got = model.update(changed).solve('gurobi').objective
+        assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
+        assert model.metrics().solver_instances == 2, 'a quadratic row whose linear part changed was kept'

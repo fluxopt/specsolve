@@ -704,7 +704,7 @@ parametrized by what the window moves:
 | `values` | re-attaches the same sources | push |
 | `shape` | attaches the rung one snapshot shorter (`cases.shortened`) | load |
 | `one` | updates the first declared parameter alone, as `update` is usually called | push |
-| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | load |
+| `coefficient` | updates the case's `coefficient`, a parameter inside the matrix, one percent up (`cases.rescaled`) | push |
 | `cold` | re-attaches the same sources after dropping the loaded solver | load |
 
 Values are not varied, because a push sends whole vectors whatever they hold.
@@ -712,9 +712,10 @@ Values are not varied, because a push sends whole vectors whatever they hold.
 parameter it was given, and builds every entry — so
 it is the baseline an incremental build would have to beat. `coefficient` is
 the case a model predictive controller meets when an efficiency or a COP
-multiplies a variable: the matrix moves, so every such update loads the solver
-again. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
-name one; the other cases skip it. A `start=` changes only what the solver begins from, which moves the solve and not anything timed here.
+multiplies a variable: the matrix's coefficients change, and the loaded solver
+takes them in place. Only `commitment` (`p_max`), `sector` (`produces`) and `storage` (`eta`)
+name one; the other cases skip it. A `start=` changes only what the solver
+begins from, which moves the solve and not anything timed here.
 
 The clock stops at `Model._handoff`, the half of `Model.solve` before the run, so
 nothing about the solver's own work lands in the wall time or the peak. The

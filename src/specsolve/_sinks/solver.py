@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import polars as pl
 
-from specsolve._names import COEFF, VALUE
+from specsolve._names import COEFF, COL, VALUE
 from specsolve._sinks.tables import SENSE_CODES
 from specsolve.errors import SpecsolveError
 
@@ -110,7 +110,7 @@ class Solver(ABC):
         self._tables: SinkTables | None = tables
         #: The digest, or ``None`` until [`structure`][] is first asked. Read through it.
         self._structure: bytes | None = None
-        #: The matrix's coefficients as loaded, in matrix order, for [`keeps`][].
+        #: The matrix's coefficients the loaded model holds, in matrix order, for [`keeps`][] and [`push`][].
         self._coefficients = tables.matrix[COEFF].to_numpy()
         #: The loaded model's spans, read by [`_spans`][].
         self._columns = tables.column_count
@@ -156,17 +156,32 @@ class Solver(ABC):
     def keeps(self, tables: SinkTables, solver_options: Mapping[str, Any] | None) -> bool:
         """Whether this held solver may keep its load and take *tables* by value.
 
-        The same options and [`structure`][], and every matrix coefficient
-        within 1e-12 relative of the one loaded, which stays: a coefficient
-        summed over rows in another order moves in its last bits.
+        The same options and [`structure`][], and every coefficient of a
+        quadratic constraint's linear part as loaded: a sink loads that row
+        whole, so only a linear row takes a coefficient in place ([`push`][]).
+        """
+        if self._options != dict(solver_options or {}) or self.structure() != tables.structure:
+            return False
+        tail = int(tables.row_starts[tables.linear_row_count])
+        return bool(_unchanged(tables.matrix[COEFF].to_numpy()[tail:], self._coefficients[tail:]).all())
+
+    def push(self, tables: SinkTables) -> None:
+        """*tables*' bounds, costs, right-hand sides and changed coefficients onto the loaded model.
+
+        Called only after [`keeps`][] said yes. A coefficient within 1e-12
+        relative of the one loaded stays: a coefficient summed over rows in
+        another order moves in its last bits.
         """
         import numpy as np
 
-        return (
-            self._options == dict(solver_options or {})
-            and self.structure() == tables.structure
-            and np.allclose(tables.matrix[COEFF].to_numpy(), self._coefficients, rtol=1e-12, atol=0.0)
-        )
+        new = tables.matrix[COEFF].to_numpy()
+        unchanged = _unchanged(new, self._coefficients)
+        if not unchanged.all():
+            changed = np.flatnonzero(~unchanged)
+            rows = np.searchsorted(tables.row_starts, changed, side='right') - 1
+            self._change_coefficients(rows, tables.matrix[COL].to_numpy()[changed], new[changed])
+            self._coefficients = np.where(unchanged, self._coefficients, new)
+        self._push(tables)
 
     @classmethod
     def imported(cls) -> Any:
@@ -194,11 +209,14 @@ class Solver(ABC):
         """Hand *tables* to the solver and hold whatever reads it back. Called by ``__init__``."""
 
     @abstractmethod
-    def push(self, tables: SinkTables) -> None:
-        """*tables*' bounds, costs and right-hand sides onto the loaded model, as whole vectors.
+    def _push(self, tables: SinkTables) -> None:
+        """*tables*'s bounds, costs and right-hand sides onto the loaded model. Called by [`push`][], after the coefficients."""
 
-        Called only after *tables*' digest matched the loaded one.
-        """
+    @abstractmethod
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """Set the loaded coefficient at each ``(rows[i], cols[i])``, one that exists, to ``values[i]``."""
 
     def start_from_basis(self, basis: Basis) -> None:
         """Start the next [`run`][] of this LP from *basis* instead of from scratch.
@@ -414,3 +432,12 @@ def solver_vector(values: Any) -> pl.Series:  # pyrefly: ignore[explicit-any] â€
     entry's share by slicing.
     """
     return pl.Series(VALUE, values, dtype=pl.Float64)
+
+
+def _unchanged(
+    new: np.ndarray[tuple[int], np.dtype[np.float64]], held: np.ndarray[tuple[int], np.dtype[np.float64]]
+) -> np.ndarray[tuple[int], np.dtype[np.bool_]]:
+    """Which of *new* is within 1e-12 relative of the coefficient *held* in its place."""
+    import numpy as np
+
+    return np.isclose(new, held, rtol=1e-12, atol=0.0)

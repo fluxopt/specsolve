@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     import numpy as np
     import polars as pl
 
-    from specsolve._sinks.tables import ColumnVectors, RowVectors, SinkTables
+    from specsolve._sinks.tables import ColumnVectors, Ints, RowVectors, SinkTables
 
 
 #: HiGHS model status -> termination condition, copied from linopy's
@@ -216,13 +216,13 @@ def _warn_dropped(h: Any, values: Any, coefficients: Any, what: str) -> None:
 class Highs(Solver):
     """HiGHS, holding one model at ``.handle``, a `highspy.Highs`.
 
-    A re-solve pushes bounds, costs and right-hand sides onto the held model
-    and starts from the basis the last solve ended on.
+    A re-solve pushes bounds, costs, right-hand sides and changed coefficients
+    onto the held model and starts from the basis the last solve ended on.
     """
 
     #: The loaded model. ``close`` drops it.
     _handle: Any
-    #: The column and row vectors the loaded model holds now, so [`push`][] sends only what moved.
+    #: The column and row vectors the loaded model holds now, so [`_push`][] sends only what moved.
     _column_vectors: ColumnVectors
     _row_vectors: RowVectors
 
@@ -259,7 +259,15 @@ class Highs(Solver):
     def handle(self) -> Any:
         return self._handle
 
-    def push(self, tables: SinkTables) -> None:
+    def _change_coefficients(
+        self, rows: Ints, cols: Ints, values: np.ndarray[tuple[int], np.dtype[np.float64]]
+    ) -> None:
+        """``changeCoeff``, one call per coefficient: HiGHS has no call that takes several."""
+        h = self._handle
+        for row, col, value in zip(rows.tolist(), cols.tolist(), values.tolist(), strict=True):
+            _loaded(h, h.changeCoeff(row, col, value), 'a new coefficient')
+
+    def _push(self, tables: SinkTables) -> None:
         """Send only the elements that differ from what the model holds: HiGHS spends its time per element sent, moved or not."""
         import highspy
         import numpy as np
