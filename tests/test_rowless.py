@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import _assumptions
+from specsolve import _assumptions, _sources
 from specsolve._engine import conditions, indices
 from specsolve._engine import queries as queries_module
 from specsolve._names import COL, ROW
@@ -289,3 +289,17 @@ def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table
     assert built == [(('e', 'g'), COL), (('e', 'g'), ROW)], (
         f'empty tables were built for {built}, where one per dimensions and index column is enough'
     )
+
+
+def test_a_parameter_table_with_no_row_is_not_checked_for_its_coordinates(monkeypatch):
+    """`flag` and `on` arrive with no row, so there is no coordinate or value of theirs to refuse; `cap` has rows."""
+    checked = []
+    real = _sources._refuse_unknown_or_repeated_coordinates
+
+    def counted(name, *args):
+        checked.append(name)
+        return real(name, *args)
+
+    monkeypatch.setattr(_sources, '_refuse_unknown_or_repeated_coordinates', counted)
+    sps.build(TABLED_SPEC, TABLED_SOURCES).close()
+    assert checked == ['cap'], f'the coordinates of {checked} were checked, where only cap has a row'

@@ -753,7 +753,10 @@ def _checked_parameter(
     *dimension_labels* holds the labels of each dimension read so far
     ([`_dimension_labels`][]), read once for every table checked against them.
 
-    The collect is the one model-sized materialisation on the way in.
+    The collect is the one model-sized materialisation on the way in. A table
+    over dimensions with no row holds no coordinate or value to refuse, so it
+    is checked for its columns' types alone: PyPSA's spec gives most of its
+    parameters such a table.
 
     Raises:
         DataError: The table lacks a declared dimension or ``value``, holds two rows
@@ -773,8 +776,9 @@ def _checked_parameter(
         table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
     )
     checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
-    _refuse_unknown_or_repeated_coordinates(name, p, checked, dimension_labels, kind)
-    _refuse_absent_values(name, p, checked, kind)
+    if checked.height or not p.dims:
+        _refuse_unknown_or_repeated_coordinates(name, p, checked, dimension_labels, kind)
+        _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
     return checked.lazy()
 
