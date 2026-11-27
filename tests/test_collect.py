@@ -173,3 +173,58 @@ def test_the_reach_against_the_limit_decides_the_build_engine(
         assert set(engines) == {'in-memory'}, (
             f'{engines.count("auto")} of {len(engines)} collects left the engine to polars at the limit'
         )
+
+
+TWO_ROWS = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
+    'parameters': {'load': {'dims': ['t']}},
+    'variables': {'p': {'dims': ['t'], 'bounds': {'lower': 0}}, 'q': {'dims': ['t'], 'bounds': {'lower': 0}}},
+    'constraints': {
+        'balance': {'dims': ['t'], 'expression': 'p + q == load'},
+        'cap': {'dims': ['t'], 'expression': 'p <= load'},
+    },
+    'objective': {'sense': 'minimize', 'expression': 'sum(p + 2 * q, over=t)'},
+}
+TWO_ROWS_DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0, 6.0]})}
+
+
+@pytest.mark.parametrize(
+    ('limit', 'order', 'shared'),
+    [
+        pytest.param(0, ['plan balance', 'read balance', 'plan cap', 'read cap'], False, id='above-the-reach'),
+        pytest.param(10**9, ['plan balance', 'plan cap', 'read balance', 'read cap'], True, id='within-the-reach'),
+    ],
+)
+def test_above_the_reach_a_pass_reads_one_entry_and_lets_it_go_before_the_next(monkeypatch, limit, order, shared):
+    """A shared pass holds every entry's tables until it has read them all, which a large build cannot afford.
+
+    Above `IN_MEMORY_REACH` each constraint's terms are read and made into its
+    shares before the next constraint's are planned, and no two queries share a
+    collect; within it every constraint's are planned, then read in one.
+    """
+    monkeypatch.setattr(assembly, 'IN_MEMORY_REACH', limit)
+    events, batched = [], []
+    planned, shares, together = (
+        assembly.coverage.constant_side_planned,
+        assembly.Assembly._shares,
+        assembly.collected_all,
+    )
+
+    def spied_planned(scope, rows, terms, c):
+        events.append(f'plan {"balance" if c.sense == "==" else "cap"}')
+        return planned(scope, rows, terms, c)
+
+    def spied_shares(self, p, *args):
+        events.append(f'read {p.name}')
+        return shares(self, p, *args)
+
+    def spied_together(queries):
+        batched.append(len(queries))
+        return together(queries)
+
+    monkeypatch.setattr(assembly.coverage, 'constant_side_planned', spied_planned)
+    monkeypatch.setattr(assembly.Assembly, '_shares', spied_shares)
+    monkeypatch.setattr(assembly, 'collected_all', spied_together)
+    sps.build(TWO_ROWS, TWO_ROWS_DATA).close()
+    assert events == order, f'the terms pass ran in the order {events}'
+    assert any(n > 1 for n in batched) == shared, f'queries per collect_all: {batched}'

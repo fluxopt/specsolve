@@ -284,19 +284,26 @@ class Assembly:
         finally:
             self.lap('build', step, entry)
 
-    def _together(self, queries: list[pl.LazyFrame]) -> list[pl.DataFrame]:
-        """Every query of one shared pass collected: together within [`IN_MEMORY_REACH`][], one at a time above it.
+    def _batches[T](self, entries: list[T]) -> list[list[T]]:
+        """*entries* in the batches a shared pass reads: one batch within [`IN_MEMORY_REACH`][], one entry per batch above it.
 
-        A query costs polars a fixed time however few rows it reads, and one
-        pass pays it once; in a port model that was about 15% of a build
-        (#2022). Above the reach each query is large, and one pass would hold
-        every one's working set at once.
+        A batch's queries are collected together, which pays polars' fixed
+        cost of a query once rather than per query; in a port model that was
+        about 15% of a build (#2022). Above the reach each query is large, and a
+        batch is read, checked and let go before the next is read, so a pass
+        holds no more at once than one entry built alone does.
+        """
+        return [entries] if self.small else [[entry] for entry in entries]
+
+    def _together(self, queries: list[pl.LazyFrame]) -> list[pl.DataFrame]:
+        """Every query of one batch: in one pass within [`IN_MEMORY_REACH`][], one after another above it.
+
+        Above the reach one pass would run an entry's queries side by side, each
+        holding its working set at once.
         """
         if not queries:
             return []
-        if self.small:
-            return collected_all(queries)
-        return [collected(query) for query in queries]
+        return collected_all(queries) if self.small else [collected(query) for query in queries]
 
     def _reach(self) -> int:
         """The columns or the rows the model would have with no ``where``, whichever is more: known before the build.
@@ -351,7 +358,7 @@ class Assembly:
         return name, v.domain, query
 
     def _bounded(self, bounds: list[_Bounds]) -> list[pl.DataFrame]:
-        """Every variable's share of ``cols``, its bounds read in one shared pass.
+        """Every variable's share of ``cols``, its bounds read in [`_batches`][].
 
         A share leaves in index order: ``cols`` carries no ``COL``, so a row's
         position is its solver column index. The bounds are collected in memory:
@@ -359,14 +366,15 @@ class Assembly:
         2.0's streaming engine runs that ordered join 4.6 to 5.5 times slower
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
-        with in_memory():
-            read = self._together([query for _, _, query in bounds])
         cols = []
-        for (name, domain, _), table in zip(bounds, read, strict=True):
-            bounded = indices.in_position_order(table, COL)
-            cols.append(bounded.select('lb', 'ub', pl.lit(domain, dtype=_DTYPES['vtype']).alias('vtype')))
-            if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
-                self.measured.bounds[name] = spread
+        for batch in self._batches(bounds):
+            with in_memory():
+                read = self._together([query for _, _, query in batch])
+            for (name, domain, _), table in zip(batch, read, strict=True):
+                bounded = indices.in_position_order(table, COL)
+                cols.append(bounded.select('lb', 'ub', pl.lit(domain, dtype=_DTYPES['vtype']).alias('vtype')))
+                if (spread := _magnitude_range(bounded, 'lb', 'ub')) is not None:
+                    self.measured.bounds[name] = spread
         return cols
 
     def _build_sos(self, s: program.Sos, v: program.Variable) -> pl.DataFrame:
@@ -430,57 +438,63 @@ class Assembly:
         return _Planned(name, c, linear, quadratic, constant, bool(presences), query, finish, admitted)
 
     def _indexed(self, planned: list[_Planned]) -> list[_Planned]:
-        """Every constraint's rows, read in one shared pass; the constraints that hold a row.
+        """Every constraint's rows, read in [`_batches`][]; the constraints that hold a row.
 
         A presence narrows the rows the ``where`` admits, and the rows it
         removed are counted as not built.
         """
-        read = self._together([p.query for p in planned] + [p.admitted for p in planned if p.admitted is not None])
-        admitted = iter(read[len(planned) :])
         live = []
-        for p, table in zip(planned, read, strict=False):
-            indexed = p.finish(table)
-            if p.narrowed:
-                declared = (
-                    math.prod(self.attached.dimensions[d].size for d in p.c.dims)
-                    if p.admitted is None
-                    else next(admitted).item()
-                )
-                if declared > indexed.height:
-                    self.measured.omitted[p.name] = self.measured.omitted.get(p.name, 0) + declared - indexed.height
-            if not indexed.height:
-                self._without_a_row(p.name, indexed)
-                continue
-            self.constraints[p.name] = indices.Indexed(indexed.lazy(), 0, indexed.height)
-            live.append(p)
+        for batch in self._batches(planned):
+            read = self._together([p.query for p in batch] + [p.admitted for p in batch if p.admitted is not None])
+            admitted = iter(read[len(batch) :])
+            for p, table in zip(batch, read, strict=False):
+                indexed = p.finish(table)
+                if p.narrowed:
+                    declared = (
+                        math.prod(self.attached.dimensions[d].size for d in p.c.dims)
+                        if p.admitted is None
+                        else next(admitted).item()
+                    )
+                    if declared > indexed.height:
+                        self.measured.omitted[p.name] = self.measured.omitted.get(p.name, 0) + declared - indexed.height
+                if not indexed.height:
+                    self._without_a_row(p.name, indexed)
+                    continue
+                self.constraints[p.name] = indices.Indexed(indexed.lazy(), 0, indexed.height)
+                live.append(p)
         return live
 
     def _terms(self, live: list[_Planned]) -> dict[str, _ConstraintShare]:
-        """Every constraint's constant side and matrix shares, read in one shared pass and checked in build order.
+        """Every constraint's constant side and matrix shares, read in [`_batches`][] and checked in build order.
 
         The [`coverage`][] checks run on each table before an aggregate can
         hide a hole. A row is built where either matrix has a term.
         """
-        queries: dict[tuple[str, str], pl.LazyFrame] = {}
-        finishes: dict[tuple[str, str], Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]] = {}
-        sides: dict[str, dict[str, frozenset[str]]] = {}
-        for p in live:
-            table = self.constraints[p.name].table
-            subject = f"constraint '{p.name}'"
-            if program.parameters_of(*coverage.divisors_of(p.c.lhs, p.c.rhs)):
-                narrowed = coverage.narrowed_to_rows(table, [t for t, _ in p.constant])
-                queries[p.name, 'undefined'] = coverage.undefined_constants(narrowed)
-            queries[p.name, 'side'], sides[p.name] = coverage.constant_side_planned(self.scope, table, p.constant, p.c)
-            if p.linear:
-                queries[p.name, 'matrix'], finishes[p.name, 'matrix'] = self._matrix_share(
-                    self._linear_tables(p, table), subject, p.c.lhs, p.c.rhs
+        shares: dict[str, _ConstraintShare] = {}
+        for batch in self._batches(live):
+            queries: dict[tuple[str, str], pl.LazyFrame] = {}
+            finishes: dict[tuple[str, str], Callable[[pl.DataFrame], tuple[pl.DataFrame, pl.Series]]] = {}
+            sides: dict[str, dict[str, frozenset[str]]] = {}
+            for p in batch:
+                table = self.constraints[p.name].table
+                subject = f"constraint '{p.name}'"
+                if program.parameters_of(*coverage.divisors_of(p.c.lhs, p.c.rhs)):
+                    narrowed = coverage.narrowed_to_rows(table, [t for t, _ in p.constant])
+                    queries[p.name, 'undefined'] = coverage.undefined_constants(narrowed)
+                queries[p.name, 'side'], sides[p.name] = coverage.constant_side_planned(
+                    self.scope, table, p.constant, p.c
                 )
-            if p.quadratic:
-                queries[p.name, 'quadratic'], finishes[p.name, 'quadratic'] = self._quadratic_share(
-                    table, p.quadratic, p.name, p.c
-                )
-        read = dict(zip(queries, self._together(list(queries.values())), strict=True))
-        return {p.name: self._shares(p, read, finishes, sides[p.name]) for p in live}
+                if p.linear:
+                    queries[p.name, 'matrix'], finishes[p.name, 'matrix'] = self._matrix_share(
+                        self._linear_tables(p, table), subject, p.c.lhs, p.c.rhs
+                    )
+                if p.quadratic:
+                    queries[p.name, 'quadratic'], finishes[p.name, 'quadratic'] = self._quadratic_share(
+                        table, p.quadratic, p.name, p.c
+                    )
+            read = dict(zip(queries, self._together(list(queries.values())), strict=True))
+            shares |= {p.name: self._shares(p, read, finishes, sides[p.name]) for p in batch}
+        return shares
 
     def _linear_tables(self, p: _Planned, table: pl.LazyFrame) -> list[pl.LazyFrame]:
         """Each linear term of *p* placed on its rows as ``(row, col, coeff)``, by its own coordinate where it can."""
@@ -537,12 +551,13 @@ class Assembly:
             self.measured.rhs[p.name] = sides
         return rows, matrix, qmatrix
 
-    def _placed(self, names: list[str], shares: Mapping[str, _ConstraintShare]) -> list[_ConstraintShare]:
+    def _placed(self, names: list[str], shares: dict[str, _ConstraintShare]) -> list[_ConstraintShare]:
         """Every constraint's shares, in build order, moved from its own rows onto the model's.
 
         A constraint's rows follow the ones every constraint before it kept, and
         a constraint keeps its rows only once its terms are read, so the move
-        waits for the last one.
+        waits for the last one. Each share leaves *shares* as it moves, so its
+        rows are not held twice.
         """
         placed = []
         for name in names:
@@ -552,7 +567,7 @@ class Assembly:
             self.n_rows = offset + held.height
             if name not in shares:
                 continue
-            rows, matrix, qmatrix = shares[name]
+            rows, matrix, qmatrix = shares.pop(name)
             placed.append(
                 (
                     _moved(rows, offset),
