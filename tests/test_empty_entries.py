@@ -1,4 +1,4 @@
-"""An entry that holds no row is not queried, and the model is the one without it.
+"""An entry that holds nothing is not queried, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
 most entries span a dimension without a label or a `where` that admits

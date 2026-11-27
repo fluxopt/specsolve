@@ -5,7 +5,7 @@ same pass, every atom of a ``where`` or a ``cases:`` region ([`settle`][]).
 What that read settles is answered here: the program a build reads is
 [`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
-already ruled out ([`rowless`][]). Every such decision lives in this module, so
+already ruled out ([`is_empty`][]). Every such decision lives in this module, so
 a build's shortcuts are one list rather than a check in each place that takes
 one.
 """
@@ -86,7 +86,7 @@ def specialized(compiled: program.Program, attached: AttachedSources) -> program
     A variable's or constraint's ``where`` the data settles true is dropped, so
     the entry takes the path of one without a ``where``: dense labels,
     and terms placed on their rows without a join. One it settles false is
-    kept as that literal, for [`rowless`][] to skip. A region it settles
+    kept as that literal, for [`is_empty`][] to skip. A region it settles
     false is dropped from its ``cases:``, and one left alone holding true
     stands for its ``cases:``: a build places a term on its rows by the
     term's own dimensions, and a sum spreads a term along what it sums, so
@@ -130,8 +130,8 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
     return where is not None and _holds(_specialized_mask(where, attached.settled), value=False)
 
 
-def rowless(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
-    """Whether *entry* holds no row whatever its terms: it spans a dimension without a label, or its ``where`` is ruled out."""
+def is_empty(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
+    """Whether *entry* holds nothing whatever its terms, no column or no row: it spans a dimension without a label, or its ``where`` is ruled out."""
     return any(not attached.cardinality[d] for d in entry.dims) or rules_out(entry.where, attached)
 
 

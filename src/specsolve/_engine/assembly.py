@@ -20,7 +20,7 @@ from specsolve._collect import collected, in_memory
 from specsolve._engine import coverage, indices
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
-from specsolve._engine.specialize import rowless, specialized
+from specsolve._engine.specialize import is_empty, specialized
 from specsolve._engine.terms import Term, presences_of
 from specsolve._names import COEFF, COL, COL_2, COL_L, COL_R, CONSTANT, ROW
 from specsolve._sinks.tables import SENSE
@@ -284,7 +284,7 @@ class Assembly:
         than its in-memory one on the nodal benchmark at sizes m and l (#1857).
         """
         start = self.n_cols
-        if rowless(v, self.attached):
+        if is_empty(v, self.attached):
             indexed = self._empty_table(v.dims, COL)
         else:
             indexed = indices.table(self.scope, v.dims, v.where, COL, start)
@@ -355,7 +355,7 @@ class Assembly:
         absence never meets the full product of its dimensions.
         """
         start = self.n_rows
-        if rowless(c, self.attached):
+        if is_empty(c, self.attached):
             return self._without_a_row(name, self._empty_table(c.dims, ROW), start)
         admitted = None if c.where is None else indices.table(self.scope, c.dims, c.where, ROW, start)
         if admitted is not None and not admitted.height:
