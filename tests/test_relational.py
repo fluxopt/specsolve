@@ -1486,6 +1486,7 @@ class TestThePositionalHandoff:
             expected = indexed.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
 
+    @pytest.mark.usefixtures('read_by_position')
     def test_a_bound_dense_over_the_product_is_attached_by_position_not_joined(self, monkeypatch):
         """The shape xarray gets for free: position *is* the coordinate.
 
@@ -1509,6 +1510,7 @@ class TestThePositionalHandoff:
                 'every p at its own upper bound; the cap of 100 never binds'
             )
 
+    @pytest.mark.usefixtures('read_by_position')
     def test_the_positional_attach_sorts_rather_than_trusting_the_source_order(self, monkeypatch):
         """The same numbers arriving shuffled must give the same model.
 

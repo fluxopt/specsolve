@@ -228,6 +228,21 @@ under the `specsolve_` prefix a dimension cannot take. Parameters are
 `(dims…, value)`. A variable table is `(dims…, COL)`. A linear expression is `(dims…, COL, COEFF)` plus a
 constant term. An absent coordinate is a missing row, and broadcasting is a join.
 
+**A term over data with a row at every coordinate is also held by position**
+(`dense.py`). A coordinate's row-major position is then the key, and an
+alignment is an index rather than a join. Such a term still carries its tidy
+table, so an operator with no positional arm reads the table and the term is a
+table from there on. Negation, a product with a constant term, a constraint's
+share of the matrix and its right-hand side have a positional arm. A
+constraint takes the share's only when every linear term it holds is held by
+position, and the right-hand side's only when every constant term is. A
+`where` and a bound read such a parameter at each row's position as well, from
+100,000 coordinates up and where the row's labels are their own positions
+(`Scope.parameter_join`).
+Every such read is a polars expression over a table of positions, so it runs
+on the threads and the memory the rest of the build uses.
+`pixi run test-by-join` builds the whole suite with nothing read by position.
+
 **Solver indices are contiguous `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
@@ -270,6 +285,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/shifts.py` | `shift` and `sum_back` |
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
+| `_engine/dense.py` | data read by position instead of joined, where it has a value at every coordinate of its dimensions |
 | `_engine/indices.py` | which coordinate gets which solver index |
 | `_engine/attaching.py` | what a model makes of its data: missing rows filled, conditions settled, assumptions checked |
 | `_engine/assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the attached data |

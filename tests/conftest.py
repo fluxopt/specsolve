@@ -40,7 +40,7 @@ from tests.fixtures import (  # noqa: F401
 from tools import constructs
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from specsolve._engine.assembly import BuiltModel
     from specsolve.types import Result
@@ -118,6 +118,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help='read and write every file through pyarrow, as specsolve does where polars has no parquet',
     )
     parser.addoption(
+        '--by-join',
+        action='store_true',
+        default=False,
+        help='read nothing by position, so the joins build every model the suite holds',
+    )
+    parser.addoption(
         '--sweep-shard',
         default='0/1',
         help='run the i-th of n equal strides of the sweep, as `i/n`; the CI job takes one per matrix leg',
@@ -125,11 +131,22 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet."""
+    """Under ``--parquet-via-pyarrow``, specsolve takes this polars for one built without parquet; under ``--by-join``, nothing is read by position."""
     if config.getoption('--parquet-via-pyarrow'):
         from specsolve import _parquet as parquet
 
         parquet._polars_has_parquet = cache(lambda: False)
+    if config.getoption('--by-join'):
+        nothing_by_position()
+
+
+def nothing_by_position(put: Callable[[object, str, object], None] = setattr) -> None:
+    """Every read by position switched off. *put* sets an attribute: a test passes ``monkeypatch.setattr`` to have it undone."""
+    from specsolve._engine import dense
+
+    put(dense, 'constant', lambda *args: None)
+    put(dense, 'variable', lambda *args: None)
+    put(dense, 'readable', lambda *args: False)
 
 
 @pytest.fixture
@@ -137,6 +154,13 @@ def polars_parquet(request: pytest.FixtureRequest) -> None:
     """Skip where ``--parquet-via-pyarrow`` takes away the polars parquet this test needs."""
     if request.config.getoption('--parquet-via-pyarrow'):
         pytest.skip('--parquet-via-pyarrow takes away the polars parquet this test needs')
+
+
+@pytest.fixture
+def read_by_position(request: pytest.FixtureRequest) -> None:
+    """Skip where ``--by-join`` takes away the reading by position this test is about."""
+    if request.config.getoption('--by-join'):
+        pytest.skip('--by-join reads nothing by position, which this test is about')
 
 
 # ---------------------------------------------------------------------------

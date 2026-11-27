@@ -117,6 +117,35 @@ def _survivors(scope: Scope, dims: tuple[str, ...], where: program.Mask | None) 
     return narrowed(scope, read, where).join(scope.product(free), how='cross')
 
 
+def renumbered(kept: pl.DataFrame, dims: tuple[str, ...], index: str, start: int) -> pl.DataFrame:
+    """*kept*, some rows of an indexed table still in index order, numbered again from *start*."""
+    return (
+        kept.drop(index)
+        .with_row_index(index, offset=start)
+        .select(*(dims or (UNIT,)), pl.col(index).cast(pl.Int64).set_sorted())
+    )
+
+
+def from_positions(scope: Scope, dims: tuple[str, ...], positions: pl.Series, index: str, start: int) -> pl.DataFrame:
+    """[`table`][]'s answer for the coordinates at *positions* in the product of *dims*, ascending, numbered from *start*.
+
+    Each label is read off its dimension at the coordinate's position, so the
+    product the coordinates lie in is never formed: a constraint that a
+    variable narrowed by its ``where:`` cuts to half its coordinates holds half
+    the table, not the whole of it first. Over no dimensions [`table`][] keys
+    the one row itself.
+    """
+    assert dims, 'an entry over no dimensions is one row, which table() indexes'
+    columns: list[pl.Series] = []
+    stride = scope.data.size(dims)
+    for d in dims:
+        held = scope.data.dimensions[d]
+        stride //= held.size
+        columns.append(held.labels.gather((positions // stride) % held.size).alias(d))
+    numbered = pl.int_range(start, start + positions.len(), dtype=pl.Int64, eager=True).alias(index)
+    return pl.DataFrame([*columns, numbered.set_sorted()])
+
+
 def narrowed_by(
     indexed: pl.DataFrame, dims: tuple[str, ...], index: str, start: int, presences: Sequence[Presence]
 ) -> pl.DataFrame:
@@ -129,10 +158,7 @@ def narrowed_by(
     surviving = indexed.lazy()
     for presence in presences:
         surviving = presence.narrow(surviving, presence.joined_on or ())
-    kept = in_position_order(surviving.pipe(collected), index).drop(index)
-    return kept.with_row_index(index, offset=start).select(
-        *(dims or (UNIT,)), pl.col(index).cast(pl.Int64).set_sorted()
-    )
+    return renumbered(in_position_order(surviving.pipe(collected), index), dims, index, start)
 
 
 def nothing(scope: Scope, dims: tuple[str, ...], index: str) -> pl.DataFrame:

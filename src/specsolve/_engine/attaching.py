@@ -8,7 +8,6 @@ reaches a build or a read.
 
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -59,7 +58,7 @@ def attach(program: program.Program, data: AttachedSources, lap: Lap = untimed) 
     for name, p in program.parameters.items():
         if isinstance(p.missing, str) or p.missing is None or (reads_as_zero(p.missing) and name not in filled):
             continue
-        if rows[name] < math.prod(data.dimensions[d].size for d in p.dims):
+        if not data.covers(name, p.dims):
             table = parameters[name].pipe(collected)
             given[name] = table.select(*p.dims).lazy()
             whole = _filled(table, p.dims, p.missing, data.dimensions)

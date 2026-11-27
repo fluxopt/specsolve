@@ -17,7 +17,8 @@ from mathspec import program
 from specsolve import _sinks as sinks
 from specsolve._answer.result import Diagnostics
 from specsolve._collect import collected, in_memory
-from specsolve._engine import coverage, indices
+from specsolve._engine import coverage, dense, indices
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope, join_on
 from specsolve._engine.specialize import is_empty, specialized
@@ -257,18 +258,100 @@ class Assembly:
         )
 
     def _matrix_share(
-        self, tables: list[pl.LazyFrame], name: str, *expressions: program.Expression
+        self, stacked: pl.DataFrame, name: str, *expressions: program.Expression
     ) -> tuple[pl.DataFrame, pl.Series]:
-        """One constraint's share: in ``(row, col)`` order, repeated cells summed.
+        """One constraint's share from its terms' coefficients: in ``(row, col)`` order, repeated cells summed.
 
         Returns:
             The share, and the rows that had any term, read before the prune: a
             row whose every coefficient is zero is not a row with no terms.
         """
-        stacked = pl.concat(tables).pipe(collected)
         coverage.refuse_null_coefficients(stacked, name, *expressions)
         share, dropped = _collapsed(stacked, (ROW, COL), ordered=True)
         return share, stacked.get_column(ROW).unique() if dropped else _ordered_rows(share)
+
+    def _placed_by_join(
+        self,
+        linear: list[tuple[Term, float]],
+        c: program.Constraint,
+        indexed: pl.DataFrame,
+        start: int,
+        *,
+        narrowed: bool,
+    ) -> pl.DataFrame:
+        """Every coefficient of *linear* as ``(ROW, COL, COEFF)``, each term joined onto the rows *indexed* holds."""
+        if not linear:
+            return _stack([], _MATRIX)
+        table = indexed.lazy()
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
+        whole = c.where is None and not narrowed
+        tables = []
+        for p, sign in linear:
+            if whole and set(p.dims) == set(c.dims):
+                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
+            else:
+                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
+            tables.append(
+                placed.select(
+                    ROW,
+                    pl.col(COL).cast(_DTYPES[COL]).alias(COL),
+                    (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
+                )
+            )
+        return pl.concat(tables).pipe(collected)
+
+    def _positions(self, dims: tuple[str, ...], indexed: pl.DataFrame | None) -> pl.Series:
+        """The position of each coordinate *indexed* holds, in its order; ``None`` stands for every coordinate of *dims*."""
+        if indexed is None:
+            cells = self.attached.size(dims)
+            return pl.int_range(cells, dtype=pl.Int64, eager=True)
+        position = self.scope.row_major(dims, self.scope.position_of) if dims else pl.lit(0, dtype=pl.Int64)
+        return indexed.select(position.alias(dense.ROW_MAJOR), ROW).get_column(dense.ROW_MAJOR)
+
+    def _placed_by_position(
+        self, linear: list[tuple[DenseTerm, float]], dims: tuple[str, ...], indexed: pl.DataFrame | None, start: int
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.Series]:
+        """[`_placed_by_join`][]'s coefficients for terms held by position, the indexed rows they keep, and their positions.
+
+        The terms' own absences are read off their columns here, where the
+        join path hands them to [`indices.table`][specsolve._engine.indices.table]
+        as presences. *indexed* numbers its rows in position order, so
+        the coefficients leave in row order; ``None`` stands for every coordinate
+        of *dims*. Where the terms then drop some, the rows are indexed from
+        the coordinates kept and the whole product is never a table.
+        """
+        positions, kept, coefficients = dense.placed(
+            linear, self._positions(dims, indexed), dense.CoordinatePositions(dims, self.attached.dimensions)
+        )
+        if indexed is None and kept is None:
+            indexed = indices.table(self.scope, dims, None, ROW, start)
+        elif indexed is None:
+            indexed = indices.from_positions(self.scope, dims, positions, ROW, start)
+        elif kept is not None:
+            indexed = indices.renumbered(indexed.filter(kept), dims, ROW, start)
+        return coefficients.select((pl.col('index') + start).alias(ROW), COL, COEFF), indexed, positions
+
+    def _sides_by_position(
+        self,
+        constant: list[tuple[DenseTerm, float]],
+        c: program.Constraint,
+        indexed: pl.DataFrame,
+        positions: pl.Series | None,
+    ) -> pl.DataFrame:
+        """[`coverage.constant_side`][specsolve._engine.coverage.constant_side]'s rows for constant terms held by position.
+
+        *positions* are those of *indexed*'s rows where its placing read
+        them, ``None`` to read them here. A term held by position has a value
+        at each, so no row is owed one and there is no coverage to check.
+        """
+        positions = self._positions(c.dims, indexed) if positions is None else positions
+        total = dense.summed(constant, dense.CoordinatePositions(c.dims, self.attached.dimensions))
+        sides = {
+            ROW: indexed.get_column(ROW),
+            'sense': pl.repeat(c.sense, indexed.height, dtype=_DTYPES['sense'], eager=True),
+            'rhs': pl.DataFrame({dense.ROW_MAJOR: positions}).with_columns(total.alias('rhs')).get_column('rhs'),
+        }
+        return pl.DataFrame(sides, schema={column: _DTYPES[column] for column in _ROWS})
 
     # ------------------------------------------------------------------
     # entries
@@ -366,19 +449,29 @@ class Assembly:
         linear = [(p, 1.0) for p in lhs.linear] + [(p, -1.0) for p in rhs.linear]
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
-        presences = presences_of([p for p, _ in (*linear, *quadratic, *constant)])
-        if admitted is None:
+        by_position = [
+            (p.body, sign) for p, sign in linear if isinstance(p.body, DenseTerm) and p.body.stands_for(p.presences)
+        ]
+        whole_by_position = bool(linear) and len(by_position) == len(linear)
+        presences = presences_of(
+            [p for p, _ in ((*quadratic, *constant) if whole_by_position else (*linear, *quadratic, *constant))]
+        )
+        indexed: pl.DataFrame | None
+        if whole_by_position and admitted is None and c.dims and not presences:
+            indexed = None
+        elif admitted is None:
             indexed = indices.table(self.scope, c.dims, None, ROW, start, presences)
         elif presences:
             indexed = indices.narrowed_by(admitted, c.dims, ROW, start, presences)
         else:
             indexed = admitted
-        if presences:
-            declared = (
-                math.prod(self.attached.dimensions[d].size for d in c.dims) if admitted is None else admitted.height
-            )
-            if declared > indexed.height:
-                self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
+        declared = self.attached.size(c.dims) if admitted is None else admitted.height
+        stacked, positions = None, None
+        if whole_by_position:
+            stacked, indexed, positions = self._placed_by_position(by_position, c.dims, indexed, start)
+        assert indexed is not None, 'only a constraint placed by position is left for its placing to index'
+        if declared > indexed.height:
+            self.measured.omitted[name] = self.measured.omitted.get(name, 0) + declared - indexed.height
         self.n_rows = start + indexed.height
         table = indexed.lazy()
         self.constraints[name] = indices.Indexed(table, start, indexed.height)
@@ -389,33 +482,20 @@ class Assembly:
             program.parameters_of(*coverage.divisors_of(c.lhs, c.rhs)),
             subject,
         )
-        rows = coverage.constant_side(self.scope, table, constant, c, subject)
+        sides = [(p.body, sign) for p, sign in constant if isinstance(p.body, DenseTerm)]
+        if len(sides) == len(constant):
+            rows = self._sides_by_position(sides, c, indexed, positions)
+        else:
+            rows = coverage.constant_side(self.scope, table, constant, c, subject)
 
         if not linear and not quadratic:
             none = pl.Series(ROW, [], dtype=_DTYPES[ROW])
             rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
-        tables = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not presences
-        for p, sign in linear:
-            if dense and set(p.dims) == set(c.dims):
-                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
-            else:
-                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
-            tables.append(
-                placed.select(
-                    ROW,
-                    pl.col(COL).cast(_DTYPES[COL]).alias(COL),
-                    (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
-                )
-            )
-        matrix, term_rows = (
-            self._matrix_share(tables, subject, c.lhs, c.rhs)
-            if tables
-            else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
-        )
+        if stacked is None:
+            stacked = self._placed_by_join(linear, c, indexed, start, narrowed=bool(presences))
+        matrix, term_rows = self._matrix_share(stacked, subject, c.lhs, c.rhs)
         qmatrix, quadratic_rows = self._quadratic_share(table, quadratic, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, quadratic_rows]).unique()
@@ -568,20 +648,12 @@ class Assembly:
 
 
 def short_parameters(program: program.Program, attached: AttachedSources) -> dict[str, tuple[int, int]]:
-    """Which parameters arrived short, and by how much: ``name -> (reach, rows)``.
-
-    [`tidy_sources`][specsolve._sources.tidy_sources] refuses duplicates and strangers, so a parameter's height is the
-    number of coordinates it covers.
-    """
-    short: dict[str, tuple[int, int]] = {}
-    for name, p in program.parameters.items():
-        if not p.dims:
-            continue
-        reach = math.prod(attached.dimensions[d].size for d in p.dims)
-        rows = attached.parameter_rows[name]
-        if rows < reach:
-            short[name] = (reach, rows)
-    return short
+    """Which parameters arrived short of their coordinates, and by how much: ``name -> (reach, rows)``."""
+    return {
+        name: (attached.size(p.dims), attached.parameter_rows[name])
+        for name, p in program.parameters.items()
+        if p.dims and not attached.covers(name, p.dims)
+    }
 
 
 def declares_quadratic(c: program.Constraint) -> bool:

@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Literal, NoReturn, assert_never
 import polars as pl
 from mathspec import program
 
+from specsolve._engine import dense
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.scope import join_on
 from specsolve._names import COEFF, COL, COL_2, CONSTANT
 from specsolve.errors import SpecsolveError
@@ -78,7 +80,7 @@ class Term:
     """One additive term of an expression, over its own dimensions."""
 
     dims: tuple[str, ...]
-    table: pl.LazyFrame
+    body: pl.LazyFrame | DenseTerm
     kind: Kind
 
     presences: tuple[Presence, ...] = ()
@@ -100,6 +102,11 @@ class Term:
 
     A linear or quadratic term carries none, since a sparse coefficient is a zero, and a divisor has its own check.
     """
+
+    @property
+    def table(self) -> pl.LazyFrame:
+        """The term as the join path reads it, whichever way it is held."""
+        return self.body.table if isinstance(self.body, DenseTerm) else self.body
 
     @property
     def value_column(self) -> str:
@@ -144,7 +151,7 @@ def spread_term(scope: Scope, p: Term, dims: Sequence[str]) -> Term:
         return p
     out = scope.in_dimension_order((*p.dims, *missing))
     table = scope.spread(p.table, missing).select(*out, *p.carried)
-    return replace(p, dims=out, table=table, presences=_keyed(p))
+    return replace(p, dims=out, body=table, presences=_keyed(p))
 
 
 #: The column-index columns each kind carries, in the order a projection keeps them.
@@ -248,7 +255,7 @@ def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]
         return terms
 
     def narrow(p: Term) -> Term:
-        table, dims = p.table, p.dims
+        table, dims, narrowed = p.table, p.dims, False
         for source, presence in absent:
             if source is p:
                 continue
@@ -259,8 +266,8 @@ def propagate_absence(terms: ExpressionTerms, scope: Scope, along: Sequence[str]
             if missing:
                 dims = scope.in_dimension_order((*dims, *missing))
                 table = scope.spread(table, missing).select(*dims, *p.carried)
-            table = presence.narrow(table, on)
-        return p if table is p.table else replace(p, dims=dims, table=table)
+            table, narrowed = presence.narrow(table, on), True
+        return replace(p, dims=dims, body=table) if narrowed else p
 
     return map_terms(terms, narrow)
 
@@ -293,7 +300,10 @@ def region_over(region: program.Mask | None, dims: Sequence[str]) -> program.Mas
 
 
 def negate(p: Term) -> Term:
-    return replace(p, table=p.table.with_columns(-pl.col(p.value_column)))
+    def tidy() -> pl.LazyFrame:
+        return p.table.with_columns(-pl.col(p.value_column))
+
+    return replace(p, body=dense.negated(p.body, tidy) if isinstance(p.body, DenseTerm) else tidy())
 
 
 def _paired(a: Term, b: Term, right: pl.LazyFrame, how: JoinStrategy) -> tuple[pl.LazyFrame, tuple[str, ...]]:
@@ -310,8 +320,11 @@ def _keyed(p: Term) -> tuple[Presence, ...]:
 
     The implied join columns are the term's own dimensions, and the product's are a superset,
     so carried over unspelled it would name columns the table does not hold.
+    One already spelled out travels as the object it is, which is how a body
+    held by position knows the presence is still its own
+    ([`DenseTerm.stands_for`][specsolve._engine.dense.DenseTerm.stands_for]).
     """
-    return tuple(Presence(x.table, x.join_columns(p.dims)) for x in p.presences)
+    return tuple(x if x.joined_on is not None else Presence(x.table, p.dims) for x in p.presences)
 
 
 def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
@@ -322,17 +335,26 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     divisor has no value for yields a null coefficient rather than dropping the
     term; a coordinate where the divisor is absent leaves the table, the
     quotient being absent too. The presences of both sides travel out: at a
-    read *c* may be a variable at its primal.
+    read *c* may be a variable at its primal. A product of two terms held by
+    position is held by position.
     """
-    joined, out_dims = _paired(a, c, c.table.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
-    if divide:
-        for presence in c.presences:
-            joined = presence.narrow(joined, presence.join_columns(c.dims))
+    out_dims = a.dims + tuple(d for d in c.dims if d not in a.dims)
 
-    value, rhs = pl.col(a.value_column), pl.col(_RHS)
-    combined = value / rhs if divide else value * rhs
-    out = value_column(kind)
-    table = joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
+    def tidy() -> pl.LazyFrame:
+        joined, _ = _paired(a, c, c.table.rename({CONSTANT: _RHS}), 'left' if divide else 'inner')
+        if divide:
+            for presence in c.presences:
+                joined = presence.narrow(joined, presence.join_columns(c.dims))
+        value, rhs = pl.col(a.value_column), pl.col(_RHS)
+        combined = value / rhs if divide else value * rhs
+        out = value_column(kind)
+        return joined.with_columns(combined.alias(out)).select(*out_dims, *carried_columns(kind))
+
+    body: pl.LazyFrame | DenseTerm
+    if not divide and isinstance(a.body, DenseTerm) and isinstance(c.body, DenseTerm):
+        body = dense.product(a.body, c.body, tidy)
+    else:
+        body = tidy()
     if kind != 'constant':
         parameters = frozenset[str]()
     elif divide:
@@ -342,7 +364,7 @@ def times_constant(a: Term, c: Term, kind: Kind, divide: bool = False) -> Term:
     return replace(
         a,
         dims=out_dims,
-        table=table,
+        body=body,
         kind=kind,
         presences=_keyed(a) + _keyed(c),
         region=both_regions(a.region, c.region),
