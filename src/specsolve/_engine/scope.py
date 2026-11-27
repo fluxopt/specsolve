@@ -63,6 +63,10 @@ def join_on(
 #: hold a table with one row and no columns.
 UNIT = '__unit__'
 
+#: The column a join keyed by row-major position ([`Scope.parameter_join`][]) carries its key in,
+#: named with a space so no dimension a file declares can share it.
+_POSITION_KEY = '__row-major position__'
+
 
 def position_column(dim: str) -> str:
     """The column carrying *dim*'s position in its declared order."""
@@ -123,7 +127,9 @@ class Scope:
         parameter with a row at every coordinate, and enough of them to be
         [worth reading][specsolve._engine.dense.worth_reading], is read at
         each row's [`row_major_position`][Scope.row_major_position] instead, which is what a left
-        or an inner join of it finds.
+        or an inner join of it finds. Any other join over several dimensions
+        that have such a position is keyed on it, one Int64 rather than a
+        column per dimension.
         """
         entry = self.program.parameters[parameter]
         assert not set(entry.dims) - set(table_dims), f'{subject} has dimensions outside {list(table_dims)}'
@@ -135,7 +141,29 @@ class Scope:
         if not entry.dims and how == 'left':
             null = pl.LazyFrame({alias: [None]}, schema={alias: values.collect_schema()[alias]})
             values = pl.concat([values, null]).head(1)
+        if (key := self._position_key(entry.dims)) is not None:
+            return (
+                table.with_columns(key.alias(_POSITION_KEY))
+                .join(
+                    values.select(key.alias(_POSITION_KEY), alias),
+                    on=_POSITION_KEY,
+                    how=how,
+                    maintain_order=maintain_order,
+                )
+                .drop(_POSITION_KEY)
+            )
         return join_on(table, values, entry.dims, how, maintain_order)
+
+    def _position_key(self, dims: tuple[str, ...]) -> pl.Expr | None:
+        """The one Int64 a join over *dims* can take as its key, where it would otherwise take their columns.
+
+        Only a join over several dimensions gains: over one it already takes one
+        column. The key is [`row_major_position`][Scope.row_major_position], so it
+        exists only where each dimension reads its position off its own column;
+        a lookup per label would cost more than the join it saves. It fits an
+        Int64 wherever a solver index does.
+        """
+        return self.row_major_position(dims) if len(dims) > 1 else None
 
     def row_major_position(self, dims: tuple[str, ...]) -> pl.Expr | None:
         """A table row's [`row_major`][Scope.row_major] position over *dims*, read off its dimension columns alone.
