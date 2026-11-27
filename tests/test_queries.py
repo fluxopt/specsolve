@@ -28,8 +28,7 @@ import polars as pl
 import pytest
 from mathspec import program
 
-from specsolve._dimensions import Dimension
-from specsolve._engine.attaching import AttachedSources
+from specsolve._attached import AttachedSources, Dimension
 from specsolve._engine.conditions import narrowed
 from specsolve._engine.indices import Indexed
 from specsolve._engine.queries import QueryBuilder

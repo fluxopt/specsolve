@@ -35,7 +35,8 @@ from specsolve._answer.outputs import checked_outputs
 from specsolve._answer.records import METRICS_SCHEMA, Metrics, Provenance, installed_version
 from specsolve._answer.result import Result
 from specsolve._archive_layout import carried_sources, check_the_target, write_archive
-from specsolve._clock import Clock
+from specsolve._clock import Clock, untimed
+from specsolve._encoding import encoded
 from specsolve._engine import readback
 from specsolve._engine.assembly import Measured
 from specsolve._engine.assembly import build as build_model
@@ -54,6 +55,8 @@ if TYPE_CHECKING:
     from specsolve._answer.outputs import Output
     from specsolve._answer.result import ConstraintRow, Diagnostics, InfeasibleSubsystem
     from specsolve._answer.status import SolveStatus
+    from specsolve._attached import AttachedSources
+    from specsolve._clock import Lap
     from specsolve._engine.assembly import BuiltModel
     from specsolve._start import Start
 
@@ -120,18 +123,29 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
         LanguageError: A construct outside the language.
         DataError: As [`build`][] refuses the sources.
     """
-    return checked_sources(as_program(spec), sources)
+    return attach_sources(as_program(spec), sources)[0]
 
 
-def checked_sources(program: Program, sources: Mapping[str, Source]) -> dict[str, pl.DataFrame]:
-    """*sources* read as a build reads them, and refused where it refuses them: the tables [`tidy`][] and an archive hold.
+def attach_sources(
+    program: Program, sources: Mapping[str, Source], lap: Lap = untimed
+) -> tuple[dict[str, pl.DataFrame], AttachedSources]:
+    """*sources* read, held to what *program* declares and attached to it: the one way a caller's data reaches a build.
+
+    Args:
+        program: The compiled spec.
+        sources: The caller's sources, as [`build`][] takes them.
+        lap: Ends a lap at each step of the ``tidy`` and ``attach`` phases, as
+            [`timings`][specsolve._api.Model.timings] names them.
+
+    Returns:
+        The tables as they were read, which [`tidy`][] returns and an archive
+        holds, and the same data as a build reads it.
 
     Raises:
         DataError: As [`build`][] refuses the sources.
     """
-    tables = tidy_sources(program, sources)
-    attach(program, tables)
-    return tables
+    tables = tidy_sources(program, sources, lap)
+    return tables, attach(program, encoded(program, tables, lap), lap)
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -185,7 +199,7 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
     spec = as_spec(spec)
     program = as_program(spec)
     _refuse_a_decision(program)
-    attached = attach(program, tidy_sources(program, sources))
+    _, attached = attach_sources(program, sources)
     return readback.expressions_of(program, attached, lambda written: expression_node(spec, written)).value(expression)
 
 
@@ -251,9 +265,7 @@ class Model:
         """
         lap = self._clock.lap
         try:
-            self._tidied = tidy_sources(self._program, self._sources, lap)
-            attached = attach(self._program, self._tidied)
-            lap('attach')
+            self._tidied, attached = attach_sources(self._program, self._sources, lap)
             if self._solver is not None:
                 self._solver.structure()
                 lap('handoff', 'digest')
@@ -494,7 +506,7 @@ class Model:
         Raises:
             SpecsolveError: As [`read_start`][] raises.
         """
-        return read_start(start, self._program, self._tidied)
+        return read_start(start, self._program, self._tidied, self._standing('to start').attached.dimensions)
 
     def _archive(self, out: Path, answered: Result) -> Result:
         """Write this model, what is attached to it now, and *answered* to *out*; *answered* with the row it recorded.
@@ -679,10 +691,17 @@ class Model:
         stacked into one matrix in row order; and ``tables``, the rest of what
         a solver is handed. An entry's seconds are its own: they hold when the
         entries build in another order. The tidy's steps are ``read``, every
-        path read at once; ``dimension`` and ``relation``, one row per entry;
-        ``parameter``, one row per parameter, checked and collected, the
-        first also holding the relations' label checks and every parameter's
-        shaping; and ``check``, the refusal that needs every source read. The
+        path read at once, and ``shape``, one row per dimension, relation and
+        parameter, each held to its columns and their types, the first
+        parameter's also holding every parameter's shaping, and a last row
+        with no entry for the refusal that needs every source read. The
+        attach's steps are ``encode``, one row per relation and parameter,
+        its labels turned into its dimensions' own type; ``content``, one row
+        per relation and parameter, checked to hold only its dimensions'
+        labels, no coordinate twice, and a row wherever it refuses to lack
+        one; ``fill``, the missing rows a divisor reads written in;
+        ``settle``, each condition the data decides read once; and
+        ``assume``, the spec's assumptions checked. The
         handoff's steps are ``digest``, the held solver's fingerprint of its
         model, read before a rebuild;
         ``start``, the ``start=`` matched to this build; ``check``, the solver

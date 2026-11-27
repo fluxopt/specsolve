@@ -23,15 +23,17 @@ from specsolve._answer.records import PHASES, Metrics
 #: type checker.
 Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
 
-#: What a lap did inside its phase: a step of ``tidy``, ``build`` or
-#: ``handoff``, as [`Model.timings`][specsolve._api.Model.timings] names them.
+#: What a lap did inside its phase: a step of ``tidy``, ``attach``, ``build``
+#: or ``handoff``, as [`Model.timings`][specsolve._api.Model.timings] names them.
 #: A step is not checked against its phase.
 Step = Literal[
     'read',
-    'dimension',
-    'relation',
-    'parameter',
-    'check',
+    'shape',
+    'encode',
+    'content',
+    'fill',
+    'settle',
+    'assume',
     'setup',
     'variable',
     'set',
@@ -41,6 +43,7 @@ Step = Literal[
     'tables',
     'digest',
     'start',
+    'check',
     'push',
     'instance',
     'warm',

@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
     from specsolve._answer.outputs import Output
     from specsolve._answer.status import SolveStatus
+    from specsolve._attached import AttachedSources
     from specsolve._engine.assembly import BuiltModel
-    from specsolve._engine.attaching import AttachedSources
     from specsolve._sinks.solver import InfeasibleSubsystemIndices, SolveAnswer
     from specsolve._sinks.tables import SinkTables
 

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from mathspec import program
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
 
 #: What a [`Grouping`][] adds to a dimension table: a coordinate's rank
 #: inside its group, and the group's size.

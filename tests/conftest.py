@@ -23,13 +23,13 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from specsolve._api import attach_sources
 from specsolve._clock import untimed
 from specsolve._engine import assembly, readback
-from specsolve._engine.attaching import attach
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
 from specsolve._sinks.highs import Highs
-from specsolve._sources import attachable, tidy_sources
+from specsolve._sources import attachable
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
     expanded,
@@ -610,7 +610,7 @@ def solver_name(request: pytest.FixtureRequest) -> str:
 
 def build_program(program, sources) -> BuiltModel:
     """*program* built over *sources* with no spec behind it, which is what the engine takes below ``specsolve.build``."""
-    return assembly.build(program, attach(program, tidy_sources(program, sources)), assembly.Measured(), untimed)
+    return assembly.build(program, attach_sources(program, sources)[1], assembly.Measured(), untimed)
 
 
 def solve_built(built: BuiltModel) -> Result:

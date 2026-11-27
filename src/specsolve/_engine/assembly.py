@@ -31,8 +31,8 @@ if TYPE_CHECKING:
     from mathspec.program import ObjectiveSense
     from polars._typing import MaintainOrderJoin, PolarsDataType
 
+    from specsolve._attached import AttachedSources
     from specsolve._clock import Lap, Step
-    from specsolve._engine.attaching import AttachedSources
 
 
 #: The most columns or rows a model may reach for its build to collect in memory.

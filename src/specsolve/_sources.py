@@ -3,13 +3,13 @@
 Parquet paths, any table exposing the Arrow PyCapsule protocol, or a
 plain-Python shape become the tidy tables both lanes read by name. Every check
 on whether a source is a table its entry can read is made here, once. Whether
-the data holds what the spec assumes of it is
-[`attach`][specsolve._engine.attaching.attach]'s.
+its labels and coordinates fit the dimensions is
+[`encoded`][specsolve._encoding.encoded]'s, and what the model makes of the
+data [`attach`][specsolve._engine.attaching.attach]'s.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,20 +17,18 @@ from typing import TYPE_CHECKING
 import polars as pl
 import polars.selectors as cs
 from mathspec.errors import did_you_mean
-from mathspec.program import Parameter
 
 from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
-from specsolve._dimensions import row_major
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
-from specsolve._messages import coordinate_text, coordinates_text
+from specsolve._messages import coordinates_text
 from specsolve._names import POSITION, VALUE
 from specsolve.errors import DataError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from mathspec.program import Dimension, Program, Relation
+    from mathspec.program import Dimension, Parameter, Program, Relation
 
     from specsolve._clock import Lap
     from specsolve._inputs import Label, Source
@@ -68,29 +66,28 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
     column over a dimension in that dimension's label type.
 
     Every read holds one table whole, so it runs on polars' in-memory engine.
-    Whether the data holds the spec's ``assumptions:`` is not asked here:
-    [`attach`][specsolve._engine.attaching.attach] asks it, of the tables this
-    returns.
+    Each table is held to its shape here: its columns, their types, no null.
+    Whether its labels are its dimensions' and its coordinates each have one
+    row is [`encoded`][specsolve._encoding.encoded]'s to ask, and whether the
+    data holds the spec's ``assumptions:`` is
+    [`attach`][specsolve._engine.attaching.attach]'s.
 
     Args:
         program: The compiled spec.
         data: The caller's sources, by the name each is declared under.
         lap: Ends a lap of ``tidy`` after each step: ``read``, every path read
-            at once; ``dimension`` and ``relation``, one per entry with labels
-            of its own; ``parameter``, one per parameter, checked and
-            collected; and ``check``, the refusal that needs every source
-            read. The checks of the relations' labels and the parameters' lazy
-            shaping run before the first parameter's check, and are in its row.
+            at once, and ``shape``, one per dimension, relation and parameter
+            and a last one for the refusal that needs every source read. The
+            parameters' lazy shaping runs before the first parameter's check,
+            and is in its row.
 
     Raises:
         DataError: A key naming nothing the spec declares; a declared
             dimension, relation or parameter with no data; a source no reader
             accepts or short of the columns its entry needs; a dimension's
             labels of another type than its ``dtype``, or holding one twice; a
-            parameter with two rows for one
-            coordinate, a label its dimension lacks, a null or NaN value, or a
-            column of another type than it declares; a relation with a null, a
-            row twice, or a label its column's dimension lacks; a column over a
+            parameter with a null or NaN value, or a column of another type
+            than it declares; a relation with a null; a column over a
             dimension holding another kind of label than its labels; or a
             datetime label finer than a microsecond, or in another time zone
             than its dimension's labels.
@@ -105,15 +102,14 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
         if dname in data:
             sources[dname] = _labels_table(data[dname], dname, declared.dtype)
             labels_by_dimension[dname] = sources[dname][dname]
-            lap('tidy', 'dimension', dname)
+            lap('tidy', 'shape', dname)
     relations: dict[str, pl.DataFrame] = {}
     for name, relation in program.relations.items():
         relations[name] = _read_relation(data[name], name, relation, labels_by_dimension)
-        lap('tidy', 'relation', name)
+        lap('tidy', 'shape', name)
     for dname in program.dimensions:
         if dname not in sources and (authors := [f'sources[{name!r}]' for name in _relations_over(program, dname)]):
             raise DataError(_relation_needs_labels_message(dname, authors))
-    _refuse_unknown_labels_in_relations(program, relations, labels_by_dimension)
     sources |= relations
 
     shaped: dict[str, pl.LazyFrame] = {}
@@ -122,13 +118,13 @@ def tidy_sources(program: Program, data: Mapping[str, Source], lap: Lap = untime
             raise DataError(_no_parameter_source_message(pname))
         shaped[pname] = parameter_table(pname, pdef, data[pname], sources)
     for pname, pdef in program.parameters.items():
-        sources[pname] = _checked_parameter(pname, pdef, shaped[pname], labels_by_dimension)
-        lap('tidy', 'parameter', pname)
+        sources[pname] = checked_parameter(pname, pdef, shaped[pname], labels_by_dimension)
+        lap('tidy', 'shape', pname)
 
     for dname in program.dimensions:
         if dname not in sources:
             raise DataError(_no_labels_source_message(dname))
-    lap('tidy', 'check', None)
+    lap('tidy', 'shape', None)
 
     return sources
 
@@ -465,39 +461,6 @@ def _column_names(source: Source, dim: str) -> frozenset[str]:
     return frozenset(table.collect_schema().names()) if table is not None else frozenset()
 
 
-def _refuse_unknown_labels_in_relations(
-    program: Program, relations: Mapping[str, pl.DataFrame], labels_by_dimension: Mapping[str, pl.Series]
-) -> None:
-    """Every column of every relation holds labels of its dimension.
-
-    Raises:
-        DataError: A column holding a label its dimension lacks.
-    """
-    for name, relation in program.relations.items():
-        for role, dim in relation.columns:
-            _refuse_unknown_labels_in_column(relations[name], name, role, dim, labels_by_dimension[dim])
-
-
-def _refuse_unknown_labels_in_column(rows: pl.DataFrame, name: str, role: str, dim: str, labels: pl.Series) -> None:
-    """Refuse a relation column holding a value that is not a label of its dimension.
-
-    Offenders keep their own type — a python native off polars, never a numpy
-    scalar — because the message reprs them.
-    """
-    known = set(labels.to_list())
-    strays: dict[object, None] = {v: None for v in rows[role].to_list() if v not in known}
-    if not strays:
-        return
-    shown = ', '.join(repr(v) for v in list(strays)[:5]) + (' …' if len(strays) > 5 else '')
-    spelled = [str(x) for x in labels.to_list()]
-    raise DataError(
-        f"relation '{name}' has value(s) in '{role}' that are not '{dim}' labels: {shown}. '{dim}' takes "
-        f'its labels from the data here, and they are {spelled[:8]}{" …" if len(spelled) > 8 else ""}. A '
-        f'relation relates the labels that exist — a value matching none of them would place its terms '
-        f'nowhere, so it is a typo on one side or a label missing from the other.'
-    )
-
-
 def _read_relation(
     source: Source, name: str, relation: Relation, labels_by_dimension: Mapping[str, pl.Series]
 ) -> pl.DataFrame:
@@ -546,20 +509,6 @@ def _read_relation(
             f'means by it.'
         )
 
-    key = list(relation.key)
-    twice = rows.group_by(key).len().filter(pl.col('len') > 1).sort(key)
-    if twice.height:
-        shown = coordinates_text(key, twice.select(key).head(5).rows())
-        if relation.values:
-            raise DataError(
-                f"relation '{name}' maps {twice.height} key(s) more than once: {shown}. "
-                f'{key} is the declared key, so each key it maps takes exactly one row.'
-            )
-        raise DataError(
-            f"relation '{name}' relates {twice.height} tuple(s) more than once: {shown}. "
-            f'A relation holds each row at most once, so drop the repeats.'
-        )
-
     return rows
 
 
@@ -592,23 +541,6 @@ def parameter_table(
         )
     table = as_table(obj, p.dims)
     return table if table is not None else _spread(name, obj, p.dims, sources, kind)
-
-
-def read_values(
-    kind: str, name: str, dims: Sequence[str], obj: Source, labels: Mapping[str, pl.DataFrame], dtype: str
-) -> pl.DataFrame:
-    """*obj*, ``(dims…, value)`` of *dtype* over *dims*, read and checked as a parameter's source is.
-
-    For values that are no parameter's, such as a start's. *kind* and *name*
-    say whose they are in a refusal, and *labels* holds each dimension's
-    labels under its own name.
-
-    Raises:
-        DataError: A table a parameter over the same dimensions would be refused for.
-    """
-    declared = Parameter(dims=tuple(dims), dtype=dtype)  # pyrefly: ignore[bad-argument-type] — the two dtypes a start reads
-    table = parameter_table(name, declared, obj, labels, kind)
-    return _checked_parameter(name, declared, table, {d: labels[d][d] for d in dims if d in labels}, kind)
 
 
 def least_value(program: Program, sources: Mapping[str, Source], name: str) -> int:
@@ -710,7 +642,7 @@ def _labels(name: str, dim: str, sources: Mapping[str, pl.DataFrame], kind: str)
     return source[dim].to_list()
 
 
-def _checked_parameter(
+def checked_parameter(
     name: str,
     p: Parameter,
     table: pl.LazyFrame,
@@ -725,9 +657,10 @@ def _checked_parameter(
     The collect is the one model-sized materialisation on the way in.
 
     Raises:
-        DataError: The table lacks a declared dimension or ``value``, holds two rows
-            for one coordinate or a label its dimension lacks, carries a null
-            or NaN value, or types the column differently from the entry.
+        DataError: The table lacks a declared dimension or ``value``, carries
+            a null or NaN value, types a column differently from the entry or
+            from its dimension's labels, or holds more than one row over no
+            dimension.
     """
     wanted = [*p.dims, VALUE]
     available = table.collect_schema().names()
@@ -742,118 +675,21 @@ def _checked_parameter(
         table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), labels_by_dimension)
     )
     checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), labels_by_dimension)
-    _refuse_unknown_or_repeated_coordinates(name, p, checked, labels_by_dimension, kind)
+    _refuse_rows_over_no_dimension(name, p, checked, kind)
     _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
     return checked
 
 
-def _refuse_unknown_or_repeated_coordinates(
-    name: str, p: Parameter, table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series], kind: str
-) -> None:
-    """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
-
-    Labels are checked against the dimensions whose labels have been read; one
-    still missing is refused once every source is in. A table with no row over
-    its dimensions has neither to check, and is not queried.
-    """
-    if not p.dims:
-        if table.height > 1 or (table.height == 0 and p.missing == 'refused'):
-            raise DataError(
-                f"{kind} '{name}' is declared with no dimensions, which means one value "
-                f'broadcast everywhere — but its source has {table.height} rows. '
-                f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
-                f'`missing:` to say what no row means.'
-            )
-        return
-    if not table.height:
-        return
-
-    positions = _coordinate_positions(p.dims, table, labels_by_dimension)
-    _refuse_unknown_labels(name, kind, table, p.dims, labels_by_dimension, positions)
-    _refuse_repeated_coordinates(name, kind, table, p.dims, positions)
-
-
-def _coordinate_positions(
-    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series]
-) -> pl.Series | None:
-    """Each row's coordinate position: where its coordinate sits in the product of its dimensions' labels.
-
-    A coordinate's position is built from its labels' positions, row-major, so
-    two rows share one exactly when they share a coordinate, and a row with a
-    label its dimension lacks has none and reads as null. Counting distinct
-    positions replaces hashing every key column, which is the check's cost on a
-    large dense table. ``None`` asks the caller to hash instead: for one key
-    column, which hashes once either way, for a table under 50,000 rows, and
-    where a position cannot be formed — a dimension whose labels are not read
-    yet, a column of another dtype than its labels, a product past 63 bits.
-    """
-    if len(dims) < 2 or table.height < 50_000:
-        return None
-    if any(d not in labels_by_dimension or table.schema[d] != labels_by_dimension[d].dtype for d in dims):
-        return None
-    if math.prod(labels_by_dimension[d].len() for d in dims) >= 2**63:
-        return None
-    held = [labels_by_dimension[d] for d in dims]
-    of_labels = [
-        pl.col(d).replace_strict(labels, pl.int_range(labels.len(), dtype=pl.UInt64, eager=True), default=None)
-        for d, labels in zip(dims, held, strict=True)
-    ]
-    return table.select(row_major((labels.len() for labels in held), of_labels, pl.UInt64)).to_series()
-
-
-def _refuse_unknown_labels(
-    name: str,
-    kind: str,
-    table: pl.DataFrame,
-    dims: tuple[str, ...],
-    labels_by_dimension: Mapping[str, pl.Series],
-    positions: pl.Series | None,
-) -> None:
-    """Refuse the first of *dims* holding a label it does not have; positions without a null prove there is none."""
-    read = [d for d in dims if d in labels_by_dimension]
-    if not read or (positions is not None and not positions.null_count()):
-        return
-    all_known = table.select(_is_label(d, labels_by_dimension[d]).all().alias(d) for d in read).row(0, named=True)
-    dim = next((d for d in read if not all_known[d]), None)
-    if dim is None:
-        return
-    labels = labels_by_dimension[dim]
-    unknown = table.filter(~_is_label(dim, labels)).select(pl.col(dim).unique())[dim].to_list()
-    shown = ', '.join(repr(s) for s in unknown[:5])
-    more = f' (and {len(unknown) - 5} more)' if len(unknown) > 5 else ''
-    raise DataError(
-        f"{kind} '{name}' has label(s) in dimension '{dim}' that are not labels "
-        f'of it: {shown}{more}.\n'
-        f'  {dim} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-        f'A missing row means no value there, but a label the dimension does not have is a '
-        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-        f'as absent. Fix the label, or add it to the labels of {dim}.'
-    )
-
-
-def _refuse_repeated_coordinates(
-    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], positions: pl.Series | None
-) -> None:
-    """Refuse a coordinate that has more than one row, naming the first three."""
-    repeated = table.select(dims).is_duplicated().any() if positions is None else positions.n_unique() < table.height
-    if not repeated:
-        return
-    duplicated = table.group_by(dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
-    shown = '; '.join(
-        f'{coordinate_text({d: row[d] for d in dims})} ({row["#rows"]} rows)'
-        for row in duplicated.iter_rows(named=True)
-    )
-    raise DataError(
-        f"{kind} '{name}' has more than one row for a coordinate: {shown}. "
-        f'It holds one value per coordinate, so which value applies is undefined — '
-        f'aggregate the source to one row per {list(dims)} before attaching it.'
-    )
-
-
-def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
-    """Whether each row's *dim* is one of *labels*: false for a null, which ``is_in`` leaves null and ``all`` skips."""
-    return pl.col(dim).is_in(labels.implode()).fill_null(False)
+def _refuse_rows_over_no_dimension(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:
+    """Refuse a parameter over no dimension that holds more than its one value, or none where it refuses that."""
+    if not p.dims and (table.height > 1 or (table.height == 0 and p.missing == 'refused')):
+        raise DataError(
+            f"{kind} '{name}' is declared with no dimensions, which means one value "
+            f'broadcast everywhere — but its source has {table.height} rows. '
+            f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
+            f'`missing:` to say what no row means.'
+        )
 
 
 def _refuse_absent_values(name: str, p: Parameter, table: pl.DataFrame, kind: str) -> None:

@@ -24,14 +24,13 @@ import polars as pl
 from mathspec import to_spec
 
 import specsolve as sps
+from specsolve._api import attach_sources
 from specsolve._clock import untimed
 from specsolve._engine import readback
 from specsolve._engine.assembly import Measured, build
-from specsolve._engine.attaching import attach
 from specsolve._names import COL
 from specsolve._sinks import WRITERS
 from specsolve._sinks.highs import Highs
-from specsolve._sources import tidy_sources
 
 if TYPE_CHECKING:
     from mathspec.spec import Spec
@@ -149,7 +148,7 @@ def model_tables(program: Any) -> BuiltModel:
     program, and the engine assembles the model from them.
     """
     banner(4, 'plan + data -> the model tables', '_engine/assembly.py')
-    built = build(program, attach(program, tidy_sources(program, SOURCES)), Measured(), untimed)
+    built = build(program, attach_sources(program, SOURCES)[1], Measured(), untimed)
     tables = built.tables
     for name, table in (
         ('cols', tables.cols),

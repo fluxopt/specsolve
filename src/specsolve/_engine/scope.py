@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from specsolve._dimensions import row_major
+from specsolve._attached import row_major
 from specsolve._names import LABEL, POSITION, VALUE
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from mathspec import program
     from polars._typing import JoinStrategy, MaintainOrderJoin
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
     from specsolve._engine.indices import Indexed
     from specsolve._engine.terms import Term
 

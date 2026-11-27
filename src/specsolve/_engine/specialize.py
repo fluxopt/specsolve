@@ -26,7 +26,7 @@ from specsolve._engine.scope import Scope
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
 
 
 def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:

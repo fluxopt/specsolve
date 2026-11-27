@@ -22,7 +22,7 @@ from specsolve.errors import DataError
 if TYPE_CHECKING:
     from mathspec.program import Assumption, Program
 
-    from specsolve._engine.attaching import AttachedSources
+    from specsolve._attached import AttachedSources
 
 
 def check_assumptions(program: Program, attached: AttachedSources) -> None:

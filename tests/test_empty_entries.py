@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import _sources
+from specsolve import _encoding
 from specsolve._engine import assumptions as _assumptions
 from specsolve._engine import conditions, indices, specialize
 from specsolve._engine import queries as queries_module
@@ -328,9 +328,9 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     calls = []
     real = _api.attach
 
-    def counted(program, sources):
+    def counted(*args):
         calls.append(1)
-        return real(program, sources)
+        return real(*args)
 
     monkeypatch.setattr(_api, 'attach', counted)
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
@@ -391,13 +391,13 @@ def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table
 def test_a_parameter_table_with_no_row_is_not_checked_for_its_coordinates(monkeypatch):
     """`flag` over `g` and `on` over `g` and `e` arrive with no row, so there is no coordinate of theirs to refuse; `cap` over `g` has rows."""
     checked = []
-    real = _sources._coordinate_positions
+    real = _encoding._coordinate_positions
 
     def counted(dims, *args):
         checked.append(dims)
         return real(dims, *args)
 
-    monkeypatch.setattr(_sources, '_coordinate_positions', counted)
+    monkeypatch.setattr(_encoding, '_coordinate_positions', counted)
     sps.build(TABLED_SPEC, TABLED_SOURCES).close()
     assert checked == [('g',)], f'the coordinates of tables over {checked} were checked, where only cap has a row'
 

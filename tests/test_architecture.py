@@ -79,7 +79,7 @@ def _imported(
 
 
 #: The relational lane, fenced as one by hard rule 2: the engine, the sinks, and the modules both read.
-LANE = frozenset({'_answer', '_clock', '_collect', '_dimensions', '_engine', '_names', '_parquet', '_sinks'})
+LANE = frozenset({'_answer', '_clock', '_collect', '_attached', '_engine', '_names', '_parquet', '_sinks'})
 
 
 def _lane_modules() -> list[Path]:

@@ -232,6 +232,7 @@ STEPS = [
     pytest.param([(_api, 'as_spec')], 'load', id='the spec read'),
     pytest.param([(_api, 'as_program')], 'load', id='the program compiled'),
     pytest.param([(_api, 'tidy_sources')], 'tidy', id='the sources read'),
+    pytest.param([(_api, 'encoded')], 'attach', id='the sources encoded'),
     pytest.param([(attaching, 'check_assumptions')], 'attach', id='the assumptions checked'),
     pytest.param([(_api, 'attach')], 'attach', id='the sources attached'),
     pytest.param([(assembly, 'short_parameters')], 'build', id='the sparse parameters counted'),

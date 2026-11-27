@@ -431,7 +431,7 @@ class TestWhatBindRefusesAndWhatItTakes:
             assert result.objective == pytest.approx(15.0)
 
         # the check the column belongs to still catches its own case
-        doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
+        doubled = {'n': [1, 2], 'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
         with pytest.raises(DataError, match="parameter 'cost'"):
             sps.build(spec, doubled)
 
@@ -830,6 +830,7 @@ class TestTheIndexSpace:
         data = {
             'cap': pl.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 1.0]}),
             'line': pl.DataFrame({'line': ['l1', 'l2']}),
+            'bus': ['b1', 'b2'],
             'from': pl.DataFrame({'line': ['l1', 'l1', 'l2', 'l2'], 'bus': ['b1', 'b2', 'b1', 'b2']}),
             'to': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['b2', 'b1']}),
         }

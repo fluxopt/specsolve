@@ -29,10 +29,11 @@ flowchart TB
 
     SPEC -->|"the entries to attach against"| SRC
     SRC["<b>_sources.py</b> — flat<br/>data → the tidy tables, by name<br/><i>tidy_sources, the one function both lanes read data through</i>"]
+    SRC --> ENC["<b>_encoding.py</b> — flat<br/>the tidy tables in their dimensions' own types<br/><i>labels known, no coordinate twice, no row refused missing</i>"]
 
     PLAN -->|"outside the program:<br/>LanguageError naming the construct"| ERR["load error<br/>(no fallback)"]
     PLAN -->|"the program"| QUERIES
-    SRC --> ATTACH
+    ENC --> ATTACH
     PLAN -->|"the program, the same one"| BUILD
     SRC --> LOAD
 
@@ -41,7 +42,7 @@ flowchart TB
         subgraph ENG["_engine/ — what the contract around it is written against"]
             direction TB
             QUERIES["queries.py<br/>program → lazy queries · reads nothing"] --> ENGINE
-            ATTACH["attaching.py<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
+            ATTACH["attaching.py<br/>fill · settle · assume<br/>→ AttachedSources, frozen"] --> SPECIALIZE["specialize.py<br/>what the data already settles"]
             SPECIALIZE --> ENGINE["assembly.py + indices.py<br/>assemble the model tables"]
         end
         ENG --> TABLES["_sinks/tables.py<br/>cols · obj · rows · A · sos"]
@@ -72,7 +73,7 @@ flowchart TB
     class LIN laneE
     class TS laneT
     class PLAN waist
-    class SRC flat
+    class SRC,ENC flat
     class DATA data
     class ANS,MODEL out
 ```
@@ -82,10 +83,17 @@ flowchart TB
 - **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
   accepts into tidy polars tables, and refuses a source that is not one.
-- **Data reaches a build through one more.** `attaching.attach` takes those
-  tables, and a build and a read take nothing but what it returns. It ends with
-  the check of a spec's assumptions (`_engine/assumptions.py`), which is the
-  only place they are checked: the linopy lane calls it too.
+- **Data reaches a build through one function, in seven steps.**
+  `_api.attach_sources` reads a caller's sources and returns them twice: as
+  the tidy tables, and as a build reads them. `tidy_sources` reads each
+  source and holds it to its shape. `_encoding.encoded` turns each label into
+  its dimension's own type and holds each table to its content: every label
+  one its dimension has, no coordinate twice, and a row wherever the spec
+  refuses to lack one. `attaching.attach` fills the missing rows a divisor
+  reads, settles the conditions the data decides, and checks the spec's
+  assumptions (`_engine/assumptions.py`). The first two need only what the
+  spec declares and sit outside the engine. The last needs the program's
+  expressions and conditions. The linopy lane calls `attach_sources` too.
 - **One function decides what either lane builds.** `_inputs.as_program`, which
   every verb compiles a spec through, returns a `Program` or raises
   `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
@@ -109,8 +117,8 @@ slows each step to find it in its own phase.
 | phase | lapped in |
 | --- | --- |
 | `load` | `Model.__init__` |
-| `tidy` | `Model._fill` |
-| `attach` | `Model._fill` |
+| `tidy` | `_sources.tidy_sources`: `read`, `shape` |
+| `attach` | `_encoding.encoded`: `encode`, `content`; `attaching.attach`: `fill`, `settle`, `assume` |
 | `build` | `assembly.build` |
 | `handoff` | `Model._handoff`; `Model._fill` for the held solver's digest |
 | `solve` | `Model.solve` |
@@ -246,14 +254,15 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_api.py` | the functions that take a spec, and `Model`, which holds a build and its solver and runs the lifecycle |
 | `_clock.py` | the clock a model's life is timed on: its laps, its runs, and the solves each run took |
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
-| `_sources.py` | `tidy_sources`: caller data into tidy tables |
+| `_sources.py` | `tidy_sources`: caller data into tidy tables, each held to its shape |
+| `_encoding.py` | `encoded`: the tidy tables in their dimensions' own types, each held to its labels and coordinates |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
 | `_collect.py` | how polars materialises a lazy table |
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_names.py` | the columns specsolve writes beside a spec's own |
-| `_dimensions.py` | a dimension's labels in order, and what turns a label into its position: `Dimension` and the one row-major rule |
+| `_attached.py` | the data a program is built against: `AttachedSources`, a `Dimension` per dimension with what turns a label into its position, and the one row-major rule |
 | `_messages.py` | a wording two modules raise |
 | `_engine/scope.py` | the program, its attached data and the variable tables built so far |
 | `_engine/queries.py` | program → lazy queries |
@@ -262,7 +271,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/conditions.py` | a `where:` condition as a boolean query |
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
 | `_engine/indices.py` | which coordinate gets which solver index |
-| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources`, the one way data reaches a build |
+| `_engine/attaching.py` | what a model makes of its data: missing rows filled, conditions settled, assumptions checked |
 | `_engine/assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the attached data |
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
@@ -283,7 +292,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 
 **The lane imports nothing else from the package but `errors.py` and
 `_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer/`, `_clock.py`,
-`_collect.py`, `_dimensions.py`, `_names.py` and `_parquet.py` (`LANE`). No module imports
+`_collect.py`, `_attached.py`, `_names.py` and `_parquet.py` (`LANE`). No module imports
 linopy, and none imports xarray at module level.
 
 ## Internal names
@@ -324,10 +333,16 @@ The names the code uses for its own parts. The names a caller meets are in
   of a reload.
 
 **Attached sources**
-: The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
-  label column as an `Enum` in declared order. They also hold each settled atom
-  of a `where` or a `cases:` region, read once for the assumptions and the
-  build both.
+: The tidy tables as every query reads them: a `Dimension` per dimension, a
+  column of string labels as an `Enum` in the labels' order. They also hold
+  each settled atom of a `where` or a `cases:` region, read once for the
+  assumptions and the build both (`_attached.py`).
+
+**Shape** and **content**
+: The two halves of what a source is held to. Its shape is its columns, their
+  types and no null, asked of the table as it arrived. Its content is that its
+  labels are its dimensions', that no coordinate has two rows and that none
+  lacks one where the spec refuses that, asked once the labels are encoded.
 
 **Term**, **presence** and **region**
 : One additive term of an expression, over its own dimensions: linear,

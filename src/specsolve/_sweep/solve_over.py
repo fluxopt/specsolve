@@ -28,7 +28,7 @@ import polars as pl
 from specsolve import _parquet as parquet
 from specsolve._answer.outputs import checked_outputs
 from specsolve._answer.records import Metrics, Record
-from specsolve._api import build, check, checked_sources
+from specsolve._api import attach_sources, build, check
 from specsolve._archive_layout import ANSWER_DIR, carried_sources, check_the_target, sweep_archive
 from specsolve._collect import collected
 from specsolve._inputs import as_spec, as_table
@@ -338,8 +338,8 @@ def _archived_sources(
         DataError: As [`build`][] refuses the sources.
     """
     if isinstance(axis, EachWindow):
-        return dict(checked_sources(program, sources))
-    tidied = checked_sources(program, one_slice)
+        return dict(attach_sources(program, sources)[0])
+    tidied, _ = attach_sources(program, one_slice)
     cut = {name: _uncut(program, axis, name, t) for name, t in sources_with_column(sources, axis.dim).items()}
     held = {**tidied, **cut}
     return {name: held[name] for name in sources}
