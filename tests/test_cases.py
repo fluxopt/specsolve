@@ -467,3 +467,151 @@ def test_a_read_through_a_cased_divisor_whose_otherwise_is_missing_zero_is_refus
         pytest.raises(SchemaError, match="the divisor contains 'b', which is declared missing: 0"),
     ):
         result.evaluate('v / e')
+
+
+#: `delayed` claims a unit only where its `delay` is positive, as PyPSA's links
+#: read a port's flow an earlier snapshot only where the port has a delay.
+DELAYED = {
+    'dimensions': {'t': {'dtype': 'int', 'ordered': True}, 'g': {}},
+    'parameters': {'delay': {'dims': ['g'], 'dtype': 'int'}},
+    'variables': {'p': {'dims': ['t', 'g'], 'bounds': {'lower': 0, 'upper': 1}}},
+    'expressions': {
+        'arrival': {
+            'dims': ['t', 'g'],
+            'cases': {'delayed': {'when': 'delay > 0', 'expression': 'shift(p, along=t, offset=1, edge=0)'}},
+            'otherwise': 'p',
+        }
+    },
+    'constraints': {'held': {'dims': ['t', 'g'], 'expression': 'arrival <= 0.5'}},
+    'objective': {'sense': 'maximize', 'expression': 'sum(p)'},
+}
+
+
+@pytest.mark.parametrize(
+    ('delay', 'terms', 'objective', 'reads'),
+    [
+        pytest.param([0, 0], 1, 4.0, 'every p is held to 0.5', id='a-region-that-claims-no-unit-builds-no-term'),
+        pytest.param(
+            [1, 0],
+            2,
+            4.5,
+            'a reads p one step late, so its last p is free up to 1',
+            id='a-region-that-claims-a-unit-builds-its-term',
+        ),
+    ],
+)
+def test_a_region_builds_a_term_only_where_it_claims_a_coordinate(monkeypatch, delay, terms, objective, reads):
+    """PyPSA's spec writes a delayed and a curved arrival for every link port, and most networks claim neither.
+
+    Each term of a region carries presences over the full product of its dimensions,
+    so a region claiming nothing still read that product to cut it away.
+    """
+    from specsolve._engine import queries as queries_module
+
+    built = []
+    expression = queries_module.QueryBuilder.expression
+
+    def spied(self, e, what, **kwargs):
+        terms = expression(self, e, what, **kwargs)
+        if what == "constraint 'held' lhs":
+            built.append(len(terms.linear))
+        return terms
+
+    monkeypatch.setattr(queries_module.QueryBuilder, 'expression', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    with differential(DELAYED, sources) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+    assert built == [terms], f'`held` builds {terms} term(s): one per region that claims a unit'
+
+
+@pytest.mark.parametrize(
+    'solved',
+    [
+        pytest.param(True, id='an-expression-read-from-a-solve'),
+        pytest.param(False, id='a-calculation-evaluated-without-a-solve'),
+    ],
+)
+def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solved):
+    """`flat` claims every step, so `otherwise` claims none, and `otherwise` is the one region over `g`.
+
+    A build places each term on a row by its own dimensions, so a region that claims
+    nothing can be left out of it. A read takes its columns from the terms it
+    is given, and with `otherwise` left out it came back over `h` alone, one
+    value where the expression declares two.
+    """
+    spec = {
+        'dimensions': {'g': {}, 'h': {'dtype': 'int', 'ordered': True}},
+        'parameters': {'on': {'dims': ['h'], 'dtype': 'bool'}, 'w': {'dims': ['h', 'g']}},
+        'expressions': {
+            'e': {
+                'dims': ['g', 'h'],
+                'cases': {'flat': {'when': 'on', 'expression': '0.5'}},
+                'otherwise': 'v' if solved else 'w',
+            }
+        },
+    }
+    if solved:
+        spec['variables'] = {'v': {'dims': ['h', 'g'], 'bounds': {'lower': 0, 'upper': 5}}}
+        spec['objective'] = {'sense': 'maximize', 'expression': 'sum(v)'}
+    sources = _tables(
+        {
+            'g': ['a', 'b'],
+            'h': [7],
+            'on': {'h': [7], 'value': [True]},
+            'w': {'h': [7, 7], 'g': ['a', 'b'], 'value': [1.0, 2.0]},
+        }
+    )
+    read = sps.solve(spec, sources).evaluate('e') if solved else sps.evaluate(spec, sources, 'e')
+    assert read.columns == ['g', 'h', 'value'], '`e` is declared over `g` and `h`, whichever region claims a coordinate'
+    assert read.sort('g').get_column('value').to_list() == [0.5, 0.5], '`flat` is worth 0.5 at each of the two units'
+
+
+@pytest.mark.parametrize(
+    ('delay', 'objective', 'reads'),
+    [
+        pytest.param([0, 0], 4.0, 'no unit is delayed, so every p is held to 0.5', id='settled-false'),
+        pytest.param(
+            [1, 1], 5.0, 'every unit reads p one step late, so each last p is free up to 1', id='settled-true'
+        ),
+    ],
+)
+def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkeypatch, delay, objective, reads):
+    """`delay > 0` holds at no unit, or at every unit, and either is read once for the build rather than per region."""
+    from specsolve._engine import queries as queries_module
+
+    read, real = [], queries_module.narrowed
+
+    def spied(scope, dims, where):
+        read.append(tuple(dims))
+        return real(scope, dims, where)
+
+    monkeypatch.setattr(queries_module, 'narrowed', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    with differential(DELAYED, sources) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+    assert not read, f'a region whose condition the data settles was read over {read}'
+
+
+@pytest.mark.parametrize('delay', [pytest.param([0, 0], id='settled-false'), pytest.param([1, 1], id='settled-true')])
+def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_reads(monkeypatch, delay):
+    """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to build.
+
+    The false one leaves, and the true one, left alone, stands for the `cases:`. Either kept builds the same model
+    over a filter no query needs, which only this sees.
+    """
+    from mathspec import program
+
+    from specsolve._engine import assembly as assembly_module
+
+    programs, real = [], assembly_module.Assembly.__init__
+
+    def spied(self, compiled, *args):
+        programs.append(compiled)
+        real(self, compiled, *args)
+
+    monkeypatch.setattr(assembly_module.Assembly, '__init__', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    sps.build(DELAYED, sources).close()
+    held = programs[0].constraints['held']
+    left = [e for e in program.walk(held.lhs, held.rhs) if isinstance(e, program.Cases)]
+    assert not left, f'the build reads {left}, where the data settled every region of it'
