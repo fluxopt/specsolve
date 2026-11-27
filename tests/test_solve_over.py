@@ -1674,7 +1674,6 @@ def test_a_resume_checks_the_layout_of_the_spec_and_sources_it_is_extending(tmp_
     assert json.loads(stamp.read_text()) == {'layout': 99}, 'and the stamp it was refused over is left as it was found'
 
 
-@pytest.mark.xfail(strict=True, reason='the archive is written before the first slice checks the assumptions')
 @pytest.mark.parametrize(
     ('spec', 'sources', 'axis'),
     [
@@ -1685,13 +1684,14 @@ def test_a_resume_checks_the_layout_of_the_spec_and_sources_it_is_extending(tmp_
 def test_a_sweep_its_assumptions_refuse_leaves_no_archive_behind(spec, sources, axis, tmp_path) -> None:
     """The data the archive is written from is checked against the assumptions before anything lands.
 
-    A directory holding the refused call's inputs would refuse the corrected call
-    as a sweep solved from other inputs.
+    The archive's spec, sources and axis were written first and the first slice
+    refused the data after, so the directory held the refused call's inputs and
+    refused the corrected call as a sweep solved from other inputs.
     """
     assumed = {**spec, 'assumptions': {'load_is_non_negative': 'load >= 0'}}
     good = sources()
-    first_row_negative = pl.when(pl.int_range(pl.len()) == 0).then(-1.0).otherwise(pl.col('value')).alias('value')
-    bad = {**good, 'load': good['load'].with_columns(first_row_negative)}
+    negative_at_the_start = pl.when(pl.col('snapshot') == 0).then(-1.0).otherwise(pl.col('value')).alias('value')
+    bad = {**good, 'load': good['load'].with_columns(negative_at_the_start)}
     out = tmp_path / 'sweep'
 
     with pytest.raises(sps.errors.DataError, match="assumption 'load_is_non_negative'"):
