@@ -9,12 +9,14 @@ solves cold, and `metrics().solver_instances` says which happened.
 from __future__ import annotations
 
 import gc
+import importlib
 import weakref
 from dataclasses import replace
 from typing import Any, NamedTuple
 
 import polars as pl
 import pytest
+import yaml
 from mathspec import to_spec
 from polars.testing import assert_frame_equal
 
@@ -361,18 +363,18 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
     """
     if port['name'] in TOO_SLOW_TO_WALK:
         pytest.skip(f'{port["name"]} is too slow to walk — see TOO_SLOW_TO_WALK')
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
     spec = expanded(port['spec'])
     given = _declared(port_sources(port['name']), spec.program)
-    real = engine_module.spliced_model
+    real = _api.spliced_model
     took: list[str] = []
 
     def spy(built: Any, attached: Any, changed: Any, measured: Any, lap: Any) -> Any:
         took.extend(changed)
         return real(built, attached, changed, measured, lap)
 
-    monkeypatch.setattr(engine_module, 'spliced_model', spy)
+    monkeypatch.setattr(_api, 'spliced_model', spy)
     with sps.build(spec, given) as model:
         for name, value in given.items():
             if not (isinstance(value, pl.DataFrame) and value.schema.get('value') == pl.Float64):
@@ -385,7 +387,7 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
             with reference:
                 model.update(change)
                 where = f'{port["name"]} {name}'
-                _same_tables(model._engine._model.tables, reference._engine._model.tables, where)
+                _same_tables(model._built.tables, reference._built.tables, where)
                 _same_diagnostics(model, reference, where)
             model.update({name: value})
 
@@ -467,7 +469,7 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
     tables are a fresh build's. A coefficient falling to zero leaves the
     matrix, on the old indices, and the coefficients after it move up.
     """
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
     spec = override(ROLES, **entries)
     new = {
@@ -476,13 +478,13 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
         else value
         for name, value in change.items()
     }
-    real = engine_module.spliced_model
+    real = _api.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(_api, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | new) as reference:
         model.solve()
         model.update(new)
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, str(change))
+        _same_tables(model._built.tables, reference._built.tables, str(change))
         assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
         assert bool(took) is spliced, f'the update {"skipped" if took else "ran"} the build'
         assert model.metrics().solver_instances == loads, (
@@ -492,16 +494,16 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
 
 def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
     """A quadratic row goes to a sink whole, coefficients and all, so its coefficients are not read again."""
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
     spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p * p, over=generator) <= demand'})
     change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 2.0]))}
-    real = engine_module.spliced_model
+    real = _api.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(_api, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
         model.update(change)
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'eff on a quadratic row')
+        _same_tables(model._built.tables, reference._built.tables, 'eff on a quadratic row')
     assert not took, 'a quadratic row was read again on the old indices'
 
 
@@ -572,14 +574,14 @@ def test_a_parameter_that_picks_which_coefficients_exist_is_built_again(monkeypa
     Neither is a scaling of a variable the walk of products can see, so each
     has its own branch; either one missed reads new numbers onto old indices.
     """
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
-    real = engine_module.spliced_model
+    real = _api.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(_api, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, data) as model, sps.build(spec, data | change) as reference:
         model.update(change)
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, str(change))
+        _same_tables(model._built.tables, reference._built.tables, str(change))
     assert not took, 'a parameter that decides which coefficients exist was read again on the old indices'
 
 
@@ -589,17 +591,17 @@ def test_as_many_coordinates_but_other_ones_build_in_full(monkeypatch):
     `cap` declares `missing: absent`, so a generator it has no row for has no
     upper bound; the new table names `b` where the old named `a`.
     """
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
     spec = override(ROLES, **{'parameters.cap.missing': 'absent'})
     before = ROLE_DATA | {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})}
     change = {'cap': pl.DataFrame({'generator': ['b'], 'value': [8.0]})}
-    real = engine_module.spliced_model
+    real = _api.spliced_model
     took: list[bool] = []
-    monkeypatch.setattr(engine_module, 'spliced_model', lambda *args: took.append(True) or real(*args))
+    monkeypatch.setattr(_api, 'spliced_model', lambda *args: took.append(True) or real(*args))
     with sps.build(spec, before) as model, sps.build(spec, before | change) as reference:
         model.update(change)
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'cap moved to b')
+        _same_tables(model._built.tables, reference._built.tables, 'cap moved to b')
     assert not took, 'other coordinates were read again on the old indices'
 
 
@@ -659,7 +661,7 @@ def test_only_a_update_that_moves_a_solver_index_loads_the_solver_again(dispatch
 def _tables(spec: Any) -> Any:
     """*model*'s solver tables, read off it built on the reach data."""
     with sps.build(spec, reach_sources()) as built:
-        return built._engine._model.tables
+        return built._built.tables
 
 
 #: The three fields of the digest **no rung above can reach**: a variable's
@@ -764,7 +766,7 @@ def test_a_rebuild_leaves_the_held_solver_pinning_none_of_the_old_model(model):
     the new model's too, since only numbers changed.
     """
     model.solve()
-    released = weakref.ref(model._engine._model.tables.rows)
+    released = weakref.ref(model._built.tables.rows)
     model.update({'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [12.0, 22.0, 32.0, 42.0]})})
     gc.collect()
     assert released() is None, "the rebuilt-over model's rows are still reachable, so the solver kept a whole model"
@@ -881,30 +883,60 @@ def test_a_dimension_s_labels_update_as_a_source(model):
         pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='a dimension and the parameters over it'),
     ],
 )
-def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked):
-    """A parameter whose own source and whose dimensions' labels an update leaves alone is not read or checked again."""
-    from specsolve import _sources
-
-    real = _sources._checked_parameter
+@pytest.mark.parametrize(
+    ('module', 'check'),
+    [
+        pytest.param('_sources', 'checked_parameter', id='shape'),
+        pytest.param('_encoding', '_refuse_unknown_or_repeated_coordinates', id='content'),
+    ],
+)
+def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked, module, check):
+    """A parameter whose own source and whose dimensions' labels an update leaves alone is neither shaped nor checked again."""
+    held = importlib.import_module(f'specsolve.{module}')
+    real = getattr(held, check)
     seen: list[str] = []
 
     def spy(name, *args, **kwargs):
         seen.append(name)
         return real(name, *args, **kwargs)
 
-    monkeypatch.setattr(_sources, '_checked_parameter', spy)
+    monkeypatch.setattr(held, check, spy)
     model.update(change)
     assert set(seen) == checked, f'the update checked {sorted(seen)} again'
 
 
 def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over_it(model):
-    """A parameter kept from the last build is still checked against the labels the update changed.
+    """A parameter is checked again against a dimension the update changed, though its own source is unchanged.
 
     `load` is not in the update, but its rows at snapshot 3 now name a label
     the dimension no longer has.
     """
     with pytest.raises(sps.errors.DataError, match="parameter 'load' has label"):
         model.update({'snapshot': [0, 1, 2]})
+
+
+def test_an_update_keeps_a_filled_parameter_with_the_coordinates_its_data_gave(dispatch_yaml):
+    """A kept parameter that a build filled still tells the rows its data gave from the ones it filled.
+
+    `derate` declares `missing: 1` and gives a row for `gas` alone; the
+    constraint asks `where: derate`, so only `gas` is capped, before the update
+    of `load` and after it.
+    """
+    spec = yaml.safe_load(dispatch_yaml.read_text())
+    spec['parameters']['derate'] = {'dims': ['generator'], 'missing': 1}
+    spec['constraints']['derated'] = {
+        'dims': ['snapshot', 'generator'],
+        'where': 'derate',
+        'expression': 'p <= derate * p_max',
+    }
+    data = sources() | COORDINATES | {'derate': pl.DataFrame({'generator': ['gas'], 'value': [0.5]})}
+    load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [41.0, 81.0, 56.0, 96.0]})
+    with sps.build(spec, data) as model:
+        rows = model.metrics().rows
+        model.update({'load': load})
+        assert model.metrics().rows == rows, 'the same rows, derated for gas alone'
+        with sps.build(spec, data | {'load': load}) as fresh:
+            assert model.solve().objective == pytest.approx(fresh.solve().objective), 'as a fresh build answers'
 
 
 def test_a_update_can_grow_a_dimension():
@@ -991,9 +1023,8 @@ def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
     """`model.update(x)` answers what a fresh build of every source given so far answers.
 
     The refused `load` is still the model's source, so an update of `cost`
-    alone is refused for it, as a fresh build of the same sources is. `tidy_sources`
-    refused `load` before the last good tables were replaced, and the
-    next update kept that good `load` and built, until a failure forgot them.
+    alone is refused for it, as a fresh build of the same sources is: a
+    refused update leaves no build to keep a parameter from.
     """
     with pytest.raises(sps.errors.DataError):
         model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
@@ -1005,28 +1036,26 @@ def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_ag
     """`model.update(x)` answers what a fresh build of every source given so far answers.
 
     The first update of `load` stops while it chooses what to keep, after the
-    new `load` is attached. The next update, of `cost` alone, must still read
-    that `load` rather than keep the tables of the build before it. The choice
-    ran before the cleanup that forgets the last build's tables, so the next
-    update kept the `load` built before the attached one.
+    new `load` is among the model's sources. The next update, of `cost` alone,
+    must still read that `load` rather than keep the one built before it.
     """
-    import specsolve._sources as sources_module
+    from specsolve import _api
 
     load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
     cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = sources_module._kept
+    choose = _api._unchanged
 
     def interrupted(*args):
-        monkeypatch.setattr(sources_module, '_kept', choose)
+        monkeypatch.setattr(_api, '_unchanged', choose)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(sources_module, '_kept', interrupted)
+    monkeypatch.setattr(_api, '_unchanged', interrupted)
     with pytest.raises(KeyboardInterrupt):
         model.update({'load': load})
     model.update({'cost': cost})
     with sps.build(dispatch_yaml, sources() | COORDINATES | {'load': load, 'cost': cost}) as fresh:
         expected = fresh.solve().objective
-    assert model.solve().objective == pytest.approx(expected), 'the attached load, not the one built before it'
+    assert model.solve().objective == pytest.approx(expected), 'the load given last, not the one built before it'
 
 
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
@@ -1063,15 +1092,13 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
     given = reach_sources()
     with sps.build(REACH, given) as model:
         model.solve()
-        before = model._engine._model.tables.obj.height
+        before = model._built.tables.obj.height
         assert model.metrics().solver_instances == 1, 'the first solve has nothing loaded to keep'
 
         zeroed = pl.DataFrame({'plant': PLANTS, 'value': [0.0, 2.0, 3.0, 4.0]})
         updated = model.update({'cost': zeroed}).solve()
 
-        assert model._engine._model.tables.obj.height == before - 1, (
-            'the zero cost should have left the objective table'
-        )
+        assert model._built.tables.obj.height == before - 1, 'the zero cost should have left the objective table'
         assert model.metrics().solver_instances == 1, 'a cost is pushed, so a cost falling to zero may not reload'
 
     with sps.build(REACH, {**given, 'cost': zeroed}) as fresh:
@@ -1123,7 +1150,7 @@ def test_a_splice_reads_nothing_for_an_entry_without_an_index(monkeypatch):
         monkeypatch.setattr(assembly_module.Assembly, '_terms', spied_terms)
         monkeypatch.setattr(assembly_module.Assembly, '_columns', spied_columns)
         model.update({'floor': _idle_data(0.5, 9.0)['floor'], 'ceiling': _idle_data(0.5, 9.0)['ceiling']})
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'floor and ceiling')
+        _same_tables(model._built.tables, reference._built.tables, 'floor and ceiling')
     assert not {'idle', 'unmet'} & set(read), f'the splice read {sorted(set(read))}, which hold no index'
 
 
@@ -1156,4 +1183,4 @@ def test_a_flag_the_build_settled_builds_again_when_it_changes(overrides):
     off = {'on': ROLE_DATA['on'].with_columns(pl.Series('value', [0.0, 0.0]))}
     with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | off) as reference:
         model.update(off)
-        _same_tables(model._engine._model.tables, reference._engine._model.tables, 'on switched off')
+        _same_tables(model._built.tables, reference._built.tables, 'on switched off')

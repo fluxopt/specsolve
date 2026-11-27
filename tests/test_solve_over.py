@@ -26,11 +26,11 @@ from mathspec import to_spec
 
 import specsolve as sps
 from specsolve import _archive_layout as archive_layout
-from specsolve import _solve_over as driver
-from specsolve import _sweep as sweep_module
-from specsolve._axes import CarryRule, Slice, as_built, axis_from
+from specsolve._answer.records import Metrics, Provenance, Record
 from specsolve._inputs import as_program
-from specsolve._records import Metrics, Provenance, Record
+from specsolve._sweep import solve_over as driver
+from specsolve._sweep import sweep as sweep_module
+from specsolve._sweep.axes import CarryRule, Slice, as_built, axis_from
 from tests.conftest import DISPATCH_SPEC, override
 
 # ---------------------------------------------------------------------------
@@ -1672,6 +1672,32 @@ def test_a_resume_checks_the_layout_of_the_spec_and_sources_it_is_extending(tmp_
     with pytest.raises(sps.errors.LayoutError, match='spec and sources are in layout 99'):
         sps.solve_over(DISPATCH, scenario_sources(), sps.EachLabel('scenario'), archive=out)
     assert json.loads(stamp.read_text()) == {'layout': 99}, 'and the stamp it was refused over is left as it was found'
+
+
+@pytest.mark.parametrize(
+    ('spec', 'sources', 'axis'),
+    [
+        pytest.param(WINDOW, span_sources, WINDOW_AXIS, id='each-window-over-the-uncut-sources'),
+        pytest.param(DISPATCH, scenario_sources, sps.EachLabel('scenario'), id='each-label-over-the-first-slice'),
+    ],
+)
+def test_a_sweep_its_assumptions_refuse_leaves_no_archive_behind(spec, sources, axis, tmp_path) -> None:
+    """The data the archive is written from is checked against the assumptions before anything lands.
+
+    The archive's spec, sources and axis were written first and the first slice
+    refused the data after, so the directory held the refused call's inputs and
+    refused the corrected call as a sweep solved from other inputs.
+    """
+    assumed = {**spec, 'assumptions': {'load_is_non_negative': 'load >= 0'}}
+    good = sources()
+    negative_at_the_start = pl.when(pl.col('snapshot') == 0).then(-1.0).otherwise(pl.col('value')).alias('value')
+    bad = {**good, 'load': good['load'].with_columns(negative_at_the_start)}
+    out = tmp_path / 'sweep'
+
+    with pytest.raises(sps.errors.DataError, match="assumption 'load_is_non_negative'"):
+        sps.solve_over(assumed, bad, axis, archive=out)
+    assert not out.exists(), 'a refused sweep writes nothing where its archive would go'
+    sps.solve_over(assumed, good, axis, archive=out)
 
 
 class _CrashError(Exception):

@@ -80,8 +80,8 @@ print(model.timings())
 - **`run` counts the results handed back before the lap.** Run 0 ends with
   the first result.
 - **`step` says what a lap did inside its phase, and `entry` names the entry
-  it built.** The tidy, the build and the handoff have steps. Elsewhere both are
-  null.
+  it built.** The tidy, the attach, the build and the handoff have steps.
+  Elsewhere both are null.
 - **The rows add up to the metrics.** A phase's rows sum to its clock in
   `model.metrics()`, and a run's rows to the `metrics` of the result that
   ends it.
@@ -95,10 +95,17 @@ print(model.timings().filter(phase='tidy').select('step', 'entry', 'seconds'))
 ```
 
 `read` is every path read at once, so one row for all the files. Then each
-`dimension` and `relation` has a row for its labels or its table, and each
-`parameter` a row for its check: no coordinate given twice, and every label one
-of its dimension's. `check` is the refusal that needs every source read: a
-dimension that got no labels.
+dimension, relation and parameter has a `shape` row, for its columns and their
+types. The last `shape` row has no entry: it is the refusal that needs every
+source read, a dimension that got no labels.
+
+The attach has a row per step as well. `encode` turns a table's labels into
+its dimensions' own type, and `content` checks what that shows: every label
+one of its dimension's, no coordinate given twice, and a row wherever the spec
+refuses to lack one. Each relation and parameter has one row of each. `fill`,
+`settle` and `assume` follow, once each: the missing rows a divisor reads
+written in, the conditions the data decides read, and the spec's assumptions
+checked.
 
 ## The entry a build spends
 

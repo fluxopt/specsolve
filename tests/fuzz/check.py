@@ -39,10 +39,7 @@ from mathspec import advice, to_spec, typeset
 from mathspec.errors import MathSpecError
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
-from specsolve._inputs import as_program
 from specsolve._names import COEFF, ROW
-from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, SpecsolveError
 from tests.differential import RTOL, _hold, _table, by_coordinate
 from tests.linopy_lane.loader import OracleCannotBuildError
@@ -53,6 +50,7 @@ if TYPE_CHECKING:
 
     from mathspec.spec import Spec
 
+    from specsolve._engine.assembly import BuiltModel
     from tests.fuzz.generate import Case
 
 #: A value the two lanes read apart by less than this is the same value.
@@ -289,12 +287,10 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
     m = specsolve_linopy.build(spec, dict(sources))
     status, condition = m.solve(solver_name='highs', output_flag=False, io_api='direct', sanitize_zeros=False)
     oracle = float(m.objective.value) if status == 'ok' else math.nan
-    program = as_program(spec)
     findings = []
-    with Engine() as engine:
-        engine.build(program, tidy_sources(program, dict(sources)))
-        result = engine.solve(solver_options={'output_flag': False})
-        diagnostics = engine.metrics()
+    with sps.build(spec, dict(sources)) as relational:
+        result = relational.solve(solver_options={'output_flag': False})
+        diagnostics = relational.metrics()
         if (diagnostics.columns, diagnostics.rows) != (m.nvars, m.ncons):
             findings.append(
                 Finding(
@@ -304,7 +300,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
                 )
             )
         else:
-            findings += _same_matrix(engine, m)
+            findings += _same_matrix(relational._built, m)
         if result.termination_condition != condition:
             if {result.termination_condition, condition} <= {'infeasible', 'infeasible_or_unbounded', 'unbounded'}:
                 return findings, False
@@ -327,7 +323,7 @@ def _solve(spec: Spec, sources: Mapping[str, Any]) -> tuple[list[Finding], bool]
         if all(v.domain == 'continuous' for v in spec.variables.values()):
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'model.lp'
-                engine.write(path)
+                relational.write(path)
                 written = _resolve(path)
             if written is None or not _close(written, oracle):
                 findings.append(
@@ -352,16 +348,16 @@ def _resolve(path: Path) -> float | None:
     return h.getInfo().objective_function_value
 
 
-def _same_matrix(engine: Engine, m: Any) -> list[Finding]:
+def _same_matrix(built: BuiltModel, m: Any) -> list[Finding]:
     """Each constraint's rows as a sorted multiset of rows, each row its sorted coefficients up to sign.
 
     The lanes number rows and columns apart, and may move every term of a row
     to the other side, which negates the row and flips its sense: the objective
     check sees a sense that is wrong, this one the coefficients.
     """
-    tables = engine._model.tables
+    tables = built.tables
     findings = []
-    for constraint, indexed in engine._model.constraints.items():
+    for constraint, indexed in built.constraints.items():
         got = _canonical(tables.matrix_chunk(indexed.start, indexed.start + indexed.height), indexed.height)
         want = _linopy_matrix(m, constraint)
         if len(got) != len(want) or any(

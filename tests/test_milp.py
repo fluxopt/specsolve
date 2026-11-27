@@ -82,13 +82,13 @@ def test_the_highs_solver_takes_integrality_over_the_whole_column_index(commitme
     or in another order reassigns which variables are integral and the
     objective moves. A binary model is the sharp case.
     """
-    tables = commitment_run.engine._model.tables
+    tables = commitment_run.relational._built.tables
     with Highs(tables, None) as sink:
         loaded = sink.run(tables)
     assert loaded.status.is_ok
     assert loaded.objective == pytest.approx(commitment_run.oracle, rel=1e-9)
 
-    held = commitment_run.engine._model.variables['u']
+    held = commitment_run.relational._built.variables['u']
     u = held.share(loaded.primal).to_numpy()
     assert set(np.round(u)) <= {0.0, 1.0}, 'integrality landed on the wrong columns'
 
@@ -113,8 +113,8 @@ def test_cols_vtype_is_an_enum_over_every_declared_domain(commitment_run):
     An Enum refuses a value outside it, so a fourth domain added to the program
     and not reaching the column fails where the column is built.
     """
-    vtype = commitment_run.engine._model.tables.cols.schema['vtype']
-    held = set(commitment_run.engine._model.tables.cols['vtype'].unique().to_list())
+    vtype = commitment_run.relational._built.tables.cols.schema['vtype']
+    held = set(commitment_run.relational._built.tables.cols['vtype'].unique().to_list())
 
     assert isinstance(vtype, pl.Enum), f'vtype is {vtype}, so it stores a word per column'
     assert set(vtype.categories.to_list()) == set(get_args(program.VariableDomain))

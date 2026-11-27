@@ -74,6 +74,17 @@ NO_BASIS = (
 KINDS = ('primal', 'dual', 'expression', *OUTPUT_KINDS)
 
 
+#: What each of the [`KINDS`][] holds one table per, as a message names it.
+ENTRIES: Mapping[str, str] = MappingProxyType(
+    {
+        'primal': 'variable',
+        'dual': 'constraint',
+        'expression': 'named expression',
+        **{kind: carried.per for kind, carried in OUTPUT_KINDS.items()},
+    }
+)
+
+
 def is_output(name: str) -> TypeGuard[Output]:
     """Whether *name* is one of the [`OUTPUTS`][]."""
     return name in OUTPUTS

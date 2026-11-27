@@ -362,7 +362,7 @@ def test_a_solver_this_environment_cannot_run_is_refused_before_the_build(
 
     sources = dispatch_table_inputs
     monkeypatch.setattr(SOLVERS['gurobi'], 'requires', ('a_package_no_environment_has',))
-    monkeypatch.setattr(api.Engine, 'build', lambda *_a, **_k: pytest.fail('the model was built before the refusal'))
+    monkeypatch.setattr(api, 'build_model', lambda *_a, **_k: pytest.fail('the model was built before the refusal'))
 
     with pytest.raises(ModuleNotFoundError, match=r'not installed here.*\[gurobi\] extra'):
         sps.solve(dispatch_yaml, sources, solver_name='gurobi')
@@ -905,7 +905,7 @@ def test_a_result_stays_readable_until_it_is_closed(dispatch_yaml, dispatch_tabl
 
 
 def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatch_table_inputs):
-    """A result reports its own solve, not the engine's latest."""
+    """A result reports its own solve, not the model's latest."""
     key = ['snapshot', 'generator']
     sources = dispatch_table_inputs
     with sps.build(dispatch_yaml, sources) as model:
@@ -913,9 +913,9 @@ def test_a_second_solve_does_not_rewrite_the_first_result(dispatch_yaml, dispatc
         before = first.primal('p').sort(key)
         assert first.is_ok
 
-        built = model._engine._model
+        built = model._built
         negated = replace(built.tables, obj=built.tables.obj.with_columns(-pl.col(COEFF)))
-        model._engine._built = replace(built, tables=negated)
+        model._built = replace(built, tables=negated)
         second = model.solve()
 
         assert not second.primal('p').sort(key).equals(before), 'the second solve really moved'
