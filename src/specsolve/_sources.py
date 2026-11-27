@@ -753,10 +753,7 @@ def _checked_parameter(
     *dimension_labels* holds the labels of each dimension read so far
     ([`_dimension_labels`][]), read once for every table checked against them.
 
-    The collect is the one model-sized materialisation on the way in. A table
-    over dimensions with no row holds no coordinate or value to refuse, so it
-    is checked for its columns' types alone: PyPSA's spec gives most of its
-    parameters such a table.
+    The collect is the one model-sized materialisation on the way in.
 
     Raises:
         DataError: The table lacks a declared dimension or ``value``, holds two rows
@@ -776,9 +773,8 @@ def _checked_parameter(
         table.select(wanted).pipe(collected), owner, _over_datetimes(((d, d) for d in p.dims), sources)
     )
     checked = _typed_as_labels(owner, checked, ((d, d) for d in p.dims), sources)
-    if checked.height or not p.dims:
-        _refuse_unknown_or_repeated_coordinates(name, p, checked, dimension_labels, kind)
-        _refuse_absent_values(name, p, checked, kind)
+    _refuse_unknown_or_repeated_coordinates(name, p, checked, dimension_labels, kind)
+    _refuse_absent_values(name, p, checked, kind)
     _refuse_another_value_dtype(name, p, checked, kind)
     return checked.lazy()
 
@@ -789,7 +785,8 @@ def _refuse_unknown_or_repeated_coordinates(
     """A table of values is a function of its dimensions: one row per coordinate, every label a real one.
 
     Labels are checked against the dimensions whose labels have been read; one
-    still missing is refused once every source is in.
+    still missing is refused once every source is in. A table with no row over
+    its dimensions has neither to check, and is not queried.
     """
     if not p.dims:
         if table.height > 1 or (table.height == 0 and p.missing == 'refused'):
@@ -799,6 +796,8 @@ def _refuse_unknown_or_repeated_coordinates(
                 f'Declare the dimensions it is indexed by, reduce the source to a single row, or declare '
                 f'`missing:` to say what no row means.'
             )
+        return
+    if not table.height:
         return
 
     known = {d: dimension_labels[d] for d in p.dims if d in dimension_labels}

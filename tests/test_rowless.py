@@ -292,14 +292,14 @@ def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table
 
 
 def test_a_parameter_table_with_no_row_is_not_checked_for_its_coordinates(monkeypatch):
-    """`flag` and `on` arrive with no row, so there is no coordinate or value of theirs to refuse; `cap` has rows."""
+    """`flag` over `g` and `on` over `g` and `e` arrive with no row, so there is no coordinate of theirs to refuse; `cap` over `g` has rows."""
     checked = []
-    real = _sources._refuse_unknown_or_repeated_coordinates
+    real = _sources._row_major_positions
 
-    def counted(name, *args):
-        checked.append(name)
-        return real(name, *args)
+    def counted(dims, *args):
+        checked.append(dims)
+        return real(dims, *args)
 
-    monkeypatch.setattr(_sources, '_refuse_unknown_or_repeated_coordinates', counted)
+    monkeypatch.setattr(_sources, '_row_major_positions', counted)
     sps.build(TABLED_SPEC, TABLED_SOURCES).close()
-    assert checked == ['cap'], f'the coordinates of {checked} were checked, where only cap has a row'
+    assert checked == [('g',)], f'the coordinates of tables over {checked} were checked, where only cap has a row'
