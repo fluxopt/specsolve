@@ -322,16 +322,16 @@ def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypa
 
 def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
     """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
-    from specsolve._engine import engine as engine_module
+    from specsolve import _api
 
     calls = []
-    real = engine_module.attach
+    real = _api.attach
 
     def counted(program, sources):
         calls.append(1)
         return real(program, sources)
 
-    monkeypatch.setattr(engine_module, 'attach', counted)
+    monkeypatch.setattr(_api, 'attach', counted)
     monkeypatch.setattr(_assumptions, 'attach', counted)
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()

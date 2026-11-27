@@ -23,7 +23,7 @@ spec: examples/walkthrough/walkthrough.yaml
     )
     ^ frozen dataclasses, no macro, no YAML, no linopy, no engine
 
-[4] plan + data -> the model tables  (_engine/engine.py)
+[4] plan + data -> the model tables  (_engine/assembly.py)
     cols                   18 rows
     obj                     6 rows
     rows                    6 rows

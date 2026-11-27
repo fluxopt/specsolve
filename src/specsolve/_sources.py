@@ -17,6 +17,7 @@ from mathspec.errors import did_you_mean
 from mathspec.program import Parameter
 
 from specsolve._assumptions import validate_assumptions
+from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
@@ -28,8 +29,8 @@ if TYPE_CHECKING:
 
     from mathspec.program import Dimension, Program, Relation
 
+    from specsolve._clock import Lap
     from specsolve._inputs import Label, Source
-    from specsolve._records import Lap, Phase, Step
 
 
 def attachable(program: Program) -> dict[str, Parameter | Dimension | Relation]:
@@ -75,7 +76,7 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             ``assumptions:`` entry the data does not hold, a ``piecewise:``
             method's conditions on its breakpoints among them.
     """
-    sources = tidied(program, data, _untimed)
+    sources = tidied(program, data, untimed)
     validate_assumptions(program, sources)
     return sources
 
@@ -90,10 +91,6 @@ def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, 
     """
     refuse_unknown_sources(program, data)
     return _read(program, data, lap)
-
-
-def _untimed(phase: Phase, step: Step | None, entry: str | None) -> None:
-    """A lap no engine clocks: [`tidy_sources`][] read outside a model."""
 
 
 @in_memory()

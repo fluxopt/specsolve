@@ -25,9 +25,6 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine.engine import Engine
-from specsolve._inputs import as_program
-from specsolve._sources import tidy_sources
 from specsolve.errors import DataError
 from tests.conftest import schema_of, solve_written_file
 from tests.oracle import linopy, specsolve_linopy, xr
@@ -35,8 +32,8 @@ from tests.oracle import linopy, specsolve_linopy, xr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
-    from specsolve._engine.engine import Result
     from specsolve._outputs import Output
+    from specsolve.types import Model, Result
 
 #: Both lanes hand the same numbers to the same solver, so they agree to solver precision.
 RTOL = 1e-9
@@ -63,7 +60,9 @@ class Agreement:
     result: Result
     """The relational solution; live until the ``with`` block exits."""
 
-    engine: Engine
+    relational: Model
+    """The relational model, for what it built."""
+
     lp: Path | None = None
     """The written LP file, when ``lp=True`` — already checked to agree."""
 
@@ -101,25 +100,23 @@ def differential(
                 "the linopy lane's model is infeasible or unbounded — fix the data, not the tolerance"
             )
 
-        program = as_program(model)
-        with Engine() as engine:
-            engine.build(program, tidy_sources(program, dict(sources)))
-            result = engine.solve(outputs=outputs)
+        with sps.build(model, dict(sources)) as relational:
+            result = relational.solve(outputs=outputs)
             assert result.is_ok, f'the relational lane reached no solution: {result.status}'
             assert result.objective == pytest.approx(oracle, rel=RTOL), (
                 f'the lanes disagree on the objective — relational {result.objective}, linopy {oracle}'
             )
-            _same_shape(engine.metrics(), m)
+            _same_shape(relational.metrics(), m)
 
             lp_path = None
             if lp:
                 lp_path = work / 'model.lp'
-                engine.write(lp_path)
+                relational.write(lp_path)
                 assert solve_written_file(lp_path) == pytest.approx(oracle, rel=RTOL), (
                     f'the written {lp_path.name} re-solves to a different objective than both lanes reached'
                 )
 
-            yield Agreement(oracle=oracle, model=m, result=result, engine=engine, lp=lp_path)
+            yield Agreement(oracle=oracle, model=m, result=result, relational=relational, lp=lp_path)
 
 
 @contextmanager

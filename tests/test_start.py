@@ -46,7 +46,7 @@ def solved(spec: dict, given: dict, solver_name: str, **solve: Any) -> tuple[Res
     """One solve of *spec* on a fresh model, and the simplex iterations it took."""
     with sps.build(spec, given) as model:
         answer = model.solve(solver_name=solver_name, **solve)
-        return answer, SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        return answer, SIMPLEX_ITERATIONS[solver_name](model._solver)
 
 
 def test_an_unchanged_model_started_from_its_own_answer_does_no_simplex_work(solver_name: str) -> None:

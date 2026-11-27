@@ -19,7 +19,7 @@ import tempfile
 import tomllib
 from functools import partial
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -56,7 +56,7 @@ from bench.conftest import (
     take_lock,
 )
 from bench.test_ladder import RELOADS, _fresh
-from specsolve._engine.engine import Engine
+from specsolve._engine import readback
 
 # ---------------------------------------------------------------------------
 # the machine interlock (#705)
@@ -2121,10 +2121,13 @@ def test_a_checkout_without_the_method_a_verb_is_timed_through_skips_it(
     """This harness can run against an older checkout's `src/`.
 
     A base with no `Engine.handoff` raised in every window cell, which failed
-    the base pass, so nothing was compared.
+    the base pass, so nothing was compared. This checkout has no `Engine`, so
+    one without the method stands in for the older base.
     """
-    assert unsupported(verb) is None, f'this checkout has Engine.{method}'
-    monkeypatch.delattr(Engine, method)
+    assert unsupported(verb) is None, 'this checkout, whose Model runs the lifecycle, takes every verb'
+    older = ModuleType('specsolve._engine.engine')
+    older.Engine = type('Engine', (), {})
+    monkeypatch.setitem(sys.modules, 'specsolve._engine.engine', older)
     assert unsupported(verb) == f'this checkout has no Engine.{method}, which the {verb} is timed through'
 
 
@@ -2232,7 +2235,7 @@ def test_an_answer_reads_back_without_a_solve(case_name: str, into: str) -> None
     args, kwargs = module.read_setup(prepared, into)
     model, answer, _ = args
     assert answer.primal.len() == _tables(model).column_count, 'the answer spans every built column'
-    assert (answer.dual is None) == bool(model._engine._discrete()), (
+    assert (answer.dual is None) == bool(readback.discrete(model._built)), (
         'duals exactly where a real solve leaves them: none for a model with an integer variable'
     )
     assert module.read(*args, **kwargs)['columns'] == answer.primal.len(), 'and reads back the build it answered'

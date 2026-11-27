@@ -1,32 +1,46 @@
-"""Reading a built model back: one constraint row, a solve's tables, a named expression."""
+"""Reading a built model back: one constraint row, a solve as a [`Result`][], a named expression, and a start laid onto it."""
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 from mathspec import program
 
+from specsolve import _sinks as sinks
+from specsolve._answer import WHOLE, Answer
 from specsolve._collect import collected
 from specsolve._engine import coverage, indices
+from specsolve._engine.assembly import declares_quadratic
+from specsolve._engine.attaching import attach
+from specsolve._engine.queries import QueryBuilder, Solution
+from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Term, presences_of
 from specsolve._messages import coordinate_expr, reported_divisor_message, unknown_name_message
 from specsolve._names import COEFF, COL, COL_L, COL_R, CONSTANT, ROW, VALUE
-from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem
-from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, seated
+from specsolve._outputs import kinds_of
+from specsolve._records import Record
+from specsolve._result import ConstraintRow, Expressions, InfeasibleSubsystem, Result
+from specsolve._sinks.solver import AT_LOWER, BASIC, BASIS, BASIS_STATUSES, Basis, seated
 from specsolve._sinks.tables import SENSE_CODES
-from specsolve.errors import SpecsolveError
+from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    import numpy as np
-
     from specsolve._engine.assembly import BuiltModel
     from specsolve._engine.attaching import AttachedSources
-    from specsolve._engine.queries import QueryBuilder
-    from specsolve._sinks.solver import Basis, InfeasibleSubsystemIndices
+    from specsolve._outputs import Output
+    from specsolve._sinks.solver import InfeasibleSubsystemIndices, SolveAnswer
     from specsolve._sinks.tables import SinkTables
+    from specsolve._status import SolveStatus
+
+#: How an expression the caller writes becomes a program node. ``None``
+#: wherever one stands for a build with no spec as written to compile it
+#: against.
+type Lower = Callable[[str | Mapping[str, object]], program.Expression]
 
 #: Scratch columns. The spaces make them unrepresentable as declared names.
 _SOLUTION = '__solution value__'
@@ -203,8 +217,6 @@ def reduced_costs(tables: SinkTables, primal: pl.Series, dual: pl.Series) -> pl.
     every sink. The gradients are taken at *primal*, which only a quadratic
     term reads.
     """
-    import numpy as np
-
     x = primal.to_numpy()
     y = dual.to_numpy()
 
@@ -235,8 +247,6 @@ def slacks(tables: SinkTables, activity: pl.Series) -> pl.Series:
     not depend on which side a term is written on, and ``-|rhs - lhs|`` for
     ``==``, which holds only at zero.
     """
-    import numpy as np
-
     rows = tables.dense_rows(np.inf)
     lhs = activity.to_numpy()
     gap = rows.rhs - lhs
@@ -305,9 +315,7 @@ def _aligned(
 
 
 def expressions(
-    builder: QueryBuilder,
-    named: Mapping[str, program.NamedExpression],
-    lower: Callable[[str | Mapping[str, object]], program.Expression] | None,
+    builder: QueryBuilder, named: Mapping[str, program.NamedExpression], lower: Lower | None
 ) -> Expressions:
     """The reads [`evaluate`][specsolve._result.Result.evaluate] is built from, over one builder.
 
@@ -398,8 +406,6 @@ def matched_basis(model: BuiltModel, columns: Mapping[str, pl.LazyFrame], rows: 
     Raises:
         SpecsolveError: No status lands at a coordinate this build holds.
     """
-    import numpy as np
-
     tables = model.tables
     status = pl.col(VALUE).cast(BASIS).to_physical()
     placed_columns = np.full(tables.column_count, AT_LOWER, dtype=np.int8)
@@ -419,8 +425,6 @@ def matched_values(model: BuiltModel, values: Mapping[str, pl.LazyFrame]) -> np.
     Raises:
         SpecsolveError: No value lands at a coordinate this build holds.
     """
-    import numpy as np
-
     out = np.full(model.tables.column_count, np.nan)
     _refuse_nothing_placed(
         _place(out, model, model.variables, model.program.variables, values, pl.col(VALUE).cast(pl.Float64))
@@ -452,8 +456,6 @@ def _place(
     label. A table whose columns are not its entry's dimensions and ``value``
     is skipped, as is a coordinate only one side holds.
     """
-    import numpy as np
-
     positions = pl.Series(VALUE, np.arange(len(into), dtype=np.int64))
     placed = 0
     for name, indexed in held.items():
@@ -480,8 +482,6 @@ def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndar
     shortfall is made up by the last nonbasic rows, whose slacks enter. Which
     ones is arbitrary: a basis the count makes singular, each solver repairs.
     """
-    import numpy as np
-
     columns, rows = columns.copy(), rows.copy()
     surplus = int((columns == BASIC).sum() + (rows == BASIC).sum()) - len(rows)
     if surplus > 0:
@@ -491,3 +491,294 @@ def _counted(columns: np.ndarray, rows: np.ndarray) -> tuple[np.ndarray, np.ndar
         entering = np.flatnonzero(rows != BASIC)[surplus:]
         rows[entering] = BASIC
     return columns, rows
+
+
+# ---------------------------------------------------------------------------
+# a solve, read back as a result
+# ---------------------------------------------------------------------------
+
+
+def result(
+    model: BuiltModel,
+    answer: SolveAnswer,
+    solver_name: str,
+    lower: Lower | None,
+    outputs: frozenset[Output] = frozenset(),
+) -> Result:
+    """*answer*'s vectors laid out against *model*, as a [`Result`][].
+
+    Takes the answer rather than the solver, so that a benchmark can time
+    reading one back without a solve; every vector must span this build.
+
+    Args:
+        model: The build *answer* answered.
+        answer: What the solver returned.
+        solver_name: The solver that returned it, for the reason it left no ray.
+        lower: How an expression the caller writes becomes a program node, for
+            [`evaluate`][specsolve._result.Result.evaluate].
+        outputs: Which of [`OUTPUTS`][specsolve._outputs.OUTPUTS] the result
+            carries, already checked.
+    """
+    assert answer.primal is not None or not answer.status.is_readable, (
+        'a readable status must come with a primal vector'
+    )
+    assert (answer.activity is None) == (answer.primal is None), (
+        'activity travels with the primal: every sink reads it whenever a solution exists, mixed-integer included'
+    )
+    primals, duals, rays = read_back(model, answer.primal, answer.dual, answer.dual_ray)
+    status = answer.status
+    no_duals = (
+        None
+        if answer.dual is not None
+        else _no_duals_message(discrete(model), status.termination_condition, _quadratic_constraints(model))
+    )
+    return Result(
+        Answer(
+            Record.of(status.termination_condition, answer.objective, has_primal=status.is_readable, solved_at=None),
+            tables={
+                'primal': primals,
+                'dual': duals,
+                **{kind: _output(model, kind, answer) for kind in kinds_of(outputs)},
+            },
+            reasons={} if no_duals is None else {'dual': {WHOLE: no_duals}},
+            wording=status.solver_wording,
+        ),
+        _expressions=_expressions(model, answer.primal, answer.dual, no_duals, lower),
+        _dual_rays=rays,
+        _no_dual_ray=None if answer.dual_ray is not None else _no_dual_ray_message(status, solver_name),
+    )
+
+
+def read_back(
+    model: BuiltModel, primal: pl.Series | None, dual: pl.Series | None, dual_ray: pl.Series | None
+) -> tuple[dict[str, pl.LazyFrame], ...]:
+    """One solve's vectors as one table per entry: the primal, the duals and the ray.
+
+    The tables reference *model*'s index tables, which a rebuild replaces
+    rather than mutates. A ``None`` vector yields no tables rather than empty
+    ones.
+    """
+    return (
+        {} if primal is None else _per_variable(model, primal),
+        {} if dual is None else _per_constraint(model, dual),
+        {} if dual_ray is None else _per_constraint(model, dual_ray),
+    )
+
+
+def _output(model: BuiltModel, kind: str, answer: SolveAnswer) -> Mapping[str, pl.LazyFrame]:
+    """The tables of *kind*, one of the [`OUTPUT_KINDS`][specsolve._outputs.OUTPUT_KINDS], computed only when asked for; empty where a vector it needs is absent."""
+    match kind:
+        case 'activity':
+            return {} if answer.activity is None else _per_constraint(model, answer.activity)
+        case 'reduced_cost':
+            if answer.primal is None or answer.dual is None:
+                return {}
+            return _per_variable(model, reduced_costs(model.tables, answer.primal, answer.dual))
+        case 'slack':
+            return {} if answer.activity is None else _per_constraint(model, slacks(model.tables, answer.activity))
+        case 'variable_basis':
+            return {} if answer.basis is None else _per_variable(model, _statuses(answer.basis.columns))
+        case 'constraint_basis':
+            return {} if answer.basis is None else _per_constraint(model, _statuses(answer.basis.rows))
+        case _:
+            raise AssertionError(f'{kind!r} is none of the OUTPUT_KINDS, which kinds_of draws from')
+
+
+def _statuses(codes: np.ndarray) -> pl.Series:
+    """Basis status codes as the series a table is laid out from."""
+    return pl.Series(VALUE, BASIS_STATUSES, dtype=BASIS).gather(codes)
+
+
+def _per_constraint(model: BuiltModel, values: pl.Series) -> dict[str, pl.LazyFrame]:
+    """A vector over the rows as one table per constraint."""
+    return {
+        name: laid_out(model.attached, model.constraints[name], c.dims, values)
+        for name, c in model.program.constraints.items()
+    }
+
+
+def _per_variable(model: BuiltModel, values: pl.Series) -> dict[str, pl.LazyFrame]:
+    """A vector over the columns as one table per variable."""
+    return {
+        name: laid_out(model.attached, model.variables[name], v.dims, values)
+        for name, v in model.program.variables.items()
+    }
+
+
+def _expressions(
+    model: BuiltModel, primal: pl.Series | None, dual: pl.Series | None, no_duals: str | None, lower: Lower | None
+) -> Expressions:
+    """What [`evaluate`][specsolve._result.Result.evaluate] reads through, at the solution *primal* and *dual* hold.
+
+    The readers close over a snapshot the result owns, including a copy of
+    the variable registry, so they keep answering after an update or
+    ``close()``. A solve that left no primal has none.
+    """
+    if primal is None:
+        return Expressions()
+    solution = Solution(primal, dual, dict(model.constraints), no_duals)
+    builder = QueryBuilder(Scope(model.program, model.attached, dict(model.variables)), solution)
+    return expressions(builder, model.program.expressions, lower)
+
+
+def evaluator(
+    model: BuiltModel,
+    primals: Mapping[str, pl.DataFrame],
+    duals: Mapping[str, pl.DataFrame] | None,
+    no_duals: str | None,
+    lower: Lower,
+) -> Callable[[str | Mapping[str, object]], pl.DataFrame]:
+    """The reader of an expression the file never named, for a saved solution put back against *model*.
+
+    *model* supplies the solver indices that put the saved values back in
+    vector order.
+
+    Args:
+        model: A build of the spec and the sources the saved solution answered.
+        primals: The saved ``(dims…, value)`` table per variable.
+        duals: The same per constraint, or ``None`` where the solve left no duals.
+        no_duals: Why there are no duals, or ``None`` when *duals* holds them.
+        lower: How an expression the caller writes becomes a program node.
+    """
+    primal = reordered(model.attached, model.variables, model.program.variables, primals)
+    dual = reordered(model.attached, model.constraints, model.program.constraints, duals) if duals is not None else None
+    evaluate = _expressions(model, primal, dual, no_duals, lower).undeclared
+    assert evaluate is not None, 'a reader given a way to lower an expression reads an undeclared one'
+    return evaluate
+
+
+def expressions_of(program: program.Program, sources: Mapping[str, pl.LazyFrame], lower: Lower | None) -> Expressions:
+    """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
+
+    Args:
+        program: A compiled program with no variables — a calculation, so every
+            expression has a value with no solver.
+        sources: Tidied sources, as
+            [`tidy_sources`][specsolve._sources.tidy_sources] produces.
+        lower: How an expression the caller writes becomes a program node.
+
+    Returns:
+        The readers, each of which builds its query on call.
+    """
+    builder = QueryBuilder(Scope(program, attach(program, sources), {}))
+    return expressions(builder, program.expressions, lower)
+
+
+def discrete(model: BuiltModel) -> list[str]:
+    """The variables *model* declared as anything but continuous."""
+    return sorted(n for n, v in model.program.variables.items() if v.domain != 'continuous')
+
+
+def _quadratic_constraints(model: BuiltModel) -> list[str]:
+    """The constraints *model* declared as quadratic — a fact about the model, not the solve."""
+    return sorted(n for n, c in model.program.constraints.items() if declares_quadratic(c))
+
+
+def _no_dual_ray_message(status: SolveStatus, solver_name: str) -> str:
+    """Why this answer carries no certificate of infeasibility.
+
+    It takes the sink's name rather than asking the sink, whose session may
+    already have been let go.
+    """
+    if status.termination_condition != 'infeasible':
+        return (
+            f'a dual ray certifies that a model has no solution, and this solve terminated '
+            f'{status.termination_condition!r} rather than infeasible. Read dual() for the prices of a '
+            f'model that does have one.'
+        )
+    ask = sinks.SOLVERS[solver_name].dual_ray_advice
+    return f'the model is infeasible, and the {solver_name} sink returned no dual ray to certify it. ' + (
+        f'{ask}.' if ask else 'A ray comes from the simplex, so a run that never reached it has none to give.'
+    )
+
+
+def _no_duals_message(discrete: Sequence[str], termination_condition: str, quadratic_rows: Sequence[str]) -> str:
+    """The message for a solve that left values but no duals."""
+    if quadratic_rows and not discrete:
+        names = ', '.join(f"'{n}'" for n in quadratic_rows)
+        return (
+            f"a quadratic constraint prices only under gurobi's QCPDual, which is off by default: "
+            f'{names} {"is" if len(quadratic_rows) == 1 else "are"} quadratic. Asking for those '
+            f'prices makes the solver take the convex path, so a nonconvex row that solves without '
+            f'them fails with them — which is why this is yours to ask for rather than ours to '
+            f"assume. Re-solve with solver_options={{'QCPDual': 1}} if the model is convex."
+        )
+    if discrete:
+        names = ', '.join(f"'{n}'" for n in discrete)
+        return (
+            f'duals are undefined for a mixed-integer model: {names} '
+            f'{"is" if len(discrete) == 1 else "are"} not continuous. '
+            f'Drop the integrality to price the LP relaxation instead.'
+        )
+    return (
+        f'the solver returned no dual solution, though the solve terminated '
+        f'{termination_condition!r}. Duals come from a simplex basis, which a '
+        f'run stopped short of one does not have.'
+    )
+
+
+# ---------------------------------------------------------------------------
+# a start, laid onto a build
+# ---------------------------------------------------------------------------
+
+
+def matched_start(
+    model: BuiltModel, start: Result | Mapping[str, Mapping[str, pl.LazyFrame]], solver_name: str
+) -> Basis | np.ndarray:
+    """*start* laid onto *model*: a basis for an LP given one, else a value per column, NaN where none is given.
+
+    *start* is an earlier answer, or a [`Start`][specsolve.types.Start]
+    already read ([`read_start`][specsolve._start.read_start]). A
+    mixed-integer model starts from values, so a basis given it is not used.
+    An LP given both starts from the basis.
+
+    Raises:
+        SpecsolveError: A start that gives this model nothing it starts
+            from or lands nowhere on this build, or values for an LP that
+            *solver_name* cannot take.
+    """
+    given = start._start() if isinstance(start, Result) else start
+    mixed_integer = bool(discrete(model))
+    if not mixed_integer and (given.get('variable_basis') or given.get('constraint_basis')):
+        return matched_basis(model, given.get('variable_basis', {}), given.get('constraint_basis', {}))
+    if not given.get('primal'):
+        raise SpecsolveError(_nothing_to_start_message(mixed_integer))
+    values = matched_values(model, given['primal'])
+    if not mixed_integer:
+        _checked_lp_values(sinks.solver(solver_name), solver_name, values)
+    return values
+
+
+def _nothing_to_start_message(discrete: bool) -> str:
+    """Why a start gives a model nothing it starts from: a basis alone for a mixed-integer model, or no table at all."""
+    if discrete:
+        return (
+            'start= gives this mixed-integer model a basis alone, and a basis starts only an LP. Give values '
+            "under 'primal' as well."
+        )
+    return "start= gives nothing to start from. Give a table under 'primal', 'variable_basis' or 'constraint_basis'."
+
+
+def _checked_lp_values(sink: type[sinks.Solver], solver_name: str, values: np.ndarray) -> None:
+    """Refuse a start of values for an LP that *sink* cannot take, and warn of one it takes where no gain is known.
+
+    Raises:
+        SpecsolveError: *sink* cannot take values that leave a column out.
+    """
+    partial = bool(np.isnan(values).any())
+    match sink.lp_values['partial' if partial else 'complete']:
+        case 'refused':
+            raise SpecsolveError(
+                f'{solver_name} cannot start an LP from values that leave a column out, and this start gives '
+                f'no value at {int(np.isnan(values).sum())} of {len(values)}. Give a value at every '
+                "coordinate of every variable, or start from an earlier answer solved with outputs={'basis'}."
+            )
+        case 'no_gain':
+            warnings.warn(
+                f'{solver_name} takes {"a partial" if partial else "a"} start of values for an LP, and no gain '
+                f'from one is known: it measured no fewer iterations than a solve started cold. An earlier '
+                f"answer solved with outputs={{'basis'}} starts an LP from its basis. If you see a start of "
+                f'values speed up a solve, please report it at https://github.com/fluxopt/specsolve/issues.',
+                SpecsolveWarning,
+                stacklevel=5,
+            )

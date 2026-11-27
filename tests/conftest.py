@@ -23,9 +23,13 @@ import polars as pl
 import pytest
 import yaml as pyyaml
 
+from specsolve._clock import untimed
+from specsolve._engine import assembly, readback
+from specsolve._engine.attaching import attach
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
 from specsolve._sinks import SOLVERS
-from specsolve._sources import attachable
+from specsolve._sinks.highs import Highs
+from specsolve._sources import attachable, tidy_sources
 from tests.fixtures import (  # noqa: F401
     DISPATCH_SPEC,
     expanded,
@@ -37,6 +41,9 @@ from tools import constructs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from specsolve._engine.assembly import BuiltModel
+    from specsolve.types import Result
 
 EXAMPLES_DIR = Path(__file__).parent.parent / 'examples'
 
@@ -411,7 +418,7 @@ def transport_data():
     return gens, lines, load
 
 
-def recomputed_row_values(engine, result) -> Any:
+def recomputed_row_values(built, result) -> Any:
     """Every row's left-hand side at the solution, recomputed from the model.
 
     ``Ax`` for a linear row and ``xᵀQx + Ax`` for a quadratic one, from the
@@ -419,9 +426,9 @@ def recomputed_row_values(engine, result) -> Any:
     purely quadratic row owns no linear coefficients, and ``reduceat`` repeats the
     previous row on an empty span.
     """
-    tables = engine._model.tables
+    tables = built.tables
     x = np.zeros(tables.column_count)
-    for name, indexed in engine._model.variables.items():
+    for name, indexed in built.variables.items():
         x[indexed.start : indexed.start + indexed.height] = result.primal(name)['value'].to_numpy()
 
     values = np.zeros(tables.row_count)
@@ -599,3 +606,14 @@ def solver_name(request: pytest.FixtureRequest) -> str:
     if not SOLVERS[request.param].is_available():
         pytest.skip(f'{request.param} is not installed here')
     return str(request.param)
+
+
+def build_program(program, sources) -> BuiltModel:
+    """*program* built over *sources* with no spec behind it, which is what the engine takes below ``specsolve.build``."""
+    return assembly.build(program, attach(program, tidy_sources(program, sources)), assembly.Measured(), untimed)
+
+
+def solve_built(built: BuiltModel) -> Result:
+    """*built* solved by HiGHS and read back, with no model around it."""
+    with Highs(built.tables) as solver:
+        return readback.result(built, solver.run(built.tables), 'highs', None)

@@ -60,7 +60,7 @@ def _tables(handle: Any) -> Any:
     the tables (``handoff`` or ``tables``) in each shape an older checkout had.
     """
     engine = getattr(handle, '_engine', handle)
-    built = getattr(engine, '_model', None)
+    built = getattr(engine, '_built', None) or getattr(engine, '_model', None)
     if built is None:
         return engine._tables()
     tables = getattr(built, 'tables', None) or built.handoff
@@ -100,7 +100,7 @@ def _laps(model: Any, since: int = 0) -> list[dict[str, Any]]:
     runs inside the timed call, and building a polars frame there is charged
     to the wall time.
     """
-    log = getattr(getattr(model, '_engine', None), '_log', None)
+    log = getattr(model, '_clock', None) or getattr(getattr(model, '_engine', None), '_log', None)
     if log is None:
         return []
     steps = list(log._steps)
@@ -135,7 +135,7 @@ def _loaded(sink: str, model: Any) -> Any:
     return load(_tables(model))
 
 
-#: The private engine method each verb is timed through, which a checkout older than the verb lacks.
+#: The private engine method each verb was timed through while an `Engine` ran the lifecycle, which a checkout older than the verb lacks.
 TIMED_THROUGH = {'window': 'handoff', 'read': '_answered'}
 
 
@@ -144,11 +144,14 @@ def unsupported(verb: str) -> str | None:
 
     A run of this harness against an older checkout's `src/` meets a base
     without the method a verb is timed through. Its cells are skipped there, so
-    a comparison holds only what both runs measured.
+    a comparison holds only what both runs measured. A checkout whose `Model`
+    runs the lifecycle itself has every verb.
     """
-    from specsolve._engine.engine import Engine
-
     method = TIMED_THROUGH.get(verb)
+    try:
+        from specsolve._engine.engine import Engine
+    except ModuleNotFoundError:
+        return None
     if method is None or hasattr(Engine, method):
         return None
     return f'this checkout has no Engine.{method}, which the {verb} is timed through'
@@ -199,12 +202,16 @@ def window(model: Any, sink: str, sources: dict[str, str], cold: bool) -> Counts
 
 
 def _handed_off(model: Any, sink: str, *, cold: bool = False) -> bool:
-    """``Engine.handoff``, and whether it loaded the solver from scratch; a *cold* window closes the held solver first."""
-    engine = model._engine
-    if cold and engine._solver is not None:
-        engine._solver.close()
-        engine._solver = None
-    return engine.handoff(sink, None)[1]
+    """The handoff, and whether it loaded the solver from scratch; a *cold* window closes the held solver first.
+
+    ``Model._handoff``, or ``Engine.handoff`` on a checkout whose engine holds the solver.
+    """
+    holder = getattr(model, '_engine', model)
+    if cold and holder._solver is not None:
+        holder._solver.close()
+        holder._solver = None
+    handoff = getattr(holder, '_handoff', None) or holder.handoff
+    return handoff(sink, None)[1]
 
 
 #: Slices in the measured sweep — enough that every one after the first is the push path.
@@ -274,7 +281,7 @@ def read_setup(prepared: tuple[Path, dict[str, str]], into: str) -> tuple[tuple[
         SolveStatus('optimal'),
         0.0,
         primal=pl.zeros(tables.column_count, dtype=pl.Float64, eager=True),
-        dual=None if model._engine._discrete() else rows,
+        dual=None if _discrete(model) else rows,
         activity=rows,
     )
     return (model, answer, into), {}
@@ -290,9 +297,7 @@ def read(model: Any, answer: Any, into: str) -> Counts:
     ``Model._with_record_fields`` as a solve's does, so what `solve` attaches
     is timed too; a checkout older than it reads the engine's answer as it is.
     """
-    answered = model._engine._answered
-    kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
-    result = answered(answer, 'highs', *kept, None)
+    result = _laid_out(model, answer)
     if (with_record_fields := getattr(model, '_with_record_fields', None)) is not None:
         result = with_record_fields(result, 'highs', None, ())
     if into == 'frames':
@@ -305,6 +310,26 @@ def read(model: Any, answer: Any, into: str) -> Counts:
         with tempfile.TemporaryDirectory(prefix='specsolve-bench-') as tmp:
             _write_answer(result, Path(tmp) / 'answer')
     return _counts(_tables(model), nonzeros=False)
+
+
+def _discrete(model: Any) -> list[str]:
+    """The variables *model* declares as anything but continuous, as the checkout under test names them."""
+    if (engine := getattr(model, '_engine', None)) is not None:
+        return engine._discrete()
+    from specsolve._engine import readback
+
+    return readback.discrete(model._built)
+
+
+def _laid_out(model: Any, answer: Any) -> Any:
+    """*answer* laid out against *model*'s build as a result: ``readback.result``, or ``Engine._answered`` before it."""
+    if (engine := getattr(model, '_engine', None)) is None:
+        from specsolve._engine import readback
+
+        return readback.result(model._built, answer, 'highs', None)
+    answered = engine._answered
+    kept = ('nothing',) if 'kept' in inspect.signature(answered).parameters else ()
+    return answered(answer, 'highs', *kept, None)
 
 
 def _write_answer(result: Any, out: Path) -> None:

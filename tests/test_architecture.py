@@ -83,6 +83,7 @@ LANE = frozenset(
     {
         '_answer',
         '_answer_layout',
+        '_clock',
         '_collect',
         '_engine',
         '_names',

@@ -94,10 +94,11 @@ flowchart TB
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
 phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
 draws what each hands to the next. The clock
-is one mark: each public call starts it with `Engine.start()`, and
-`Engine.lap(phase)` adds the time since the mark to that phase and moves the
-mark, so the laps tile the call and a step between two named ones is in the
-phase of the one after it. `lap` refuses a name that has no `Metrics` column.
+is one mark (`Clock`, `_clock.py`): each public call starts it with
+`Clock.start()`, and `Clock.lap(phase)` adds the time since the mark to that
+phase and moves the mark, so the laps tile the call and a step between two
+named ones is in the phase of the one after it. `lap` refuses a name that has
+no `Metrics` column.
 `tests/test_phases.py` holds the phases' sum to the wall time of a call, within
 the return from one call and the entry into the next (50–110 µs, #2180), and
 slows each step to find it in its own phase.
@@ -106,17 +107,17 @@ slows each step to find it in its own phase.
 | --- | --- |
 | `load` | `Model.__init__` |
 | `tidy` | `Model._fill` |
-| `attach` | `Model._fill`, or `Engine.build` where no assumption attached the tables |
-| `build` | `Engine.build` |
-| `handoff` | `Engine.handoff`; `Engine.build` for the held solver's digest |
-| `solve` | `Engine.solve` |
+| `attach` | `Model._fill` |
+| `build` | `assembly.build` |
+| `handoff` | `Model._handoff`; `Model._fill` for the held solver's digest |
+| `solve` | `Model.solve` |
 | `readback` | `Model.solve` |
-| `write` | `Engine.write` |
+| `write` | `Model.write` |
 | `archive` | `Model._archive` |
 
-**A result's metrics row is its share of the model's clocks**: `Engine.metrics`
-builds the one `Metrics`, and `Model.solve` takes the difference from where
-the previous result was handed back. A sweep slice's row is its result's.
+**A result's metrics row is its share of the model's clocks**: `Clock.metrics`
+builds the one `Metrics`, and `Model.solve` takes the laps since the previous
+result was handed back. A sweep slice's row is its result's.
 **The row is the archive's last member**, written after the zip is packed, so
 `archive_seconds` covers every other member, and the result handed back
 carries that row. Writing the row and landing the archive are in
@@ -147,9 +148,11 @@ the dependency claims.*
    program that crosses is fully resolved: macros and named expressions without
    `cases:` are substituted, and `Spec.expand` expands `piecewise:` first.
    Every `mathspec` import names the package, never a module inside it.
-2. **The engine knows nothing about linopy, xarray or YAML.** It imports
-   nothing from the package but `errors.py` and `_messages.py`
+2. **The engine knows nothing about linopy, xarray or YAML, and holds no state.**
+   It imports nothing from the package but `errors.py` and `_messages.py`
    (`ENGINE_MAY_IMPORT`), and no contract module names a module inside it.
+   `_engine/` is functions over frozen values: `attach`, `build` and the
+   read-back. `Model` holds the build, the solver and the clock between calls.
 3. **One language, two builds, and linopy only in the linopy lane.** Both pass
    `_inputs.as_program`, and nothing under `src/` imports linopy. The three files
    that build on one side only are in
@@ -202,8 +205,9 @@ terminal `SUM(coeff) GROUP BY row, col` at assembly.
 ## The relational lane
 
 **The spine is one module per box**: `attaching.py`, `specialize.py`,
-`queries.py`, `assembly.py`, `_sinks/`, and `engine.py`, which runs the
-lifecycle. `scope.py` sits under them all.
+`queries.py`, `assembly.py`, `_sinks/`, and `readback.py`, which lays a
+solve's vectors out as a `Result`. `scope.py` sits under them all. `Model`
+(`_api.py`) runs the lifecycle over them.
 
 **`AttachedSources` and `BuiltModel` are frozen**, so a build that raises
 leaves no model.
@@ -234,7 +238,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | Module | Role |
 |---|---|
 | `mathspec` (a dependency) | the whole language |
-| `_api.py` | the functions that take a spec, and `Model` |
+| `_api.py` | the functions that take a spec, and `Model`, which holds a build and its solver and runs the lifecycle |
+| `_clock.py` | the clock a model's life is timed on: its laps, its runs, and the solves each run took |
 | `_archive_layout.py` | what an archive holds |
 | `_archive.py` | reads an archive back: `read_archive`, `scan_archive` and `read_inputs` |
 | `_inputs.py` | `SpecLike` and `Source`, what every function takes, and a caller's table read through the Arrow PyCapsule protocol |
@@ -261,8 +266,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
-| `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate |
-| `_engine/engine.py` | the lifecycle: build, hand to a sink, read back |
+| `_engine/readback.py` | a row, a solve and a named expression, read back by coordinate, and a start laid onto a build |
 | `_answer.py` | one solve's answer as plain data: its record, its metrics, its tables and why a table is not there |
 | `_result.py` | what a caller reads an answer through: `Result`, and what a build says of itself |
 | `_outputs.py` | what an answer carries: the kinds of table, and the outputs a solve is asked for |
@@ -274,7 +278,7 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_sinks/` | how a built model leaves: a solver by name, a writer by suffix ([README](https://github.com/fluxopt/specsolve/blob/main/src/specsolve/_sinks/README.md)) |
 
 **The lane imports nothing else from the package but `errors.py` and
-`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer.py`, `_answer_layout.py`,
+`_messages.py`.** The lane is `_engine/`, `_sinks/`, `_answer.py`, `_answer_layout.py`, `_clock.py`,
 `_collect.py`, `_names.py`, `_outputs.py`, `_parquet.py`, `_records.py`,
 `_result.py` and `_status.py` (`LANE`). No module imports linopy, and none imports xarray at module
 level.

@@ -53,7 +53,7 @@ def test_a_coefficient_below_the_highs_default_reaches_the_solver():
 )
 def test_highs_holds_a_coefficient_below_its_default(spec, held):
     """A square term is loaded as ``2a``, 1e-9, which the default cut drops too."""
-    with sps.build(spec, _a(5e-10)) as model, Highs(model._engine._model.tables) as solver:
+    with sps.build(spec, _a(5e-10)) as model, Highs(model._built.tables) as solver:
         assert len(held(solver.handle.getModel())) == 1, 'the 5e-10 coefficient is in the loaded model'
 
 

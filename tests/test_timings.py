@@ -12,8 +12,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve._engine import assembly, engine
+from specsolve import _clock
+from specsolve._engine import assembly, readback
 from specsolve._records import PHASES
+from specsolve._sinks.highs import Highs
+from specsolve.types import Model
 
 SPEC = {
     'dimensions': {'t': {'dtype': 'int', 'ordered': True}},
@@ -117,7 +120,7 @@ def test_laps_after_the_last_result_are_the_next_run():
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = assembly.Assembly._build_constraint
 
     def slow(self, name, c):
@@ -135,7 +138,7 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 @pytest.mark.parametrize(
     ('module', 'slowed', 'row'),
     [
-        pytest.param('engine', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('assembly', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
         pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
         pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
@@ -143,9 +146,9 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
     """What the build does around its entries is timed too: ten seconds added to a step land in its row."""
-    owner = {'engine': engine, 'assembly': assembly}[module]
+    owner = {'assembly': assembly}[module]
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = getattr(owner, slowed)
 
     def slow(*args, **kwargs):
@@ -232,26 +235,22 @@ def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expe
 @pytest.mark.parametrize(
     ('owner', 'slowed', 'step'),
     [
-        pytest.param('engine', 'Engine._matched_start', 'start', id='matching-a-start'),
-        pytest.param('engine', 'Engine.check_sink', 'check', id='checking-the-solver'),
-        pytest.param('sinks', 'Highs._load', 'instance', id='loading-a-new-solver'),
+        pytest.param(readback, 'matched_start', 'start', id='matching-a-start'),
+        pytest.param(Model, 'check_sink', 'check', id='checking-the-solver'),
+        pytest.param(Highs, '_load', 'instance', id='loading-a-new-solver'),
     ],
 )
 def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowed, step):
     """Ten seconds added to one step of a handoff land in that step's row and in no other."""
-    from specsolve._sinks.highs import Highs
-
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
-    cls = {'engine': engine.Engine, 'sinks': Highs}[owner]
-    name = slowed.split('.')[1]
-    real = getattr(cls, name)
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
+    real = getattr(owner, slowed)
 
     def slow(*args, **kwargs):
         added[0] += 10.0
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(cls, name, slow)
+    monkeypatch.setattr(owner, slowed, slow)
     with sps.build(SPEC, DATA) as model:
         model.solve(start=model.solve() if step == 'start' else 'previous')
         took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
@@ -317,7 +316,7 @@ def test_a_slow_step_of_a_tidy_lands_in_its_own_row(monkeypatch, slowed, step, e
     from specsolve import _sources
 
     added = [0.0]
-    monkeypatch.setattr(engine, 'perf_counter', lambda: time.perf_counter() + added[0])
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
     real = getattr(_sources, slowed)
     seen = []
 
@@ -357,16 +356,24 @@ def test_a_refused_source_keeps_the_tidy_laps_it_reached():
         pytest.param({0: (0.3, 0.2, 0.1), 1: (0.1, 0.2, 0.3)}, id='two runs'),
     ],
 )
-def test_a_runs_clocks_never_exceed_the_whole_life(laps):
+def test_a_runs_clocks_never_exceed_the_whole_life(monkeypatch, laps):
     """A result's row is its run's laps summed; its clocks never pass the model's, which are every run's.
 
     Three laps of 0.3, 0.2 and 0.1 s summed from the last come to one unit in the
     last place more than the same three summed in the order they ran, which is
     how a run's row used to pass its model's.
     """
-    log = engine._Laps()
-    for run, seconds in laps.items():
+    now = [0.0]
+    monkeypatch.setattr(_clock, 'perf_counter', lambda: now[0])
+    clock = _clock.Clock()
+    for seconds in laps.values():
         for took in seconds:
-            log.append(run, 'build', 'constraint', None, took)
-    whole = log.clocks()['build']
-    assert all(log.clocks(run)['build'] <= whole for run in laps), "each run's share is no more than the whole"
+            now[0] = 0.0
+            clock.start()
+            now[0] = took
+            clock.lap('build', 'constraint')
+        clock.next_run()
+    whole = clock.metrics(0, 0, 0).build_seconds
+    assert all(clock.metrics(0, 0, 0, run).build_seconds <= whole for run in laps), (
+        "each run's share is no more than the whole"
+    )
