@@ -46,7 +46,7 @@ def solved(spec: dict, given: dict, solver_name: str, **solve: Any) -> tuple[Res
     """One solve of *spec* on a fresh model, and the simplex iterations it took."""
     with sps.build(spec, given) as model:
         answer = model.solve(solver_name=solver_name, **solve)
-        return answer, SIMPLEX_ITERATIONS[solver_name](model._engine._solver)
+        return answer, SIMPLEX_ITERATIONS[solver_name](model._solver)
 
 
 def test_an_unchanged_model_started_from_its_own_answer_does_no_simplex_work(solver_name: str) -> None:
@@ -181,6 +181,42 @@ def test_a_start_of_values_for_an_lp_is_used_warned_of_or_refused_as_its_sink_sa
     warned = [w for w in caught if issubclass(w.category, SpecsolveWarning) and 'no gain' in str(w.message)]
     assert bool(warned) == (expected == 'no_gain'), 'the solve warns exactly where no gain is known'
     assert after.objective == pytest.approx(before.objective), 'the sink took the values and still solved'
+
+
+def _through_model_solve(start: dict[str, Any]) -> None:
+    with sps.build(DISPATCH, snapshots(40)) as model:
+        model.solve(start=start)
+
+
+def _through_solve(start: dict[str, Any]) -> None:
+    sps.solve(DISPATCH, snapshots(40), start=start)
+
+
+def _through_solve_over(start: dict[str, Any]) -> None:
+    sps.solve_over(DISPATCH, snapshots(40), sps.EachWindow('snapshot', horizon=40, lookahead=0), start=start)
+
+
+@pytest.mark.parametrize(
+    'call',
+    [
+        pytest.param(_through_model_solve, id='model-solve'),
+        pytest.param(_through_solve, id='solve'),
+        pytest.param(_through_solve_over, id='solve-over'),
+    ],
+)
+def test_the_warning_of_a_start_with_no_gain_names_the_callers_line(call: Any) -> None:
+    """The warning points at the line that asked for the solve, whichever verb it called.
+
+    A fixed stack level counted from Model.solve, so a solve asked for through
+    sps.solve or solve_over named a line inside specsolve.
+    """
+    primal = sps.solve(DISPATCH, snapshots(40)).primal('p')
+    start = {'primal': {'p': primal.head(primal.height // 2)}}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        call(start)
+    warned = [w for w in caught if issubclass(w.category, SpecsolveWarning) and 'no gain' in str(w.message)]
+    assert [w.filename for w in warned] == [__file__], 'one warning, attributed to this file rather than to specsolve'
 
 
 def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
@@ -649,7 +685,7 @@ def test_a_start_word_that_cannot_hold_is_refused(call: Any, match: str) -> None
 def test_a_start_refused_stops_the_sweep_before_a_slice_is_built(
     monkeypatch: pytest.MonkeyPatch, start: Any, match: str
 ) -> None:
-    from specsolve import _solve_over as driver
+    from specsolve._sweep import solve_over as driver
 
     monkeypatch.setattr(driver, 'build', lambda *_: pytest.fail('a slice was built before the refusal'))
     with pytest.raises(SpecsolveError, match=match):

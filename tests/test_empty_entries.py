@@ -1,4 +1,4 @@
-"""An entry that holds no row is not queried, and the model is the one without it.
+"""An entry that holds nothing is not queried, and the model is the one without it.
 
 PyPSA's spec declares every component, and a network has rows for few of them:
 most entries span a dimension without a label or a `where` that admits
@@ -13,10 +13,11 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import _assumptions
+from specsolve import _encoding
+from specsolve._engine import assumptions as _assumptions
 from specsolve._engine import conditions, indices, specialize
 from specsolve._engine import queries as queries_module
-from specsolve._names import ROW
+from specsolve._names import COL, ROW
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -321,18 +322,17 @@ def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypa
 
 
 def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
-    """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
-    from specsolve._engine import engine as engine_module
+    """The assumptions are checked on the attach a build reads, rather than on one of their own."""
+    from specsolve import _api
 
     calls = []
-    real = engine_module.attach
+    real = _api.attach
 
-    def counted(program, sources):
+    def counted(*args):
         calls.append(1)
-        return real(program, sources)
+        return real(*args)
 
-    monkeypatch.setattr(engine_module, 'attach', counted)
-    monkeypatch.setattr(_assumptions, 'attach', counted)
+    monkeypatch.setattr(_api, 'attach', counted)
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'
@@ -369,6 +369,37 @@ def test_a_build_with_assumptions_reports_the_time_its_attach_took():
     with sps.build(spec, TABLED_SOURCES) as model:
         attach = model.metrics().attach_seconds
     assert attach > 0, 'the one attach of a build with assumptions is timed, whoever asked for it'
+
+
+def test_entries_that_hold_no_row_over_the_same_dimensions_share_one_empty_table(monkeypatch):
+    """PyPSA's spec has hundreds of entries without a row, and an empty table built for each was a fixed cost each."""
+    built, real = [], indices.nothing
+
+    def counted(scope, dims, index):
+        built.append((tuple(sorted(dims)), index))
+        return real(scope, dims, index)
+
+    monkeypatch.setattr(indices, 'nothing', counted)
+    variables = {**TABLED_SPEC['variables'], 'y': {'dims': ['g', 'e'], 'bounds': {'lower': 0}}}
+    constraints = {f'unlabelled_{i}': {'dims': ['g', 'e'], 'expression': 'y >= 0'} for i in range(3)}
+    sps.build({**TABLED_SPEC, 'variables': variables, 'constraints': constraints}, TABLED_SOURCES).close()
+    assert built == [(('e', 'g'), COL), (('e', 'g'), ROW)], (
+        f'empty tables were built for {built}, where one per dimensions and index column is enough'
+    )
+
+
+def test_a_parameter_table_with_no_row_is_not_checked_for_its_coordinates(monkeypatch):
+    """`flag` over `g` and `on` over `g` and `e` arrive with no row, so there is no coordinate of theirs to refuse; `cap` over `g` has rows."""
+    checked = []
+    real = _encoding._coordinate_positions
+
+    def counted(dims, *args):
+        checked.append(dims)
+        return real(dims, *args)
+
+    monkeypatch.setattr(_encoding, '_coordinate_positions', counted)
+    sps.build(TABLED_SPEC, TABLED_SOURCES).close()
+    assert checked == [('g',)], f'the coordinates of tables over {checked} were checked, where only cap has a row'
 
 
 #: `active` is true at every `(g, t)`, as PyPSA's is on a network without

@@ -14,13 +14,13 @@ Example::
         return result.objective
 """
 
+from specsolve._answer.outputs import Output
+from specsolve._answer.records import Metrics, Provenance, Record
+from specsolve._answer.result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Result
 from specsolve._api import Model
 from specsolve._archive import ArchivedInputs
-from specsolve._outputs import Output
-from specsolve._records import Metrics, Provenance, Record
-from specsolve._result import ConstraintRow, Diagnostics, InfeasibleSubsystem, Result
 from specsolve._start import Start
-from specsolve._sweep import Sweep
+from specsolve._sweep.sweep import Sweep
 
 __all__ = [
     'ArchivedInputs',

@@ -39,17 +39,25 @@ from mathspec.program import (
 from mathspec.spec import Spec
 
 import specsolve as sps
+from specsolve._engine import readback
 from specsolve._engine.assembly import _sorted
-from specsolve._engine.engine import Engine
 from specsolve._engine.queries import QueryBuilder
 from specsolve._engine.scope import Scope
 from specsolve._names import COEFF, COL, COL_L, COL_R, ROW
-from specsolve._sinks import SOLVERS
+from specsolve._sinks import SOLVERS, WRITERS
 from specsolve._sinks.highs import Highs
 from specsolve._sinks.tables import ranges
 from specsolve._sources import tidy_sources
 from specsolve.errors import DataError, LanguageError, SpecsolveError
-from tests.conftest import SOLVER_VECTOR_LOAD, SOLVER_VECTOR_SPEC, override, primal_by_coordinate, solve_written_file
+from tests.conftest import (
+    SOLVER_VECTOR_LOAD,
+    SOLVER_VECTOR_SPEC,
+    build_program,
+    override,
+    primal_by_coordinate,
+    solve_built,
+    solve_written_file,
+)
 from tests.differential import RTOL, differential
 from tests.oracle import linopy, pd, specsolve_linopy, transport_linopy_objective, xr
 
@@ -277,7 +285,7 @@ def transport_program() -> Program:
 def transport_sources(gens, lines, load) -> dict:
     """The transport instance as tidy sources.
 
-    Below `specsolve.build`: `Engine.build` takes a *program* and the tables
+    Below `specsolve.build`: the engine's `build` takes a *program* and the tables
     a built model reads, which is the same shape `tidy_sources` hands over — a
     table of labels per dimension, and each map as its own two-column relation.
     """
@@ -309,24 +317,23 @@ class TestTwoModelsRoundTrip:
         gens, load = dispatch_data
         oracle = dispatch_linopy_objective(gens, load)
 
-        with Engine() as engine:
-            engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
+        built = build_program(dispatch_program(), dispatch_sources(gens, load))
 
-            result = engine.solve()
-            assert result.is_ok
-            assert result.objective == pytest.approx(oracle, rel=RTOL)
+        result = solve_built(built)
+        assert result.is_ok
+        assert result.objective == pytest.approx(oracle, rel=RTOL)
 
-            lp = tmp_path / 'dispatch.lp'
-            engine.write(lp)
-            assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
+        lp = tmp_path / 'dispatch.lp'
+        WRITERS['.lp'].write(built.tables, lp)
+        assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-            primal = result.to_pandas('p')
-            n_active = int((gens['p_max'] > 0).sum())
-            assert len(primal) == n_active * len(load), 'a variable row the condition leaves out is absent, not zero'
-            assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coordinates'
-            balance = primal.groupby('snapshot')['value'].sum()
-            expected = load.set_index('snapshot')['value']
-            assert np.allclose(balance.sort_index(), expected.sort_index()), 'dispatch meets load in every snapshot'
+        primal = result.to_pandas('p')
+        n_active = int((gens['p_max'] > 0).sum())
+        assert len(primal) == n_active * len(load), 'a variable row the condition leaves out is absent, not zero'
+        assert set(primal.columns) == {'snapshot', 'generator', 'value'}, 'primal joins back to the coordinates'
+        balance = primal.groupby('snapshot')['value'].sum()
+        expected = load.set_index('snapshot')['value']
+        assert np.allclose(balance.sort_index(), expected.sort_index()), 'dispatch meets load in every snapshot'
 
     def test_transport_roundtrip(self, transport_data, tmp_path):
         """Solver and LP file agree with the linopy oracle."""
@@ -334,21 +341,20 @@ class TestTwoModelsRoundTrip:
         oracle = transport_linopy_objective(gens, lines, load)
         assert np.isfinite(oracle), 'oracle model must be feasible'
 
-        with Engine() as engine:
-            engine.build(transport_program(), tidy_sources(transport_program(), transport_sources(gens, lines, load)))
+        built = build_program(transport_program(), transport_sources(gens, lines, load))
 
-            result = engine.solve()
-            assert result.is_ok
-            assert result.objective == pytest.approx(oracle, rel=RTOL)
+        result = solve_built(built)
+        assert result.is_ok
+        assert result.objective == pytest.approx(oracle, rel=RTOL)
 
-            lp = tmp_path / 'transport.lp'
-            engine.write(lp)
-            assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
+        lp = tmp_path / 'transport.lp'
+        WRITERS['.lp'].write(built.tables, lp)
+        assert solve_written_file(lp) == pytest.approx(oracle, rel=RTOL)
 
-            primal_f = result.to_pandas('f')
-            caps = lines.set_index('line')['cap']
-            limits = primal_f['line'].map(caps)
-            assert (primal_f['value'].abs() <= limits + 1e-6).all()
+        primal_f = result.to_pandas('f')
+        caps = lines.set_index('line')['cap']
+        limits = primal_f['line'].map(caps)
+        assert (primal_f['value'].abs() <= limits + 1e-6).all()
 
 
 #: A scalar parameter used in a bound and in the objective — the two places a
@@ -425,7 +431,7 @@ class TestWhatBindRefusesAndWhatItTakes:
             assert result.objective == pytest.approx(15.0)
 
         # the check the column belongs to still catches its own case
-        doubled = {'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
+        doubled = {'n': [1, 2], 'cost': pl.DataFrame({'n': [1, 1, 2], 'value': [1.0, 9.0, 2.0]})}
         with pytest.raises(DataError, match="parameter 'cost'"):
             sps.build(spec, doubled)
 
@@ -573,7 +579,7 @@ class TestTheIndexSpace:
         ]
 
         with sps.build(spec, sources) as model:
-            indexed = model._engine._model.variables['p'].table.collect()
+            indexed = model._built.variables['p'].table.collect()
 
         assert indexed[COL].to_list() == list(range(len(expected))), 'column indices must be contiguous and ascending'
         assert list(indexed.select('snapshot', 'node', 'tech').iter_rows()) == expected, (
@@ -592,7 +598,7 @@ class TestTheIndexSpace:
         declared = pl.Enum(['c', 'a', 'b'])
 
         with sps.build(NODE_CAP_SPEC, {'node': ['c', 'a', 'b'], 'cap': cap}) as model:
-            assert model._engine._model.variables['x'].table.collect_schema()['node'] == declared
+            assert model._built.variables['x'].table.collect_schema()['node'] == declared
             primal = model.solve().primal('x')
 
         assert primal.schema['node'] == pl.String, 'what leaves is what a caller can join against'
@@ -639,9 +645,7 @@ class TestTheIndexSpace:
         cap = pl.DataFrame({'node': ['a', 'b'], 'value': [1.0, 2.0]})
 
         with sps.build(spec, {'node': ['a', 'b'], 'cap': cap}) as model:
-            assert model._engine._model.tables.rows.height == 0, (
-                'the condition holds nowhere, so no constraint row is built'
-            )
+            assert model._built.tables.rows.height == 0, 'the condition holds nowhere, so no constraint row is built'
             assert model.solve().objective == pytest.approx(0.0)
 
     def test_a_condition_that_removes_nothing_indexes_exactly_like_no_condition(self, dispatch_data):
@@ -658,9 +662,8 @@ class TestTheIndexSpace:
         for where in (None, Mask(ParameterComparison('p_max', '>', 0, ('generator',)))):
             base = dispatch_program()
             program = replace(base, variables={'p': replace(base.variables['p'], where=where)})
-            with Engine() as engine:
-                engine.build(program, tidy_sources(program, dispatch_sources(gens, load)))
-                indexed.append(engine._model.variables['p'].table.collect().sort(COL))
+            built = build_program(program, dispatch_sources(gens, load))
+            indexed.append(built.variables['p'].table.collect().sort(COL))
         assert indexed[0].equals(indexed[1])
 
     def test_a_condition_a_missing_value_can_satisfy_keeps_the_rows_with_no_value(self):
@@ -691,7 +694,7 @@ class TestTheIndexSpace:
         }
         with sps.build(spec, sources) as model:
             surviving = {
-                name: sorted(model._engine._model.variables[name].table.select('i').collect().to_series().to_list())
+                name: sorted(model._built.variables[name].table.select('i').collect().to_series().to_list())
                 for name in ('absent', 'either', 'both', 'mixed')
             }
         assert surviving == {
@@ -727,11 +730,11 @@ class TestTheIndexSpace:
         }
         listed = {'i': [0, 1, 2], 'j': ['a', 'b']}
         with sps.build(spec, listed | {'cap': pl.DataFrame({'i': [0, 1, 2], 'value': [1.0, 2.0, 3.0]})}) as model:
-            engine = model._engine
-            tables = engine._model.tables
+            built = model._built
+            tables = built.tables
             for names, total, held, index in (
-                (['x', 'y', 'z'], tables.column_count, engine._model.variables, COL),
-                (['c1', 'c2'], tables.row_count, engine._model.constraints, ROW),
+                (['x', 'y', 'z'], tables.column_count, built.variables, COL),
+                (['c1', 'c2'], tables.row_count, built.constraints, ROW),
             ):
                 at = 0
                 for name in names:
@@ -827,6 +830,7 @@ class TestTheIndexSpace:
         data = {
             'cap': pl.DataFrame({'line': ['l1', 'l2'], 'value': [1.0, 1.0]}),
             'line': pl.DataFrame({'line': ['l1', 'l2']}),
+            'bus': ['b1', 'b2'],
             'from': pl.DataFrame({'line': ['l1', 'l1', 'l2', 'l2'], 'bus': ['b1', 'b2', 'b1', 'b2']}),
             'to': pl.DataFrame({'line': ['l1', 'l2'], 'bus': ['b2', 'b1']}),
         }
@@ -861,10 +865,10 @@ class TestTheIndexSpace:
         }
         empty = pl.DataFrame(schema={'cut': dtype, 'value': pl.Float64})
         with sps.build(spec, {'c': empty} | {'cut': []}) as model:
-            assert model._engine._model.tables.column_count == 0
+            assert model._built.tables.column_count == 0
 
         with sps.build(spec, {'c': pl.DataFrame({'cut': grown, 'value': [1.0, 2.0]})} | {'cut': grown}) as model:
-            assert model._engine._model.tables.column_count == 2
+            assert model._built.tables.column_count == 2
 
     def test_two_solutions_over_different_members_concatenate(self):
         """An `Enum` column will not concatenate against different categories.
@@ -883,10 +887,9 @@ class TestTheIndexSpace:
 
 def _objective_table(program, sources):
     """`obj` as `{col: coeff}`, plus whether the aggregate was skipped."""
-    with Engine() as engine:
-        engine.build(program, tidy_sources(program, sources))
-        obj = engine._model.tables.obj
-        return dict(zip(obj[COL].to_list(), obj[COEFF].to_list(), strict=True)), obj.height
+    built = build_program(program, sources)
+    obj = built.tables.obj
+    return dict(zip(obj[COL].to_list(), obj[COEFF].to_list(), strict=True)), obj.height
 
 
 def _network(ends: tuple[str, str]) -> tuple[dict, dict]:
@@ -981,7 +984,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         spec = override(RHS_SPEC, **{'constraints.c.expression': 'x + 2 * x >= rhs'})
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [6.0, 9.0]})}
         with sps.build(spec, sources) as model:
-            matrix = model._engine._model.tables.matrix
+            matrix = model._built.tables.matrix
             assert matrix.height == 2, 'one coefficient per row, not one per term'
             assert sorted(matrix[COEFF].to_list()) == [3.0, 3.0]
             result = model.solve()
@@ -997,8 +1000,8 @@ class TestWhatReachesTheSolverAsACoefficient:
             'objective': {'sense': 'minimize', 'expression': 'sum(x) + sum(4 * x)'},
         }
         with sps.build(spec, {'i': [0], 'lb': pl.DataFrame({'i': [0], 'value': [2.0]})}) as model:
-            assert model._engine._model.tables.obj.height == 1
-            assert model._engine._model.tables.obj[COEFF].to_list() == [5.0]
+            assert model._built.tables.obj.height == 1
+            assert model._built.tables.obj[COEFF].to_list() == [5.0]
             assert model.solve().objective == pytest.approx(10.0)
 
     @pytest.mark.parametrize(
@@ -1027,7 +1030,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         sources = {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [4.0, 6.0]})}
 
         with sps.build(spec, sources) as model:
-            matrix = model._engine._model.tables.matrix
+            matrix = model._built.tables.matrix
             assert matrix.height == height, 'one coefficient per (row, col) cell the expression reaches'
             assert set(matrix[COEFF].to_list()) == {coeff}
 
@@ -1055,12 +1058,12 @@ class TestWhatReachesTheSolverAsACoefficient:
         spec, sources = _network(ends)
         with sps.build(spec, sources) as model:
             program = Spec(**spec).program
-            built = model._engine._model
+            built = model._built
             builder = QueryBuilder(Scope(built.program, built.attached, built.variables))
             terms = builder.expression(next(iter(program.constraints.values())).lhs, 'test').linear
             assert len(terms) == 2
 
-            tables = model._engine._model.tables
+            tables = model._built.tables
             cells = tables.matrix_chunk(0, tables.row_count).select(ROW, COL)
             assert cells.height == cells.unique().height, 'a cell reached the sinks twice'
 
@@ -1124,7 +1127,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         """
         a = _spelled_zeros([[1.0, 0.0, 0.0, 2.0], [0.0, 3.0, 0.0, 0.0]])
         with sps.build(SPELLED_ZEROS_SPEC, SPELLED_ZEROS_LABELS | {'a': a}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             assert tables.matrix.height == 3, 'the five zero coefficients reached the matrix'
             assert list(tables.matrix[COEFF]) == [1.0, 2.0, 3.0], 'the surviving coefficients are the nonzero ones'
 
@@ -1138,7 +1141,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         """
         a = _spelled_zeros([[1.0, 1.0], [0.0, 0.0]])
         with sps.build(SPELLED_ZEROS_SPEC, {'i': [0, 1], 'j': [0, 1], 'a': a}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             assert tables.row_count == 2, 'the all-zero row was dropped instead of kept'
             assert list(np.diff(tables.row_starts)) == [2, 0], 'the all-zero row should own no coefficients'
             assert model.solve().termination_condition == 'infeasible', 'a row asserting 0 >= 10 came back feasible'
@@ -1162,7 +1165,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         }
         a = pl.DataFrame({'i': [0, 1], 'value': [1.0, 0.0]})
         with sps.build(spec, {'i': [0, 1], 'a': a}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             assert tables.row_count == 2, 'the all-zero quadratic row was dropped instead of kept'
             assert tables.qmatrix.height == 1, 'the zero pair reached the quadratic matrix'
 
@@ -1173,7 +1176,7 @@ class TestWhatReachesTheSolverAsACoefficient:
         spec['parameters'] = {**spec['parameters'], 'cost': {'dims': ['j'], 'missing': 0}}
         cost = pl.DataFrame({'j': [0, 1], 'value': [0.0, 5.0]})
         with sps.build(spec, {'i': [0], 'j': [0, 1], 'a': a, 'cost': cost}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             assert tables.obj.height == 1, 'the zero-cost column reached the objective table'
             assert list(tables.obj[COEFF]) == [5.0]
 
@@ -1182,10 +1185,9 @@ class TestWhatReachesTheSolverAsACoefficient:
         gens, load = dispatch_data
         base = dispatch_program()
         unbounded = replace(base, variables={'p': replace(base.variables['p'], upper=None)})
-        with Engine() as engine:
-            engine.build(unbounded, tidy_sources(unbounded, dispatch_sources(gens, load)))
-            assert engine._model.tables.cols['ub'].is_infinite().all()
-            assert engine.solve().is_ok
+        built = build_program(unbounded, dispatch_sources(gens, load))
+        assert built.tables.cols['ub'].is_infinite().all()
+        assert solve_built(built).is_ok
 
     def test_equal_bounds_pin_a_variable_so_one_equation_covers_both_regimes(self):
         """A capacity that is data in one model and a decision in another.
@@ -1310,9 +1312,9 @@ class TestThePositionalHandoff:
             'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [1.0, 0.0, 2.0, 3.0]}),
         }
         with sps.build(spec, sources) as model:
-            primal = pl.Series('value', np.arange(model._engine._model.tables.column_count, dtype=np.float64))
-            dual = pl.Series('value', np.arange(model._engine._model.tables.row_count, dtype=np.float64))
-            primals, duals, _ = model._engine._read_back(primal, dual, None)
+            primal = pl.Series('value', np.arange(model._built.tables.column_count, dtype=np.float64))
+            dual = pl.Series('value', np.arange(model._built.tables.row_count, dtype=np.float64))
+            primals, duals, _ = readback.read_back(model._built, primal, dual, None)
             assert 'SORT' not in primals['p'].explain(optimized=False), (
                 'assigning the solver indices already ordered this'
             )
@@ -1363,10 +1365,9 @@ class TestThePositionalHandoff:
         """
         with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
             assert model.solve(solver_name=solver_name).is_ok
-            engine = model._engine
-            assert engine._solver is not None, 'a solve leaves the solver holding the model'
-            tables = engine._model.tables
-            answer = engine._solver.run(tables)
+            assert model._solver is not None, 'a solve leaves the solver holding the model'
+            tables = model._built.tables
+            answer = model._solver.run(tables)
             for values, count in ((answer.primal, tables.column_count), (answer.dual, tables.row_count)):
                 assert isinstance(values, pl.Series), 'a table here is an index column nothing reads'
                 assert values.name == 'value'
@@ -1394,20 +1395,19 @@ class TestThePositionalHandoff:
         )
         load = pd.DataFrame({'snapshot': np.arange(n_s), 'value': np.full(n_s, 100.0)})
 
-        with Engine() as engine:
-            engine.build(dispatch_program(), tidy_sources(dispatch_program(), dispatch_sources(gens, load)))
-            tables = engine._model.tables
-            assert tables.matrix.height == n_g * n_s
+        built = build_program(dispatch_program(), dispatch_sources(gens, load))
+        tables = built.tables
+        assert tables.matrix.height == n_g * n_s
 
-            def widest(ranges):
-                return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
+        def widest(ranges):
+            return max(int(tables.row_starts[hi] - tables.row_starts[lo]) for lo, hi in ranges)
 
-            budget = 100
-            assert widest(tables._spans(budget)) <= budget
+        budget = 100
+        assert widest(tables._spans(budget)) <= budget
 
-            assert widest(ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
-                'the same budget spent as if a row cost one element puts every coefficient in one chunk'
-            )
+        assert widest(ranges(tables.row_count, budget, 1.0)) == n_g * n_s, (
+            'the same budget spent as if a row cost one element puts every coefficient in one chunk'
+        )
 
     @pytest.mark.parametrize(
         ('total', 'budget', 'width'),
@@ -1442,7 +1442,7 @@ class TestThePositionalHandoff:
         ask would read bounds the first had already edited.
         """
         with sps.build(RHS_SPEC, {'i': [0, 1], 'rhs': pl.DataFrame({'i': [0, 1], 'value': [1.0, 2.0]})}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             first = tables.dense_columns(1e30).lb
             ub_after_first = tables.cols['ub'].to_list()
 
@@ -1477,11 +1477,11 @@ class TestThePositionalHandoff:
         spec = override(POSITIONAL_COLS_SPEC, **{'variables.x.where': where}) if where else POSITIONAL_COLS_SPEC
 
         with sps.build(spec, {'i': list(range(4)), 'j': ['a', 'b', 'c'], 'cap': pl.DataFrame(caps)}) as model:
-            tables = model._engine._model.tables
+            tables = model._built.tables
             assert COL not in tables.cols.columns, 'cols carries an index it does not need'
             assert tables.cols.height == tables.column_count
 
-            indexed = model._engine._model.variables['x'].table.collect().sort(COL)
+            indexed = model._built.variables['x'].table.collect().sort(COL)
             raw = pl.DataFrame(caps).with_columns(pl.col('j').cast(indexed['j'].dtype))
             expected = indexed.join(raw, on=['i', 'j'], how='left')['value'].to_list()
             assert tables.cols['ub'].to_list() == expected, 'a bound is attached to the wrong column'
@@ -1714,7 +1714,7 @@ def _tidy_cap(names):
     wide = pd.DataFrame([(a, b, v) for (a, b), v in CAPS.items()], columns=[*names, 'value'])
     schema = Spec(**NETWORK)
     buses = {'from_bus': ['n1', 'n2'], 'to_bus': ['n1', 'n2']}
-    table = tidy_sources(schema.program, {'cap': wide, **buses})['cap'].collect()
+    table = tidy_sources(schema.program, {'cap': wide, **buses})['cap']
     columns = table.to_dict(as_series=False)
     return dict(zip(zip(columns['from_bus'], columns['to_bus'], strict=True), columns['value'], strict=True))
 

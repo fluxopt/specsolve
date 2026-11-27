@@ -1,6 +1,6 @@
 """The phases a solve is clocked in add up to the call, and each step is clocked in the phase that names it.
 
-[`Metrics`][specsolve._records.Metrics] defines the phases. The model's own
+[`Metrics`][specsolve._answer.records.Metrics] defines the phases. The model's own
 clocks are held to the process's CPU time over a whole call; the archived row, written
 before the archive lands, to at most what the model kept. One test slows one
 step at a time and finds the delay in its own phase and nowhere else.
@@ -15,10 +15,11 @@ import pytest
 import yaml
 
 import specsolve as sps
-from specsolve import _api, _archive_layout, _assumptions
-from specsolve._engine import assembly, engine
-from specsolve._records import PHASES, Metrics, Phase
-from specsolve._result import Result
+from specsolve import _api, _archive_layout, _clock
+from specsolve._answer.records import PHASES, Metrics
+from specsolve._answer.result import Result
+from specsolve._clock import Phase
+from specsolve._engine import assembly, attaching, readback
 from specsolve._sinks.solver import Solver
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ class Clock:
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     """The clock the engine laps on for this test."""
     on = Clock()
-    monkeypatch.setattr(engine, 'perf_counter', on)
+    monkeypatch.setattr(_clock, 'perf_counter', on)
     return on
 
 
@@ -230,19 +231,19 @@ def _slowed(real: Callable[..., object], clock: Clock) -> Callable[..., object]:
 STEPS = [
     pytest.param([(_api, 'as_spec')], 'load', id='the spec read'),
     pytest.param([(_api, 'as_program')], 'load', id='the program compiled'),
-    pytest.param([(_api, 'tidied')], 'tidy', id='the sources read'),
-    pytest.param([(_api, 'validate_assumptions')], 'attach', id='the assumptions checked'),
-    pytest.param([(engine, 'attach'), (_assumptions, 'attach')], 'attach', id='the sources attached'),
-    pytest.param([(engine, 'short_parameters')], 'build', id='the sparse parameters counted'),
+    pytest.param([(_api, 'tidy_sources')], 'tidy', id='the sources read'),
+    pytest.param([(_api, 'encoded')], 'attach', id='the sources encoded'),
+    pytest.param([(attaching, 'check_assumptions')], 'attach', id='the assumptions checked'),
+    pytest.param([(_api, 'attach')], 'attach', id='the sources attached'),
+    pytest.param([(assembly, 'short_parameters')], 'build', id='the sparse parameters counted'),
     pytest.param([(assembly.Assembly, 'run')], 'build', id='the entries assembled'),
     pytest.param([(_api.Model, '_read_start')], 'handoff', id='the start read'),
-    pytest.param([(engine.Engine, '_matched_start')], 'handoff', id='the start matched'),
-    pytest.param([(engine.sinks, 'loaded')], 'handoff', id='the solver loaded'),
+    pytest.param([(readback, 'matched_start')], 'handoff', id='the start matched'),
+    pytest.param([(_api.sinks, 'loaded')], 'handoff', id='the solver loaded'),
     pytest.param([(Solver, 'start_from_values')], 'handoff', id='the start given to the solver'),
     pytest.param([(Solver, 'run')], 'solve', id='the solver run'),
-    pytest.param([(engine.Engine, '_answered')], 'readback', id='the vectors laid out'),
+    pytest.param([(readback, 'result')], 'readback', id='the vectors laid out'),
     pytest.param([(_api.Model, '_with_record_fields')], 'readback', id='the record filled'),
-    pytest.param([(_api, 'with_positions')], 'archive', id='the sources positioned for the archive'),
     pytest.param([(Result, '_save')], 'archive', id='the answer written'),
     pytest.param([(_archive_layout, '_write_catalogs')], 'archive', id='the catalog written'),
     pytest.param([(_archive_layout, '_pack')], 'archive', id='the zip packed'),
@@ -292,13 +293,13 @@ def test_a_pause_off_the_cpu_leaves_no_step_unclocked(
     dispatch_yaml, dispatch_table_inputs, tmp_path, monkeypatch, clock
 ):
     """A runner that takes the CPU away after the last lap, as #2227 found on CI, is no step the laps missed."""
-    real = engine.Engine.next_run
+    real = _clock.Clock.next_run
 
-    def paused(self: engine.Engine) -> None:
+    def paused(self: _clock.Clock) -> None:
         time.sleep(4 * SLACK)
         real(self)
 
-    monkeypatch.setattr(engine.Engine, 'next_run', paused)
+    monkeypatch.setattr(_clock.Clock, 'next_run', paused)
     out = tmp_path / 'case.zip'
     _timed(_archived(dispatch_yaml, dispatch_table_inputs, out), out, clock).check()
 

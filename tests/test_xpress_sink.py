@@ -100,7 +100,7 @@ def test_forgetting_makes_the_next_solve_start_cold() -> None:
     from tests.test_warm_start import DISPATCH, SNAPSHOTS, dispatch_sources
 
     with sps.build(DISPATCH, dispatch_sources() | {'snapshot': SNAPSHOTS}) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
     session = Xpress(tables)
     try:
         session.run(tables)
@@ -121,7 +121,7 @@ def test_solver_options_reach_xpress() -> None:
     """Forwarded verbatim, in the solver's own vocabulary — a control name here."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
     problem = Xpress(tables, solver_options={'timelimit': 42}).handle
     assert int(problem.controls.timelimit) == 42, 'the option did not reach the problem'
 
@@ -130,7 +130,7 @@ def test_constructing_xpress_loads_the_model_and_stops() -> None:
     """The handoff `bench/` measures: a loaded problem, unsolved."""
     spec, data = CASES['LP']
     with sps.build(spec, data) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
     problem = Xpress(tables).handle
     assert (problem.attributes.rows, problem.attributes.cols) == (tables.row_count, tables.column_count)
     assert int(problem.attributes.solvestatus) == 0, 'constructing Xpress loads the model and does not solve it'
@@ -142,7 +142,7 @@ def test_a_set_reaches_the_solver_natively() -> None:
     from tests.test_sos import DATA, best, spec
 
     with sps.build(spec(2), DATA) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
     problem = Xpress(tables).handle
     assert int(problem.attributes.sets) == 2, 'both declared sets reached the solver as sets'
     problem.optimize()
@@ -219,7 +219,7 @@ def test_a_basis_is_loaded_in_the_row_statuses_xpress_itself_reports() -> None:
     from tests.test_basis import SPEC
 
     with sps.build(SPEC, {}) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
     first = Xpress(tables)
     try:
         basis = first.run(tables, basis=True).basis

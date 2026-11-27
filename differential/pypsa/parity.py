@@ -108,7 +108,7 @@ from sweep import untested_conjuncts  # noqa: E402  the pure half, so a test nee
 import specsolve as sps  # noqa: E402
 from specsolve._engine.conditions import narrowed  # noqa: E402
 from specsolve._engine.scope import Scope  # noqa: E402
-from specsolve._names import COEFF, COL, ROW  # noqa: E402
+from specsolve._names import COEFF, COL, POSITION, ROW  # noqa: E402
 from specsolve._sources import tidy_sources  # noqa: E402
 
 
@@ -336,7 +336,7 @@ def rung_spec(stem: str, spec: Path, built_rows: dict, built_columns: dict, fed:
 
 def built_counts(model) -> tuple[dict[str, int], dict[str, int]]:
     """Rows per constraint and columns per variable of one build, before any solve."""
-    built = model._engine._model
+    built = model._built
     return (
         {name: held.height for name, held in built.constraints.items()},
         {name: held.height for name, held in built.variables.items()},
@@ -350,7 +350,7 @@ def fed(sources: dict[str, object]) -> list[str]:
 
 def _keyed_model(model) -> dict[str, object]:
     """One build as index-free sets — every column, row, coefficient and objective term keyed by its declaration and coordinate."""
-    built = model._engine._model
+    built = model._built
     tables = built.tables
 
     def keys(held: dict) -> dict[int, tuple]:
@@ -411,14 +411,15 @@ def committed(stem: str, spec: str, declared, sources: dict[str, object]) -> Non
     """Write the tables this rung is the first to feed as CSV, rows sorted — the tables the page shows under it.
 
     Written through :func:`tidy_sources`, so a file holds exactly the tidy
-    table `sps.solve` received, floats rounded to twelve places because a
-    ``pow`` differs by an ulp between libms and the gate is a byte diff. Once
-    per table, under the lowest rung that feeds it.
+    table `sps.solve` received, less the position it numbers a dimension's
+    labels with, floats rounded to twelve places because a ``pow`` differs by
+    an ulp between libms and the gate is a byte diff. Once per table, under
+    the lowest rung that feeds it.
     """
     folder = TABLES / stem
     folder.mkdir(parents=True)
-    for name, source in tidy_sources(declared.program, sources).items():
-        table = source.collect() if hasattr(source, 'collect') else source
+    for name, table in tidy_sources(declared.program, sources).items():
+        table = table.drop(POSITION, strict=False)
         if len(table) and name not in FIRST[spec]:
             table.sort(table.columns).with_columns(cs.float().round(12)).write_csv(folder / f'{name}.csv')
             FIRST[spec].add(name)
@@ -431,7 +432,7 @@ def conjunct_verdicts(built_model, program) -> dict[str, str]:
     and ``-`` where the rung builds no row of the entry at all. Positional:
     :attr:`mathspec.program.Mask.conjuncts` is deterministic for a program.
     """
-    model = built_model._engine._model
+    model = built_model._built
     scope = Scope(model.program, model.attached, model.variables)
     verdicts: dict[str, str] = {}
     for name, block in {**program.constraints, **program.variables}.items():

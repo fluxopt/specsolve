@@ -110,8 +110,8 @@ def test_the_activity_is_the_whole_left_hand_side():
     """
     with sps.build(SPEC, SOURCES) as model:
         result = model.solve(solver_name='gurobi', outputs={'activity'})
-        recomputed = recomputed_row_values(model._engine, result)
-        indexed = model._engine._model.constraints['coupled']
+        recomputed = recomputed_row_values(model._built, result)
+        indexed = model._built.constraints['coupled']
         reported = result.activity('coupled')['value'].to_numpy()
         assert reported == pytest.approx(recomputed[indexed.start : indexed.start + indexed.height], rel=RTOL)
         assert reported == pytest.approx([4.0, 4.0], rel=RTOL), 'the row binds, and its value is the product'
@@ -148,8 +148,8 @@ def test_quadratic_entries_take_the_tail_of_the_label_space():
         }
     )
     with sps.build(first, SOURCES) as model:
-        tables = model._engine._model.tables
-        assert model._engine._model.constraints['cap'].start == 0, 'the linear entry is built first'
+        tables = model._built.tables
+        assert model._built.constraints['cap'].start == 0, 'the linear entry is built first'
         assert [row for row, _ in tables.quadratic_rows()] == [1, 2], (
             'the quadratic rows are the tail, however the file was written'
         )
@@ -208,7 +208,7 @@ def test_a_quadratic_row_keeps_its_own_pair_when_a_row_before_it_is_not_built():
     }
     sources = {'g': ['a', 'b', 'c'], 'k': pl.DataFrame({'g': ['b', 'c'], 'value': [1.0, 4.0]})}
     with sps.build(sparse, sources) as model:
-        assert model._engine._model.tables.qmatrix.rows() == [(0, 1, 1, 1.0), (1, 2, 2, 4.0)], (
+        assert model._built.tables.qmatrix.rows() == [(0, 1, 1, 1.0), (1, 2, 2, 4.0)], (
             'row b holds p_b² at 1 and row c holds p_c² at 4, each on its new row'
         )
         assert model.solve(solver_name='gurobi').objective == pytest.approx(10 + 10**0.5 + 2.5**0.5, rel=1e-3), (
@@ -252,7 +252,7 @@ def _coefficients(expression: str, sources=None) -> pl.DataFrame:
     """The quadratic stream of a model whose row is *expression*."""
     varied = spec(constraints={'coupled': {'dims': ['g'], 'expression': expression}})
     with sps.build(varied, dict(sources or SOURCES)) as model:
-        return model._engine._model.tables.qmatrix
+        return model._built.tables.qmatrix
 
 
 def test_a_pair_in_a_row_is_stored_once_whichever_order_it_was_written():
@@ -330,7 +330,7 @@ def test_the_pair_a_row_holds_is_structure_even_at_the_same_coefficient():
     directly instead: one coefficient at a different column, same value.
     """
     with sps.build(SPEC, SOURCES) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         assert tables.qmatrix.height, 'the model under test carries a quadratic row'
         moved = replace(tables, qmatrix=tables.qmatrix.with_columns(pl.col(COL_R) + 1))
         assert moved.structure != tables.structure, (
@@ -372,7 +372,7 @@ def test_the_highs_handoff_refuses_one_even_when_reached_directly():
     from specsolve._sinks.highs import Highs
 
     with sps.build(SPEC, SOURCES) as model, pytest.raises(SpecsolveError, match='no quadratic-constraint concept'):
-        Highs(model._engine._model.tables)
+        Highs(model._built.tables)
 
 
 def test_a_bare_check_stays_silent_about_all_of_it():

@@ -10,6 +10,7 @@ import weakref
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from specsolve._answer.status import SolveStatus
 from specsolve._names import COEFF, COL, COL_L, COL_R
 from specsolve._sinks.capabilities import Capabilities
 from specsolve._sinks.solver import (
@@ -27,7 +28,6 @@ from specsolve._sinks.solver import (
     solver_vector,
     spelled_senses,
 )
-from specsolve._status import SolveStatus
 from specsolve.errors import SpecsolveError
 
 if TYPE_CHECKING:

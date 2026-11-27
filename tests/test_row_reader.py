@@ -19,7 +19,7 @@ from specsolve.errors import SpecsolveError
 from tests.conftest import DISPATCH_SPEC, override
 
 if TYPE_CHECKING:
-    from specsolve._result import ConstraintRow
+    from specsolve._answer.result import ConstraintRow
 
 DATA = {
     'generator': pl.DataFrame({'generator': ['wind', 'gas']}),
@@ -237,9 +237,9 @@ def test_the_row_read_is_the_row_the_solver_was_given() -> None:
     still return plausible terms.
     """
     with sps.build(COMMITMENT, COMMITMENT_DATA) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         for name in ('commit', 'balance'):
-            indexed = model._engine._model.constraints[name]
+            indexed = model._built.constraints[name]
             coordinates = indexed.table.collect()
             for offset in range(indexed.height):
                 at = indexed.start + offset

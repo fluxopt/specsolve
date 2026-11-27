@@ -119,7 +119,7 @@ def test_the_reduced_cost_agrees_with_the_solvers_own(solver_name: str, sense: s
     """Every sink's native reduced costs carry the same convention, so a sink whose duals drifted shows here."""
     with sps.build(spec(sense, balance), SOURCES) as model, model.solve(solver_name, outputs=RC) as answer:
         computed = answer.reduced_cost('p')['value'].to_list()
-        own = native(solver_name, model._engine._solver.handle)
+        own = native(solver_name, model._solver.handle)
     assert computed == pytest.approx(own, abs=RTOL), f"{solver_name}'s own reduced costs agree with the computed ones"
 
 
@@ -153,7 +153,7 @@ def test_a_quadratic_objective_contributes_its_gradient_at_the_solution(
     model_spec = spec(sense, 'sum(p, over=g) == total', objective_written)
     with sps.build(model_spec, SOURCES) as model, model.solve(solver_name, outputs=RC) as answer:
         computed = answer.reduced_cost('p')['value'].to_list()
-        own = native(solver_name, model._engine._solver.handle)
+        own = native(solver_name, model._solver.handle)
     assert computed == pytest.approx(own, abs=RTOL), f"{solver_name}'s own reduced costs agree with the computed ones"
     assert computed[2] != pytest.approx(0.0, abs=RTOL), 'c is held at its floor, so its bound has a price'
 

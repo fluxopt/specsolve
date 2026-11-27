@@ -47,7 +47,7 @@ INTEGRAL = PLAIN | {'variables': {'p': {'dims': ['g'], 'domain': 'integer', 'bou
 def _tables(spec, sources=SOURCES):
     """The built model a capability question is asked of, as a stub sink is asked it."""
     with sps.build(spec, dict(sources)) as model:
-        return model._engine._model.tables
+        return model._built.tables
 
 
 def _refusal(spec, sink: str, sources=SOURCES) -> str | None:
