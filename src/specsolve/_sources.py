@@ -785,52 +785,53 @@ def _refuse_unknown_or_repeated_coordinates(
             )
         return
 
-    labels_by_dim = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
-    codes = _coordinate_codes(p.dims, table, labels_by_dim)
-    _refuse_unknown_labels(name, kind, table, labels_by_dim, codes)
-    _refuse_repeated_coordinates(name, kind, table, p.dims, codes)
+    labels_by_dimension = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
+    positions = _coordinate_positions(p.dims, table, labels_by_dimension)
+    _refuse_unknown_labels(name, kind, table, labels_by_dimension, positions)
+    _refuse_repeated_coordinates(name, kind, table, p.dims, positions)
 
 
-def _coordinate_codes(
-    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dim: Mapping[str, pl.Series]
+def _coordinate_positions(
+    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series]
 ) -> pl.Series | None:
-    """One integer per row that names its coordinate: its row-major index in the product of the labels.
+    """Each row's coordinate position: where its coordinate sits in the product of its dimensions' labels.
 
-    Two rows share a code exactly when they share a coordinate, and a row with a
-    label its dimension lacks gets a null, so counting distinct codes replaces
-    hashing every key column, which is the check's cost on a large dense table.
-    ``None`` asks the caller to hash instead: for one key column, which hashes
-    once either way, for a table under 50,000 rows, and where a code cannot be
-    formed — a dimension whose labels are not read yet, a column of another
-    dtype than its labels, a product past 63 bits.
+    A coordinate's position is built from its labels' positions, row-major, so
+    two rows share one exactly when they share a coordinate, and a row with a
+    label its dimension lacks has none and reads as null. Counting distinct
+    positions replaces hashing every key column, which is the check's cost on a
+    large dense table. ``None`` asks the caller to hash instead: for one key
+    column, which hashes once either way, for a table under 50,000 rows, and
+    where a position cannot be formed — a dimension whose labels are not read
+    yet, a column of another dtype than its labels, a product past 63 bits.
     """
     if len(dims) < 2 or table.height < 50_000:
         return None
-    if any(d not in labels_by_dim or table.schema[d] != labels_by_dim[d].dtype for d in dims):
+    if any(d not in labels_by_dimension or table.schema[d] != labels_by_dimension[d].dtype for d in dims):
         return None
-    if math.prod(labels_by_dim[d].len() for d in dims) >= 2**63:
+    if math.prod(labels_by_dimension[d].len() for d in dims) >= 2**63:
         return None
-    code = pl.lit(0, dtype=pl.UInt64)
+    position = pl.lit(0, dtype=pl.UInt64)
     for d in dims:
-        labels = labels_by_dim[d]
-        index = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        code = code * labels.len() + pl.col(d).replace_strict(labels, index, default=None)
-    return table.select(code).to_series()
+        labels = labels_by_dimension[d]
+        label_position = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        position = position * labels.len() + pl.col(d).replace_strict(labels, label_position, default=None)
+    return table.select(position).to_series()
 
 
 def _refuse_unknown_labels(
-    name: str, kind: str, table: pl.DataFrame, labels_by_dim: Mapping[str, pl.Series], codes: pl.Series | None
+    name: str, kind: str, table: pl.DataFrame, labels_by_dimension: Mapping[str, pl.Series], positions: pl.Series | None
 ) -> None:
-    """Refuse the first dimension holding a label it does not have; codes without a null prove there is none."""
-    if not labels_by_dim or (codes is not None and not codes.null_count()):
+    """Refuse the first dimension holding a label it does not have; positions without a null prove there is none."""
+    if not labels_by_dimension or (positions is not None and not positions.null_count()):
         return
-    all_known = table.select(_is_label(d, labels).all().alias(d) for d, labels in labels_by_dim.items()).row(
+    all_known = table.select(_is_label(d, labels).all().alias(d) for d, labels in labels_by_dimension.items()).row(
         0, named=True
     )
-    dim = next((d for d in labels_by_dim if not all_known[d]), None)
+    dim = next((d for d in labels_by_dimension if not all_known[d]), None)
     if dim is None:
         return
-    labels = labels_by_dim[dim]
+    labels = labels_by_dimension[dim]
     unknown = table.filter(~_is_label(dim, labels)).select(pl.col(dim).unique())[dim].to_list()
     shown = ', '.join(repr(s) for s in unknown[:5])
     more = f' (and {len(unknown) - 5} more)' if len(unknown) > 5 else ''
@@ -845,10 +846,10 @@ def _refuse_unknown_labels(
 
 
 def _refuse_repeated_coordinates(
-    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], codes: pl.Series | None
+    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], positions: pl.Series | None
 ) -> None:
     """Refuse a coordinate that has more than one row, naming the first three."""
-    repeated = table.select(dims).is_duplicated().any() if codes is None else codes.n_unique() < table.height
+    repeated = table.select(dims).is_duplicated().any() if positions is None else positions.n_unique() < table.height
     if not repeated:
         return
     duplicated = table.group_by(dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)

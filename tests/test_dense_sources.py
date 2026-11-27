@@ -69,8 +69,10 @@ def test_a_large_table_over_one_dimension_is_checked_by_hashing_its_column():
 
     #2154's A/B had the position path double the tidy of `grid-dims-1-l`, a table of 1.2M rows over one dimension.
     """
-    from specsolve._sources import _coordinate_codes
+    from specsolve._sources import _coordinate_positions
 
     labels = pl.Series('g', [f'g{i}' for i in range(60_000)])
     table = pl.DataFrame({'g': labels, 'value': 1.0})
-    assert _coordinate_codes(('g',), table, {'g': labels}) is None, 'one column is hashed, not turned into positions'
+    assert _coordinate_positions(('g',), table, {'g': labels}) is None, (
+        'one column is hashed, not turned into positions'
+    )
