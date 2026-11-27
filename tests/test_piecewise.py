@@ -331,20 +331,19 @@ def test_convex_breakpoints_that_are_not_convex_are_refused(nonconvex_inputs, br
     schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(DataError, match=match):
-        tidy_sources(schema.expand('piecewise').program, {**data, **breakpoints})
+        sps.tidy(schema.expand('piecewise'), {**data, **breakpoints})
 
 
 def test_the_curvature_guard_also_fires_through_the_relational_adapter(nonconvex_inputs):
-    """`tidy_sources` is the one function the relational lane reads data through, so the guard
-    has to live behind it too — not only in the linopy loader."""
+    """`tidy` reads data the way a build does, so the guard fires there too, not only in the linopy loader."""
     data = nonconvex_inputs
     schema = schema_of(CONVEX_SPEC)
 
-    tidy_sources(schema.expand('piecewise').program, data)  # consistent (concave) curvature passes
+    sps.tidy(schema.expand('piecewise'), data)  # consistent (concave) curvature passes
 
     bad = {**data, 'bp_x': BACKWARDS_BP_X}
     with pytest.raises(DataError, match='strictly increasing'):
-        tidy_sources(schema.expand('piecewise').program, bad)
+        sps.tidy(schema.expand('piecewise'), bad)
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +372,7 @@ def test_a_curve_written_out_of_order_is_the_same_curve(nonconvex_inputs):
 
     schema = schema_of(CONVEX_SPEC)
 
-    tidy_sources(schema.expand('piecewise').program, shuffled)
+    sps.tidy(schema.expand('piecewise'), shuffled)
 
 
 def test_a_breakpoint_dimension_with_no_labels_keeps_its_own_message(nonconvex_inputs):
@@ -389,7 +388,7 @@ def test_a_breakpoint_dimension_with_no_labels_keeps_its_own_message(nonconvex_i
     schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(DataError, match='has no labels'):
-        tidy_sources(schema.expand('piecewise').program, orphaned)
+        sps.tidy(schema.expand('piecewise'), orphaned)
 
 
 def test_the_linopy_lane_reads_the_curve_in_label_order(nonconvex_inputs, tmp_path):
@@ -424,7 +423,7 @@ def test_breakpoint_labels_that_run_backwards_are_refused(nonconvex_inputs):
     schema = schema_of(CONVEX_SPEC)
 
     with pytest.raises(DataError, match='strictly increasing'):
-        tidy_sources(schema.expand('piecewise').program, backwards)
+        sps.tidy(schema.expand('piecewise'), backwards)
 
 
 # ---------------------------------------------------------------------------
@@ -462,7 +461,7 @@ def test_a_curve_short_of_a_breakpoint_is_refused(ragged_inputs):
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
     with pytest.raises(DataError, match=r"parameter 'bp_x' has no row at bp=2, generator=B"):
-        tidy_sources(schema.expand('piecewise').program, dict(ragged_inputs))
+        sps.tidy(schema.expand('piecewise'), dict(ragged_inputs))
 
 
 def test_the_curve_guard_fires_on_the_linopy_lane_too(ragged_inputs, tmp_path):
@@ -486,7 +485,7 @@ def test_a_curve_supplied_at_every_breakpoint_passes(ragged_inputs):
 
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
-    tidy_sources(schema.expand('piecewise').program, whole)
+    sps.tidy(schema.expand('piecewise'), whole)
 
 
 def test_a_dict_shaped_curve_is_read_for_holes_too(ragged_inputs, tmp_path):
@@ -524,7 +523,7 @@ def test_a_dimension_with_no_labels_keeps_its_own_message(ragged_inputs):
     schema = schema_of(raw_of(TWO_DIM_YAML))
 
     with pytest.raises(DataError, match='has no labels'):
-        tidy_sources(schema.expand('piecewise').program, whole)
+        sps.tidy(schema.expand('piecewise'), whole)
 
 
 # ---------------------------------------------------------------------------
@@ -695,7 +694,7 @@ def test_a_condition_with_a_gap_in_it_is_refused(short_curve_inputs, present, ma
     schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match=match):
-        tidy_sources(schema.expand('piecewise').program, data)
+        sps.tidy(schema.expand('piecewise'), data)
 
 
 def test_a_condition_that_marks_no_breakpoint_leaves_no_curve(short_curve_inputs):
@@ -727,7 +726,7 @@ def test_values_missing_where_the_condition_says_present_are_still_refused(short
     schema = schema_of(raw_of(SHORT_CURVE))
 
     with pytest.raises(DataError, match='every breakpoint the curve runs through needs a row'):
-        tidy_sources(schema.expand('piecewise').program, data)
+        sps.tidy(schema.expand('piecewise'), data)
 
 
 def test_the_hole_message_offers_the_condition_to_a_block_that_has_none(short_curve_inputs):
@@ -743,12 +742,12 @@ def test_the_hole_message_offers_the_condition_to_a_block_that_has_none(short_cu
     without = schema_of(unmasked)
 
     with pytest.raises(DataError, match='declare a where: that sets how far the curve runs'):
-        tidy_sources(without.expand('piecewise').program, ragged)
+        sps.tidy(without.expand('piecewise'), ragged)
 
     thin = {k: v for k, v in A_AND_SHORT_B['x'].items() if k != ('A', 2)}
     masked = schema_of(raw_of(SHORT_CURVE))
     with pytest.raises(DataError, match=r"narrow where: 'bp_present' to where the curve runs"):
-        tidy_sources(masked.expand('piecewise').program, {**short_curve_inputs, 'bp_x': curve_table(thin)})
+        sps.tidy(masked.expand('piecewise'), {**short_curve_inputs, 'bp_x': curve_table(thin)})
 
 
 #: One curve over ``bp``, its breakpoints handed over as bare sequences —

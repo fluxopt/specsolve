@@ -14,14 +14,14 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 import polars as pl
 
+from specsolve._answer.result import Result
 from specsolve._collect import collected
+from specsolve._encoding import read_values
 from specsolve._inputs import as_table
 from specsolve._messages import unknown_name_message
 from specsolve._names import VALUE
-from specsolve._result import Result
 from specsolve._sinks.solver import BASIS_STATUSES
-from specsolve._sources import read_values
-from specsolve._sweep import Sweep
+from specsolve._sweep.sweep import Sweep
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
@@ -29,8 +29,9 @@ if TYPE_CHECKING:
 
     from mathspec.program import Constraint, Program, Variable
 
-    from specsolve._axes import Axis, Slice
+    from specsolve._attached import Dimension
     from specsolve._inputs import Label, Source
+    from specsolve._sweep.axes import Axis, Slice
 
 
 class Start(TypedDict, total=False):
@@ -41,7 +42,7 @@ class Start(TypedDict, total=False):
     ``variable_basis`` and ``constraint_basis`` give a basis status in
     [`Result.variable_basis`][]'s words, as a string or as that ``Enum``. An
     earlier [`Result`][] is the same, from the tables it carries. Given to
-    [`solve_over`][specsolve._solve_over.solve_over], a table that carries the
+    [`solve_over`][specsolve._sweep.solve_over.solve_over], a table that carries the
     sliced dimension is cut per slice, as a source is.
 
     Example::
@@ -59,14 +60,15 @@ class Start(TypedDict, total=False):
 
 
 def read_start(
-    start: Start, program: Program, labels: Mapping[str, pl.LazyFrame]
+    start: Start, program: Program, tidy: Mapping[str, pl.DataFrame], dimensions: Mapping[str, Dimension]
 ) -> dict[str, dict[str, pl.LazyFrame]]:
     """*start*'s tables, each read and checked as a parameter's source is, over its entry's dimensions.
 
     Every shape a parameter takes is read, from a parquet path to one number
-    for every coordinate; *labels* holds each dimension's labels under its
-    own name. ``primal`` holds numbers, and ``variable_basis`` and
-    ``constraint_basis`` hold basis statuses in their words.
+    for every coordinate; *tidy* holds each dimension's labels as they
+    arrived and *dimensions* the same as the build holds them. ``primal``
+    holds numbers, and ``variable_basis`` and ``constraint_basis`` hold basis
+    statuses in their words.
 
     Raises:
         SpecsolveError: As [`refuse_unknown_start`][] raises, or a basis
@@ -82,7 +84,7 @@ def read_start(
         read[reader] = {}
         for name, obj in tables.items():
             kind = _kind(reader, per)
-            table = read_values(kind, name, declared[name].dims, obj, labels, dtype)
+            table = read_values(kind, name, declared[name].dims, obj, tidy, dimensions, dtype).lazy()
             if reader != 'primal':
                 _refuse_unknown_statuses(kind, name, table)
             read[reader][name] = table

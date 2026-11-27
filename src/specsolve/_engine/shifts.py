@@ -129,7 +129,7 @@ def window_term(scope: Scope, p: Term, s: program.WindowSum, context: str) -> Te
     else:
         assert not isinstance(s.width, str)
         widest = s.width
-    lags = pl.LazyFrame({_LAG: pl.Series(range(min(widest, scope.data.cardinality[s.along])), dtype=pl.Int64)})
+    lags = pl.LazyFrame({_LAG: pl.Series(range(min(widest, scope.data.dimensions[s.along].size)), dtype=pl.Int64)})
 
     moved = pl.col(_POSITION_IN) + pl.col(_LAG)
     if s.wrap:

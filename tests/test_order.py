@@ -54,7 +54,7 @@ def _built(port: dict[str, Any], given: Mapping[str, Any]) -> tuple[bytes, ...]:
     no order contract.
     """
     with sps.build(expanded(port['spec']), given) as model:
-        tables = model._engine._model.tables
+        tables = model._built.tables
         numbers = (
             tables.matrix[COEFF],
             tables.cols['lb'],
