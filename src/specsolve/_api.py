@@ -287,7 +287,8 @@ class Model:
         read it ([`attach_sources`][]); with no standing build, as after a
         failure, every source is read again. A change of numbers alone
         ([`numbers_only`][specsolve._engine.assembly.numbers_only]) reads
-        again only the bounds, constant sides and objective it feeds
+        again only the bounds, constant sides, linear coefficients and
+        objective it feeds
         ([`spliced_model`][specsolve._engine.assembly.spliced_model]);
         anything else builds in full. The held solver
         reads its [`structure`][specsolve._sinks.solver.Solver.structure]
