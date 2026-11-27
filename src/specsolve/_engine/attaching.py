@@ -7,7 +7,7 @@ every source; this shapes each and encodes the string dimensions.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,6 +17,7 @@ from mathspec import program as program_module
 from specsolve._collect import collected, collected_all, in_memory
 from specsolve._engine.coverage import divisors_of
 from specsolve._engine.scope import reads_as_zero
+from specsolve._engine.specialize import settle
 from specsolve._messages import coordinate_text, missing_row_message, negative_window_message
 from specsolve._names import LABEL, POSITION, VALUE
 from specsolve.errors import DataError
@@ -40,7 +41,9 @@ class AttachedSources:
     cached table heights.
     ``consecutive`` maps each dimension whose labels are the integers
     ``first, first + 1, …`` in that order to ``first``, so that a label less
-    ``first`` is its position.
+    ``first`` is its position. ``settled`` is each atom of a ``where`` that the
+    data settles: ``True`` where it holds everywhere, ``False`` where
+    nowhere ([`settle`][]).
     """
 
     parameters: Mapping[str, pl.LazyFrame]
@@ -50,6 +53,7 @@ class AttachedSources:
     parameter_rows: Mapping[str, int]
     consecutive: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame]
+    settled: Mapping[program.Condition, bool] = field(default_factory=dict)
 
     def is_enum_encoded(self, dim: str) -> bool:
         """Whether *dim* was given an ``Enum``."""
@@ -65,10 +69,11 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
 
     A dimension's ``Enum`` is built from its labels, then every table that
     carries the dimension is re-encoded against it. Each table is read
-    [`in_memory`][], since every read holds one table whole. A dimension's
-    cast is built once and the parameters are cast in one batch: building a
-    cast to an ``Enum`` of many labels costs a fixed time per expression, and
-    PyPSA's spec casts hundreds of tables over the same dozen dimensions.
+    [`in_memory`][], since every read holds one table whole. Each dimension's
+    cast is built once and shared, since building a cast to an ``Enum`` of
+    many labels costs a fixed time per expression, and the parameters are
+    cast in one batch. Every atom of a ``where`` is then read once
+    ([`settle`][]), for the assumptions and the build both.
 
     Raises:
         DataError: A parameter or a relation that refuses a missing row has none
@@ -87,18 +92,12 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         if casts:
             relations[name] = relations[name].with_columns(casts)
     to_enum = {d: pl.col(d).cast(enum) for d, enum in enums.items()}
-    uncollected: dict[str, pl.LazyFrame] = {}
+    cast: dict[str, pl.LazyFrame] = {}
     for name, p in program.parameters.items():
-        table = _plain_strings(parameters[name], p.dims)
-        casts = [to_enum[d] for d in p.dims if d in to_enum]
-        if p.dtype == 'float':
-            casts.append(_AS_FLOAT)
-        if casts:
-            uncollected[name] = table.lazy().with_columns(casts)
-        else:
-            parameters[name] = table
+        casts = [to_enum[d] for d in p.dims if d in to_enum] + ([_AS_FLOAT] if p.dtype == 'float' else [])
+        cast[name] = _plain_strings(parameters[name], p.dims).lazy().with_columns(casts)
     with in_memory():
-        parameters |= dict(zip(uncollected, collected_all(uncollected.values()), strict=True))
+        parameters = dict(zip(cast, collected_all(cast.values()), strict=True))
 
     for name, relation in program.relations.items():
         if relation.missing == 'refused':
@@ -119,7 +118,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
             given[name] = table.select(*p.dims).lazy()
             parameters[name] = _filled(table, p.dims, p.missing, dimensions)
 
-    return AttachedSources(
+    attached = AttachedSources(
         parameters={name: f.lazy() for name, f in parameters.items()},
         dimensions={d: f.lazy() for d, f in dimensions.items()},
         relations={name: f.lazy() for name, f in relations.items()},
@@ -128,6 +127,7 @@ def attach(program: program.Program, sources: Mapping[str, pl.LazyFrame]) -> Att
         consecutive={d: first for d, f in dimensions.items() if (first := _first_of_a_run(f)) is not None},
         given=given,
     )
+    return replace(attached, settled=settle(program, attached))
 
 
 def filled_parameters(declared: program.Program) -> frozenset[str]:

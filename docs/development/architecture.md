@@ -317,7 +317,9 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Attached sources**
 : The tidy tables as every query reads them: a dimension as `(LABEL, POSITION)`, a
-  label column as an `Enum` in declared order.
+  label column as an `Enum` in declared order. They also hold each settled atom
+  of a `where` or a `cases:` region, read once for the assumptions and the
+  build both.
 
 **Term**, **presence** and **region**
 : One additive term of an expression, over its own dimensions: linear,
