@@ -1,8 +1,9 @@
 """What the data decides about a program before an entry is built.
 
 [`attach`][specsolve._engine.attaching.attach] reads the data once and, in the
-same pass, every atom of a ``where`` ([`settle`][]). What that read settles
-is answered here: the program a build reads is [`specialized`][] to it, and
+same pass, every atom of a ``where`` or a ``cases:`` region ([`settle`][]).
+What that read settles is answered here: the program a build reads is
+[`specialized`][] to it, and
 [`Assembly`][specsolve._engine.assembly.Assembly] builds nothing the data has
 already ruled out ([`rowless`][]). Every such decision lives in this module, so
 a build's shortcuts are one list rather than a check in each place that takes
@@ -13,22 +14,26 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from mathspec import program
+from mathspec.program import walk
 
 from specsolve._collect import collected_all, in_memory
 from specsolve._engine.conditions import counted_over_nothing, passes_without_a_row, passing
 from specsolve._engine.scope import Scope
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from specsolve._engine.attaching import AttachedSources
 
 
 def settle(compiled: program.Program, attached: AttachedSources) -> dict[program.Condition, bool]:
-    """Each atom of the ``where`` of a variable, constraint or assumption that *attached* settles.
+    """Each atom of *compiled*'s conditions that *attached* settles.
+
+    The conditions are the ``where`` of every variable, constraint and
+    assumption, and of every ``cases:`` region the rows and bounds read.
 
     An atom is read anywhere in a ``where``, a named condition read through:
     ``True`` where it holds everywhere, ``False`` where nowhere. An atom the
@@ -44,7 +49,11 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     count along a dimension without a label, settle without a query.
     """
     entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
-    masks = [e.where for e in entries if e.where is not None]
+    bounds = [b for v in compiled.variables.values() for b in (v.lower, v.upper) if b is not None]
+    regions = [
+        r.when for node in walk(*compiled.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+    ]
+    masks = [*(e.where for e in entries if e.where is not None), *regions]
     scope = Scope(compiled, attached, {})
     atoms = {atom for mask in masks for atom in mask.atoms}
     out: dict[program.Condition, bool] = {}
@@ -72,35 +81,48 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
 
 
 def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
-    """*compiled* with each variable's and constraint's ``where`` specialized to the atoms *attached* settled.
+    """*compiled* with each ``where`` and ``cases:`` region it builds rows from specialized to the atoms *attached* settled.
 
-    A ``where`` the data settles true is dropped, so the entry takes the
-    path of one without a ``where``: dense labels, and terms placed on their
-    rows without a join. One it settles false is kept as that literal, for
-    [`rowless`][] to skip. The program a build keeps is this one, so readback
-    reads the entries it built. Assumptions keep their ``where`` as
-    written, since a refusal quotes it; [`rules_out`][] answers for them.
+    A variable's or constraint's ``where`` the data settles true is dropped, so
+    the entry takes the path of one without a ``where``: dense labels,
+    and terms placed on their rows without a join. One it settles false is
+    kept as that literal, for [`rowless`][] to skip. A region it settles
+    false is dropped from its ``cases:``, and one left alone holding true
+    stands for its ``cases:``: a build places a term on its rows by the
+    term's own dimensions, and a sum spreads a term along what it sums, so
+    the region's dimensions are not needed to place it.
+
+    The program a build keeps is this one, so readback reads the
+    entries it built. Assumptions keep their ``where`` as written, since
+    a refusal quotes it; [`rules_out`][] answers for them. The ``expressions``
+    stay as written too: a read takes its dimensions from its terms, and a
+    region may be the only one over a dimension.
     """
     settled = attached.settled
-
-    def specialized_entries[D: (program.Variable, program.Constraint)](entries: Mapping[str, D]) -> dict[str, D]:
-        out = {}
-        for name, entry in entries.items():
-            where = entry.where
-            if where is None:
-                out[name] = entry
-                continue
-            kept = _specialized_mask(where, settled)
-            out[name] = replace(entry, where=None if _holds(kept, value=True) else kept)
-        return out
-
     if not settled:
         return compiled
-    return replace(
-        compiled,
-        variables=specialized_entries(compiled.variables),
-        constraints=specialized_entries(compiled.constraints),
-    )
+
+    def where(entry: program.Variable | program.Constraint) -> program.Mask | None:
+        if entry.where is None:
+            return None
+        kept = _specialized_mask(entry.where, settled)
+        return None if _holds(kept, value=True) else kept
+
+    def bound(b: program.Expression | None) -> program.Expression | None:
+        return None if b is None else _regions_specialized(b, settled)
+
+    variables = {
+        n: replace(v, where=where(v), lower=bound(v.lower), upper=bound(v.upper)) for n, v in compiled.variables.items()
+    }
+    constraints = {
+        n: replace(
+            c, where=where(c), lhs=_regions_specialized(c.lhs, settled), rhs=_regions_specialized(c.rhs, settled)
+        )
+        for n, c in compiled.constraints.items()
+    }
+    o = compiled.objective
+    objective = None if o is None else replace(o, expression=_regions_specialized(o.expression, settled))
+    return replace(compiled, variables=variables, constraints=constraints, objective=objective)
 
 
 def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
@@ -136,3 +158,36 @@ def _substituted(node: program.Condition, settled: Mapping[program.Condition, bo
     if isinstance(node, program.ConditionReference):
         return _substituted(node.body, settled)
     return node
+
+
+def _regions_specialized(e: program.Expression, settled: Mapping[program.Condition, bool]) -> program.Expression:
+    """*e* with each ``cases:`` region specialized as [`specialized`][] says, a named expression rewritten where it is read."""
+    if isinstance(e, program.Cases):
+        regions = tuple(
+            program.Region(when, _regions_specialized(r.value, settled))
+            for r in e.regions
+            if not _holds(when := _specialized_mask(r.when, settled), value=False)
+        )
+        if len(regions) == 1 and _holds(regions[0].when, value=True):
+            return regions[0].value
+        return replace(e, regions=regions)
+    return _rebuilt(e, lambda child: _regions_specialized(child, settled))
+
+
+def _rebuilt(e: program.Expression, f: Callable[[program.Expression], program.Expression]) -> program.Expression:
+    """*e* with *f* applied to each sub-expression ``mathspec.program.children`` names, the rest kept."""
+    if isinstance(e, program.Constant | program.ParameterReference | program.VariableReference | program.Dual):
+        return e
+    if isinstance(e, program.Add | program.Multiply):
+        return replace(e, left=f(e.left), right=f(e.right))
+    if isinstance(e, program.Divide):
+        return replace(e, numerator=f(e.numerator), divisor=f(e.divisor))
+    if isinstance(e, program.Power):
+        return replace(e, base=f(e.base), exponent=f(e.exponent))
+    if isinstance(e, program.Negate | program.Sum | program.Join | program.Translate | program.WindowSum):
+        return replace(e, operand=f(e.operand))
+    if isinstance(e, program.ExpressionReference):
+        return replace(e, body=f(e.body))
+    if isinstance(e, program.Cases):
+        return replace(e, regions=tuple(replace(r, value=f(r.value)) for r in e.regions))
+    assert_never(e)

@@ -564,3 +564,54 @@ def test_a_read_keeps_the_dimension_only_a_region_that_claims_nothing_spans(solv
     read = sps.solve(spec, sources).evaluate('e') if solved else sps.evaluate(spec, sources, 'e')
     assert read.columns == ['g', 'h', 'value'], '`e` is declared over `g` and `h`, whichever region claims a coordinate'
     assert read.sort('g').get_column('value').to_list() == [0.5, 0.5], '`flat` is worth 0.5 at each of the two units'
+
+
+@pytest.mark.parametrize(
+    ('delay', 'objective', 'reads'),
+    [
+        pytest.param([0, 0], 4.0, 'no unit is delayed, so every p is held to 0.5', id='settled-false'),
+        pytest.param(
+            [1, 1], 5.0, 'every unit reads p one step late, so each last p is free up to 1', id='settled-true'
+        ),
+    ],
+)
+def test_a_region_the_data_settles_is_built_without_reading_its_condition(monkeypatch, delay, objective, reads):
+    """`delay > 0` holds at no unit, or at every unit, and either is read once for the build rather than per region."""
+    from specsolve._engine import queries as queries_module
+
+    read, real = [], queries_module.narrowed
+
+    def spied(scope, dims, where):
+        read.append(tuple(dims))
+        return real(scope, dims, where)
+
+    monkeypatch.setattr(queries_module, 'narrowed', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    with differential(DELAYED, sources) as run:
+        assert run.oracle == pytest.approx(objective, rel=RTOL), reads
+    assert not read, f'a region whose condition the data settles was read over {read}'
+
+
+@pytest.mark.parametrize('delay', [pytest.param([0, 0], id='settled-false'), pytest.param([1, 1], id='settled-true')])
+def test_a_region_the_data_settles_is_written_out_of_the_program_a_build_reads(monkeypatch, delay):
+    """One region of `arrival` settles false and the other true, so `specialized` leaves no `cases:` to build.
+
+    The false one leaves, and the true one, left alone, stands for the `cases:`. Either kept builds the same model
+    over a filter no query needs, which only this sees.
+    """
+    from mathspec import program
+
+    from specsolve._engine import assembly as assembly_module
+
+    programs, real = [], assembly_module.Assembly.__init__
+
+    def spied(self, compiled, *args):
+        programs.append(compiled)
+        real(self, compiled, *args)
+
+    monkeypatch.setattr(assembly_module.Assembly, '__init__', spied)
+    sources = _tables({'t': [0, 1, 2, 3], 'g': ['a', 'b'], 'delay': {'g': ['a', 'b'], 'value': delay}})
+    sps.build(DELAYED, sources).close()
+    held = programs[0].constraints['held']
+    left = [e for e in program.walk(held.lhs, held.rhs) if isinstance(e, program.Cases)]
+    assert not left, f'the build reads {left}, where the data settled every region of it'

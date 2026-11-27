@@ -14,6 +14,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 - feat!: specsolve requires mathspec 0.5.0a1, where a missing row reads as the value `missing:` names and a piecewise entry names its links ([#2199](https://github.com/fluxopt/specsolve/pull/2199))
 - perf(engine): a flag that switches entries on or off is read once per build ([#2132](https://github.com/fluxopt/specsolve/pull/2132))
 - perf(engine): a case that claims no coordinate builds no term ([#2157](https://github.com/fluxopt/specsolve/pull/2157))
+- perf(engine): a cases region whose condition the data settles is built without reading it ([#2158](https://github.com/fluxopt/specsolve/pull/2158))
 
 ## 0.13.0 (2026-11-25)
 
