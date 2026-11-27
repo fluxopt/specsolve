@@ -785,77 +785,82 @@ def _refuse_unknown_or_repeated_coordinates(
             )
         return
 
-    known = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
-    positions = _row_major_positions(p.dims, table, known)
-    if positions is None:
-        answers: dict[str, bool] = (
-            table.select(_is_label(d, labels).all().alias(d) for d, labels in known.items()).row(0, named=True)
-            if known
-            else {}
-        )
-        repeated = table.select(p.dims).is_duplicated().any()
-        strays = [d for d in known if not answers[d]]
-    else:
-        repeated = positions.n_unique() < table.height
-        strays = [
-            d
-            for d, labels in known.items()
-            if positions.null_count() and not table.select(_is_label(d, labels).all()).item()
-        ]
+    labels_by_dim = {d: _labels_of(d, sources[d]) for d in p.dims if d in sources}
+    codes = _coordinate_codes(p.dims, table, labels_by_dim)
+    _refuse_unknown_labels(name, kind, table, labels_by_dim, codes)
+    _refuse_repeated_coordinates(name, kind, table, p.dims, codes)
 
-    if strays:
-        d = strays[0]
-        labels = known[d]
-        strangers = table.filter(~_is_label(d, labels)).select(pl.col(d).unique())[d].to_list()
-        shown = ', '.join(repr(s) for s in strangers[:5])
-        more = f' (and {len(strangers) - 5} more)' if len(strangers) > 5 else ''
-        raise DataError(
-            f"{kind} '{name}' has label(s) in dimension '{d}' that are not labels "
-            f'of it: {shown}{more}.\n'
-            f'  {d} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
-            f'A missing row means no value there, but a label the dimension does not have is a '
-            f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
-            f'as absent. Fix the label, or add it to the labels of {d}.'
-        )
 
+def _coordinate_codes(
+    dims: tuple[str, ...], table: pl.DataFrame, labels_by_dim: Mapping[str, pl.Series]
+) -> pl.Series | None:
+    """One integer per row that names its coordinate: its row-major index in the product of the labels.
+
+    Two rows share a code exactly when they share a coordinate, and a row with a
+    label its dimension lacks gets a null, so counting distinct codes replaces
+    hashing every key column, which is the check's cost on a large dense table.
+    ``None`` asks the caller to hash instead: for one key column, which hashes
+    once either way, for a table under 50,000 rows, and where a code cannot be
+    formed — a dimension whose labels are not read yet, a column of another
+    dtype than its labels, a product past 63 bits.
+    """
+    if len(dims) < 2 or table.height < 50_000:
+        return None
+    if any(d not in labels_by_dim or table.schema[d] != labels_by_dim[d].dtype for d in dims):
+        return None
+    if math.prod(labels_by_dim[d].len() for d in dims) >= 2**63:
+        return None
+    code = pl.lit(0, dtype=pl.UInt64)
+    for d in dims:
+        labels = labels_by_dim[d]
+        index = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
+        code = code * labels.len() + pl.col(d).replace_strict(labels, index, default=None)
+    return table.select(code).to_series()
+
+
+def _refuse_unknown_labels(
+    name: str, kind: str, table: pl.DataFrame, labels_by_dim: Mapping[str, pl.Series], codes: pl.Series | None
+) -> None:
+    """Refuse the first dimension holding a label it does not have; codes without a null prove there is none."""
+    if not labels_by_dim or (codes is not None and not codes.null_count()):
+        return
+    all_known = table.select(_is_label(d, labels).all().alias(d) for d, labels in labels_by_dim.items()).row(
+        0, named=True
+    )
+    dim = next((d for d in labels_by_dim if not all_known[d]), None)
+    if dim is None:
+        return
+    labels = labels_by_dim[dim]
+    unknown = table.filter(~_is_label(dim, labels)).select(pl.col(dim).unique())[dim].to_list()
+    shown = ', '.join(repr(s) for s in unknown[:5])
+    more = f' (and {len(unknown) - 5} more)' if len(unknown) > 5 else ''
+    raise DataError(
+        f"{kind} '{name}' has label(s) in dimension '{dim}' that are not labels "
+        f'of it: {shown}{more}.\n'
+        f'  {dim} has: {sorted(str(k) for k in labels.to_list())[:10]}\n'
+        f'A missing row means no value there, but a label the dimension does not have is a '
+        f'typo: its row joins nothing, so the coordinate it was meant for silently reads '
+        f'as absent. Fix the label, or add it to the labels of {dim}.'
+    )
+
+
+def _refuse_repeated_coordinates(
+    name: str, kind: str, table: pl.DataFrame, dims: tuple[str, ...], codes: pl.Series | None
+) -> None:
+    """Refuse a coordinate that has more than one row, naming the first three."""
+    repeated = table.select(dims).is_duplicated().any() if codes is None else codes.n_unique() < table.height
     if not repeated:
         return
-    duplicated = table.group_by(p.dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
+    duplicated = table.group_by(dims).agg(pl.len().alias('#rows')).filter(pl.col('#rows') > 1).head(3)
     shown = '; '.join(
-        f'{coordinate_text({d: row[d] for d in p.dims})} ({row["#rows"]} rows)'
+        f'{coordinate_text({d: row[d] for d in dims})} ({row["#rows"]} rows)'
         for row in duplicated.iter_rows(named=True)
     )
     raise DataError(
         f"{kind} '{name}' has more than one row for a coordinate: {shown}. "
         f'It holds one value per coordinate, so which value applies is undefined — '
-        f'aggregate the source to one row per {list(p.dims)} before attaching it.'
+        f'aggregate the source to one row per {list(dims)} before attaching it.'
     )
-
-
-def _row_major_positions(
-    dims: tuple[str, ...], table: pl.DataFrame, known: Mapping[str, pl.Series]
-) -> pl.Series | None:
-    """Each row's row-major position in the product of *dims*' labels, one integer per row.
-
-    Two rows for one coordinate share a position, so counting distinct
-    positions replaces hashing every key column, which is the check's cost on a
-    dense table. ``None`` where hashing costs less: one key column, which
-    hashes once either way and would first be looked up label by label, or a
-    table under 50,000 rows. ``None`` too where positions cannot be formed: a
-    dimension whose labels are not read yet, a column of another dtype than its
-    labels, a product past 63 bits. A label that is none of its dimension's has
-    no position, and reads as null.
-    """
-    if len(dims) < 2 or table.height < 50_000 or any(d not in known or table.schema[d] != known[d].dtype for d in dims):
-        return None
-    if math.prod(known[d].len() for d in dims) >= 2**63:
-        return None
-    position = pl.lit(0, dtype=pl.UInt64)
-    for d in dims:
-        labels = known[d]
-        label_positions = pl.int_range(labels.len(), dtype=pl.UInt64, eager=True)
-        position = position * labels.len() + pl.col(d).replace_strict(labels, label_positions, default=None)
-    return table.select(position).to_series()
 
 
 def _is_label(dim: str, labels: pl.Series) -> pl.Expr:
