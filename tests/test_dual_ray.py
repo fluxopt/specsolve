@@ -117,6 +117,16 @@ def test_a_solve_that_found_an_answer_has_nothing_to_certify() -> None:
             answer.dual_ray('demand')
 
 
+@pytest.mark.xfail(strict=True, reason='an archived answer reaches an internal assertion')
+def test_an_archived_answer_says_it_holds_no_ray(tmp_path) -> None:
+    """A ray is live only, so an answer read back from an archive refuses it and says how to get one."""
+    sps.solve(SHORT, SOURCES, archive=tmp_path / 'short')
+    with sps.read_archive(tmp_path / 'short') as answer:
+        assert answer.termination_condition == 'infeasible'
+        with pytest.raises(SpecsolveError, match='an archive holds none'):
+            answer.dual_ray('demand')
+
+
 def test_a_closed_result_says_so_before_it_says_anything_else() -> None:
     """A ray is released with the primals, and reports the same way they do."""
     answer = certified('highs', {})

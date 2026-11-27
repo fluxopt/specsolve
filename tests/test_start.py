@@ -183,6 +183,43 @@ def test_a_start_of_values_for_an_lp_is_used_warned_of_or_refused_as_its_sink_sa
     assert after.objective == pytest.approx(before.objective), 'the sink took the values and still solved'
 
 
+def _through_model_solve(start: dict[str, Any]) -> None:
+    with sps.build(DISPATCH, snapshots(40)) as model:
+        model.solve(start=start)
+
+
+def _through_solve(start: dict[str, Any]) -> None:
+    sps.solve(DISPATCH, snapshots(40), start=start)
+
+
+def _through_solve_over(start: dict[str, Any]) -> None:
+    sps.solve_over(DISPATCH, snapshots(40), sps.EachWindow('snapshot', horizon=40, lookahead=0), start=start)
+
+
+_LANDS_INSIDE = pytest.mark.xfail(
+    strict=True, reason='a fixed stack level lands inside specsolve when a verb calls Model.solve'
+)
+
+
+@pytest.mark.parametrize(
+    'call',
+    [
+        pytest.param(_through_model_solve, id='model-solve'),
+        pytest.param(_through_solve, id='solve', marks=_LANDS_INSIDE),
+        pytest.param(_through_solve_over, id='solve-over', marks=_LANDS_INSIDE),
+    ],
+)
+def test_the_warning_of_a_start_with_no_gain_names_the_callers_line(call: Any) -> None:
+    """The warning points at the line that asked for the solve, whichever verb it called."""
+    primal = sps.solve(DISPATCH, snapshots(40)).primal('p')
+    start = {'primal': {'p': primal.head(primal.height // 2)}}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        call(start)
+    warned = [w for w in caught if issubclass(w.category, SpecsolveWarning) and 'no gain' in str(w.message)]
+    assert [w.filename for w in warned] == [__file__], 'one warning, attributed to this file rather than to specsolve'
+
+
 def test_a_start_from_another_model_lands_nowhere_and_is_refused() -> None:
     before = sps.solve(KNAPSACK, knapsack_sources(), outputs=BASIS)
     with pytest.raises(SpecsolveError, match='no value at any coordinate'):
