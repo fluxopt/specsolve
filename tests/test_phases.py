@@ -15,9 +15,9 @@ import pytest
 import yaml
 
 import specsolve as sps
-from specsolve import _api, _archive_layout, _assumptions, _clock
+from specsolve import _api, _archive_layout, _clock
 from specsolve._clock import Phase
-from specsolve._engine import assembly, readback
+from specsolve._engine import assembly, attaching, readback
 from specsolve._records import PHASES, Metrics
 from specsolve._result import Result
 from specsolve._sinks.solver import Solver
@@ -232,8 +232,8 @@ STEPS = [
     pytest.param([(_api, 'as_spec')], 'load', id='the spec read'),
     pytest.param([(_api, 'as_program')], 'load', id='the program compiled'),
     pytest.param([(_api, 'tidied')], 'tidy', id='the sources read'),
-    pytest.param([(_api, 'validate_assumptions')], 'attach', id='the assumptions checked'),
-    pytest.param([(_api, 'attach'), (_assumptions, 'attach')], 'attach', id='the sources attached'),
+    pytest.param([(attaching, 'check_assumptions')], 'attach', id='the assumptions checked'),
+    pytest.param([(_api, 'attach')], 'attach', id='the sources attached'),
     pytest.param([(assembly, 'short_parameters')], 'build', id='the sparse parameters counted'),
     pytest.param([(assembly.Assembly, 'run')], 'build', id='the entries assembled'),
     pytest.param([(_api.Model, '_read_start')], 'handoff', id='the start read'),

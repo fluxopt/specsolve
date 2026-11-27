@@ -14,7 +14,6 @@ from specsolve._answer import WHOLE, Answer
 from specsolve._collect import collected
 from specsolve._engine import coverage, indices
 from specsolve._engine.assembly import declares_quadratic
-from specsolve._engine.attaching import attach
 from specsolve._engine.queries import QueryBuilder, Solution
 from specsolve._engine.scope import Scope
 from specsolve._engine.terms import Term, presences_of
@@ -647,21 +646,19 @@ def evaluator(
     return evaluate
 
 
-def expressions_of(program: program.Program, sources: Mapping[str, pl.LazyFrame], lower: Lower | None) -> Expressions:
-    """Attach *sources* and defer the reads [`specsolve.evaluate`][] values one expression through.
+def expressions_of(program: program.Program, attached: AttachedSources, lower: Lower | None) -> Expressions:
+    """The reads [`specsolve.evaluate`][] values one expression through, deferred.
 
     Args:
         program: A compiled program with no variables — a calculation, so every
             expression has a value with no solver.
-        sources: Tidied sources, as
-            [`tidy_sources`][specsolve._sources.tidy_sources] produces.
+        attached: Its data, as [`attach`][specsolve._engine.attaching.attach] returns it.
         lower: How an expression the caller writes becomes a program node.
 
     Returns:
         The readers, each of which builds its query on call.
     """
-    builder = QueryBuilder(Scope(program, attach(program, sources), {}))
-    return expressions(builder, program.expressions, lower)
+    return expressions(QueryBuilder(Scope(program, attached, {})), program.expressions, lower)
 
 
 def discrete(model: BuiltModel) -> list[str]:

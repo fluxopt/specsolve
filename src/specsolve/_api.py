@@ -32,8 +32,7 @@ from mathspec import advice
 from specsolve import _parquet as parquet
 from specsolve import _sinks as sinks
 from specsolve._archive_layout import carried_sources, check_the_target, write_archive
-from specsolve._assumptions import validate_assumptions
-from specsolve._clock import Clock
+from specsolve._clock import Clock, untimed
 from specsolve._collect import collected
 from specsolve._engine import readback
 from specsolve._engine.assembly import Measured
@@ -179,9 +178,8 @@ def evaluate(spec: SpecLike, sources: Mapping[str, Source], expression: str | Ma
     spec = as_spec(spec)
     program = as_program(spec)
     _refuse_a_decision(program)
-    tidied = tidy_sources(program, sources)
-    readers = readback.expressions_of(program, tidied, lambda written: expression_node(spec, written))
-    return readers.value(expression)
+    attached = attach(program, tidied(program, sources, untimed))
+    return readback.expressions_of(program, attached, lambda written: expression_node(spec, written)).value(expression)
 
 
 class Model:
@@ -247,7 +245,7 @@ class Model:
         lap = self._clock.lap
         try:
             self._tidied = tidied(self._program, self._sources, lap)
-            attached = validate_assumptions(self._program, self._tidied)
+            attached = attach(self._program, self._tidied)
             lap('attach')
             if self._solver is not None:
                 self._solver.structure()
@@ -255,9 +253,6 @@ class Model:
             self._built = None
             self._solved = None
             self._measured = Measured()
-            if attached is None:
-                attached = attach(self._program, self._tidied)
-                lap('attach')
             self._built = build_model(self._program, attached, self._measured, lap)
         except BaseException:
             self.close()

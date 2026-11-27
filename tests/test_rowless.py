@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
-from specsolve import _assumptions
+from specsolve._engine import assumptions as _assumptions
 from specsolve._engine import conditions, indices, specialize
 from specsolve._engine import queries as queries_module
 from specsolve._names import ROW
@@ -321,7 +321,7 @@ def test_an_assumption_is_read_only_where_its_where_admits_a_coordinate(monkeypa
 
 
 def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
-    """The assumptions are read against an attach, and the build reuses it rather than attaching the same sources again."""
+    """The assumptions are checked on the attach a build reads, rather than on one of their own."""
     from specsolve import _api
 
     calls = []
@@ -332,7 +332,6 @@ def test_a_build_with_assumptions_attaches_its_sources_once(monkeypatch):
         return real(program, sources)
 
     monkeypatch.setattr(_api, 'attach', counted)
-    monkeypatch.setattr(_assumptions, 'attach', counted)
     spec = {**TABLED_SPEC, 'assumptions': {'capped': {'holds': 'cap > 0'}}}
     sps.build(spec, TABLED_SOURCES).close()
     assert len(calls) == 1, f'the sources were attached {len(calls)} times in one build'

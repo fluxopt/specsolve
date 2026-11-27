@@ -16,9 +16,9 @@ import polars.selectors as cs
 from mathspec.errors import did_you_mean
 from mathspec.program import Parameter
 
-from specsolve._assumptions import validate_assumptions
 from specsolve._clock import untimed
 from specsolve._collect import collected, collected_all, in_memory
+from specsolve._engine.attaching import attach
 from specsolve._inputs import as_table, is_dense_array, is_multi_indexed
 from specsolve._messages import coordinate_text, coordinates_text
 from specsolve._names import POSITION, VALUE
@@ -77,29 +77,16 @@ def tidy_sources(program: Program, data: Mapping[str, Source]) -> dict[str, pl.L
             method's conditions on its breakpoints among them.
     """
     sources = tidied(program, data, untimed)
-    validate_assumptions(program, sources)
+    if program.assumptions:
+        attach(program, sources)
     return sources
 
 
-def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
-    """[`tidy_sources`][] short of the assumptions, which a build checks where it clocks the attach they share.
-
-    *lap* ends a lap of ``tidy`` at each step, as [`_read`][] names them.
-
-    Raises:
-        DataError: As [`tidy_sources`][] raises, but for an assumption.
-    """
-    refuse_unknown_sources(program, data)
-    return _read(program, data, lap)
-
-
 @in_memory()
-def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
-    """[`tidy_sources`][] short of the assumptions, on polars' in-memory engine: every read here holds one table whole.
+def tidied(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, pl.LazyFrame]:
+    """[`tidy_sources`][] short of the assumptions, which [`attach`][specsolve._engine.attaching.attach] checks for a build.
 
-    [`validate_assumptions`][] runs
-    after it. It attaches in memory too, and checks each assumption over the
-    dimensions on the default engine.
+    On polars' in-memory engine: every read here holds one table whole.
 
     *lap* ends a lap of ``tidy`` after each step: ``read``, every path read at
     once; ``dimension`` and ``relation``, one per entry with labels of its
@@ -107,7 +94,11 @@ def _read(program: Program, data: Mapping[str, Source], lap: Lap) -> dict[str, p
     ``check``, the refusal that needs every source read. The checks of the
     relations' labels and the parameters' lazy shaping run before the first
     parameter's check, and are in its row.
+
+    Raises:
+        DataError: As [`tidy_sources`][] raises, but for an assumption.
     """
+    refuse_unknown_sources(program, data)
     _refuse_unsupplied_or_misplaced_relations(program, data)
     data = _read_paths_at_once(program, data)
     lap('tidy', 'read', None)

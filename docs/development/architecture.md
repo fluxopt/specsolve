@@ -81,8 +81,11 @@ flowchart TB
   to a `Program`. It cannot import anything here.
 - **Both lanes read data through one function.**
   `_sources.tidy_sources` reads every shape [the data contract](../reference/data.md)
-  accepts into tidy polars tables, and `_assumptions.py` checks a spec's
-  assumptions there.
+  accepts into tidy polars tables, and checks a spec's assumptions there, on
+  the tables attached.
+- **Data reaches a build through one more.** `attaching.attach` takes those
+  tables, and a build and a read take nothing but what it returns. It ends with
+  the assumptions' check (`_engine/assumptions.py`).
 - **One function decides what either lane builds.** `_inputs.as_program`, which
   every verb compiles a spec through, returns a `Program` or raises
   `LanguageError`. `DataError` is what a source failed to supply. A spec the language accepts and this lane cannot build raises
@@ -247,7 +250,6 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_parquet.py` | every parquet file, through polars, or pyarrow where polars has none |
 | `_sources.py` | `tidy_sources`: caller data into tidy tables |
 | `_start.py` | what a solve starts from: `Start`, read against a build and cut for a sweep's slices |
-| `_assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the data |
 | `types.py` | public: every type a call returns |
 | `errors.py` | public: the error tree |
 | `_messages.py` | a wording two modules raise |
@@ -262,7 +264,8 @@ name from `SOLVERS`, and a writer by suffix from `WRITERS`.
 | `_engine/terms.py` | the terms an expression turns into: linear, quadratic or constant |
 | `_status.py` | solve outcome on two axes |
 | `_engine/indices.py` | which coordinate gets which solver index |
-| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources` |
+| `_engine/attaching.py` | the tables `tidy_sources` returns → `AttachedSources`, the one way data reaches a build |
+| `_engine/assumptions.py` | a spec's `assumptions:` and a curve's conditions, checked against the attached data |
 | `_engine/specialize.py` | what the data settles before an entry is built |
 | `_engine/assembly.py` | one build: every entry into the model tables |
 | `_engine/coverage.py` | is the data there where an entry reads it |
