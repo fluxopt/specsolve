@@ -212,8 +212,7 @@ flowchart TB
     TABLES --> PACK
     PACK --> DISK[("the archive on disk")]
 
-    RESULT -.->|"Model.update: a parameter is read again only where its source or its labels changed"| READ
-    BUILT -.->|"Model.update, numbers alone: the indices and the matrix are kept"| SETUP
+    RESULT -.->|"Model.update"| READ
 
     classDef value stroke:#4a5fc1,stroke-width:1.5px
     classDef held stroke:#4a5fc1,stroke-width:3.5px
@@ -223,19 +222,8 @@ flowchart TB
     class SPECFILE,DATA,LPFILE,DISK data
 ```
 
-**An update runs the same road again, less what cannot have changed.**
-`Model.update` reads and checks a parameter again only where its own source,
-or the labels of one of its dimensions, were replaced. A parameter left alone
-is taken as the standing build read it, with no lap. Dimensions, relations and
-the assumptions are read and checked every time.
-
-**A change of numbers alone keeps most of the build.** Where an update gives
-only new numbers at the coordinates they had (`assembly.numbers_only`),
-`assembly.spliced_model` keeps the indices and the matrix and reads again only
-the bounds, right-hand sides and costs those numbers feed. Its build laps
-`setup`, those entries and `tables`, and no `matrix`. Any other update builds
-whole. Either way an update can keep the solver: `push` in place of
-`instance`, where the new model differs from the loaded one in numbers only.
+**An update takes the same road again, with a fork at three phases.**
+[An update](#an-update) draws them.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
@@ -245,6 +233,67 @@ result was handed back. A sweep slice's row is its result's.
 carries that row. Writing the row and landing the archive are in
 `metrics()` alone (3.3–3.5 ms median, #2180). Closing the model comes
 after the archive, and no phase holds it.
+
+## An update
+
+**`Model.update` runs the phases again and decides, at three of them, what it
+can keep.** A six-sided box is a fork. A bold word is the step the
+branch laps, as in [the diagram of a build](#the-phases).
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 460}}}%%
+flowchart TB
+    accTitle: An update, fork by fork
+    accDescr: An update passes through tidy and attach, build, and handoff. At each it asks one question, and one branch keeps what the standing build or the loaded solver already holds.
+    UPDATE["Model.update<br/>the names it is passed are the sources that changed"]
+
+    subgraph READS["tidy and attach"]
+        direction TB
+        TOUCHED{{"for each parameter:<br/>was its own source replaced,<br/>or the labels of one of its dimensions?"}}
+        AGAIN["read and checked again<br/>a <b>shape</b>, an <b>encode</b> and a <b>content</b> lap for it"]
+        KEPT["taken as the standing build read it<br/>no lap"]
+        EVERY["every time: each dimension and relation,<br/>then <b>fill</b>, <b>settle</b> and <b>assume</b>"]
+        TOUCHED -->|yes| AGAIN
+        TOUCHED -->|no| KEPT
+        AGAIN --> EVERY
+        KEPT --> EVERY
+    end
+    UPDATE --> TOUCHED
+
+    subgraph BUILDS["build"]
+        direction TB
+        NUMBERS{{"do the changed sources change numbers alone,<br/>at the coordinates they had?"}}
+        SPLICED["spliced into the standing build<br/>its indices and its matrix kept, and only the bounds,<br/>right-hand sides and costs those numbers feed read again<br/><b>setup</b>, those entries and <b>tables</b>, with no <b>matrix</b>"]
+        WHOLE["built whole<br/>every step, as a first build takes them"]
+        NUMBERS -->|yes| SPLICED
+        NUMBERS -->|no| WHOLE
+    end
+    EVERY --> NUMBERS
+    SPLICED --> SAME
+
+    subgraph HANDS["handoff, at the next solve"]
+        direction TB
+        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every coefficient as it was loaded?"}}
+        PUSHED["<b>push</b><br/>the new bounds, costs and right-hand sides<br/>onto the loaded solver"]
+        LOADED["<b>instance</b><br/>the solver closed and loaded again"]
+        SAME -->|yes| PUSHED
+        SAME -->|no| LOADED
+    end
+    WHOLE --> SAME
+
+    classDef fork stroke:#b7791f,stroke-width:2px
+    class TOUCHED,NUMBERS,SAME fork
+```
+
+**What an update is passed decides the first fork** (`_api._unchanged`): a
+parameter's checks read its own source and the labels of each of its
+dimensions, so a parameter is kept only where none of them was passed.
+**What the changed parameters feed decides the second**
+(`assembly.numbers_only`): each must be read for a bound, a right-hand side or
+a cost only, by no condition the data settled, and attached at exactly the
+coordinates it had. `assembly.spliced_model` then builds from the standing
+model.
+**The loaded solver decides the last** (`Solver.keeps`, `_sinks/solver.py`).
 
 ## The public API
 
