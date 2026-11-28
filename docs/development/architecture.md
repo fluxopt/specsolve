@@ -334,7 +334,10 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Attached sources**
 : The tidy tables as every query reads them: a `Dimension` per dimension, a
-  column of string labels as an `Enum` in the labels' order. They also hold
+  column of string labels as an `Enum` in the labels' order. That `Enum`
+  stays inside the build: `readback` returns the column as a `String`
+  ([the type of a label](../reference/data.md#the-type-of-a-label)). They
+  also hold
   each settled atom of a `where` or a `cases:` region, read once for the
   assumptions and the build both (`_attached.py`).
 
