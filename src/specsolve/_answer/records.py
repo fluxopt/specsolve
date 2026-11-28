@@ -187,7 +187,7 @@ class Metrics(NamedTuple):
     share, from where the answer before it was handed back. There
     [`solver_instances`][] is ``1`` where the solve took a new solver and
     ``0`` where its values were pushed onto the one held, and
-    [`load_seconds`][] is on the row of the answer that built the model. A
+    [`compile_seconds`][] is on the row of the answer that built the model. A
     slice's [`write_seconds`][] and [`archive_seconds`][] are zero: a sweep
     writes no model file, and cutting, stitching and archiving the sweep are
     not one slice's.
@@ -212,10 +212,10 @@ class Metrics(NamedTuple):
     #: there are solves on an iterating driver means the model has a
     #: condition on a parameter that varies.
     solver_instances: int
-    #: mathspec's load: ``to_spec`` on the spec as given, a path read and
+    #: mathspec's work: ``to_spec`` on the spec as given, a path read and
     #: parsed, every rule that needs no data checked, and the program
-    #: compiled. Creating a solver is [`handoff_seconds`][]'s.
-    load_seconds: float
+    #: compiled.
+    compile_seconds: float
     #: The source keys checked against the spec, and each source read into
     #: its tidy table, the way [`tidy`][specsolve._api.tidy] returns it.
     tidy_seconds: float

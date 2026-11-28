@@ -33,7 +33,7 @@ to the whole call:
 
 ```mermaid
 flowchart TB
-    SPEC["the spec<br/>a YAML file or a mapping"] -->|load| PROGRAM["the checked spec and its program"]
+    SPEC["the spec<br/>a YAML file or a mapping"] -->|compile| PROGRAM["the checked spec and its program"]
     DATA[("your sources<br/>parquet files and tables")] -->|tidy| TIDY["the tidy tables<br/>as sps.tidy returns them"]
     PROGRAM --> ATTACHED
     TIDY -->|attach| ATTACHED["the data on the program<br/>assumptions checked"]
@@ -116,9 +116,10 @@ time:
 print(model.timings().filter(phase='build').sort('seconds', descending=True))
 ```
 
-The build's steps follow it: `setup`, one `variable`, `set` or `constraint`
-row per entry, the `objective`, then `matrix`, which stacks every constraint
-into one matrix, and `tables`, the rest of what the solver is handed. An
+The build's steps follow it: `specialize`, which rewrites the program with
+what the data settled, one `variable`, `sos` or `constraint` row per entry,
+the `objective`, then `matrix`, which stacks every constraint into one matrix,
+and `sink_tables`, the rest of what the solver is handed. An
 entry's seconds are its own: they hold when the entries build in another
 order.
 
@@ -130,8 +131,9 @@ The handoff's rows name its steps, the same for every solver:
 print(model.timings().filter(phase='handoff').select('step', 'seconds'))
 ```
 
-A first solve runs `start`, `check`, `instance` and `warm`. `start` matches
-your `start=` to this build, `check` checks the solver can take the model,
+A first solve runs `match`, `capability`, `instance` and `warm`. `match`
+matches your `start=` to this build, `capability` checks the solver can take
+the model,
 `instance` is a new solver instance taking it, and `warm` gives the solver the
 start. The first `instance` in a process also imports the solver's package.
 
@@ -160,7 +162,7 @@ model.close()
 pl.Config.set_tbl_rows(None)
 ```
 
-Run 0 holds the load and the first build. Each later run holds its update,
+Run 0 holds the compile and the first build. Each later run holds its update,
 its build and its solve. An archive written by a solve lands in that solve's
 run. The result's own row is written into the archive before it lands, so the
 run holds the landing and the result does not.

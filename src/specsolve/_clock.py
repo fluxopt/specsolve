@@ -21,7 +21,7 @@ from specsolve._answer.records import PHASES, Metrics
 #: A name in [`PHASES`][specsolve._answer.records.PHASES], so a lap under a phase no
 #: [`Metrics`][specsolve._answer.records.Metrics] column carries is refused by the
 #: type checker.
-Phase = Literal['load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
+Phase = Literal['compile', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write', 'archive']
 
 #: What a lap did inside its phase: a step of ``tidy``, ``attach``, ``build``
 #: or ``handoff``, as [`Model.timings`][specsolve._api.Model.timings] names them.
@@ -34,16 +34,16 @@ Step = Literal[
     'fill',
     'settle',
     'assume',
-    'setup',
+    'specialize',
     'variable',
-    'set',
+    'sos',
     'constraint',
     'objective',
     'matrix',
-    'tables',
+    'sink_tables',
     'digest',
-    'start',
-    'check',
+    'match',
+    'capability',
     'push',
     'instance',
     'warm',
@@ -142,7 +142,7 @@ class Clock:
             nonzeros=nonzeros,
             solves=solves,
             solver_instances=instances,
-            load_seconds=clocks['load'],
+            compile_seconds=clocks['compile'],
             tidy_seconds=clocks['tidy'],
             attach_seconds=clocks['attach'],
             build_seconds=clocks['build'],

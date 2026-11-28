@@ -815,7 +815,7 @@ def test_an_archive_records_what_reaching_its_answer_cost(
         'nonzeros',
         'solves',
         'solver_instances',
-        'load_seconds',
+        'compile_seconds',
         'tidy_seconds',
         'attach_seconds',
         'build_seconds',

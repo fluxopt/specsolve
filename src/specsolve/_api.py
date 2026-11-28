@@ -222,7 +222,7 @@ class Model:
         self._clock = Clock()
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
-        self._clock.lap('load')
+        self._clock.lap('compile')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.DataFrame] = {}
@@ -457,10 +457,10 @@ class Model:
         lap = self._clock.lap
         model = self._standing('to hand over')
         matched = None if start is None or isinstance(start, str) else readback.matched_start(model, start, solver_name)
-        lap('handoff', 'start')
+        lap('handoff', 'match')
         self.check_sink(solver_name)
         self._solved = None
-        lap('handoff', 'check')
+        lap('handoff', 'capability')
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, model.tables, solver_options)
         reloaded = self._solver is not held
@@ -687,11 +687,12 @@ class Model:
         what the model took between handing back two results. ``run`` counts
         the results handed back before the lap: ``0`` up to the first.
         ``step`` says what a lap did inside a phase that has steps, and
-        ``entry`` names the entry it built. The build's steps are ``setup``;
-        ``variable``, ``set`` and ``constraint``, one row per entry; the
+        ``entry`` names the entry it built. The build's steps are
+        ``specialize``, the program rewritten with what the data settled;
+        ``variable``, ``sos`` and ``constraint``, one row per entry; the
         ``objective``, which has no name; ``matrix``, every constraint's share
-        stacked into one matrix in row order; and ``tables``, the rest of what
-        a solver is handed. An entry's seconds are its own: they hold when the
+        stacked into one matrix in row order; and ``sink_tables``, the rest of
+        what a solver is handed. An entry's seconds are its own: they hold when the
         entries build in another order. The tidy's steps are ``read``, every
         path read at once, and ``shape``, one row per dimension, relation and
         parameter, each held to its columns and their types, the first
@@ -706,8 +707,8 @@ class Model:
         ``assume``, the spec's assumptions checked. The
         handoff's steps are ``digest``, the held solver's fingerprint of its
         model, read before a rebuild;
-        ``start``, the ``start=`` matched to this build; ``check``, the solver
-        checked to take the model; ``push``, the held solver kept and the new
+        ``match``, the ``start=`` matched to this build; ``capability``, the
+        solver checked to take the model; ``push``, the held solver kept and the new
         numbers pushed onto it, or ``instance``, a new solver instance given
         the model, the held one closed; and ``warm``, the start given to the
         solver, or its last solve forgotten. The same steps for every

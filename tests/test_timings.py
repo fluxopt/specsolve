@@ -32,14 +32,14 @@ DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0
 GROWN = {'t': [0, 1, 2, 3], 'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [5.0, 4.0, 6.0, 1.0]})}
 
 BUILD = [
-    ('setup', None),
+    ('specialize', None),
     ('variable', 'p'),
     ('variable', 'q'),
     ('constraint', 'balance'),
     ('constraint', 'cap'),
     ('objective', None),
     ('matrix', None),
-    ('tables', None),
+    ('sink_tables', None),
 ]
 
 
@@ -53,8 +53,8 @@ def _clocks(metrics: sps.types.Metrics) -> dict[str, float]:
     return {phase: getattr(metrics, f'{phase}_seconds') for phase in PHASES}
 
 
-def test_a_build_logs_its_setup_each_entry_and_its_stacking_in_build_order():
-    """The build phase's rows name the step: the setup, each entry, then the two stacking steps."""
+def test_a_build_logs_its_specializing_each_entry_and_its_stacking_in_build_order():
+    """The build phase's rows name the step: the program specialized, each entry, then the two stacking steps."""
     with sps.build(SPEC, DATA) as model:
         build = model.timings().filter(phase='build')
     assert build.select('step', 'entry').rows() == BUILD, 'every step once, in the order the build takes them'
@@ -87,7 +87,7 @@ def test_each_run_adds_up_to_the_result_it_handed_back():
         assert _by_phase(timings.filter(run=run)) == pytest.approx(_clocks(result.metrics), rel=1e-12), (
             f'run {run} is its result'
         )
-    assert timings.filter(run=2, phase='build', step='setup').height == 2, (
+    assert timings.filter(run=2, phase='build', step='specialize').height == 2, (
         'two builds before the third solve, both logged'
     )
 
@@ -138,10 +138,10 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 @pytest.mark.parametrize(
     ('module', 'slowed', 'row'),
     [
-        pytest.param('assembly', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('assembly', 'short_parameters', 'specialize', id='specialize-reading-the-short-parameters'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
-        pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
-        pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
+        pytest.param('assembly', '_stack', 'sink_tables', id='sink-tables-stacking-the-columns'),
+        pytest.param('assembly', 'BuiltModel', 'sink_tables', id='sink-tables-making-the-built-model'),
     ],
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
@@ -211,9 +211,9 @@ def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
 @pytest.mark.parametrize(
     ('update', 'expected'),
     [
-        pytest.param(None, ['start', 'check', 'instance', 'warm'], id='a-first-load'),
-        pytest.param(NUMBERS, ['digest', 'start', 'check', 'push', 'warm'], id='new-numbers-pushed'),
-        pytest.param(GROWN, ['digest', 'start', 'check', 'instance', 'warm'], id='a-reload'),
+        pytest.param(None, ['match', 'capability', 'instance', 'warm'], id='a-first-load'),
+        pytest.param(NUMBERS, ['digest', 'match', 'capability', 'push', 'warm'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['digest', 'match', 'capability', 'instance', 'warm'], id='a-reload'),
     ],
 )
 def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expected):
@@ -235,8 +235,8 @@ def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expe
 @pytest.mark.parametrize(
     ('owner', 'slowed', 'step'),
     [
-        pytest.param(readback, 'matched_start', 'start', id='matching-a-start'),
-        pytest.param(Model, 'check_sink', 'check', id='checking-the-solver'),
+        pytest.param(readback, 'matched_start', 'match', id='matching-a-start'),
+        pytest.param(Model, 'check_sink', 'capability', id='checking-the-solver'),
         pytest.param(Highs, '_load', 'instance', id='loading-a-new-solver'),
     ],
 )
@@ -252,7 +252,7 @@ def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowe
 
     monkeypatch.setattr(owner, slowed, slow)
     with sps.build(SPEC, DATA) as model:
-        model.solve(start=model.solve() if step == 'start' else 'previous')
+        model.solve(start=model.solve() if step == 'match' else 'previous')
         took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
     took = dict(took.iter_rows())
     assert took[step] >= 10.0, f'the slowed step lands in {step}'

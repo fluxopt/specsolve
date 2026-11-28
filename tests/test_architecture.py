@@ -851,7 +851,7 @@ def test_every_module_is_documented_somewhere():
 def _phase_diagram() -> str:
     """The diagram of one build and solve, under "The phases" in docs/development/architecture.md."""
     fences = re.findall(r'```mermaid\n(.*?)```', (REPO / 'docs/development/architecture.md').read_text(), re.DOTALL)
-    return next(fence for fence in fences if 'subgraph LOAD[' in fence)
+    return next(fence for fence in fences if 'subgraph COMPILE[' in fence)
 
 
 def _drawn_steps(diagram: str) -> dict[str, set[str]]:
