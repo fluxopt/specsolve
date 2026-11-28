@@ -61,7 +61,9 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 **Label**
 : One member of a dimension, such as `wind` in `generator`. A dimension's
   labels arrive in `sources` under its name, in order, each once
-  ([where coordinates come from](data.md#where-coordinates-come-from)).
+  ([where coordinates come from](data.md#where-coordinates-come-from)). A
+  label has one type per `dtype`, in `tidy` and in every result
+  ([the type of a label](data.md#the-type-of-a-label)).
 
 **Coordinate**
 : One label from each of an entry's dimensions, written as a tuple, such as

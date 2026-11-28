@@ -15,6 +15,7 @@ import polars as pl
 import pytest
 
 import specsolve as sps
+from specsolve._answer.outputs import OUTPUTS
 from tests.differential import both_lanes_refuse
 
 DAYS = [dt.date(2030, 1, 1), dt.date(2030, 1, 2)]
@@ -127,6 +128,53 @@ def test_the_tidy_holds_labels_in_the_declared_dtype_and_a_column_as_it_arrived(
     assert tables['cap'].schema['d'] == column, 'the column of a parameter is not converted beyond a datetime'
     with sps.solve(_spec(dtype), _sources(labels)) as result:
         assert result.primal('x').schema['d'] == held, 'and a result names each label in the type of the labels'
+
+
+#: Every way a table with a label column leaves a result.
+READERS = [
+    pytest.param(lambda result: result.primal('x'), id='primal'),
+    pytest.param(lambda result: result.dual('c'), id='dual'),
+    pytest.param(lambda result: result.reduced_cost('x'), id='reduced_cost'),
+    pytest.param(lambda result: result.activity('c'), id='activity'),
+    pytest.param(lambda result: result.slack('c'), id='slack'),
+    pytest.param(lambda result: result.variable_basis('x'), id='variable_basis'),
+    pytest.param(lambda result: result.constraint_basis('c'), id='constraint_basis'),
+    pytest.param(lambda result: result.evaluate('doubled'), id='a-named-expression'),
+    pytest.param(lambda result: result.evaluate('3 * x'), id='an-expression-the-spec-does-not-name'),
+]
+
+#: Labels in a type other than the one their `dtype` names, and that type.
+ENCODED = [
+    pytest.param('int', pl.Series([1, 2], dtype=pl.Int8), pl.Int64, id='a-narrower-integer'),
+    pytest.param('float', pl.Series([0.5, 1.5], dtype=pl.Float32), pl.Float64, id='a-narrower-float'),
+    pytest.param(None, pl.Series(['a', 'b'], dtype=pl.Categorical), pl.String, id='a-categorical'),
+    pytest.param(None, pl.Series(['a', 'b'], dtype=ENUM), pl.String, id='an-enum'),
+    pytest.param('datetime', pl.Series(DAYS), MICROSECONDS, id='dates'),
+]
+
+
+def _read_spec(dtype: str | None) -> dict[str, object]:
+    return _spec(dtype) | {
+        'constraints': {'c': {'dims': ['d'], 'expression': 'x <= cap'}},
+        'expressions': {'doubled': {'dims': ['d'], 'expression': '2 * x'}},
+    }
+
+
+@pytest.mark.parametrize('read', READERS)
+@pytest.mark.parametrize(('dtype', 'labels', 'held'), ENCODED)
+def test_every_table_a_result_returns_names_a_label_in_the_type_its_dtype_declares(dtype, labels, held, read):
+    """The type a label leaves in is the dimension's, never the one a source arrived in or the one a build encodes it in."""
+    with sps.solve(_read_spec(dtype), _sources(labels), outputs=OUTPUTS) as result:
+        assert read(result).schema['d'] == held
+
+
+@pytest.mark.parametrize(('dtype', 'labels', 'held'), ENCODED)
+def test_an_archived_answer_names_a_label_in_the_type_its_dtype_declares(tmp_path, dtype, labels, held):
+    """An archive holds the tidy tables and the answer, and both come back in the dimension's type."""
+    sps.solve(_read_spec(dtype), _sources(labels), archive=tmp_path / 'a').close()
+    with sps.read_archive(tmp_path / 'a') as result:
+        assert result.primal('x').schema['d'] == held, 'the answer'
+    assert sps.read_inputs(tmp_path / 'a').sources['d'].collect_schema()['d'] == held, 'the labels it was solved from'
 
 
 def test_integer_labels_past_the_signed_64_bit_range_are_refused():

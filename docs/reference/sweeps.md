@@ -28,7 +28,7 @@ the answer. A rule for a window's first row is written
 since its windows would follow the row order of the data.
 
 **A datetime axis is held in microseconds**, as
-[a label is](data.md#where-coordinates-come-from). A key finer than a
+[a label is](data.md#the-type-of-a-label). A key finer than a
 microsecond is refused.
 
 **`horizon=` as a sequence is one horizon per window**, laid end to end.

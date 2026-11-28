@@ -37,27 +37,7 @@ labels. Other columns of the table are ignored.
 
 **A dimension's labels, and every column over the dimension, are of its declared
 `dtype`, `str` unless it declares one.** Another type is refused, and the message
-names the fix.
-
-| `dtype` | Labels it takes | Held as |
-|---|---|---|
-| `int` | an integer of any width | `Int64` |
-| `float` | a float of any width | `Float64` |
-| `str` | `String`, `Categorical` or `Enum` | `String` |
-| `datetime` | a datetime in any unit or time zone, or a date | a `Datetime` in microseconds, in its time zone |
-
-**The labels are held in one type per `dtype`.** [`tidy`](api.md#specsolve.tidy)
-returns them in that type, and a result names each label in it.
-
-- **A date is read as the microsecond its day starts on.**
-- **A `Categorical` or an `Enum` is read as its strings.** The labels are in the
-  order of their rows, not of the categories.
-- **An integer label past the range of `Int64` is refused.**
-- **A table with no rows takes the type.**
-
-**A column over the dimension stays as it arrived.** An `Int32` column of a
-parameter is an `Int32` column in what `tidy` returns. A datetime column is the
-exception: it is read in microseconds, as the labels are.
+names the fix. [The type of a label](#the-type-of-a-label) lists the types.
 
 **A dimension's labels list each label once, in order.** On a dimension the
 spec declares `ordered: true`,
@@ -67,9 +47,6 @@ spec declares `ordered: true`,
 each label of a table, and `list(dict.fromkeys(labels))` the first of a bare
 sequence.
 
-**A datetime label is held in microseconds**, in the time zone it arrives in.
-A column must be in the time zone of its dimension's labels.
-
 **A dimension nothing supplies raises.** Attach never reads labels out of the
 parameters, so a misspelled label, such as `gsa` for `gas`, is refused by name.
 
@@ -78,6 +55,36 @@ parameters, so a misspelled label, such as `gsa` for `gas`, is refused by name.
 as a table of its rows with one column per column it declares. A value matching
 no label is refused. A keyed relation holds one row per key; a bare relation
 holds each row at most once.
+
+## The type of a label
+
+**A label has one type per `dtype`, wherever you read it.** A dimension's
+labels arrive in any width or encoding of its `dtype`.
+[`tidy`](api.md#specsolve.tidy) returns them in the one type the `dtype` names.
+So does every table of a [result](glossary.md), from a solve or from an
+archive.
+
+| `dtype` | Labels it takes | Returned as |
+|---|---|---|
+| `int` | an integer of any width | `Int64` |
+| `float` | a float of any width | `Float64` |
+| `str` | `String`, `Categorical` or `Enum` | `String` |
+| `datetime` | a datetime in any unit or time zone, or a date | a `Datetime` in microseconds, in its time zone |
+
+- **No `Categorical` and no `Enum` comes back as a label.** Either is read as
+  its strings, in the order of its rows, not of its categories. A result
+  names a `str` label as a `String`, which joins a `String` column of your
+  own.
+- **A date is read as the microsecond its day starts on.**
+- **A datetime keeps the time zone it arrives in.** A label finer than a
+  microsecond is refused.
+- **An integer label past the range of `Int64` is refused.**
+- **Labels with no rows take the type.**
+
+**A column over the dimension stays in the type it arrived in.** An `Int32` or
+a `Categorical` column of a parameter is the same column in what `tidy`
+returns. A datetime column is the exception: it is read in microseconds, and
+must be in the time zone of its dimension's labels.
 
 ## What attaching refuses and accepts
 
