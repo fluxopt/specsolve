@@ -129,10 +129,10 @@ flowchart TB
     DATA[("sources<br/>parquet paths · tables · sequences")]
 
     subgraph LOAD["load · Model.__init__"]
-        COMPILE["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
+        READSPEC["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
     end
-    SPECFILE --> COMPILE
-    COMPILE --> PROGRAM(["Spec and Program"])
+    SPECFILE --> READSPEC
+    READSPEC --> PROGRAM(["Spec and Program"])
 
     subgraph TIDY["tidy · tidy_sources, _sources.py"]
         direction TB
@@ -156,36 +156,36 @@ flowchart TB
             direction TB
             FILL["<b>fill</b><br/>the missing rows a divisor reads"]
             SETTLE["<b>settle</b><br/>each condition the data decides, read once<br/><i>specialize.py</i>"]
-            ASSUME["<b>assume</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
-            FILL --> SETTLE --> ASSUME
+            ASSUMPTIONS["<b>assumptions</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
+            FILL --> SETTLE --> ASSUMPTIONS
         end
         CONTENT --> FILL
     end
     TABLES --> ENCODE
-    ASSUME --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
+    ASSUMPTIONS --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
 
     subgraph BUILD["build · build, _engine/assembly.py"]
         direction TB
-        SETUP["<b>setup</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
-        ENTRIES["<b>variable</b> · <b>set</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
+        SPECIALIZE["<b>specialize</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
+        ENTRIES["<b>variable</b> · <b>sos</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
-        SINKTABLES["<b>tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
-        SETUP --> ENTRIES --> MATRIX --> SINKTABLES
+        SINKTABLES["<b>sink_tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
+        SPECIALIZE --> ENTRIES --> MATRIX --> SINKTABLES
     end
-    ATTACHED --> SETUP
+    ATTACHED --> SPECIALIZE
     SINKTABLES --> BUILT(["BuiltModel, frozen<br/>the program, its data, the index tables and the sink tables"])
 
     subgraph HANDOFF["handoff · Model._handoff"]
         direction TB
         DIGEST["<b>digest</b> · in an update, before the build, where a solver is held<br/>the loaded model kept as a digest, and its build let go"]
-        START["<b>start</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
-        CHECK["<b>check</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
-        LOADS["<b>instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
-        WARM["<b>warm</b><br/>the start given to the solver"]
-        START --> CHECK --> LOADS --> WARM
+        MATCH["<b>match</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
+        CAPABILITY["<b>capability</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
+        LOADS["<b>solver_instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
+        GIVEN["<b>start</b><br/>the start given to the solver"]
+        MATCH --> CAPABILITY --> LOADS --> GIVEN
     end
-    BUILT --> START
-    WARM --> SOLVER(["the solver, holding the model"])
+    BUILT --> MATCH
+    GIVEN --> SOLVER(["the solver, holding the model"])
 
     subgraph SOLVE["solve · Model.solve"]
         RUN["Solver.run<br/><i>_sinks/: highs, gurobi, xpress</i>"]
@@ -222,8 +222,11 @@ flowchart TB
     class SPECFILE,DATA,LPFILE,DISK data
 ```
 
-**An update takes the same road again, with a fork at three phases.**
-[An update](#an-update) draws them.
+**An update runs the same road again.** `Model.update` reads the sources
+whole, attaches and builds; nothing of the previous build is reused. What an
+update can keep is the solver: `push` in place of `solver_instance`, where the new
+model differs from the loaded one in numbers only. A linear row's changed
+coefficients are numbers too, and are pushed in place.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
@@ -233,56 +236,6 @@ result was handed back. A sweep slice's row is its result's.
 carries that row. Writing the row and landing the archive are in
 `metrics()` alone (3.3–3.5 ms median, #2180). Closing the model comes
 after the archive, and no phase holds it.
-
-## An update
-
-**`Model.update` runs the phases again and decides, at three of them, what it
-can keep.** A six-sided box is a fork. A bold word is the step the
-branch laps, as in [the diagram of a build](#the-phases).
-
-```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 460}}}%%
-flowchart TB
-    accTitle: An update, fork by fork
-    accDescr: An update passes through tidy and attach, build, and handoff. At each it asks one question, and one branch keeps what the standing build or the loaded solver already holds.
-    UPDATE["Model.update<br/>the names it is passed are the sources that changed"]
-
-    subgraph READS["tidy and attach"]
-        direction TB
-        TOUCHED{{"for each parameter:<br/>was its own source replaced,<br/>or the labels of one of its dimensions?"}}
-        AGAIN["read and checked again<br/>a <b>shape</b>, an <b>encode</b> and a <b>content</b> lap for it"]
-        KEPT["taken as the standing build read it<br/>no lap"]
-        EVERY["every time: each dimension and relation,<br/>then <b>fill</b>, <b>settle</b> and <b>assume</b>"]
-        TOUCHED -->|yes| AGAIN
-        TOUCHED -->|no| KEPT
-        AGAIN --> EVERY
-        KEPT --> EVERY
-    end
-    UPDATE --> TOUCHED
-
-    subgraph BUILDS["build"]
-        WHOLE["built whole<br/>every step, as a first build takes them"]
-    end
-    EVERY --> WHOLE
-
-    subgraph HANDS["handoff, at the next solve"]
-        direction TB
-        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every quadratic constraint's linear part as it was loaded?"}}
-        PUSHED["<b>push</b><br/>the new bounds, costs, right-hand sides and a linear row's<br/>changed coefficients onto the loaded solver"]
-        LOADED["<b>instance</b><br/>the solver closed and loaded again"]
-        SAME -->|yes| PUSHED
-        SAME -->|no| LOADED
-    end
-    WHOLE --> SAME
-
-    classDef fork stroke:#b7791f,stroke-width:2px
-    class TOUCHED,SAME fork
-```
-
-**What an update is passed decides the first fork** (`_api._unchanged`): a
-parameter's checks read its own source and the labels of each of its
-dimensions, so a parameter is kept only where none of them was passed.
-**The loaded solver decides the last** (`Solver.keeps`, `_sinks/solver.py`).
 
 ## The public API
 
