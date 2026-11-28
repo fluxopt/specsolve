@@ -434,8 +434,8 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Push**
 : After an update that changed numbers only, a loaded solver takes the new
-  bounds, costs and right-hand sides pushed, in place of a reload. The model
-  itself is built again.
+  bounds, costs, right-hand sides and a linear row's coefficients pushed, in
+  place of a reload. The model itself is built again.
 
 **Attached sources**
 : The tidy tables as every query reads them: a `Dimension` per dimension, a
