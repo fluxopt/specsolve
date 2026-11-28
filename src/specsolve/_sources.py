@@ -66,10 +66,11 @@ def tidy_sources(
     ``shift`` counts, and a relation as one column per declared column. They
     are the tables [`tidy`][specsolve._api.tidy] returns and an archive holds
     under ``sources/``. A dimension's labels are of its declared ``dtype``,
-    ``str`` unless declared, and so is every column over it; the one conversion
-    is a date under ``datetime``, held as the microsecond its day starts on. A
-    datetime label is held in microseconds. A table with no rows reads each
-    column over a dimension in that dimension's label type.
+    ``str`` unless declared, and so is every column over it. Two types are
+    converted: a ``str`` dimension's labels are held as ``String`` whatever
+    encoding they arrived in, and a datetime is held in microseconds, a date
+    under ``datetime`` as the microsecond its day starts on. A table with no
+    rows reads each column over a dimension in that dimension's label type.
 
     Every read holds one table whole, so it runs on polars' in-memory engine.
     Each table is held to its shape here: its columns, their types, no null.
@@ -306,12 +307,16 @@ def _dtype_holding(column: pl.DataType) -> str | None:
 def _of_declared_dtype(dim: str, labels: pl.DataFrame, dtype: str) -> pl.DataFrame:
     """*labels* if their type is one *dtype* holds; an empty table, holding no label to misread, takes it.
 
+    Strings come back as plain ``String``: a ``Categorical`` or an ``Enum``
+    holds them in a dictionary of the caller's, which neither joins nor
+    compares with another encoding, and a dimension is encoded in its own.
+
     Raises:
         DataError: Labels of another type than the one declared.
     """
     given = labels.schema[dim]
     if _HOLDS[dtype](given):
-        return labels
+        return labels.with_columns(pl.col(dim).cast(pl.String)) if dtype == 'str' else labels
     if labels.height == 0:
         return labels.with_columns(pl.col(dim).cast(_DECLARED[dtype]))
     own = _dtype_holding(given) or ('datetime' if given == pl.Date else None)

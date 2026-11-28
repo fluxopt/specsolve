@@ -848,6 +848,74 @@ def test_every_module_is_documented_somewhere():
     )
 
 
+def _phase_diagram() -> str:
+    """The diagram of one build and solve, under "The phases" in docs/development/architecture.md."""
+    fences = re.findall(r'```mermaid\n(.*?)```', (REPO / 'docs/development/architecture.md').read_text(), re.DOTALL)
+    return next(fence for fence in fences if 'subgraph LOAD[' in fence)
+
+
+def _drawn_steps(diagram: str) -> dict[str, set[str]]:
+    """Each band of *diagram* by the phase its title begins with, and the steps its boxes name in bold.
+
+    A band inside a band is part of the outer one.
+    """
+    bands: dict[str, set[str]] = {}
+    open_bands: list[str] = []
+    for line in map(str.strip, diagram.splitlines()):
+        if line.startswith('subgraph '):
+            title = re.search(r'\["([^"]*)"\]', line)
+            assert title, f'a band without a quoted title: {line}'
+            open_bands.append(title.group(1).split(' · ')[0])
+            bands.setdefault(open_bands[0], set())
+        elif line == 'end':
+            open_bands.pop()
+        elif open_bands:
+            bands[open_bands[0]].update(re.findall(r'<b>(\w+)</b>', line))
+    return bands
+
+
+def _lapped_steps() -> dict[str, set[str]]:
+    """Each phase's steps, read off every ``lap(phase, step, …)`` in the package and every entry a build times."""
+    from specsolve._answer.records import PHASES
+
+    steps: dict[str, set[str]] = {phase: set() for phase in PHASES}
+    for path in _all_modules():
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.Call):
+                continue
+            called = getattr(node.func, 'attr', getattr(node.func, 'id', None))
+            words = [
+                leaf.value
+                for arg in node.args[:2]
+                for leaf in ast.walk(arg)
+                if isinstance(leaf, ast.Constant) and isinstance(leaf.value, str)
+            ]
+            if called == 'lap' and words and words[0] in steps:
+                steps[words[0]].update(words[1:])
+            elif called == '_timed' and words:
+                steps['build'].add(words[0])
+    return steps
+
+
+def test_the_phase_diagram_draws_every_phase_and_the_steps_each_one_laps():
+    """The diagram is drawn by hand, so a phase or a step added, renamed or moved has to be redrawn."""
+    from specsolve._answer.records import PHASES
+    from specsolve._clock import Step
+
+    drawn, lapped = _drawn_steps(_phase_diagram()), _lapped_steps()
+    assert list(drawn) == list(PHASES), 'one band per phase, in the order `Metrics` holds them'
+    assert drawn == lapped, 'each band names in bold exactly the steps the package laps under its phase'
+    assert set().union(*lapped.values()) == set(get_args(Step)), 'and every step `Step` names is lapped somewhere'
+
+
+def test_the_phase_diagram_names_only_modules_that_exist():
+    """A module renamed or removed leaves its old name in the diagram, where nothing else would find it."""
+    named = set(re.findall(r'\b(\w+\.py)\b', _phase_diagram()))
+    existing = {path.name for path in _all_modules()}
+    assert named <= existing, f'the diagram names {sorted(named - existing)}, which no module is called'
+    assert len(named) > 10, f'the diagram names {len(named)} modules, where it should place most of the lane'
+
+
 #: Every in-function ``specsolve`` import in the package, with the cycle it breaks.
 DELIBERATE_LAZY_IMPORTS: dict[tuple[str, str], str] = {
     ('_engine/conditions.py', 'specsolve._engine.queries'): (
