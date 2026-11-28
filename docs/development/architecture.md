@@ -212,7 +212,7 @@ flowchart TB
     TABLES --> PACK
     PACK --> DISK[("the archive on disk")]
 
-    RESULT -.->|"Model.update: the changed sources, read again"| READ
+    RESULT -.->|"Model.update: a parameter is read again only where its source or its labels changed"| READ
 
     classDef value stroke:#4a5fc1,stroke-width:1.5px
     classDef held stroke:#4a5fc1,stroke-width:3.5px
@@ -222,10 +222,13 @@ flowchart TB
     class SPECFILE,DATA,LPFILE,DISK data
 ```
 
-**An update runs the same road again.** `Model.update` reads the sources
-whole, attaches and builds; nothing of the previous build is reused. What an
-update can keep is the solver: `push` in place of `instance`, where the new
-model differs from the loaded one in numbers only.
+**An update runs the same road again, less what cannot have changed.**
+`Model.update` reads and checks a parameter again only where its own source,
+or the labels of one of its dimensions, were replaced. A parameter left alone
+is taken as the standing build read it, with no lap. Dimensions, relations and
+the assumptions are read and checked every time, and the model is built whole.
+An update can also keep the solver: `push` in place of `instance`, where the
+new model differs from the loaded one in numbers only.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
