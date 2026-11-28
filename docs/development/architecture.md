@@ -213,7 +213,7 @@ flowchart TB
     PACK --> DISK[("the archive on disk")]
 
     RESULT -.->|"Model.update: a parameter is read again only where its source or its labels changed"| READ
-    BUILT -.->|"Model.update, numbers alone: the indices and the matrix are kept"| SETUP
+    BUILT -.->|"Model.update, numbers alone: the indices are kept"| SETUP
 
     classDef value stroke:#4a5fc1,stroke-width:1.5px
     classDef held stroke:#4a5fc1,stroke-width:3.5px
@@ -231,11 +231,13 @@ the assumptions are read and checked every time.
 
 **A change of numbers alone keeps most of the build.** Where an update gives
 only new numbers at the coordinates they had (`assembly.numbers_only`),
-`assembly.spliced_model` keeps the indices and the matrix and reads again only
-the bounds, right-hand sides and costs those numbers feed. Its build laps
-`setup`, those entries and `tables`, and no `matrix`. Any other update builds
-whole. Either way an update can keep the solver: `push` in place of
-`instance`, where the new model differs from the loaded one in numbers only.
+`assembly.spliced_model` keeps the indices and reads again only the entries
+those numbers feed: bounds, right-hand sides, costs and a linear constraint's
+coefficients, each coefficient spliced into the matrix within its constraint's
+row. Its build laps `setup`, those entries and `tables`, and no `matrix`. Any
+other update builds whole. An update can keep the solver too, `push` in place
+of `instance`, where bounds, costs and right-hand sides alone differ from the
+loaded model. A changed coefficient loads the solver again.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
