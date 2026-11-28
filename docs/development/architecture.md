@@ -129,10 +129,10 @@ flowchart TB
     DATA[("sources<br/>parquet paths · tables · sequences")]
 
     subgraph LOAD["load · Model.__init__"]
-        COMPILE["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
+        READSPEC["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
     end
-    SPECFILE --> COMPILE
-    COMPILE --> PROGRAM(["Spec and Program"])
+    SPECFILE --> READSPEC
+    READSPEC --> PROGRAM(["Spec and Program"])
 
     subgraph TIDY["tidy · tidy_sources, _sources.py"]
         direction TB
@@ -156,40 +156,40 @@ flowchart TB
             direction TB
             FILL["<b>fill</b><br/>the missing rows a divisor reads"]
             SETTLE["<b>settle</b><br/>each condition the data decides, read once<br/><i>specialize.py</i>"]
-            ASSUME["<b>assume</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
-            FILL --> SETTLE --> ASSUME
+            ASSUMPTIONS["<b>assumptions</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
+            FILL --> SETTLE --> ASSUMPTIONS
         end
         CONTENT --> FILL
     end
     TABLES --> ENCODE
-    ASSUME --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
+    ASSUMPTIONS --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
 
     subgraph BUILD["build · build, _engine/assembly.py"]
         direction TB
-        SETUP["<b>setup</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
+        SPECIALIZE["<b>specialize</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
         VARIABLES["<b>variable</b> · one lap per variable<br/>each given its solver indices, its bounds planned as lazy queries<br/><i>queries.py, indices.py</i>"]
         BOUNDS["<b>bounds</b> · one pass<br/>every variable's bounds, read together"]
-        PLANNED["<b>set</b> · <b>constraint</b> · one lap per entry<br/>each constraint's terms compiled and its queries planned<br/><i>queries.py, conditions.py, terms.py</i>"]
-        PASSES["<b>indices</b>, then <b>terms</b> · one pass each<br/>every constraint's rows, then its terms and constant side with their checks, read together"]
+        PLANNED["<b>sos</b> · <b>constraint</b> · one lap per entry<br/>each constraint's terms compiled and its queries planned<br/><i>queries.py, conditions.py, terms.py</i>"]
+        PASSES["<b>rows</b>, then <b>terms</b> · one pass each<br/>every constraint's rows, then its terms and constant side with their checks, read together"]
         OBJECTIVE["<b>objective</b><br/>the cost of each column"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
-        SINKTABLES["<b>tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
-        SETUP --> VARIABLES --> BOUNDS --> PLANNED --> PASSES --> OBJECTIVE --> MATRIX --> SINKTABLES
+        SINKTABLES["<b>sink_tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
+        SPECIALIZE --> VARIABLES --> BOUNDS --> PLANNED --> PASSES --> OBJECTIVE --> MATRIX --> SINKTABLES
     end
-    ATTACHED --> SETUP
+    ATTACHED --> SPECIALIZE
     SINKTABLES --> BUILT(["BuiltModel, frozen<br/>the program, its data, the index tables and the sink tables"])
 
     subgraph HANDOFF["handoff · Model._handoff"]
         direction TB
         DIGEST["<b>digest</b> · in an update, before the build, where a solver is held<br/>the loaded model kept as a digest, and its build let go"]
-        START["<b>start</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
-        CHECK["<b>check</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
-        LOADS["<b>instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
-        WARM["<b>warm</b><br/>the start given to the solver"]
-        START --> CHECK --> LOADS --> WARM
+        MATCH["<b>match</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
+        CAPABILITY["<b>capability</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
+        LOADS["<b>solver_instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
+        GIVEN["<b>start</b><br/>the start given to the solver"]
+        MATCH --> CAPABILITY --> LOADS --> GIVEN
     end
-    BUILT --> START
-    WARM --> SOLVER(["the solver, holding the model"])
+    BUILT --> MATCH
+    GIVEN --> SOLVER(["the solver, holding the model"])
 
     subgraph SOLVE["solve · Model.solve"]
         RUN["Solver.run<br/><i>_sinks/: highs, gurobi, xpress</i>"]
@@ -228,7 +228,7 @@ flowchart TB
 
 **An update runs the same road again.** `Model.update` reads the sources
 whole, attaches and builds; nothing of the previous build is reused. What an
-update can keep is the solver: `push` in place of `instance`, where the new
+update can keep is the solver: `push` in place of `solver_instance`, where the new
 model differs from the loaded one in numbers only.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
