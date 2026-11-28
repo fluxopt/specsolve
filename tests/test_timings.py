@@ -32,14 +32,14 @@ DATA = {'t': [0, 1, 2], 'load': pl.DataFrame({'t': [0, 1, 2], 'value': [5.0, 4.0
 GROWN = {'t': [0, 1, 2, 3], 'load': pl.DataFrame({'t': [0, 1, 2, 3], 'value': [5.0, 4.0, 6.0, 1.0]})}
 
 BUILD = [
-    ('setup', None),
+    ('specialize', None),
     ('variable', 'p'),
     ('variable', 'q'),
     ('constraint', 'balance'),
     ('constraint', 'cap'),
     ('objective', None),
     ('matrix', None),
-    ('tables', None),
+    ('sink_tables', None),
 ]
 
 
@@ -53,8 +53,8 @@ def _clocks(metrics: sps.types.Metrics) -> dict[str, float]:
     return {phase: getattr(metrics, f'{phase}_seconds') for phase in PHASES}
 
 
-def test_a_build_logs_its_setup_each_entry_and_its_stacking_in_build_order():
-    """The build phase's rows name the step: the setup, each entry, then the two stacking steps."""
+def test_a_build_logs_its_specializing_each_entry_and_its_stacking_in_build_order():
+    """The build phase's rows name the step: the program specialized, each entry, then the two stacking steps."""
     with sps.build(SPEC, DATA) as model:
         build = model.timings().filter(phase='build')
     assert build.select('step', 'entry').rows() == BUILD, 'every step once, in the order the build takes them'
@@ -87,7 +87,7 @@ def test_each_run_adds_up_to_the_result_it_handed_back():
         assert _by_phase(timings.filter(run=run)) == pytest.approx(_clocks(result.metrics), rel=1e-12), (
             f'run {run} is its result'
         )
-    assert timings.filter(run=2, phase='build', step='setup').height == 2, (
+    assert timings.filter(run=2, phase='build', step='specialize').height == 2, (
         'two builds before the third solve, both logged'
     )
 
@@ -138,10 +138,10 @@ def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
 @pytest.mark.parametrize(
     ('module', 'slowed', 'row'),
     [
-        pytest.param('assembly', 'short_parameters', 'setup', id='setup-reading-the-short-parameters'),
+        pytest.param('assembly', 'short_parameters', 'specialize', id='specialize-reading-the-short-parameters'),
         pytest.param('assembly', '_row_starts', 'matrix', id='matrix'),
-        pytest.param('assembly', '_stack', 'tables', id='tables-stacking-the-columns'),
-        pytest.param('assembly', 'BuiltModel', 'tables', id='tables-making-the-built-model'),
+        pytest.param('assembly', '_stack', 'sink_tables', id='sink-tables-stacking-the-columns'),
+        pytest.param('assembly', 'BuiltModel', 'sink_tables', id='sink-tables-making-the-built-model'),
     ],
 )
 def test_a_slow_step_outside_any_entry_shows_in_its_model_row(monkeypatch, module, slowed, row):
@@ -211,13 +211,13 @@ def _handoff_steps(model: sps.types.Model, run: int) -> list[str]:
 @pytest.mark.parametrize(
     ('update', 'expected'),
     [
-        pytest.param(None, ['start', 'check', 'instance', 'warm'], id='a-first-load'),
-        pytest.param(NUMBERS, ['digest', 'start', 'check', 'push', 'warm'], id='new-numbers-pushed'),
-        pytest.param(GROWN, ['digest', 'start', 'check', 'instance', 'warm'], id='a-reload'),
+        pytest.param(None, ['match', 'capability', 'solver_instance', 'start'], id='a-first-load'),
+        pytest.param(NUMBERS, ['digest', 'match', 'capability', 'push', 'start'], id='new-numbers-pushed'),
+        pytest.param(GROWN, ['digest', 'match', 'capability', 'solver_instance', 'start'], id='a-reload'),
     ],
 )
 def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expected):
-    """A handoff that loads logs one new ``instance``; one that keeps the solver pushes. Every solver alike."""
+    """A handoff that loads logs one new ``solver_instance``; one that keeps the solver pushes. Every solver alike."""
     with sps.build(SPEC, DATA) as model:
         model.solve(solver_name=solver_name)
         run = 0
@@ -232,12 +232,23 @@ def test_a_handoff_logs_the_same_steps_on_every_solver(solver_name, update, expe
     assert handoff == pytest.approx(whole, rel=1e-12), 'and the handoff still adds up'
 
 
+def test_there_are_as_many_solver_instance_rows_as_the_metrics_count_solver_instances():
+    """A first load, a push and a reload: the step's rows and the counter are one count."""
+    with sps.build(SPEC, DATA) as model:
+        model.solve()
+        model.update(NUMBERS).solve()
+        model.update(GROWN).solve()
+        rows = model.timings().filter(step='solver_instance').height
+        counted = model.metrics().solver_instances
+    assert rows == counted == 2, 'the first load and the reload, and not the push between them'
+
+
 @pytest.mark.parametrize(
     ('owner', 'slowed', 'step'),
     [
-        pytest.param(readback, 'matched_start', 'start', id='matching-a-start'),
-        pytest.param(Model, 'check_sink', 'check', id='checking-the-solver'),
-        pytest.param(Highs, '_load', 'instance', id='loading-a-new-solver'),
+        pytest.param(readback, 'matched_start', 'match', id='matching-a-start'),
+        pytest.param(Model, 'check_sink', 'capability', id='checking-the-solver'),
+        pytest.param(Highs, '_load', 'solver_instance', id='loading-a-new-solver'),
     ],
 )
 def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowed, step):
@@ -252,7 +263,7 @@ def test_a_slow_step_of_a_handoff_lands_in_its_own_row(monkeypatch, owner, slowe
 
     monkeypatch.setattr(owner, slowed, slow)
     with sps.build(SPEC, DATA) as model:
-        model.solve(start=model.solve() if step == 'start' else 'previous')
+        model.solve(start=model.solve() if step == 'match' else 'previous')
         took = model.timings().filter(phase='handoff').group_by('step').agg(pl.col('seconds').sum())
     took = dict(took.iter_rows())
     assert took[step] >= 10.0, f'the slowed step lands in {step}'
@@ -321,7 +332,7 @@ def test_an_attach_logs_each_table_encoded_and_checked_then_what_the_model_makes
         ('content', 'p_max'),
         ('fill', None),
         ('settle', None),
-        ('assume', None),
+        ('assumptions', None),
     ], 'every step once, in the order the attach takes them: each entry by name'
     assert attach == pytest.approx(whole, rel=1e-12), 'and the attach adds up'
 
@@ -342,7 +353,7 @@ def test_an_attach_logs_each_table_encoded_and_checked_then_what_the_model_makes
         ),
         pytest.param(attaching, 'filled_parameters', ('attach', 'fill', None), id='the-fill'),
         pytest.param(attaching, 'settle', ('attach', 'settle', None), id='the-settling'),
-        pytest.param(attaching, 'check_assumptions', ('attach', 'assume', None), id='the-assumptions'),
+        pytest.param(attaching, 'check_assumptions', ('attach', 'assumptions', None), id='the-assumptions'),
     ],
 )
 def test_a_slow_step_of_a_tidy_or_an_attach_lands_in_its_own_row(monkeypatch, owner, slowed, row):
@@ -386,7 +397,7 @@ def test_an_update_logs_only_the_parameters_it_reads_again():
         ('content', 'load'),
         ('fill', None),
         ('settle', None),
-        ('assume', None),
+        ('assumptions', None),
     ], 'every attach step but the kept p_max, in order'
 
 
