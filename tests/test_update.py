@@ -356,7 +356,7 @@ def test_a_change_of_numbers_alone_hands_over_what_a_fresh_build_does(port, monk
     """Each real-valued parameter of a port, its numbers changed alone, gives the tables and diagnostics a fresh build gives.
 
     Whichever way the update went: a parameter that feeds only bounds,
-    constant sides and the objective is read again on the old indices
+    constant sides, linear coefficients and the objective is read again on the old indices
     ([`spliced_model`][specsolve._engine.assembly.spliced_model]), and any other is
     built in full. A change the fresh build refuses is left out; the model
     goes back to the port's own numbers after each.
@@ -418,44 +418,56 @@ ROLE_DATA = {
 }
 
 
+#: Where a coefficient changes, the loaded solver still loads again: it takes
+#: bounds, costs and right-hand sides by value, and its matrix whole.
+COEFFICIENT = 'sum(eff * p, over=generator) >= demand'
+
+
 @pytest.mark.parametrize(
-    ('entries', 'change', 'spliced'),
+    ('entries', 'change', 'spliced', 'loads'),
     [
-        pytest.param({}, {'cap': [8.0, 9.0]}, True, id='a bound'),
-        pytest.param({}, {'demand': [5.0]}, True, id='a constant side'),
-        pytest.param({}, {'price': [3.0, 1.0]}, True, id='a cost'),
-        pytest.param({'variables.p.where': 'on > 0'}, {'on': [0.0, 1.0]}, False, id='a variable where'),
-        pytest.param({'constraints.meet.where': 'demand > 10'}, {'demand': [15.0]}, False, id='a constraint where'),
+        pytest.param({}, {'cap': [8.0, 9.0]}, True, 1, id='a bound'),
+        pytest.param({}, {'demand': [5.0]}, True, 1, id='a constant side'),
+        pytest.param({}, {'price': [3.0, 1.0]}, True, 1, id='a cost'),
+        pytest.param({'constraints.meet.expression': COEFFICIENT}, {'eff': [0.5, 2.0]}, True, 2, id='a coefficient'),
         pytest.param(
-            {'constraints.meet.expression': 'sum(eff * p, over=generator) >= demand'},
-            {'eff': [0.5, 2.0]},
-            False,
-            id='a coefficient',
+            {
+                'constraints.meet.expression': COEFFICIENT,
+                'constraints.each': {'dims': ['generator'], 'expression': 'p <= cap'},
+            },
+            {'eff': [0.0, 2.0]},
+            True,
+            2,
+            id='a coefficient to zero before another constraint',
         ),
         pytest.param(
             {'constraints.meet.expression': 'sum(p / eff, over=generator) >= demand'},
             {'eff': [0.5, 2.0]},
-            False,
+            True,
+            2,
             id='a divisor',
         ),
+        pytest.param({'variables.p.where': 'on > 0'}, {'on': [0.0, 1.0]}, False, 2, id='a variable where'),
+        pytest.param({'constraints.meet.where': 'demand > 10'}, {'demand': [15.0]}, False, 2, id='a constraint where'),
         pytest.param(
             {'parameters.cap.missing': 'absent'},
             {'cap': pl.DataFrame({'generator': ['a'], 'value': [8.0]})},
             False,
+            1,
             id='fewer coordinates',
         ),
-        pytest.param({}, {'generator': ROLE_GENERATORS}, False, id='a dimension'),
+        pytest.param({}, {'generator': ROLE_GENERATORS}, False, 1, id='a dimension'),
     ],
 )
 def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_can_change(
-    monkeypatch, entries, change, spliced
+    monkeypatch, entries, change, spliced, loads
 ):
-    """Numbers that feed only bounds, constant sides and costs, at the coordinates they had, skip the build.
+    """Numbers that feed bounds, constant sides, linear coefficients and costs, at the coordinates they had, skip the build.
 
-    A parameter a `where` reads, or one that scales a variable, changes which
-    columns, rows or coefficients exist; so do new coordinates or new
-    labels. Each of those builds in full. Either way the tables are a fresh
-    build's, and the loaded solver takes new numbers by value.
+    A parameter a `where` reads changes which columns or rows exist; so do new
+    coordinates or new labels. Each of those builds in full. Either way the
+    tables are a fresh build's. A coefficient falling to zero leaves the
+    matrix, on the old indices, and the coefficients after it move up.
     """
     from specsolve import _api
 
@@ -475,8 +487,35 @@ def test_new_numbers_are_read_again_on_the_old_indices_only_where_nothing_else_c
         _same_tables(model._built.tables, reference._built.tables, str(change))
         assert model.solve().objective == pytest.approx(reference.solve().objective), 'a fresh build answers alike'
         assert bool(took) is spliced, f'the update {"skipped" if took else "ran"} the build'
-        if spliced:
-            assert model.metrics().solver_instances == 1, 'new numbers on the old indices are pushed, not loaded'
+        assert model.metrics().solver_instances == loads, (
+            f'the solver was loaded {model.metrics().solver_instances} times'
+        )
+
+
+def test_a_coefficient_of_a_quadratic_constraint_builds_in_full(monkeypatch):
+    """A quadratic row goes to a sink whole, coefficients and all, so its coefficients are not read again."""
+    from specsolve import _api
+
+    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p * p, over=generator) <= demand'})
+    change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 2.0]))}
+    real = _api.spliced_model
+    took: list[bool] = []
+    monkeypatch.setattr(_api, 'spliced_model', lambda *args: took.append(True) or real(*args))
+    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | change) as reference:
+        model.update(change)
+        _same_tables(model._built.tables, reference._built.tables, 'eff on a quadratic row')
+    assert not took, 'a quadratic row was read again on the old indices'
+
+
+def test_a_divisor_falling_to_zero_is_refused_as_a_fresh_build_refuses_it():
+    """`p / eff` read again on the old indices still refuses a divisor of zero, in a fresh build's words."""
+    spec = override(ROLES, **{'constraints.meet.expression': 'sum(p / eff, over=generator) >= demand'})
+    change = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.0, 2.0]))}
+    with pytest.raises(sps.errors.DataError, match='eff') as fresh:
+        sps.build(spec, ROLE_DATA | change)
+    with sps.build(spec, ROLE_DATA) as model, pytest.raises(sps.errors.DataError) as updated:
+        model.update(change)
+    assert str(updated.value) == str(fresh.value), 'the update refuses what a fresh build refuses, in its words'
 
 
 #: A variable whose coefficient a `cases:` condition picks: 2 where `flag`
@@ -533,7 +572,7 @@ def test_a_parameter_that_picks_which_coefficients_exist_is_built_again(monkeypa
     """A `cases:` condition over variables, or a shift's named offset, decides which coefficients exist.
 
     Neither is a scaling of a variable the walk of products can see, so each
-    has its own branch; either one missed reads new numbers onto the old matrix.
+    has its own branch; either one missed reads new numbers onto old indices.
     """
     from specsolve import _api
 

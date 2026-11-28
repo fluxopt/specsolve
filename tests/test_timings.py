@@ -163,6 +163,36 @@ def test_a_slow_entry_read_again_shows_in_its_own_row(monkeypatch):
     )
 
 
+def test_a_coefficient_read_again_lands_in_its_constraint_row(monkeypatch):
+    """Ten seconds added to re-reading `balance`'s coefficients land in its row, not in a `matrix` row of their own."""
+    spec = {
+        **SPEC,
+        'parameters': {**SPEC['parameters'], 'eff': {'dims': ['t']}},
+        'constraints': {**SPEC['constraints'], 'balance': {'dims': ['t'], 'expression': 'eff * p + q == load'}},
+    }
+    eff = pl.DataFrame({'t': [0, 1, 2], 'value': [1.0, 0.9, 0.8]})
+    with sps.build(spec, DATA | {'eff': eff}) as model:
+        added = [0.0]
+        monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
+        real = assembly.Assembly._linear_share
+
+        def slow(self, name, *args, **kwargs):
+            if name == 'balance':
+                added[0] += 10.0
+            return real(self, name, *args, **kwargs)
+
+        monkeypatch.setattr(assembly.Assembly, '_linear_share', slow)
+        model.update({'eff': eff.with_columns(pl.col('value') * 0.5)})
+        took = model.timings().filter(phase='build', run=0).tail(3)
+    assert took.select('step', 'entry').rows() == [
+        ('splice', None),
+        ('constraint', 'balance'),
+        ('sink_tables', None),
+    ], 'the coefficients are read again within the one constraint they scale'
+    rows = dict(took.select(pl.coalesce('entry', 'step'), 'seconds').iter_rows())
+    assert rows['balance'] >= 10.0, 'the slowed coefficients carry their delay in their constraint row'
+
+
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
     added = [0.0]

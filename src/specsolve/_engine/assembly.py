@@ -380,7 +380,6 @@ class Assembly:
         table = indexed.lazy()
         self.constraints[name] = indices.Indexed(table, start, indexed.height)
 
-        subject = f"constraint '{name}'"
         rows = self._constant_side(name, c, table, constant)
 
         if not linear and not quadratic:
@@ -388,26 +387,7 @@ class Assembly:
             rows, _, _, self.n_rows = self._drop_termless_rows(name, rows, _stack([], _MATRIX), None, none, start)
             return rows, None, None
 
-        tables = []
-        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
-        dense = c.where is None and not presences
-        for p, sign in linear:
-            if dense and set(p.dims) == set(c.dims):
-                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
-            else:
-                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
-            tables.append(
-                placed.select(
-                    ROW,
-                    pl.col(COL).cast(_DTYPES[COL]).alias(COL),
-                    (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
-                )
-            )
-        matrix, term_rows = (
-            self._matrix_share(tables, subject, c.lhs, c.rhs)
-            if tables
-            else (_stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW]))
-        )
+        matrix, term_rows = self._linear_share(name, c, table, start, linear, dense=c.where is None and not presences)
         qmatrix, quadratic_rows = self._quadratic_share(table, quadratic, name, c)
         if qmatrix is not None:
             term_rows = pl.concat([term_rows, quadratic_rows]).unique()
@@ -455,6 +435,39 @@ class Assembly:
         quadratic = [(p, 1.0) for p in lhs.quadratic] + [(p, -1.0) for p in rhs.quadratic]
         constant = [(p, 1.0) for p in rhs.constant] + [(p, -1.0) for p in lhs.constant]
         return linear, quadratic, constant
+
+    def _linear_share(
+        self,
+        name: str,
+        c: program.Constraint,
+        table: pl.LazyFrame,
+        start: int,
+        linear: list[tuple[Term, float]],
+        *,
+        dense: bool,
+    ) -> tuple[pl.DataFrame, pl.Series]:
+        """*c*'s *linear* terms placed on the rows of *table*, numbered from *start*, as [`_matrix_share`][] returns them.
+
+        *dense* says *table* is the whole product of *c*'s dimensions, so a term
+        over all of them computes its row ([`_dense_row`][]) instead of joining.
+        """
+        if not linear:
+            return _stack([], _MATRIX), pl.Series(ROW, [], dtype=_DTYPES[ROW])
+        carried_order: MaintainOrderJoin | None = 'left_right' if len(linear) == 1 else None
+        tables = []
+        for p, sign in linear:
+            if dense and set(p.dims) == set(c.dims):
+                placed = p.table.with_columns(self._dense_row(c.dims, start).alias(ROW))
+            else:
+                placed = join_on(table, p.table, p.dims, 'inner', maintain_order=carried_order)
+            tables.append(
+                placed.select(
+                    ROW,
+                    pl.col(COL).cast(_DTYPES[COL]).alias(COL),
+                    (sign * pl.col(COEFF)).cast(pl.Float64).alias(COEFF),
+                )
+            )
+        return self._matrix_share(tables, f"constraint '{name}'", c.lhs, c.rhs)
 
     def _constant_side(
         self, name: str, c: program.Constraint, table: pl.LazyFrame, constant: list[tuple[Term, float]]
@@ -610,11 +623,12 @@ def numbers_only(
     attached: AttachedSources,
     changed: Collection[str],
 ) -> bool:
-    """Whether *changed* changes only numbers [`spliced_model`][] can read again, so *built* keeps its indices and matrix.
+    """Whether *changed* changes only numbers [`spliced_model`][] can read again, so *built* keeps its indices.
 
     Every name must be a parameter that no build reads for which columns, rows
-    or coefficients exist ([`_structural_parameters`][]), nor one *compiled*
-    is [`specialized_on`][], attached now at exactly the coordinates *built*
+    or coefficients exist, nor for a quadratic row
+    ([`_structural_parameters`][]), nor one *compiled* is
+    [`specialized_on`][], attached now at exactly the coordinates *built*
     attached it at. Both are asked of *compiled*, the program as written:
     *built* keeps the program the data specialized, which no longer names a
     condition the old data settled. A constraint it feeds must have built
@@ -637,27 +651,30 @@ def spliced_model(
     measured: Measured,
     lap: Lap,
 ) -> BuiltModel:
-    """*built* with every bound, constant side and objective that reads a name in *changed* read again off *attached*.
+    """*built* with every bound, constant side, linear coefficient and objective that reads *changed* read again.
 
     The tables a full build of the same data gives, where [`numbers_only`][]
-    holds: the indices, the matrix, the quadratic rows and the sets are
-    *built*'s, and each recomputed share is spliced over the run of indices its
-    entry owns. An entry that owns no index has no share to read, so it is not
-    queried. *measured* is *built*'s, updated for what was read. *lap* logs
-    the steps a full build logs, for the entries read again: ``setup``, one
-    ``variable`` or ``constraint`` row per entry, the ``objective``, then
-    ``tables``. No ``matrix`` row, since the matrix is *built*'s.
+    holds: the indices, the quadratic rows and the sets are *built*'s, and each
+    recomputed share is spliced over the run of indices its entry owns. An
+    entry that owns no index has no share to read, so it is not queried. A
+    constraint's coefficients are read again only where *changed* scales a
+    variable in it; it built every row it indexed, so one with no ``where``
+    spans the whole product of its dimensions. *measured* is *built*'s,
+    updated for what was read. *lap* logs the steps a full build logs, for
+    the entries read again: ``setup``, one ``variable`` or ``constraint`` row
+    per entry, the ``objective``, then ``tables``. No ``matrix`` row: a
+    constraint's coefficients are spliced in within its own row.
 
     Raises:
-        DataError: A bound, constant side or objective the new data leaves
-            without a value, as a full build would.
+        DataError: A bound, constant side, coefficient or objective the new
+            data leaves without a value, as a full build would.
     """
     plan, tables = built.program, built.tables
     assembly = Assembly(plan, attached, measured, lap)
     assembly.variables.update(built.variables)
     assembly.constraints.update(built.constraints)
     assembly.n_cols, assembly.n_rows = tables.column_count, tables.row_count
-    cols, rows = tables.cols, tables.rows
+    cols, rows, matrix, starts = tables.cols, tables.rows, tables.matrix, tables.row_starts
     obj, quad, constant = tables.obj, tables.quad, tables.objective_constant
 
     def variable(name: str) -> None:
@@ -667,17 +684,22 @@ def spliced_model(
         cols = _spliced(cols, held.start, held.start + held.height, share)
 
     def constraint(name: str) -> None:
-        nonlocal rows
+        nonlocal rows, matrix, starts
         held, c = built.constraints[name], plan.constraints[name]
-        share = indices.in_position_order(
-            assembly._constant_side(name, c, held.table, assembly._terms(name, c)[2]), ROW
-        )
+        terms, _, consts = assembly._terms(name, c)
+        share = indices.in_position_order(assembly._constant_side(name, c, held.table, consts), ROW)
         measured.rhs.pop(name, None)
         if (sides := _magnitude_range(share, 'rhs')) is not None:
             measured.rhs[name] = sides
         at = rows.get_column(ROW)
         lo, hi = at.search_sorted(held.start, 'left'), at.search_sorted(held.start + held.height, 'left')
         rows = _spliced(rows, lo, hi, share)
+        if _coefficient_parameters(c) & set(changed):
+            linear, _ = assembly._linear_share(name, c, held.table, held.start, terms, dense=c.where is None)
+            matrix, starts = _respliced(matrix, starts, held.start, held.start + held.height, linear)
+            measured.coefficients.pop(name, None)
+            if (spread := _magnitude_range(linear, COEFF)) is not None:
+                measured.coefficients[name] = spread
 
     def objective(o: program.Objective) -> None:
         nonlocal obj, quad, constant
@@ -699,27 +721,41 @@ def spliced_model(
         if o is not None and program.parameters_of(o.expression) & set(changed):
             assembly._timed('objective', None, objective, o)
 
+    measured.nonzeros = matrix.height
     measured.bounds = _in_build_order(measured.bounds, built.variables)
+    measured.coefficients = _in_build_order(measured.coefficients, built.constraints)
     measured.rhs = _in_build_order(measured.rhs, built.constraints)
-    refreshed = replace(tables, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
+    refreshed = replace(
+        tables,
+        cols=cols,
+        rows=rows,
+        matrix=matrix,
+        row_starts=starts,
+        obj=obj,
+        quad=quad,
+        objective_constant=constant,
+    )
     model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
     lap('build', 'sink_tables', None)
     return model
 
 
 def _structural_parameters(plan: program.Program) -> frozenset[str]:
-    """The parameters a build reads for which columns, rows or coefficients exist, or where a coefficient is.
+    """The parameters a build reads for which columns, rows or coefficients exist, or for a quadratic row.
 
     Those a ``where`` reads, or a ``cases`` region's condition, or a shift or a
-    window as its amount, decide which coordinates exist. Inside a constraint
-    a parameter that scales a variable is a matrix coefficient. Every other use
-    is a bound, a constant side or the objective, which a sink takes by value.
+    window as its amount, decide which coordinates exist. A coefficient of a
+    quadratic constraint is part of a row a sink takes whole. Every other use
+    is a bound, a constant side, a linear coefficient or the objective, which
+    [`spliced_model`][] reads again.
     """
     names: set[str] = set()
     for entry in (*plan.variables.values(), *plan.constraints.values()):
         if entry.where is not None:
             names |= entry.where.names_read
     for c in plan.constraints.values():
+        if declares_quadratic(c):
+            names |= _coefficient_parameters(c)
         for node in program.walk(c.lhs, c.rhs):
             if isinstance(node, program.Cases):
                 names.update(*(region.when.names_read for region in node.regions))
@@ -727,12 +763,19 @@ def _structural_parameters(plan: program.Program) -> frozenset[str]:
                 amount = node.offset if isinstance(node, program.Translate) else node.width
                 if isinstance(amount, str):
                     names.add(amount)
-            elif isinstance(node, program.Multiply):
-                for side, other in ((node.left, node.right), (node.right, node.left)):
-                    if program.carries_variable(other):
-                        names |= program.parameters_of(side)
-            elif isinstance(node, program.Divide) and program.carries_variable(node.numerator):
-                names |= program.parameters_of(node.divisor)
+    return frozenset(names)
+
+
+def _coefficient_parameters(c: program.Constraint) -> frozenset[str]:
+    """The parameters that scale a variable in *c*: a factor of a product that carries one, or a divisor of one."""
+    names: set[str] = set()
+    for node in program.walk(c.lhs, c.rhs):
+        if isinstance(node, program.Multiply):
+            for side, other in ((node.left, node.right), (node.right, node.left)):
+                if program.carries_variable(other):
+                    names |= program.parameters_of(side)
+        elif isinstance(node, program.Divide) and program.carries_variable(node.numerator):
+            names |= program.parameters_of(node.divisor)
     return frozenset(names)
 
 
@@ -777,6 +820,21 @@ def _in_build_order(
 def _spliced(table: pl.DataFrame, lo: int, hi: int, share: pl.DataFrame) -> pl.DataFrame:
     """*table* with its rows ``[lo, hi)`` replaced by *share*."""
     return pl.concat([table.slice(0, lo), share, table.slice(hi)])
+
+
+def _respliced(
+    matrix: pl.DataFrame, starts: np.ndarray[tuple[int, ...], np.dtype[np.int64]], lo: int, hi: int, share: pl.DataFrame
+) -> tuple[pl.DataFrame, np.ndarray[tuple[int, ...], np.dtype[np.int64]]]:
+    """The CSR *matrix* and its *starts* with rows ``[lo, hi)`` owning *share* instead.
+
+    *share* is ``(ROW, COL, COEFF)`` in ``(ROW, COL)`` order, every row in
+    ``[lo, hi)``: a coefficient that falls to zero leaves the matrix, so the
+    rows after *hi* move by the difference.
+    """
+    first, last = int(starts[lo]), int(starts[hi])
+    spliced = pl.concat([matrix.slice(0, first), share.select(COL, COEFF), matrix.slice(last)]).rechunk()
+    owned = _row_starts(share.with_columns(pl.col(ROW) - lo), hi - lo) + first
+    return spliced, np.concatenate([starts[:lo], owned, starts[hi + 1 :] + (int(owned[-1]) - last)])
 
 
 def declares_quadratic(c: program.Constraint) -> bool:

@@ -170,7 +170,7 @@ flowchart TB
         ENTRIES["<b>variable</b> · <b>sos</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
         SINKTABLES["<b>sink_tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
-        SPLICE["<b>splice</b> · in an update that changes numbers alone, in place of specialize and matrix<br/>the standing build taken up, its indices and its matrix kept"]
+        SPLICE["<b>splice</b> · in an update that changes numbers alone, in place of specialize and matrix<br/>the standing build taken up, its indices kept"]
         SPECIALIZE --> ENTRIES --> MATRIX --> SINKTABLES
     end
     ATTACHED --> SPECIALIZE
@@ -264,7 +264,7 @@ flowchart TB
     subgraph BUILDS["build"]
         direction TB
         NUMBERS{{"do the changed sources change numbers alone,<br/>at the coordinates they had?"}}
-        SPLICED["spliced into the standing build<br/>its indices and its matrix kept, and only the bounds,<br/>right-hand sides and costs those numbers feed read again<br/><b>splice</b>, those entries and <b>sink_tables</b>, with no <b>matrix</b>"]
+        SPLICED["spliced into the standing build<br/>its indices kept, and only the bounds, right-hand sides, costs<br/>and linear coefficients those numbers feed read again<br/><b>splice</b>, those entries and <b>sink_tables</b>, with no <b>matrix</b>"]
         WHOLE["built whole<br/>every step, as a first build takes them"]
         NUMBERS -->|yes| SPLICED
         NUMBERS -->|no| WHOLE
@@ -290,10 +290,12 @@ flowchart TB
 parameter's checks read its own source and the labels of each of its
 dimensions, so a parameter is kept only where none of them was passed.
 **What the changed parameters feed decides the second**
-(`assembly.numbers_only`): each must be read for a bound, a right-hand side or
-a cost only, by no condition the data settled, and attached at exactly the
-coordinates it had. `assembly.spliced_model` then builds from the standing
-model.
+(`assembly.numbers_only`): each must be read for a bound, a right-hand side, a
+cost or a linear constraint's coefficient only, by no condition the data
+settled, and attached at exactly the coordinates it had.
+`assembly.spliced_model` then builds from the standing model, a coefficient
+spliced into the matrix within its constraint's row. A changed coefficient
+takes the `instance` branch at the handoff.
 **The loaded solver decides the last** (`Solver.keeps`, `_sinks/solver.py`).
 
 ## The public API
@@ -393,8 +395,9 @@ constant term. An absent coordinate is a missing row, and broadcasting is a join
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position. Where an update changes only such numbers,
-at the coordinates they had, the engine keeps the indices and the matrix and
-reads again only the entries they feed (`assembly.spliced_model`).
+or a linear constraint's coefficients, at the coordinates they had, the engine
+keeps the indices and reads again only the entries they feed
+(`assembly.spliced_model`). A changed coefficient still loads the solver again.
 
 **The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
