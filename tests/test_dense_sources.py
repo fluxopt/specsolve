@@ -83,6 +83,40 @@ def test_a_dense_column_narrower_than_its_labels_is_placed_among_them():
         sps.build(spec, sources | {'cap': twice})
 
 
+@pytest.mark.parametrize(
+    ('entry', 'refusal'),
+    [
+        pytest.param('cap', 'that are not labels of it: 9007199254740993', id='a-parameter'),
+        pytest.param('pairs', "that are not 'd' labels: 9007199254740993", id='a-relation'),
+    ],
+)
+def test_an_unsigned_coordinate_is_held_to_its_labels_exactly(entry, refusal):
+    """`2**53 + 1` is no label where the labels are `2**53` and `2**53 + 4`, and as a float it is the first of them.
+
+    The labels are `Int64` and the column is a `UInt64`, two types polars 1.33.1 compares as floats.
+    Kept in a module the linopy lane is not imported in, so the suite at the declared floors runs it.
+    """
+    big = 2**53
+    spec = {
+        'dimensions': {'d': {'dtype': 'int'}, 'e': {'dtype': 'int'}},
+        'parameters': {'cap': {'dims': ['d'], 'missing': 'absent'}},
+        'relations': {'pairs': {'key': 'e', 'values': 'd'}},
+        'variables': {'x': {'dims': ['d'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'objective': {'sense': 'maximize', 'expression': 'sum(x * cap)'},
+    }
+    stray = pl.Series([big + 1], dtype=pl.UInt64)
+    sources = {
+        'd': pl.Series('d', [big, big + 4], dtype=pl.UInt64),
+        'e': [1],
+        'cap': pl.DataFrame({'d': pl.Series([big], dtype=pl.UInt64), 'value': [1.0]}),
+        'pairs': pl.DataFrame({'e': [1], 'd': pl.Series([big + 4], dtype=pl.UInt64)}),
+    }
+    sps.build(spec, sources).close()
+    strayed = sources | {entry: sources[entry].with_columns(d=stray)}
+    with pytest.raises(sps.errors.DataError, match=refusal):
+        sps.build(spec, strayed)
+
+
 def test_a_dimension_is_read_once_however_many_parameters_and_relations_are_over_it(monkeypatch):
     """PyPSA's spec declares hundreds of parameters over a dozen dimensions; each check read its dimensions' labels again."""
     from specsolve import _sources as reading

@@ -124,12 +124,19 @@ def _in_dimension_types(
 
     Where *plain*, a column that arrived with a dictionary of its own is read
     as plain strings first, so that dictionary cannot block the cast into an
-    ``Enum``.
+    ``Enum``. A ``UInt64`` column over ``Int64`` labels is read as an
+    ``Int64``, null past its range: polars compares the two types as floats,
+    where two integers past 2**53 can be one number.
     """
     own = [c for c, _ in columns if plain and table.schema[c] in (pl.Categorical, pl.Enum)]
     if own:
         table = table.with_columns(pl.col(c).cast(pl.String) for c in own)
     casts = [cast for column, dim in columns if (cast := dimensions[dim].encoded(column)) is not None]
+    casts += [
+        pl.col(column).cast(pl.Int64, strict=False)
+        for column, dim in columns
+        if table.schema[column] == pl.UInt64 and dimensions[dim].dtype == pl.Int64
+    ]
     return table.with_columns(casts) if casts else table
 
 
