@@ -129,10 +129,10 @@ flowchart TB
     DATA[("sources<br/>parquet paths · tables · sequences")]
 
     subgraph LOAD["load · Model.__init__"]
-        COMPILE["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
+        READSPEC["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
     end
-    SPECFILE --> COMPILE
-    COMPILE --> PROGRAM(["Spec and Program"])
+    SPECFILE --> READSPEC
+    READSPEC --> PROGRAM(["Spec and Program"])
 
     subgraph TIDY["tidy · tidy_sources, _sources.py"]
         direction TB
@@ -156,36 +156,37 @@ flowchart TB
             direction TB
             FILL["<b>fill</b><br/>the missing rows a divisor reads"]
             SETTLE["<b>settle</b><br/>each condition the data decides, read once<br/><i>specialize.py</i>"]
-            ASSUME["<b>assume</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
-            FILL --> SETTLE --> ASSUME
+            ASSUMPTIONS["<b>assumptions</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
+            FILL --> SETTLE --> ASSUMPTIONS
         end
         CONTENT --> FILL
     end
     TABLES --> ENCODE
-    ASSUME --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
+    ASSUMPTIONS --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
 
     subgraph BUILD["build · build, _engine/assembly.py"]
         direction TB
-        SETUP["<b>setup</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
-        ENTRIES["<b>variable</b> · <b>set</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
+        SPECIALIZE["<b>specialize</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
+        ENTRIES["<b>variable</b> · <b>sos</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
-        SINKTABLES["<b>tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
-        SETUP --> ENTRIES --> MATRIX --> SINKTABLES
+        SINKTABLES["<b>sink_tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
+        SPLICE["<b>splice</b> · in an update that changes numbers alone, in place of specialize and matrix<br/>the standing build taken up, its indices and its matrix kept"]
+        SPECIALIZE --> ENTRIES --> MATRIX --> SINKTABLES
     end
-    ATTACHED --> SETUP
+    ATTACHED --> SPECIALIZE
     SINKTABLES --> BUILT(["BuiltModel, frozen<br/>the program, its data, the index tables and the sink tables"])
 
     subgraph HANDOFF["handoff · Model._handoff"]
         direction TB
         DIGEST["<b>digest</b> · in an update, before the build, where a solver is held<br/>the loaded model kept as a digest, and its build let go"]
-        START["<b>start</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
-        CHECK["<b>check</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
-        LOADS["<b>instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
-        WARM["<b>warm</b><br/>the start given to the solver"]
-        START --> CHECK --> LOADS --> WARM
+        MATCH["<b>match</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
+        CAPABILITY["<b>capability</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
+        LOADS["<b>solver_instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
+        GIVEN["<b>start</b><br/>the start given to the solver"]
+        MATCH --> CAPABILITY --> LOADS --> GIVEN
     end
-    BUILT --> START
-    WARM --> SOLVER(["the solver, holding the model"])
+    BUILT --> MATCH
+    GIVEN --> SOLVER(["the solver, holding the model"])
 
     subgraph SOLVE["solve · Model.solve"]
         RUN["Solver.run<br/><i>_sinks/: highs, gurobi, xpress</i>"]
@@ -252,7 +253,7 @@ flowchart TB
         TOUCHED{{"for each parameter:<br/>was its own source replaced,<br/>or the labels of one of its dimensions?"}}
         AGAIN["read and checked again<br/>a <b>shape</b>, an <b>encode</b> and a <b>content</b> lap for it"]
         KEPT["taken as the standing build read it<br/>no lap"]
-        EVERY["every time: each dimension and relation,<br/>then <b>fill</b>, <b>settle</b> and <b>assume</b>"]
+        EVERY["every time: each dimension and relation,<br/>then <b>fill</b>, <b>settle</b> and <b>assumptions</b>"]
         TOUCHED -->|yes| AGAIN
         TOUCHED -->|no| KEPT
         AGAIN --> EVERY
@@ -263,7 +264,7 @@ flowchart TB
     subgraph BUILDS["build"]
         direction TB
         NUMBERS{{"do the changed sources change numbers alone,<br/>at the coordinates they had?"}}
-        SPLICED["spliced into the standing build<br/>its indices and its matrix kept, and only the bounds,<br/>right-hand sides and costs those numbers feed read again<br/><b>setup</b>, those entries and <b>tables</b>, with no <b>matrix</b>"]
+        SPLICED["spliced into the standing build<br/>its indices and its matrix kept, and only the bounds,<br/>right-hand sides and costs those numbers feed read again<br/><b>splice</b>, those entries and <b>sink_tables</b>, with no <b>matrix</b>"]
         WHOLE["built whole<br/>every step, as a first build takes them"]
         NUMBERS -->|yes| SPLICED
         NUMBERS -->|no| WHOLE
@@ -275,7 +276,7 @@ flowchart TB
         direction TB
         SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every coefficient as it was loaded?"}}
         PUSHED["<b>push</b><br/>the new bounds, costs and right-hand sides<br/>onto the loaded solver"]
-        LOADED["<b>instance</b><br/>the solver closed and loaded again"]
+        LOADED["<b>solver_instance</b><br/>the solver closed and loaded again"]
         SAME -->|yes| PUSHED
         SAME -->|no| LOADED
     end

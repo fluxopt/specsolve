@@ -192,13 +192,13 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            self.lap('build', 'setup', None)
+            self.lap('build', 'specialize', None)
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
             ]
             sets = [
-                self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
+                self._timed('sos', name, self._build_sos, s, self.program.variables[s.variable])
                 for name, s in self.program.sos.items()
             ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
@@ -228,7 +228,7 @@ class Assembly:
             objective_constant=self.obj_const,
         )
         model = BuiltModel(self.program, self.attached, self.variables, self.constraints, tables)
-        self.lap('build', 'tables', None)
+        self.lap('build', 'sink_tables', None)
         return model
 
     def _timed(
@@ -688,7 +688,7 @@ def spliced_model(
         constant = assembly.obj_const
 
     with in_memory(assembly._reach() <= IN_MEMORY_REACH):
-        lap('build', 'setup', None)
+        lap('build', 'splice', None)
         for name in _entries_reading(plan.variables, changed, _bound_parameters):
             if built.variables[name].height:
                 assembly._timed('variable', name, variable, name)
@@ -703,7 +703,7 @@ def spliced_model(
     measured.rhs = _in_build_order(measured.rhs, built.constraints)
     refreshed = replace(tables, cols=cols, rows=rows, obj=obj, quad=quad, objective_constant=constant)
     model = BuiltModel(plan, attached, built.variables, built.constraints, refreshed)
-    lap('build', 'tables', None)
+    lap('build', 'sink_tables', None)
     return model
 
 

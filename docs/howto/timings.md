@@ -103,7 +103,7 @@ The attach has a row per step as well. `encode` turns a table's labels into
 its dimensions' own type, and `content` checks what that shows: every label
 one of its dimension's, no coordinate given twice, and a row wherever the spec
 refuses to lack one. Each relation and parameter has one row of each. `fill`,
-`settle` and `assume` follow, once each: the missing rows a divisor reads
+`settle` and `assumptions` follow, once each: the missing rows a divisor reads
 written in, the conditions the data decides read, and the spec's assumptions
 checked.
 
@@ -116,14 +116,15 @@ time:
 print(model.timings().filter(phase='build').sort('seconds', descending=True))
 ```
 
-The build's steps follow it: `setup`, one `variable`, `set` or `constraint`
-row per entry, the `objective`, then `matrix`, which stacks every constraint
-into one matrix, and `tables`, the rest of what the solver is handed. An
+The build's steps follow it: `specialize`, which rewrites the program with
+what the data settled, one `variable`, `sos` or `constraint` row per entry,
+the `objective`, then `matrix`, which stacks every constraint into one matrix,
+and `sink_tables`, the rest of what the solver is handed. An
 entry's seconds are its own: they hold when the entries build in another
 order.
 An update that gives only new numbers at the old coordinates reads again
-just the entries those numbers feed. Its build logs `setup`, those entries
-and `tables`, with no `matrix` row, since the matrix stays as it was.
+just the entries those numbers feed. Its build logs `splice`, those entries
+and `sink_tables`, with no `matrix` row, since the matrix stays as it was.
 
 ## The steps of a handoff
 
@@ -133,13 +134,16 @@ The handoff's rows name its steps, the same for every solver:
 print(model.timings().filter(phase='handoff').select('step', 'seconds'))
 ```
 
-A first solve runs `start`, `check`, `instance` and `warm`. `start` matches
-your `start=` to this build, `check` checks the solver can take the model,
-`instance` is a new solver instance taking it, and `warm` gives the solver the
-start. The first `instance` in a process also imports the solver's package.
+A first solve runs `match`, `capability`, `solver_instance` and `start`.
+`match` matches your `start=` to this build, `capability` checks the solver
+can take the model, `solver_instance` is a new solver instance taking it, and
+`start` gives the solver the start. The first `solver_instance` in a process
+also imports the solver's package. There are as many `solver_instance` rows as
+`metrics().solver_instances` counts.
 
 A later solve keeps the solver it holds where only numbers moved, and `push`es
-them onto it; otherwise it closes it and takes a new `instance`. A `digest`
+them onto it; otherwise it closes it and takes a new `solver_instance`. A
+`digest`
 row comes only from an `update` that rebuilds the model while a solver is held:
 the held solver reads its fingerprint of its model before the rebuild. Two
 solves with no `update` between them log no `digest`.
@@ -174,7 +178,7 @@ run holds the landing and the result does not.
 |---|---|
 | `solve` | [start from an earlier answer](faster.md#start-from-an-earlier-answer), [accept a gap](faster.md#accept-a-gap), and the ways after it |
 | `build` and `handoff`, again on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded) |
-| `handoff`, in `instance` on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded): only numbers may move |
+| `handoff`, in `solver_instance` on every `update` | [keep the model loaded](faster.md#keep-the-model-loaded): only numbers may move |
 | `build` on many small models | [build many small models faster](faster.md#build-many-small-models-faster) |
 | `build` on a large model | the entry that holds the time, then [make the model smaller](faster.md#make-the-model-smaller) |
 
