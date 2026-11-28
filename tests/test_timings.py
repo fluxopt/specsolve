@@ -365,8 +365,36 @@ def test_a_slow_step_of_a_tidy_or_an_attach_lands_in_its_own_row(monkeypatch, ow
     assert slowest == [row], 'the slowed step, the first of its kind, holds the ten seconds alone'
 
 
+def test_an_update_logs_only_the_parameters_it_reads_again():
+    """A parameter an update keeps from the last build is neither shaped, encoded nor checked, so it has no row."""
+    with sps.build(GROUPED, GROUPED_DATA) as model:
+        tidied, attached = len(_tidy_steps(model)), len(_attach_steps(model))
+        model.update({'load': GROUPED_DATA['load']})
+        tidy, attach = _tidy_steps(model)[tidied:], _attach_steps(model)[attached:]
+    assert tidy == [
+        ('read', None),
+        ('shape', 'bus'),
+        ('shape', 'generator'),
+        ('shape', 'gen_bus'),
+        ('shape', 'load'),
+        ('shape', None),
+    ], 'every tidy step but the kept p_max, in order'
+    assert attach == [
+        ('encode', 'gen_bus'),
+        ('content', 'gen_bus'),
+        ('encode', 'load'),
+        ('content', 'load'),
+        ('fill', None),
+        ('settle', None),
+        ('assume', None),
+    ], 'every attach step but the kept p_max, in order'
+
+
 def test_a_refused_source_keeps_the_laps_it_reached():
-    """A parameter with a label its dimension lacks is refused at its content; the steps before it keep their rows."""
+    """A parameter with a label its dimension lacks is refused at its content; the steps before it keep their rows.
+
+    The update replaces `p_max` alone, so `load` is kept from the build and has no row.
+    """
     with sps.build(GROUPED, GROUPED_DATA) as model:
         first = len(_attach_steps(model))
         stray = pl.DataFrame({'generator': ['g1', 'g3'], 'value': [10.0, 10.0]})
@@ -376,10 +404,8 @@ def test_a_refused_source_keeps_the_laps_it_reached():
     assert second == [
         ('encode', 'gen_bus'),
         ('content', 'gen_bus'),
-        ('encode', 'load'),
-        ('content', 'load'),
         ('encode', 'p_max'),
-    ], 'the rows up to the refused content check, and none for it or after it'
+    ], 'the rows up to the refused content check, none for it or after it, and none for the kept load'
 
 
 @pytest.mark.parametrize(
