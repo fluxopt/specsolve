@@ -7,6 +7,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 
 ## Upcoming version
 
+- refactor(api): eight steps of timings are renamed to say what each does ([#2259](https://github.com/fluxopt/specsolve/pull/2259))
 - docs(development): one diagram draws a build and solve, phase by phase ([#2258](https://github.com/fluxopt/specsolve/pull/2258))
 - fix(data): tidy returns the labels of a str dimension as String, whatever encoding they arrived in ([#2256](https://github.com/fluxopt/specsolve/pull/2256))
 - fix(data): Enum or Categorical labels work in a where ([#2257](https://github.com/fluxopt/specsolve/pull/2257))
