@@ -206,6 +206,12 @@ letter case for the columns specsolve adds, so it could collide with one.
 Rename it.
 ```
 
+### The type of a label
+
+**Every function that returns a table names a `str` label as a `String`**,
+whatever encoding the label arrived in.
+[The type of a label](data.md#the-type-of-a-label) has the other types.
+
 ### What each sink takes
 
 `Model.check_sink(sink)` refuses a built model the sink cannot ingest, naming the
