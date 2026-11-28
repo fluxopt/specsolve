@@ -58,18 +58,19 @@ holds each row at most once.
 
 ## The type of a label
 
-**A label has one type per `dtype`, wherever you read it.** A dimension's
-labels arrive in any width or encoding of its `dtype`.
-[`tidy`](api.md#specsolve.tidy) returns them in the one type the `dtype` names.
-So does every table of a [result](glossary.md), from a solve or from an
-archive.
+**A `str` label is a `String` wherever you read it.** A dimension's labels
+arrive in any width or encoding of its `dtype`. Two types are converted, and
+every other label keeps the type it arrived in.
 
 | `dtype` | Labels it takes | Returned as |
 |---|---|---|
-| `int` | an integer of any width | `Int64` |
-| `float` | a float of any width | `Float64` |
+| `int` | an integer of any width | the integer it arrived as |
+| `float` | a float of any width | the float it arrived as |
 | `str` | `String`, `Categorical` or `Enum` | `String` |
 | `datetime` | a datetime in any unit or time zone, or a date | a `Datetime` in microseconds, in its time zone |
+
+[`tidy`](api.md#specsolve.tidy) returns the labels in that type. So does
+every table of a [result](glossary.md), from a solve or from an archive.
 
 - **No `Categorical` and no `Enum` comes back as a label.** Either is read as
   its strings, in the order of its rows, not of its categories. A result
@@ -78,11 +79,10 @@ archive.
 - **A date is read as the microsecond its day starts on.**
 - **A datetime keeps the time zone it arrives in.** A label finer than a
   microsecond is refused.
-- **An integer label past the range of `Int64` is refused.**
-- **Labels with no rows take the type.**
+- **Labels with no rows take the declared type.**
 
-**A column over the dimension stays in the type it arrived in.** An `Int32` or
-a `Categorical` column of a parameter is the same column in what `tidy`
+**A column over the dimension stays in the type it arrived in.** A
+`Categorical` column of a parameter is the same column in what `tidy`
 returns. A datetime column is the exception: it is read in microseconds, and
 must be in the time zone of its dimension's labels.
 

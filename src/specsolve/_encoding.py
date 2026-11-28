@@ -124,19 +124,12 @@ def _in_dimension_types(
 
     Where *plain*, a column that arrived with a dictionary of its own is read
     as plain strings first, so that dictionary cannot block the cast into an
-    ``Enum``. A ``UInt64`` column over ``Int64`` labels is read as an
-    ``Int64``, null past its range: polars compares the two types as floats,
-    where two integers past 2**53 can be one number.
+    ``Enum``.
     """
     own = [c for c, _ in columns if plain and table.schema[c] in (pl.Categorical, pl.Enum)]
     if own:
         table = table.with_columns(pl.col(c).cast(pl.String) for c in own)
     casts = [cast for column, dim in columns if (cast := dimensions[dim].encoded(column)) is not None]
-    casts += [
-        pl.col(column).cast(pl.Int64, strict=False)
-        for column, dim in columns
-        if table.schema[column] == pl.UInt64 and dimensions[dim].dtype == pl.Int64
-    ]
     return table.with_columns(casts) if casts else table
 
 
@@ -250,22 +243,18 @@ def _coordinate_positions(
     positions replaces hashing every key column, which is the check's cost on a
     large dense table. ``None`` asks the caller to hash instead: for one key
     column, which hashes once either way, for a table under
-    [`POSITIONS_FROM`][] rows, and for a product past 63 bits, where a
-    position cannot be formed. Every label is one its dimension has by the
-    time this is asked, so a column of another width than its dimension's is
-    read in the dimension's.
+    [`POSITIONS_FROM`][] rows, and where a position cannot be formed — a
+    column of another type than its dimension's, a product past 63 bits.
+    Every label is one its dimension has by the time this is asked.
     """
     if len(dims) < 2 or table.height < POSITIONS_FROM:
+        return None
+    if any(table.schema[d] != dimensions[d].dtype for d in dims):
         return None
     if math.prod(dimensions[d].size for d in dims) >= 2**63:
         return None
     sizes = (dimensions[d].size for d in dims)
-    labels = (
-        pl.col(d) if table.schema[d] == dimensions[d].dtype else pl.col(d).cast(dimensions[d].dtype) for d in dims
-    )
-    return table.select(
-        row_major(sizes, (dimensions[d].position(label) for d, label in zip(dims, labels, strict=True)))
-    ).to_series()
+    return table.select(row_major(sizes, (dimensions[d].position(pl.col(d)) for d in dims))).to_series()
 
 
 def _refuse_a_missing_row(kind: str, name: str, rows: pl.DataFrame, columns: Mapping[str, Dimension]) -> None:

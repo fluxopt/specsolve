@@ -208,10 +208,9 @@ Rename it.
 
 ### The type of a label
 
-**Every function that returns a table names a label in the one type its
-dimension's `dtype` declares**: `Int64`, `Float64`, `String`, or a `Datetime`
-in microseconds. The type the label arrived in does not change it.
-[The type of a label](data.md#the-type-of-a-label) has the table.
+**Every function that returns a table names a `str` label as a `String`**,
+whatever encoding the label arrived in.
+[The type of a label](data.md#the-type-of-a-label) has the other types.
 
 ### What each sink takes
 

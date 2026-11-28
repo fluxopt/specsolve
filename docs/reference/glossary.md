@@ -62,7 +62,7 @@ spec ──▶ build ──▶ Model ──▶ solve ──▶ Result
 : One member of a dimension, such as `wind` in `generator`. A dimension's
   labels arrive in `sources` under its name, in order, each once
   ([where coordinates come from](data.md#where-coordinates-come-from)). A
-  label has one type per `dtype`, in `tidy` and in every result
+  `str` label is a `String` in `tidy` and in every result
   ([the type of a label](data.md#the-type-of-a-label)).
 
 **Coordinate**

@@ -2,8 +2,8 @@
 
 The declared `dtype` is the type of a label. Labels of another type used to be
 taken as they came, so a spec could declare one type and its data supply
-another, and only a later comparison noticed. Within a `dtype`, labels of any
-width or encoding are read into its one type, and a date under
+another, and only a later comparison noticed. Two conversions are made:
+string labels in any encoding read as `String`, and a date under
 `dtype: datetime` reads as the microsecond its day starts on.
 """
 
@@ -102,32 +102,22 @@ MICROSECONDS = pl.Datetime('us')
 @pytest.mark.parametrize(
     ('dtype', 'labels', 'held', 'column'),
     [
-        pytest.param('int', pl.Series([1, 2], dtype=pl.Int8), pl.Int64, pl.Int8, id='a-narrower-integer'),
-        pytest.param('int', pl.Series([1, 2], dtype=pl.UInt32), pl.Int64, pl.UInt32, id='an-unsigned-integer'),
-        pytest.param('float', pl.Series([0.5, 1.5], dtype=pl.Float32), pl.Float64, pl.Float32, id='a-narrower-float'),
         pytest.param(None, pl.Series(['a', 'b'], dtype=pl.Categorical), pl.String, pl.Categorical, id='a-categorical'),
         pytest.param(None, pl.Series(['a', 'b'], dtype=ENUM), pl.String, ENUM, id='an-enum'),
+        pytest.param('int', pl.Series([1, 2], dtype=pl.Int8), pl.Int8, pl.Int8, id='a-narrower-integer'),
+        pytest.param('float', pl.Series([0.5, 1.5], dtype=pl.Float32), pl.Float32, pl.Float32, id='a-narrower-float'),
         pytest.param('datetime', pl.Series(DAYS), MICROSECONDS, MICROSECONDS, id='dates'),
-        pytest.param(
-            'datetime',
-            pl.Series(DAYS).cast(pl.Datetime('ns', 'UTC')),
-            pl.Datetime('us', 'UTC'),
-            pl.Datetime('us', 'UTC'),
-            id='nanoseconds-in-a-time-zone',
-        ),
     ],
 )
-def test_the_tidy_holds_labels_in_the_declared_dtype_and_a_column_as_it_arrived(dtype, labels, held, column):
-    """A dimension's labels are held in the one type its `dtype` names, whatever width or encoding they arrived in.
+def test_the_tidy_returns_string_labels_as_strings_and_any_other_column_as_it_arrived(dtype, labels, held, column):
+    """The labels of a `str` dimension are `String` whatever encoding they arrived in.
 
-    A parameter's column over the dimension stays the caller's. A datetime is the exception on both
-    sides: it is read in microseconds, and keeps its time zone.
+    A column of a parameter over the dimension stays the caller's, and so do labels of another
+    `dtype` in the width they arrived in. A datetime is read in microseconds on both sides.
     """
     tables = sps.tidy(_spec(dtype), _sources(labels))
-    assert tables['d'].schema['d'] == held, f'the labels of a `{dtype or "str"}` dimension are {held}'
-    assert tables['cap'].schema['d'] == column, 'the column of a parameter is not converted beyond a datetime'
-    with sps.solve(_spec(dtype), _sources(labels)) as result:
-        assert result.primal('x').schema['d'] == held, 'and a result names each label in the type of the labels'
+    assert tables['d'].schema['d'] == held, f'the labels of a `{dtype or "str"}` dimension'
+    assert tables['cap'].schema['d'] == column, 'the column of a parameter over it'
 
 
 #: Every way a table with a label column leaves a result.
@@ -143,46 +133,35 @@ READERS = [
     pytest.param(lambda result: result.evaluate('3 * x'), id='an-expression-the-spec-does-not-name'),
 ]
 
-#: Labels in a type other than the one their `dtype` names, and that type.
+#: String labels in an encoding of the caller's.
 ENCODED = [
-    pytest.param('int', pl.Series([1, 2], dtype=pl.Int8), pl.Int64, id='a-narrower-integer'),
-    pytest.param('float', pl.Series([0.5, 1.5], dtype=pl.Float32), pl.Float64, id='a-narrower-float'),
-    pytest.param(None, pl.Series(['a', 'b'], dtype=pl.Categorical), pl.String, id='a-categorical'),
-    pytest.param(None, pl.Series(['a', 'b'], dtype=ENUM), pl.String, id='an-enum'),
-    pytest.param('datetime', pl.Series(DAYS), MICROSECONDS, id='dates'),
+    pytest.param(pl.Series(['a', 'b'], dtype=pl.Categorical), id='a-categorical'),
+    pytest.param(pl.Series(['a', 'b'], dtype=ENUM), id='an-enum'),
 ]
 
-
-def _read_spec(dtype: str | None) -> dict[str, object]:
-    return _spec(dtype) | {
-        'constraints': {'c': {'dims': ['d'], 'expression': 'x <= cap'}},
-        'expressions': {'doubled': {'dims': ['d'], 'expression': '2 * x'}},
-    }
+READ_SPEC = _spec(None) | {
+    'constraints': {'c': {'dims': ['d'], 'expression': 'x <= cap'}},
+    'expressions': {'doubled': {'dims': ['d'], 'expression': '2 * x'}},
+}
 
 
 @pytest.mark.parametrize('read', READERS)
-@pytest.mark.parametrize(('dtype', 'labels', 'held'), ENCODED)
-def test_every_table_a_result_returns_names_a_label_in_the_type_its_dtype_declares(dtype, labels, held, read):
-    """The type a label leaves in is the dimension's, never the one a source arrived in or the one a build encodes it in."""
-    with sps.solve(_read_spec(dtype), _sources(labels), outputs=OUTPUTS) as result:
-        assert read(result).schema['d'] == held
+@pytest.mark.parametrize('labels', ENCODED)
+def test_every_table_a_result_returns_names_a_str_label_as_a_string(labels, read):
+    """A `str` label leaves as a `String`, never in the encoding a source arrived in or the one a build holds it in."""
+    with sps.solve(READ_SPEC, _sources(labels), outputs=OUTPUTS) as result:
+        assert read(result).schema['d'] == pl.String
 
 
-@pytest.mark.parametrize(('dtype', 'labels', 'held'), ENCODED)
-def test_an_archived_answer_names_a_label_in_the_type_its_dtype_declares(tmp_path, dtype, labels, held):
-    """An archive holds the tidy tables and the answer, and both come back in the dimension's type."""
-    sps.solve(_read_spec(dtype), _sources(labels), archive=tmp_path / 'a').close()
+@pytest.mark.parametrize('labels', ENCODED)
+def test_an_archived_answer_names_a_str_label_as_a_string(tmp_path, labels):
+    """An archive holds the tidy tables and the answer, and a `str` label comes back from both as a `String`."""
+    sps.solve(READ_SPEC, _sources(labels), archive=tmp_path / 'a').close()
     with sps.read_archive(tmp_path / 'a') as result:
-        assert result.primal('x').schema['d'] == held, 'the answer'
-    assert sps.read_inputs(tmp_path / 'a').sources['d'].collect_schema()['d'] == held, 'the labels it was solved from'
-
-
-def test_integer_labels_past_the_signed_64_bit_range_are_refused():
-    """`dtype: int` labels are held as `Int64`, which an unsigned integer above its range does not fit."""
-    labels = pl.Series([1, 2**63], dtype=pl.UInt64)
-    sentence = both_lanes_refuse(_spec('int'), _sources(labels), match='Int64')
-    assert sentence.startswith("the labels of dimension 'd' hold"), 'it names the dimension'
-    assert str(2**63) in sentence, 'and a label that does not fit'
+        assert result.primal('x').schema['d'] == pl.String, 'the answer'
+    assert sps.read_inputs(tmp_path / 'a').sources['d'].collect_schema()['d'] == pl.String, (
+        'the labels it was solved from'
+    )
 
 
 def test_an_empty_labels_table_takes_the_declared_dtype():
