@@ -267,8 +267,8 @@ flowchart TB
 
     subgraph HANDS["handoff, at the next solve"]
         direction TB
-        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every coefficient as it was loaded?"}}
-        PUSHED["<b>push</b><br/>the new bounds, costs and right-hand sides<br/>onto the loaded solver"]
+        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every quadratic constraint's linear part as it was loaded?"}}
+        PUSHED["<b>push</b><br/>the new bounds, costs, right-hand sides and a linear row's<br/>changed coefficients onto the loaded solver"]
         LOADED["<b>instance</b><br/>the solver closed and loaded again"]
         SAME -->|yes| PUSHED
         SAME -->|no| LOADED
