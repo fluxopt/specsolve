@@ -48,7 +48,7 @@ from specsolve._start import read_start, refuse_unknown_start_word
 from specsolve.errors import SpecsolveError, SpecsolveWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from mathspec.program import Expression, Program
 
@@ -129,7 +129,11 @@ def tidy(spec: SpecLike, sources: Mapping[str, Source]) -> dict[str, pl.DataFram
 
 
 def attach_sources(
-    program: Program, sources: Mapping[str, Source], lap: Lap = untimed
+    program: Program,
+    sources: Mapping[str, Source],
+    lap: Lap = untimed,
+    last: tuple[Mapping[str, pl.DataFrame], AttachedSources] | None = None,
+    changed: Collection[str] = (),
 ) -> tuple[dict[str, pl.DataFrame], AttachedSources]:
     """*sources* read, held to what *program* declares and attached to it: the one way a caller's data reaches a build.
 
@@ -138,6 +142,12 @@ def attach_sources(
         sources: The caller's sources, as [`build`][] takes them.
         lap: Ends a lap at each step of the ``tidy`` and ``attach`` phases, as
             [`timings`][specsolve._api.Model.timings] names them.
+        last: What an earlier call returned, before the sources named
+            *changed* were replaced. A parameter that replacement leaves alone
+            ([`_unchanged`][]) is taken from it as it is: neither read nor
+            checked again, and with no lap. Dimensions, relations and the
+            assumptions are read and checked every time.
+        changed: The names whose sources were replaced since *last*.
 
     Returns:
         The tables as they were read, which [`tidy`][] returns and an archive
@@ -146,8 +156,21 @@ def attach_sources(
     Raises:
         DataError: As [`build`][] refuses the sources.
     """
-    tables = tidy_sources(program, sources, lap)
-    return tables, attach(program, encoded(program, tables, lap), lap)
+    read, held = last if last is not None else (None, None)
+    kept = () if last is None else _unchanged(program, changed)
+    tables = tidy_sources(program, sources, lap, read, kept)
+    return tables, attach(program, encoded(program, tables, lap, held, kept), lap)
+
+
+def _unchanged(program: Program, changed: Collection[str]) -> frozenset[str]:
+    """The parameters of *program* that a replacement of the sources named *changed* leaves as they were checked.
+
+    A parameter's checks read its own source and the labels of each of its
+    dimensions, so it is unchanged only where none of them is in *changed*.
+    """
+    return frozenset(
+        name for name, p in program.parameters.items() if name not in changed and not set(p.dims) & set(changed)
+    )
 
 
 def _refuse_a_decision(program: Program) -> None:
@@ -256,18 +279,22 @@ class Model:
             )
         return self._built
 
-    def _fill(self) -> None:
+    def _fill(self, changed: Collection[str] = ()) -> None:
         """Build from what is attached now; a failure closes the model rather than leaving it stale.
 
         What the build read is kept for an archive: a one-shot iterator is
-        spent by then, and a path may have been rewritten. The held solver
+        spent by then, and a path may have been rewritten. A parameter that
+        the sources named *changed* leave alone is taken as the standing build
+        read it ([`attach_sources`][]); with no standing build, as after a
+        failure, every source is read again. The held solver
         reads its [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of its
         tables.
         """
         lap = self._clock.lap
+        last = None if self._built is None else (self._tidied, self._built.attached)
         try:
-            self._tidied, attached = attach_sources(self._program, self._sources, lap)
+            self._tidied, attached = attach_sources(self._program, self._sources, lap, last, changed)
             if self._solver is not None:
                 self._solver.structure()
                 lap('handoff', 'digest')
@@ -298,6 +325,10 @@ class Model:
         rolling horizon or a myopic pathway is
         [`solve_over`][specsolve._sweep.solve_over.solve_over], which runs this loop.
 
+        A parameter whose own source and whose dimensions' labels *sources*
+        leaves alone is not read or checked again: a file rewritten in place at
+        a path it was built from is read once its name is passed again.
+
         Args:
             sources: Only what changed; the rest keeps what [`build`][]
                 attached. A dimension's labels count too, which is how a
@@ -314,7 +345,7 @@ class Model:
         self._clock.start()
         refuse_unknown_sources(self._program, sources)
         self._sources.update(sources)
-        self._fill()
+        self._fill(sources.keys())
         return self
 
     def solve(
@@ -704,8 +735,9 @@ class Model:
         labels, no coordinate twice, and a row wherever it refuses to lack
         one; ``fill``, the missing rows a divisor reads written in;
         ``settle``, each condition the data decides read once; and
-        ``assumptions``, the spec's assumptions checked. The
-        handoff's steps are ``digest``, the held solver's fingerprint of its
+        ``assumptions``, the spec's assumptions checked. An update logs a
+        ``shape``, ``encode`` and ``content`` row only for a parameter it
+        reads again. The handoff's steps are ``digest``, the held solver's fingerprint of its
         model, read before a rebuild;
         ``match``, the ``start=`` matched to this build; ``capability``, the
         solver checked to take the model; ``push``, the held solver kept and the new
