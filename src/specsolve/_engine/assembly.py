@@ -193,13 +193,13 @@ class Assembly:
         [`IN_MEMORY_REACH`][] collects [`in_memory`][].
         """
         with in_memory(self._reach() <= IN_MEMORY_REACH):
-            self.lap('build', 'setup', None)
+            self.lap('build', 'specialize', None)
             cols = [
                 self._timed('variable', name, self._build_variable, name, v)
                 for name, v in self.program.variables.items()
             ]
             sets = [
-                self._timed('set', name, self._build_sos, s, self.program.variables[s.variable])
+                self._timed('sos', name, self._build_sos, s, self.program.variables[s.variable])
                 for name, s in self.program.sos.items()
             ]
             ordered = sorted(self.program.constraints.items(), key=lambda item: declares_quadratic(item[1]))
@@ -229,7 +229,7 @@ class Assembly:
             objective_constant=self.obj_const,
         )
         model = BuiltModel(self.program, self.attached, self.variables, self.constraints, tables)
-        self.lap('build', 'tables', None)
+        self.lap('build', 'sink_tables', None)
         return model
 
     def _timed(

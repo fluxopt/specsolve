@@ -46,7 +46,7 @@ def attach(program: program.Program, data: AttachedSources, lap: Lap = untimed) 
         program: The compiled spec.
         data: Its sources, as [`encoded`][specsolve._encoding.encoded] returns them.
         lap: Ends a lap of ``attach`` after each step: ``fill``, ``settle``
-            and ``assume``.
+            and ``assumptions``.
 
     Raises:
         DataError: An ``assumptions:`` entry the data does not hold.
@@ -68,7 +68,7 @@ def attach(program: program.Program, data: AttachedSources, lap: Lap = untimed) 
     attached = replace(attached, settled=settle(program, attached))
     lap('attach', 'settle', None)
     check_assumptions(program, attached)
-    lap('attach', 'assume', None)
+    lap('attach', 'assumptions', None)
     return attached
 
 
