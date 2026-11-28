@@ -464,14 +464,14 @@ class Model:
         held = self._solver
         self._solver = sinks.loaded(held, solver_name, model.tables, solver_options)
         reloaded = self._solver is not held
-        lap('handoff', 'instance' if reloaded else 'push')
+        lap('handoff', 'solver_instance' if reloaded else 'push')
         if not reloaded and start != 'previous':
             self._solver.forget()
         if isinstance(matched, Basis):
             self._solver.start_from_basis(matched)
         elif matched is not None:
             self._solver.start_from_values(matched)
-        lap('handoff', 'warm')
+        lap('handoff', 'start')
         return self._solver, reloaded
 
     def _share(self) -> Metrics:
@@ -704,14 +704,16 @@ class Model:
         labels, no coordinate twice, and a row wherever it refuses to lack
         one; ``fill``, the missing rows a divisor reads written in;
         ``settle``, each condition the data decides read once; and
-        ``assume``, the spec's assumptions checked. The
+        ``assumptions``, the spec's assumptions checked. The
         handoff's steps are ``digest``, the held solver's fingerprint of its
         model, read before a rebuild;
         ``match``, the ``start=`` matched to this build; ``capability``, the
         solver checked to take the model; ``push``, the held solver kept and the new
-        numbers pushed onto it, or ``instance``, a new solver instance given
-        the model, the held one closed; and ``warm``, the start given to the
-        solver, or its last solve forgotten. The same steps for every
+        numbers pushed onto it, or ``solver_instance``, a new solver instance
+        given the model, the held one closed, as
+        [`solver_instances`][specsolve._answer.records.Metrics.solver_instances]
+        counts them; and ``start``, the start given to the solver, or its last
+        solve forgotten. The same steps for every
         solver. Elsewhere both are null.
         """
         return self._clock.timings()

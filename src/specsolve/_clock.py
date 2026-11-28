@@ -33,7 +33,7 @@ Step = Literal[
     'content',
     'fill',
     'settle',
-    'assume',
+    'assumptions',
     'specialize',
     'variable',
     'sos',
@@ -45,8 +45,8 @@ Step = Literal[
     'match',
     'capability',
     'push',
-    'instance',
-    'warm',
+    'solver_instance',
+    'start',
 ]
 
 #: How a step ends a lap: ``(phase, step, entry)``, as [`Clock.lap`][] takes them.
