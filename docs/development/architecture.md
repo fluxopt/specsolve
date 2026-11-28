@@ -103,8 +103,8 @@ flowchart TB
 
 **A model's life is clocked in nine phases, and every step is in exactly one.**
 [`Metrics`](../reference/api.md#specsolve.types.Metrics) defines what each
-phase covers, and [the diagram](../howto/timings.md#the-phases-of-a-solve)
-draws what each hands to the next. The clock
+phase covers, and [the timings guide](../howto/timings.md#the-phases-of-a-solve)
+draws the phases for a caller. The clock
 is one mark (`Clock`, `_clock.py`): each public call starts it with
 `Clock.start()`, and `Clock.lap(phase)` adds the time since the mark to that
 phase and moves the mark, so the laps tile the call and a step between two
@@ -114,17 +114,121 @@ no `Metrics` column.
 the return from one call and the entry into the next (50–110 µs, #2180), and
 slows each step to find it in its own phase.
 
-| phase | lapped in |
-| --- | --- |
-| `load` | `Model.__init__` |
-| `tidy` | `_sources.tidy_sources`: `read`, `shape` |
-| `attach` | `_encoding.encoded`: `encode`, `content`; `attaching.attach`: `fill`, `settle`, `assume` |
-| `build` | `assembly.build` |
-| `handoff` | `Model._handoff`; `Model._fill` for the held solver's digest |
-| `solve` | `Model.solve` |
-| `readback` | `Model.solve` |
-| `write` | `Model.write` |
-| `archive` | `Model._archive` |
+**One build and solve, phase by phase.** Each band is a phase, titled with
+the function that clocks it. A bold word is a step, as
+[`Model.timings`](../reference/api.md#specsolve.types.Model.timings) names
+it. A rounded box is the value one phase hands the next, and a thick one is
+what `Model` keeps between calls.
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 460}}}%%
+flowchart TB
+    accTitle: One build and solve, phase by phase
+    accDescr: Nine bands, one per phase, from load to archive. Each band holds its steps in the order they run and names the module behind each. Between two bands is the value the first hands the second.
+    SPECFILE["a spec<br/>a YAML file or a mapping"]
+    DATA[("sources<br/>parquet paths · tables · sequences")]
+
+    subgraph LOAD["load · Model.__init__"]
+        COMPILE["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
+    end
+    SPECFILE --> COMPILE
+    COMPILE --> PROGRAM(["Spec and Program"])
+
+    subgraph TIDY["tidy · tidy_sources, _sources.py"]
+        direction TB
+        READ["<b>read</b><br/>every parquet path, at once"]
+        SHAPE["<b>shape</b> · once per entry, then once over all<br/>its columns, their types, no null, each label once"]
+        READ --> SHAPE
+    end
+    DATA --> READ
+    PROGRAM --> READ
+    SHAPE --> TABLES(["the tidy tables<br/>what sps.tidy returns and an archive holds"])
+
+    subgraph ATTACH["attach · attach_sources, _api.py"]
+        direction TB
+        subgraph ENC["encoded, _encoding.py"]
+            direction TB
+            ENCODE["<b>encode</b> · per relation and parameter<br/>each column into its dimension's type"]
+            CONTENT["<b>content</b> · per relation and parameter<br/>every label known, no coordinate twice, no refused gap"]
+            ENCODE --> CONTENT
+        end
+        subgraph ATT["attach, _engine/attaching.py"]
+            direction TB
+            FILL["<b>fill</b><br/>the missing rows a divisor reads"]
+            SETTLE["<b>settle</b><br/>each condition the data decides, read once<br/><i>specialize.py</i>"]
+            ASSUME["<b>assume</b><br/>the spec's assumptions<br/><i>assumptions.py</i>"]
+            FILL --> SETTLE --> ASSUME
+        end
+        CONTENT --> FILL
+    end
+    TABLES --> ENCODE
+    ASSUME --> ATTACHED(["AttachedSources, frozen<br/>a Dimension per dimension, every table a lazy query"])
+
+    subgraph BUILD["build · build, _engine/assembly.py"]
+        direction TB
+        SETUP["<b>setup</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
+        ENTRIES["<b>variable</b> · <b>set</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
+        MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
+        SINKTABLES["<b>tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
+        SETUP --> ENTRIES --> MATRIX --> SINKTABLES
+    end
+    ATTACHED --> SETUP
+    SINKTABLES --> BUILT(["BuiltModel, frozen<br/>the program, its data, the index tables and the sink tables"])
+
+    subgraph HANDOFF["handoff · Model._handoff"]
+        direction TB
+        DIGEST["<b>digest</b> · in an update, before the build, where a solver is held<br/>the loaded model kept as a digest, and its build let go"]
+        START["<b>start</b><br/>a start= matched to this build<br/><i>readback.py, _start.py</i>"]
+        CHECK["<b>check</b><br/>the sink can take this model<br/><i>_sinks/capabilities.py</i>"]
+        LOADS["<b>instance</b> or <b>push</b><br/>a solver loaded, or the new numbers pushed onto the one held"]
+        WARM["<b>warm</b><br/>the start given to the solver"]
+        START --> CHECK --> LOADS --> WARM
+    end
+    BUILT --> START
+    WARM --> SOLVER(["the solver, holding the model"])
+
+    subgraph SOLVE["solve · Model.solve"]
+        RUN["Solver.run<br/><i>_sinks/: highs, gurobi, xpress</i>"]
+    end
+    SOLVER --> RUN
+    RUN --> VECTORS(["the solver's vectors and status"])
+
+    subgraph READBACK["readback · Model.solve"]
+        LAYOUT["result, _engine/readback.py<br/>each vector laid out by coordinate"]
+    end
+    VECTORS --> LAYOUT
+    LAYOUT --> RESULT(["Result over an Answer<br/>record · metrics · tables · reasons"])
+
+    subgraph WRITE["write · Model.write"]
+        WRITER["a writer, chosen by suffix<br/><i>_sinks/: lp_file, mps_file</i>"]
+    end
+    BUILT --> WRITER
+    WRITER --> LPFILE[("an LP or MPS file")]
+
+    subgraph ARCHIVE["archive · Model._archive"]
+        PACK["the spec, the tidy tables and the answer written<br/>the metrics row last<br/><i>_archive_layout.py, _answer/layout.py</i>"]
+    end
+    RESULT --> PACK
+    TABLES --> PACK
+    PACK --> DISK[("the archive on disk")]
+
+    RESULT -.->|"Model.update: a parameter is read again only where its source or its labels changed"| READ
+
+    classDef value stroke:#4a5fc1,stroke-width:1.5px
+    classDef held stroke:#4a5fc1,stroke-width:3.5px
+    classDef data stroke:#b7791f,stroke-width:1.5px
+    class PROGRAM,ATTACHED,VECTORS,RESULT value
+    class TABLES,BUILT,SOLVER held
+    class SPECFILE,DATA,LPFILE,DISK data
+```
+
+**An update runs the same road again, less what cannot have changed.**
+`Model.update` reads and checks a parameter again only where its own source,
+or the labels of one of its dimensions, were replaced. A parameter left alone
+is taken as the standing build read it, with no lap. Dimensions, relations and
+the assumptions are read and checked every time, and the model is built whole.
+An update can also keep the solver: `push` in place of `instance`, where the
+new model differs from the loaded one in numbers only.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
@@ -329,14 +433,17 @@ The names the code uses for its own parts. The names a caller meets are in
   a settled atom becomes its literal, and an entry it empties holds no row
   (`specialize.py`).
 
-**Splice** and **push**
-: An update that changes numbers only splices them into the built model's
-  tables, in place of a build; a loaded solver then takes them pushed, in place
-  of a reload.
+**Push**
+: After an update that changed numbers only, a loaded solver takes the new
+  bounds, costs and right-hand sides pushed, in place of a reload. The model
+  itself is built again.
 
 **Attached sources**
 : The tidy tables as every query reads them: a `Dimension` per dimension, a
-  column of string labels as an `Enum` in the labels' order. They also hold
+  column of string labels as an `Enum` in the labels' order. That `Enum`
+  stays inside the build: `readback` returns the column as a `String`
+  ([the type of a label](../reference/data.md#the-type-of-a-label)). They
+  also hold
   each settled atom of a `where` or a `cases:` region, read once for the
   assumptions and the build both (`_attached.py`).
 

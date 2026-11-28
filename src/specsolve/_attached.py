@@ -48,9 +48,9 @@ class Dimension:
     """One dimension's labels, held once for everything that reads them."""
 
     name: str
-    #: The labels in the order they arrived, as the engine holds them: labels
-    #: that arrived as ``String`` as an ``Enum`` in that order, so its physical
-    #: code is a label's position, and any other in the type it arrived in.
+    #: The labels in the order they arrived, as the engine holds them:
+    #: ``String`` labels as an ``Enum`` in that order, so its physical code is
+    #: a label's position, and any other in the type they arrived in.
     labels: pl.Series
     #: The cast of a column called [`name`][] into [`dtype`][], null where a
     #: value is none of the labels, or ``None`` where the labels are held as
