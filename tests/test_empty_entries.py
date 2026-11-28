@@ -152,6 +152,27 @@ def test_a_constraint_without_a_where_is_indexed_only_inside_its_presences(monke
     )
 
 
+def test_a_constraint_with_a_where_and_presences_reads_its_where_once(monkeypatch):
+    """The `where` indexes the rows, and the presences only narrow them: reading it again to narrow them cost the whole read twice."""
+    spec = {
+        **SPARSE_SPEC,
+        'parameters': {**SPARSE_SPEC['parameters'], 'on': {'dims': ['g'], 'dtype': 'bool'}},
+        'constraints': {'capped': {**SPARSE_SPEC['constraints']['capped'], 'where': 'on'}},
+    }
+    sources = SPARSE_SOURCES | {'on': pl.DataFrame({'g': ['a', 'b'], 'value': [True, False]})}
+    table, read = indices.table, []
+
+    def spied_table(scope, dims, where, *args, **kwargs):
+        if where is not None:
+            read.append(tuple(dims))
+        return table(scope, dims, where, *args, **kwargs)
+
+    monkeypatch.setattr(indices, 'table', spied_table)
+    with sps.build(spec, sources) as model:
+        assert model.metrics().rows == 1, '`limit` has one row, so `capped` keeps one'
+    assert read == [('g', 'h')], f'`capped` read its `where` {len(read)} times, where once indexes it'
+
+
 #: `e` has no label, so `count(on, over=e)` is 0 at every `g`.
 COUNTED_SPEC = {
     'dimensions': {'g': {}, 'e': {}},
