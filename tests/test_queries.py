@@ -88,7 +88,7 @@ def attached() -> AttachedSources:
         parameters=PARAMETERS,
         dimensions=DIMENSIONS,
         relations=RELATIONS,
-        parameter_rows={},
+        parameter_rows=dict.fromkeys(PARAMETERS, 0),
         given={},
     )
 

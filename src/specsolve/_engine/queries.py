@@ -20,13 +20,14 @@ import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal, assert_never
 
-import numpy as np
 import polars as pl
 from mathspec import program
 
 from specsolve._collect import collected
+from specsolve._engine import dense
 from specsolve._engine.attaching import refuse_a_negative_window
 from specsolve._engine.conditions import Carrier, falsy_if_null, narrowed, query_condition
+from specsolve._engine.dense import DenseTerm
 from specsolve._engine.relations import landed, mapping, walk_join
 from specsolve._engine.scope import UNIT, Scope, missing_value
 from specsolve._engine.shifts import translate_term, walked_dims, window_term
@@ -88,6 +89,11 @@ def _one_coefficient(terms: tuple[Term, ...]) -> tuple[Term, ...]:
     stacked = Term(dims, pl.concat([p.table.select(*dims, CONSTANT) for p in terms]), 'constant')
     parameters = frozenset[str]().union(*(p.parameters for p in terms))
     return (Term(dims, _totalled(stacked), 'constant', parameters=parameters),)
+
+
+def _held(values: dense.Values | None, table: pl.LazyFrame) -> pl.LazyFrame | DenseTerm:
+    """A constant leaf's body: held by position where *values* reads it there, *table* otherwise."""
+    return table if values is None else DenseTerm(values, lambda: table)
 
 
 def _presence(held: Indexed, dims: tuple[str, ...], index: str) -> pl.LazyFrame:
@@ -169,22 +175,15 @@ class QueryBuilder:
     ) -> pl.LazyFrame | None:
         """*table* with *parameter* attached by position, or ``None`` to join.
 
-        Position lines up only for a dense parameter over the dimensions of a
-        variable without a condition, in order. Height stands in for density because
-        duplicates are refused by [`tidy_sources`][specsolve._sources.tidy_sources].
+        Position lines up only for a parameter that covers the dimensions of a
+        variable with no condition, declared in their order.
         """
         entry = self.scope.program.parameters[parameter]
         if v.where is not None or tuple(entry.dims) != tuple(v.dims) or not v.dims:
             return None
-
-        expected = math.prod(self.scope.data.dimensions[d].size for d in v.dims)
-        values = self.scope.data.parameters[parameter]
-        if values.select(pl.len()).pipe(collected).item() != expected:
+        if not dense.readable(self.scope, parameter):
             return None
-
-        position = self.scope.row_major(v.dims, self.scope.position_of)
-        pairs = values.select(position.alias('__at__'), pl.col(VALUE)).pipe(collected)
-        return table.with_columns(pl.Series(alias, _scattered(pairs['__at__'], pairs[VALUE], expected)))
+        return table.with_columns(dense.values(self.scope, parameter).alias(alias))
 
     # ------------------------------------------------------------------
     # expressions → terms
@@ -340,14 +339,12 @@ class QueryBuilder:
                     carrier, condition = query_condition(self.scope, p.table, r.when, p.dims)
                     table = carrier.filter(falsy_if_null(condition)).select(*p.dims, *p.carried)
                     presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                    return replace(p, table=table, presences=presences, region=both_regions(p.region, r.when))
+                    return replace(p, body=table, presences=presences, region=both_regions(p.region, r.when))
                 shared = tuple(d for d in p.dims if d in on)
                 out_dims = p.dims + tuple(d for d in on if d not in p.dims)
                 table = join_on(p.table, truth, shared, 'inner').select(*out_dims, *p.carried)
                 presences = tuple(relaxed(x, p.dims) for x in p.presences)
-                return replace(
-                    p, dims=out_dims, table=table, presences=presences, region=both_regions(p.region, r.when)
-                )
+                return replace(p, dims=out_dims, body=table, presences=presences, region=both_regions(p.region, r.when))
 
             return map_terms(ev(r.value), kept)
 
@@ -368,7 +365,7 @@ class QueryBuilder:
         def ev(e: program.Expression) -> ExpressionTerms:
             if isinstance(e, program.Constant):
                 table = pl.LazyFrame({CONSTANT: [float(e.value)]}, schema={CONSTANT: pl.Float64})
-                return ExpressionTerms((), (Term((), table, 'constant'),))
+                return ExpressionTerms((), (Term((), _held(dense.constant(float(e.value)), table), 'constant'),))
             if isinstance(e, program.ParameterReference):
                 return ExpressionTerms((), (self._parameter_term(e.name),))
             if isinstance(e, program.VariableReference):
@@ -438,13 +435,26 @@ class QueryBuilder:
         table = self.scope.data.parameters[name].select(*dims, pl.col(VALUE).cast(pl.Float64).alias(CONSTANT))
         present = table.select(*dims) if dims else table.select(pl.col(CONSTANT).is_not_null().alias(PRESENT))
         presences = (Presence(present, dims),) if self.scope.absent(name) else ()
-        return Term(dims, table, 'constant', presences=presences, parameters=frozenset({name}))
+        take = None if presences else dense.parameter(self.scope, name)
+        return Term(dims, _held(take, table), 'constant', presences=presences, parameters=frozenset({name}))
 
     def _variable_term(self, name: str) -> Term:
         """A variable as a linear term with unit coefficients."""
         dims = self.scope.program.variables[name].dims
         table = self.scope.variables[name].table.select(*dims, COL, pl.lit(1.0, dtype=pl.Float64).alias(COEFF))
-        return Term(dims, table, 'linear', presences=self._variable_presences(name, dims))
+        presences = self._variable_presences(name, dims)
+        return Term(dims, self._variable_body(name, table, presences), 'linear', presences=presences)
+
+    def _variable_body(
+        self, name: str, table: pl.LazyFrame, presences: tuple[Presence, ...]
+    ) -> pl.LazyFrame | DenseTerm:
+        """A variable's body at unit coefficient: held by position where its columns are, *table* otherwise."""
+        columns = dense.variable(self.scope, name)
+        if columns is None:
+            return table
+        held = self.scope.variables[name]
+        absent = presences[0] if presences else None
+        return DenseTerm(dense.unit, lambda: table, columns, held.start + held.height - 1, absent)
 
     def _variable_presences(self, name: str, dims: tuple[str, ...]) -> tuple[Presence, ...]:
         """Presence only for a variable with a condition under ``missing: absent``, keyed explicitly as [`Presence`][] requires."""
@@ -512,7 +522,7 @@ class QueryBuilder:
         """
         if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
             return terms
-        return replace(terms, constant=tuple(replace(p, table=_totalled(p)) for p in terms.constant))
+        return replace(terms, constant=tuple(replace(p, body=_totalled(p)) for p in terms.constant))
 
     def _added_up(
         self, terms: ExpressionTerms, operand: program.Expression, *, absent: Literal['zero', 'spreads']
@@ -539,7 +549,7 @@ class QueryBuilder:
         if len(constant) == 1 and constant[0].region is None:
             if all(fan_in(node) == 'one-to-one' for node in program.walk(operand)):
                 return terms
-            return ExpressionTerms((), (replace(constant[0], table=_totalled(constant[0])),))
+            return ExpressionTerms((), (replace(constant[0], body=_totalled(constant[0])),))
         dims, presences = self.scope.spanned(constant), presences_of(constant)
         carrier = narrowed(self.scope, dims, None)
         for presence in presences:
@@ -632,12 +642,12 @@ class QueryBuilder:
             return p
         if not p.dims:
             zero = pl.LazyFrame({CONSTANT: [0.0]}, schema={CONSTANT: pl.Float64})
-            return replace(p, table=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
+            return replace(p, body=pl.concat([p.table.select(*p.carried), zero.select(*p.carried)]))
         first = self.scope.data.dimensions[p.dims[0]].table.select(pl.col(LABEL).alias(p.dims[0]))
         universe = self.scope.spread(first, p.dims[1:])
         empty = universe.join(p.table.select(*p.dims).unique(), on=list(p.dims), how='anti')
         zeros = empty.with_columns(pl.lit(0.0, dtype=pl.Float64).alias(CONSTANT)).select(*p.dims, *p.carried)
-        return replace(p, table=pl.concat([p.table.select(*p.dims, *p.carried), zeros]))
+        return replace(p, body=pl.concat([p.table.select(*p.dims, *p.carried), zeros]))
 
     def _at_term(self, p: Term, a: program.JoinColumns, context: str) -> Term:
         """Spread the dropped dimensions back out over the added ones — the adjoint of a group.
@@ -696,17 +706,3 @@ def _dimensions(over: tuple[program.Axis, ...]) -> tuple[str, ...]:
 
 def _zero(e: program.Expression) -> bool:
     return isinstance(e, program.Constant) and float(e.value) == 0
-
-
-def _scattered(at: pl.Series, values: pl.Series, size: int) -> np.ndarray[tuple[int, ...], np.dtype[np.float64]]:
-    """*values* moved to the positions *at* names, one pass, order checked."""
-    indices = at.to_numpy()
-    written = np.zeros(size, dtype=bool)
-    written[indices] = True
-    if not written.all():
-        msg = 'a parameter passed the density check but does not cover the coordinate product'
-        raise SpecsolveError(msg)
-
-    out = np.empty(size, dtype=np.float64)
-    out[indices] = values.to_numpy()
-    return out

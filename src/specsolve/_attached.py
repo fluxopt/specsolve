@@ -13,6 +13,7 @@ it with what the model makes of the data.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -71,6 +72,11 @@ class Dimension:
     def size(self) -> int:
         """How many labels the dimension has."""
         return self.labels.len()
+
+    @property
+    def positioned(self) -> bool:
+        """Whether a label is its own position, as an ``Enum``'s code or a consecutive integer less the first, rather than a lookup."""
+        return self.labels.dtype == pl.Enum or self.first is not None
 
     @property
     def dtype(self) -> pl.DataType:
@@ -148,3 +154,16 @@ class AttachedSources:
     parameter_rows: Mapping[str, int]
     given: Mapping[str, pl.LazyFrame] = field(default_factory=dict)
     settled: Mapping[program.Condition, bool] = field(default_factory=dict)
+
+    def size(self, dims: Iterable[str]) -> int:
+        """How many coordinates the product of *dims* has."""
+        return math.prod(self.dimensions[d].size for d in dims)
+
+    def covers(self, parameter: str, dims: tuple[str, ...]) -> bool:
+        """Whether *parameter*, declared over *dims*, has a row at every coordinate of them.
+
+        [`encoded`][specsolve._encoding.encoded] refuses a repeated coordinate
+        and a label its dimension lacks, so a table as tall as the product of
+        its dimensions has one row at each.
+        """
+        return self.parameter_rows[parameter] == self.size(dims)
