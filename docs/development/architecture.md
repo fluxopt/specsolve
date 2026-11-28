@@ -213,6 +213,7 @@ flowchart TB
     PACK --> DISK[("the archive on disk")]
 
     RESULT -.->|"Model.update: a parameter is read again only where its source or its labels changed"| READ
+    BUILT -.->|"Model.update, numbers alone: the indices and the matrix are kept"| SETUP
 
     classDef value stroke:#4a5fc1,stroke-width:1.5px
     classDef held stroke:#4a5fc1,stroke-width:3.5px
@@ -226,9 +227,15 @@ flowchart TB
 `Model.update` reads and checks a parameter again only where its own source,
 or the labels of one of its dimensions, were replaced. A parameter left alone
 is taken as the standing build read it, with no lap. Dimensions, relations and
-the assumptions are read and checked every time, and the model is built whole.
-An update can also keep the solver: `push` in place of `instance`, where the
-new model differs from the loaded one in numbers only.
+the assumptions are read and checked every time.
+
+**A change of numbers alone keeps most of the build.** Where an update gives
+only new numbers at the coordinates they had (`assembly.numbers_only`),
+`assembly.spliced_model` keeps the indices and the matrix and reads again only
+the bounds, right-hand sides and costs those numbers feed. Its build laps
+`setup`, those entries and `tables`, and no `matrix`. Any other update builds
+whole. Either way an update can keep the solver: `push` in place of
+`instance`, where the new model differs from the loaded one in numbers only.
 
 **A result's metrics row is its share of the model's clocks**: `Clock.metrics`
 builds the one `Metrics`, and `Model.solve` takes the laps since the previous
@@ -433,10 +440,10 @@ The names the code uses for its own parts. The names a caller meets are in
   a settled atom becomes its literal, and an entry it empties holds no row
   (`specialize.py`).
 
-**Push**
-: After an update that changed numbers only, a loaded solver takes the new
-  bounds, costs and right-hand sides pushed, in place of a reload. The model
-  itself is built again.
+**Splice** and **push**
+: An update that changes numbers only splices them into the built model's
+  tables, in place of a build; a loaded solver then takes them pushed, in place
+  of a reload.
 
 **Attached sources**
 : The tidy tables as every query reads them: a `Dimension` per dimension, a
