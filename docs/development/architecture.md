@@ -167,7 +167,7 @@ flowchart TB
     subgraph BUILD["build · build, _engine/assembly.py"]
         direction TB
         SETUP["<b>setup</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
-        ENTRIES["<b>variable</b> · <b>set</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
+        ENTRIES["<b>variable</b> · <b>set</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, dense.py, indices.py</i>"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
         SINKTABLES["<b>tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
         SETUP --> ENTRIES --> MATRIX --> SINKTABLES
