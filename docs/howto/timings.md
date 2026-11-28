@@ -122,6 +122,9 @@ the `objective`, then `matrix`, which stacks every constraint into one matrix,
 and `sink_tables`, the rest of what the solver is handed. An
 entry's seconds are its own: they hold when the entries build in another
 order.
+An update that gives only new numbers at the old coordinates reads again
+just the entries those numbers feed. Its build logs `splice`, those entries
+and `sink_tables`, with no `matrix` row, since the matrix stays as it was.
 
 ## The steps of a handoff
 

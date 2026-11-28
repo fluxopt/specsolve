@@ -35,6 +35,7 @@ Step = Literal[
     'settle',
     'assumptions',
     'specialize',
+    'splice',
     'variable',
     'sos',
     'constraint',

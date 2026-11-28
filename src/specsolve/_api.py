@@ -38,7 +38,7 @@ from specsolve._archive_layout import carried_sources, check_the_target, write_a
 from specsolve._clock import Clock, untimed
 from specsolve._encoding import encoded
 from specsolve._engine import readback
-from specsolve._engine.assembly import Measured
+from specsolve._engine.assembly import Measured, numbers_only, spliced_model
 from specsolve._engine.assembly import build as build_model
 from specsolve._engine.attaching import attach
 from specsolve._inputs import Label, Source, SpecLike, as_program, as_spec, expression_node
@@ -286,13 +286,18 @@ class Model:
         spent by then, and a path may have been rewritten. A parameter that
         the sources named *changed* leave alone is taken as the standing build
         read it ([`attach_sources`][]); with no standing build, as after a
-        failure, every source is read again. The held solver
+        failure, every source is read again. A change of numbers alone
+        ([`numbers_only`][specsolve._engine.assembly.numbers_only]) reads
+        again only the bounds, constant sides and objective it feeds
+        ([`spliced_model`][specsolve._engine.assembly.spliced_model]);
+        anything else builds in full. The held solver
         reads its [`structure`][specsolve._sinks.solver.Solver.structure]
         before the previous build is released, since that read lets go of its
         tables.
         """
         lap = self._clock.lap
-        last = None if self._built is None else (self._tidied, self._built.attached)
+        held, measured = self._built, self._measured
+        last = None if held is None else (self._tidied, held.attached)
         try:
             self._tidied, attached = attach_sources(self._program, self._sources, lap, last, changed)
             if self._solver is not None:
@@ -300,6 +305,9 @@ class Model:
                 lap('handoff', 'digest')
             self._built = None
             self._solved = None
+            if held is not None and changed and numbers_only(self._program, held, measured, attached, changed):
+                self._built = spliced_model(held, attached, changed, measured, lap)
+                return
             self._measured = Measured()
             self._built = build_model(self._program, attached, self._measured, lap)
         except BaseException:
@@ -724,7 +732,8 @@ class Model:
         ``objective``, which has no name; ``matrix``, every constraint's share
         stacked into one matrix in row order; and ``sink_tables``, the rest of
         what a solver is handed. An entry's seconds are its own: they hold when the
-        entries build in another order. The tidy's steps are ``read``, every
+        entries build in another order. An update that gives only new numbers
+        logs ``splice``, the entries it reads again and ``sink_tables``. The tidy's steps are ``read``, every
         path read at once, and ``shape``, one row per dimension, relation and
         parameter, each held to its columns and their types, the first
         parameter's also holding every parameter's shaping, and a last row

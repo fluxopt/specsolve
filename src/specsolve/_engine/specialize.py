@@ -48,12 +48,7 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
     the atom or fails it everywhere at once. A parameter with no row, and a
     count along a dimension without a label, settle without a query.
     """
-    entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
-    bounds = [b for v in compiled.variables.values() for b in (v.lower, v.upper) if b is not None]
-    regions = [
-        r.when for node in walk(*compiled.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
-    ]
-    masks = [*(e.where for e in entries if e.where is not None), *regions]
+    masks = _conditions(compiled)
     scope = Scope(compiled, attached, {})
     atoms = {atom for mask in masks for atom in mask.atoms}
     out: dict[program.Condition, bool] = {}
@@ -78,6 +73,16 @@ def settle(compiled: program.Program, attached: AttachedSources) -> dict[program
         elif count == everywhere:
             out[atom] = True
     return out
+
+
+def specialized_on(compiled: program.Program) -> frozenset[str]:
+    """The parameters whose data [`specialized`][] rewrites *compiled* by: a change of one can change the program built.
+
+    They are the names every condition [`settle`][] reads. An update of one
+    of them, numbers alone included, builds again rather than reading the
+    old program's entries again.
+    """
+    return frozenset(name for mask in _conditions(compiled) for name in mask.names_read)
 
 
 def specialized(compiled: program.Program, attached: AttachedSources) -> program.Program:
@@ -133,6 +138,16 @@ def rules_out(where: program.Mask | None, attached: AttachedSources) -> bool:
 def is_empty(entry: program.Variable | program.Constraint, attached: AttachedSources) -> bool:
     """Whether *entry* holds nothing whatever its terms, no column or no row: it spans a dimension without a label, or its ``where`` is ruled out."""
     return any(not attached.dimensions[d].size for d in entry.dims) or rules_out(entry.where, attached)
+
+
+def _conditions(compiled: program.Program) -> list[program.Mask]:
+    """Every condition the data can settle: each ``where``, and each ``cases:`` region the rows and bounds read."""
+    entries = [*compiled.variables.values(), *compiled.constraints.values(), *compiled.assumptions.values()]
+    bounds = [b for v in compiled.variables.values() for b in (v.lower, v.upper) if b is not None]
+    regions = [
+        r.when for node in walk(*compiled.roots, *bounds) if isinstance(node, program.Cases) for r in node.regions
+    ]
+    return [*(e.where for e in entries if e.where is not None), *regions]
 
 
 def _specialized_mask(mask: program.Mask, settled: Mapping[program.Condition, bool]) -> program.Mask:

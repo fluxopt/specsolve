@@ -117,6 +117,52 @@ def test_laps_after_the_last_result_are_the_next_run():
     assert set(pending.get_column('phase')) >= {'tidy', 'attach', 'build'}, 'the update, logged under run 1'
 
 
+RELOADED = {'load': pl.DataFrame({'t': [0, 1, 2], 'value': [7.0, 2.0, 3.0]})}
+
+
+def test_an_update_of_numbers_alone_logs_each_entry_it_reads_again():
+    """New numbers at the old coordinates read `balance` again and nothing else, so the build logs that row alone.
+
+    The splice keeps the matrix, so it logs no `matrix` row; it ends in
+    `tables`, as a full build does, so nothing it does lands in the next lap.
+    """
+    with sps.build(SPEC, DATA) as model:
+        model.solve()
+        model.update(RELOADED)
+        model.solve()
+        build = model.timings().filter(phase='build', run=1)
+        assert _by_phase(model.timings()) == pytest.approx(_clocks(model.metrics()), rel=1e-12), (
+            'the metrics are the log summed, the splice included'
+        )
+    assert build.select('step', 'entry').rows() == [
+        ('splice', None),
+        ('constraint', 'balance'),
+        ('sink_tables', None),
+    ], 'the splice, the one entry the load feeds, then the sink tables'
+
+
+def test_a_slow_entry_read_again_shows_in_its_own_row(monkeypatch):
+    """Ten seconds added to `balance`'s constant side, read again on the old indices, land in its row alone."""
+    with sps.build(SPEC, DATA) as model:
+        added = [0.0]
+        monkeypatch.setattr(_clock, 'perf_counter', lambda: time.perf_counter() + added[0])
+        real = assembly.Assembly._constant_side
+
+        def slow(self, name, *args):
+            if name == 'balance':
+                added[0] += 10.0
+            return real(self, name, *args)
+
+        monkeypatch.setattr(assembly.Assembly, '_constant_side', slow)
+        model.update(RELOADED)
+        took = model.timings().filter(phase='build', run=0).tail(3)
+    rows = dict(took.select(pl.coalesce('entry', 'step'), 'seconds').iter_rows())
+    assert rows['balance'] >= 10.0, 'the slowed constraint carries its delay'
+    assert max(s for entry, s in rows.items() if entry != 'balance') < 10.0, (
+        'and neither the splice nor the sink tables do'
+    )
+
+
 def test_a_slow_entry_shows_in_its_own_row(monkeypatch):
     """Ten seconds added to one constraint's build land in that constraint's row and in no other."""
     added = [0.0]
