@@ -15,7 +15,7 @@ import pytest
 import specsolve as sps
 from specsolve import _encoding
 from specsolve._engine import assumptions as _assumptions
-from specsolve._engine import conditions, indices, specialize
+from specsolve._engine import conditions, coverage, indices, specialize
 from specsolve._engine import queries as queries_module
 from specsolve._names import COL, ROW
 
@@ -54,7 +54,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
     expression, bounds, table, narrowed = (
         queries_module.QueryBuilder.expression,
         queries_module.QueryBuilder.bounds,
-        indices.table,
+        indices.planned,
         _assumptions.narrowed,
     )
 
@@ -77,7 +77,7 @@ def _read(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
 
     monkeypatch.setattr(queries_module.QueryBuilder, 'expression', spied_expression)
     monkeypatch.setattr(queries_module.QueryBuilder, 'bounds', spied_bounds)
-    monkeypatch.setattr(indices, 'table', spied_table)
+    monkeypatch.setattr(indices, 'planned', spied_table)
     monkeypatch.setattr(_assumptions, 'narrowed', spied_narrowed)
     sps.build(SPEC, SOURCES).close()
     return seen
@@ -137,14 +137,14 @@ SPARSE_SOURCES = {
 
 def test_a_constraint_without_a_where_is_indexed_only_inside_its_presences(monkeypatch):
     """A sparse absence narrows such a constraint, and indexing it before its presences would hold the full product of its dimensions."""
-    table, unnarrowed = indices.table, []
+    table, unnarrowed = indices.planned, []
 
     def spied_table(scope, dims, where, index, start, presences=()):
         if index == ROW and where is None and not presences:
             unnarrowed.append(tuple(dims))
         return table(scope, dims, where, index, start, presences)
 
-    monkeypatch.setattr(indices, 'table', spied_table)
+    monkeypatch.setattr(indices, 'planned', spied_table)
     with sps.build(SPARSE_SPEC, SPARSE_SOURCES) as model:
         assert model.metrics().rows == 1, '`limit` has one row, so `capped` keeps one'
     assert not unnarrowed, (
@@ -247,14 +247,14 @@ TABLED_SOURCES = {
 
 def _indexed_wheres(monkeypatch: pytest.MonkeyPatch, spec: dict) -> tuple[int, int, list]:
     """The model's columns and rows, and every `where` the build indexed over the product of its entry's dimensions."""
-    table, indexed = indices.table, []
+    table, indexed = indices.planned, []
 
     def spied_table(scope, dims, where, *args, **kwargs):
         if where is not None:
             indexed.append(where)
         return table(scope, dims, where, *args, **kwargs)
 
-    monkeypatch.setattr(indices, 'table', spied_table)
+    monkeypatch.setattr(indices, 'planned', spied_table)
     with sps.build(spec, TABLED_SOURCES) as model:
         metrics = model.metrics()
         return metrics.columns, metrics.rows, indexed
@@ -436,14 +436,14 @@ def test_a_condition_that_holds_everywhere_is_dropped_from_its_where(monkeypatch
         'constraints': {'probe': {'dims': ['g', 't'], 'where': where, 'expression': 'x >= 0'}},
     }
     sources = EVERYWHERE_SOURCES | {'active': EVERYWHERE_SOURCES['active'].with_columns(value=pl.Series(active))}
-    table, indexed = indices.table, []
+    table, indexed = indices.planned, []
 
     def spied_table(scope, dims, where, *args, **kwargs):
         if where is not None:
             indexed.append(tuple(sorted(where.dims)))
         return table(scope, dims, where, *args, **kwargs)
 
-    monkeypatch.setattr(indices, 'table', spied_table)
+    monkeypatch.setattr(indices, 'planned', spied_table)
     with sps.build(spec, sources) as model:
         assert model.metrics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
     assert indexed == read, f'`probe` was indexed over {indexed}, where what is left of `{where}` reads {read}'
@@ -513,3 +513,36 @@ def test_a_where_holds_where_its_parameter_has_no_row_and_the_missing_value_pass
     sources = EVERYWHERE_SOURCES | {'unset': pl.DataFrame(schema={'g': pl.String, 't': pl.Int64, 'value': pl.Float64})}
     with sps.build(spec, sources) as model:
         assert model.metrics().rows == rows, f'`{where}` admits {rows} of the 6 rows of `probe`'
+
+
+def test_a_constraint_whose_where_the_index_finds_empty_reads_no_terms(monkeypatch):
+    """`low > 1` holds at `a` and `high > 1` at `b`, so neither settles, and together they admit no row.
+
+    The data leaves the `where` to the index, which finds it empty; the
+    constraint then holds no row, and a query of its terms would build nothing.
+    """
+    spec = {
+        'dimensions': {'g': {}},
+        'parameters': {'low': {'dims': ['g']}, 'high': {'dims': ['g']}},
+        'variables': {'x': {'dims': ['g'], 'bounds': {'lower': 0, 'upper': 1}}},
+        'constraints': {
+            'live': {'dims': ['g'], 'expression': 'x <= low + high'},
+            'never': {'dims': ['g'], 'where': 'low > 1 AND high > 1', 'expression': 'x >= low'},
+        },
+        'objective': {'sense': 'maximize', 'expression': 'sum(x)'},
+    }
+    sources = {
+        'g': ['a', 'b'],
+        'low': pl.DataFrame({'g': ['a', 'b'], 'value': [2.0, 0.0]}),
+        'high': pl.DataFrame({'g': ['a', 'b'], 'value': [0.0, 2.0]}),
+    }
+    planned, sides = coverage.constant_side_planned, []
+
+    def spied(scope, rows, terms, c):
+        sides.append(c)
+        return planned(scope, rows, terms, c)
+
+    monkeypatch.setattr(coverage, 'constant_side_planned', spied)
+    with sps.build(spec, sources) as model:
+        assert model.metrics().rows == 2, '`live` keeps both rows, `never` none'
+    assert len(sides) == 1, f'only `live` had its terms read, not {len(sides)} constraints'

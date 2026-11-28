@@ -119,9 +119,13 @@ print(model.timings().filter(phase='build').sort('seconds', descending=True))
 The build's steps follow it: `specialize`, which rewrites the program with
 what the data settled, one `variable`, `sos` or `constraint` row per entry,
 the `objective`, then `matrix`, which stacks every constraint into one matrix,
-and `sink_tables`, the rest of what the solver is handed. An
-entry's seconds are its own: they hold when the entries build in another
-order.
+and `sink_tables`, the rest of what the solver is handed. Between
+them run three passes, one row each: `bounds`, `rows` and `terms`. Each
+reads the queries every entry planned for it in one go: the variables'
+bounds, the constraints' rows, and the constraints' terms and constant sides
+with their checks. An entry's seconds are its own and hold when the entries
+build in another order, so its row is what the entry does alone. Its share of
+a pass shows in the pass's row.
 
 ## The steps of a handoff
 

@@ -8,6 +8,7 @@ builds of one model must agree on every solver index
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -17,7 +18,7 @@ from specsolve._engine.conditions import narrowed
 from specsolve._engine.scope import UNIT, position_column
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Sequence
+    from collections.abc import Callable, Collection, Sequence
 
     from mathspec import program
 
@@ -72,6 +73,23 @@ def table(
         ``([`UNIT`][], index)``, the column a reader keys a scalar on, since selecting
         nothing drops the empty product's one row.
     """
+    query, finish = planned(scope, dims, where, index, start, presences)
+    return finish(collected(query))
+
+
+def planned(
+    scope: Scope,
+    dims: tuple[str, ...],
+    where: program.Mask | None,
+    index: str,
+    start: int,
+    presences: Sequence[Presence] = (),
+) -> tuple[pl.LazyFrame, Callable[[pl.DataFrame], pl.DataFrame]]:
+    """[`table`][]'s query, and what its table becomes once collected, for a caller that collects several in one pass.
+
+    A *where* that leaves the leading dimensions free reads its surviving
+    suffix here, before the query is returned.
+    """
     if where is not None and not presences:
         free = _free_prefix(dims, where.dims)
         if free:
@@ -88,10 +106,20 @@ def table(
     if not dropped:
         numbering = pl.lit(start, dtype=pl.Int64) + numbering
     position = '#position' if dropped else index
-    materialised = in_position_order(
-        surviving.select(*(dims or (UNIT,)), numbering.alias(position)).pipe(collected),
-        position,
-    )
+    query = surviving.select(*(dims or (UNIT,)), numbering.alias(position))
+    return query, partial(_numbered, dims=dims, index=index, start=start, position=position, dropped=dropped)
+
+
+def counted(scope: Scope, dims: tuple[str, ...], where: program.Mask) -> pl.LazyFrame:
+    """How many coordinates of *dims* *where* admits, as one row of one column: the height [`table`][] gives it alone."""
+    return _survivors(scope, dims, where).select(pl.len())
+
+
+def _numbered(
+    materialised: pl.DataFrame, *, dims: tuple[str, ...], index: str, start: int, position: str, dropped: bool
+) -> pl.DataFrame:
+    """[`planned`][]'s collected survivors in index order, numbered from *start* where a condition dropped some."""
+    materialised = in_position_order(materialised, position)
     if not dropped and dims:
         materialised.replace_column(materialised.get_column_index(index), materialised.get_column(index).set_sorted())
         return materialised.rechunk()
@@ -133,8 +161,8 @@ def _factored(
     where: program.Mask,
     index: str,
     start: int,
-) -> pl.DataFrame | None:
-    """Solver indices for a condition that reads none of the first *free* dimensions.
+) -> tuple[pl.LazyFrame, Callable[[pl.DataFrame], pl.DataFrame]] | None:
+    """[`planned`][]'s answer for a condition that reads none of the first *free* dimensions.
 
     The survivors are the full head product against one surviving suffix set,
     so only the suffix is ranked, and the index is the number the counted path
@@ -156,15 +184,19 @@ def _factored(
         return None
 
     position = '#position'
-    indexed = (
+    query = (
         survivors.lazy()
         .join(narrowed(scope, head, None).select(*head, _row_major(scope, head).alias(position)), how='cross')
         .select(
             *dims,
             (pl.lit(start, dtype=pl.Int64) + pl.col(position) * width + pl.col(rank)).alias(index),
         )
-        .pipe(collected)
     )
+    return query, partial(_in_index_order, index=index)
+
+
+def _in_index_order(indexed: pl.DataFrame, *, index: str) -> pl.DataFrame:
+    """[`_factored`][]'s collected table in index order, which the cross join leaves to polars."""
     return in_position_order(indexed, index).with_columns(pl.col(index).set_sorted()).rechunk()
 
 

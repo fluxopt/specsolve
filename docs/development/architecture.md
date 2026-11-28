@@ -167,10 +167,14 @@ flowchart TB
     subgraph BUILD["build · build, _engine/assembly.py"]
         direction TB
         SPECIALIZE["<b>specialize</b><br/>the program rewritten with what the data settled<br/><i>specialize.py, coverage.py</i>"]
-        ENTRIES["<b>variable</b> · <b>sos</b> · <b>constraint</b> · <b>objective</b> · one lap per entry<br/>an entry as lazy queries, collected, and given its solver indices<br/><i>queries.py, conditions.py, terms.py, indices.py</i>"]
+        VARIABLES["<b>variable</b> · one lap per variable<br/>each given its solver indices, its bounds planned as lazy queries<br/><i>queries.py, indices.py</i>"]
+        BOUNDS["<b>bounds</b> · one pass<br/>every variable's bounds, read together"]
+        PLANNED["<b>sos</b> · <b>constraint</b> · one lap per entry<br/>each constraint's terms compiled and its queries planned<br/><i>queries.py, conditions.py, terms.py</i>"]
+        PASSES["<b>rows</b>, then <b>terms</b> · one pass each<br/>every constraint's rows, then its terms and constant side with their checks, read together"]
+        OBJECTIVE["<b>objective</b><br/>the cost of each column"]
         MATRIX["<b>matrix</b><br/>every constraint's coefficients, stacked in row order"]
         SINKTABLES["<b>sink_tables</b><br/>cols · obj · rows · A · sos<br/><i>_sinks/tables.py</i>"]
-        SPECIALIZE --> ENTRIES --> MATRIX --> SINKTABLES
+        SPECIALIZE --> VARIABLES --> BOUNDS --> PLANNED --> PASSES --> OBJECTIVE --> MATRIX --> SINKTABLES
     end
     ATTACHED --> SPECIALIZE
     SINKTABLES --> BUILT(["BuiltModel, frozen<br/>the program, its data, the index tables and the sink tables"])
@@ -333,6 +337,14 @@ constant term. An absent coordinate is a missing row, and broadcasting is a join
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
 onto a loaded solver by position.
+
+**A build reads in passes.** Each entry compiles its terms and plans its
+queries alone; then one pass reads every variable's bounds, one every
+constraint's rows, and one every constraint's terms and constant side, in one
+`collect_all` within `IN_MEMORY_REACH`. Above it a pass reads, checks and lets
+go of one entry's tables before it reads the next, so it holds no more than an
+entry built alone. A constraint numbers its rows from 0 until every
+constraint has kept its rows, and then moves onto the model's, in build order.
 
 **The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
