@@ -118,7 +118,7 @@ def _archived(spec: object, sources: Mapping[str, object], out: Path, **solve: o
 
 def test_the_phases_are_the_metrics_clocks_in_the_order_they_run():
     assert PHASES == (
-        'compile',
+        'load',
         'tidy',
         'attach',
         'build',
@@ -169,8 +169,8 @@ def test_the_phases_add_up_across_a_write_an_update_and_a_second_solve(
 
     assert all(spent > 0 for spent in timed.kept.values()), f'this model entered every phase: {timed.kept}'
     entered = {phase for phase, spent in timed.recorded.items() if spent > 0}
-    assert entered == set(PHASES) - {'compile', 'write'}, (
-        f"the second answer reads its update, its solve and its archive, and the compile and the write are the first's: "
+    assert entered == set(PHASES) - {'load', 'write'}, (
+        f"the second answer reads its update, its solve and its archive, and the load and the write are the first's: "
         f'{timed.recorded}'
     )
     timed.check()
@@ -193,8 +193,8 @@ def test_each_answer_carries_its_share_and_the_shares_add_up_to_the_model(
         kept = model.metrics()
     assert first.metrics is not None and second.metrics is not None, 'a solve hands back what it took'
     assert (first.metrics.solves, second.metrics.solves, kept.solves) == (1, 1, 2), 'a row per answer, one solve each'
-    assert first.metrics.compile_seconds > 0, 'the first answer carries the compile'
-    assert second.metrics.compile_seconds == 0, 'and the second does not carry it again'
+    assert first.metrics.load_seconds > 0, 'the first answer carries the load'
+    assert second.metrics.load_seconds == 0, 'and the second does not carry it again'
     assert first.metrics.write_seconds > 0, 'a write before a solve is in that answer'
     assert second.metrics.write_seconds == 0, 'and in no later one'
     shared = {phase: _clocks(first.metrics)[phase] + _clocks(second.metrics)[phase] for phase in PHASES}
@@ -229,8 +229,8 @@ def _slowed(real: Callable[..., object], clock: Clock) -> Callable[..., object]:
 #: the phase it is clocked in. A step reached through two names is slowed
 #: under both.
 STEPS = [
-    pytest.param([(_api, 'as_spec')], 'compile', id='the spec read'),
-    pytest.param([(_api, 'as_program')], 'compile', id='the program compiled'),
+    pytest.param([(_api, 'as_spec')], 'load', id='the spec read'),
+    pytest.param([(_api, 'as_program')], 'load', id='the program compiled'),
     pytest.param([(_api, 'tidy_sources')], 'tidy', id='the sources read'),
     pytest.param([(_api, 'encoded')], 'attach', id='the sources encoded'),
     pytest.param([(attaching, 'check_assumptions')], 'attach', id='the assumptions checked'),

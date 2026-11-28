@@ -1440,15 +1440,15 @@ def test_the_phase_table_runs_along_the_ladder_in_the_order_the_engine_runs() ->
             sink='highs',
             size='m',
             counts={'columns': 10000, 'rows': 1, 'nonzeros': 1},
-            phase_seconds={'compile': 0.0005, 'build': 2.5, 'attach': 0.002},
+            phase_seconds={'load': 0.0005, 'build': 2.5, 'attach': 0.002},
         ),
         _timing('linopy', sink='highs', size='m', counts={'columns': 10000, 'rows': 1, 'nonzeros': 1}),
     ]
     rows = _phase_rows(report.phases(report.best(records)))
 
-    assert list(rows) == ['compile', 'attach', 'build'], 'the phases in the order the engine runs them'
+    assert list(rows) == ['load', 'attach', 'build'], 'the phases in the order the engine runs them'
     assert rows['build'] == ['4 ms', '2.5 s'], 'one column per rung, smallest first, each in its own unit'
-    assert rows['compile'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
+    assert rows['load'] == ['—', '0.5 ms'], 'a rung that never clocked a phase reads a dash'
 
 
 def test_a_rung_without_clocks_keeps_its_column_as_a_dash() -> None:
@@ -2569,12 +2569,12 @@ def test_a_solve_cell_reports_the_size_of_the_model_it_solved() -> None:
 
 def test_a_phase_only_head_clocked_reads_a_dash_and_takes_no_verdict() -> None:
     """A base older than a phase has none of it, so there is nothing to compare it with."""
-    row = Row('c', base=[_timed_run(1.0, build=1.0)] * 6, head=[_timed_run(1.0, compile=0.1, build=0.9)] * 6)
+    row = Row('c', base=[_timed_run(1.0, build=1.0)] * 6, head=[_timed_run(1.0, load=0.1, build=0.9)] * 6)
     lines = _phase_lines(row)
 
-    assert list(lines) == ['compile', 'build'], 'the phases in the order head ran them'
-    assert lines['compile'][2] == '—', f'base has no compile: {lines["compile"]}'
-    assert lines['compile'][-1] == '—', f'and no verdict on it: {lines["compile"]}'
+    assert list(lines) == ['load', 'build'], 'the phases in the order head ran them'
+    assert lines['load'][2] == '—', f'base has no load: {lines["load"]}'
+    assert lines['load'][-1] == '—', f'and no verdict on it: {lines["load"]}'
 
 
 def test_a_memory_comparison_reports_no_phases() -> None:

@@ -33,7 +33,7 @@ to the whole call:
 
 ```mermaid
 flowchart TB
-    SPEC["the spec<br/>a YAML file or a mapping"] -->|compile| PROGRAM["the checked spec and its program"]
+    SPEC["the spec<br/>a YAML file or a mapping"] -->|load| PROGRAM["the checked spec and its program"]
     DATA[("your sources<br/>parquet files and tables")] -->|tidy| TIDY["the tidy tables<br/>as sps.tidy returns them"]
     PROGRAM --> ATTACHED
     TIDY -->|attach| ATTACHED["the data on the program<br/>assumptions checked"]
@@ -162,7 +162,7 @@ model.close()
 pl.Config.set_tbl_rows(None)
 ```
 
-Run 0 holds the compile and the first build. Each later run holds its update,
+Run 0 holds the load and the first build. Each later run holds its update,
 its build and its solve. An archive written by a solve lands in that solve's
 run. The result's own row is written into the archive before it lands, so the
 run holds the landing and the result does not.

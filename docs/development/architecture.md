@@ -124,11 +124,11 @@ what `Model` keeps between calls.
 %%{init: {"flowchart": {"wrappingWidth": 460}}}%%
 flowchart TB
     accTitle: One build and solve, phase by phase
-    accDescr: Nine bands, one per phase, from compile to archive. Each band holds its steps in the order they run and names the module behind each. Between two bands is the value the first hands the second.
+    accDescr: Nine bands, one per phase, from load to archive. Each band holds its steps in the order they run and names the module behind each. Between two bands is the value the first hands the second.
     SPECFILE["a spec<br/>a YAML file or a mapping"]
     DATA[("sources<br/>parquet paths · tables · sequences")]
 
-    subgraph COMPILE["compile · Model.__init__"]
+    subgraph LOAD["load · Model.__init__"]
         READSPEC["read, checked and compiled by mathspec<br/><i>as_spec and as_program, _inputs.py</i>"]
     end
     SPECFILE --> READSPEC

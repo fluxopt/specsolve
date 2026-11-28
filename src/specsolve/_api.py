@@ -222,7 +222,7 @@ class Model:
         self._clock = Clock()
         self._spec = as_spec(spec)
         self._program = as_program(self._spec)
-        self._clock.lap('compile')
+        self._clock.lap('load')
         self._sources = dict(sources)
         #: What the last build read, as [`tidy_sources`][] gave it.
         self._tidied: dict[str, pl.DataFrame] = {}

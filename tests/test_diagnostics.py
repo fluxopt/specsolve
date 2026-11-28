@@ -112,8 +112,8 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
     """
     with sps.build(SOLVER_VECTOR_SPEC, SOLVER_VECTOR_LOAD) as model:
         built = model.metrics()
-        assert _ran(built) == {'compile', 'tidy', 'attach', 'build'}, (
-            'a model only built has spent time compiling the spec, reading and attaching sources and building '
+        assert _ran(built) == {'load', 'tidy', 'attach', 'build'}, (
+            'a model only built has spent time loading the spec, reading and attaching sources and building '
             'tables, nowhere else'
         )
         assert built.phases['seconds'].min() >= 0, 'a wall clock cannot run backwards'
@@ -121,7 +121,7 @@ def test_diagnostics_say_where_the_time_went(tmp_path):
         model.solve()
         model.write(tmp_path / 'model.lp')
         ran = model.metrics()
-        assert _ran(ran) == {'compile', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write'}, (
+        assert _ran(ran) == {'load', 'tidy', 'attach', 'build', 'handoff', 'solve', 'readback', 'write'}, (
             'a solve adds the handoff, the solver run and the readback, a write adds the file stream'
         )
 
