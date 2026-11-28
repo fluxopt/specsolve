@@ -8,6 +8,7 @@ it releases that version ([RELEASING.md](https://github.com/fluxopt/specsolve/bl
 ## Upcoming version
 
 - fix(data): a dimension's labels are held and returned in the one type its dtype declares ([#2256](https://github.com/fluxopt/specsolve/pull/2256))
+- fix(data): Enum or Categorical labels work in a where ([#2257](https://github.com/fluxopt/specsolve/pull/2257))
 - fix(api): an archived answer says it holds no dual ray, and a start's warning names the caller's line ([#2253](https://github.com/fluxopt/specsolve/pull/2253))
 - refactor(api): tidy refuses the data a build refuses, and timings name each step of reading it ([#2250](https://github.com/fluxopt/specsolve/pull/2250))
 - docs(benchmarks): the benchmarks page shows numbers measured on 0.13.0 ([#2242](https://github.com/fluxopt/specsolve/pull/2242))
