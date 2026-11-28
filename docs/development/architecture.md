@@ -267,8 +267,8 @@ flowchart TB
 
     subgraph HANDS["handoff, at the next solve"]
         direction TB
-        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every coefficient as it was loaded?"}}
-        PUSHED["<b>push</b><br/>the new bounds, costs and right-hand sides<br/>onto the loaded solver"]
+        SAME{{"where a solver is loaded:<br/>same structure, same options,<br/>every quadratic constraint's linear part as it was loaded?"}}
+        PUSHED["<b>push</b><br/>the new bounds, costs, right-hand sides and a linear row's<br/>changed coefficients onto the loaded solver"]
         LOADED["<b>instance</b><br/>the solver closed and loaded again"]
         SAME -->|yes| PUSHED
         SAME -->|no| LOADED
@@ -380,7 +380,8 @@ constant term. An absent coordinate is a missing row, and broadcasting is a join
 **Solver indices are contiguous `0..n-1`, row-major over the coordinate product, absent coordinates skipped.**
 So `COL` is the solver column, `ROW` is the solver row, and a build is
 the same from run to run. `update` puts new bounds, costs and right-hand sides
-onto a loaded solver by position.
+onto a loaded solver by position. A loaded solver takes a linear row's changed
+coefficients in place.
 
 **The program is affine.** No node adds variables or constraints. Binary and
 integer are a column type, `sos:` is a fourth stream, and `Spec.expand` writes
@@ -478,8 +479,8 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Push**
 : After an update that changed numbers only, a loaded solver takes the new
-  bounds, costs and right-hand sides pushed, in place of a reload. The model
-  itself is built again.
+  bounds, costs, right-hand sides and a linear row's coefficients pushed, in
+  place of a reload. The model itself is built again.
 
 **Attached sources**
 : The tidy tables as every query reads them: a `Dimension` per dimension, a
@@ -520,8 +521,9 @@ The names the code uses for its own parts. The names a caller meets are in
 
 **Structure digest**
 : A digest of everything a re-solve may not change. A loaded solver keeps its
-  model while the digest holds and every coefficient is within 1e-12 relative
-  of the one it holds (`tables.py`).
+  model while the digest holds and a quadratic constraint's linear part is
+  within 1e-12 relative of the one it holds, and takes a linear row's changed
+  coefficients in place (`tables.py`, `solver.py`).
 
 **Answer**
 : What one solve answered, as plain data: its record, its metrics, its tables

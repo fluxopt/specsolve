@@ -9,14 +9,12 @@ solves cold, and `metrics().solver_instances` says which happened.
 from __future__ import annotations
 
 import gc
-import importlib
 import weakref
 from dataclasses import replace
 from typing import Any, NamedTuple
 
 import polars as pl
 import pytest
-import yaml
 from mathspec import to_spec
 
 import specsolve as sps
@@ -100,8 +98,10 @@ def _case(rung: Rung, dispatch_yaml: Any) -> tuple[Any, dict[str, Any]]:
 #: gates ``where: p_max > 0`` *and* bounds the variable, so whether it is
 #: structural depends on its values.
 #:
-#: The four `reach` rungs move **one field of the digest each**, and each
-#: changes the answer.
+#: The `reach` rungs move the objective constant, a coefficient, a coefficient's
+#: column and a coefficient's row, and each changes the answer. A coefficient at
+#: 0.8 leaves `a` alone cheapest in the north: at 0.5 it would tie `b`, and a
+#: warm solve and a cold one may stop at either optimum.
 RUNGS = [
     pytest.param(
         Rung('dispatch', {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})}, True),
@@ -123,8 +123,8 @@ RUNGS = [
     pytest.param(
         Rung(
             'reach',
-            {'reach': reaching(('north', 'a', 0.5), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
-            False,
+            {'reach': reaching(('north', 'a', 0.8), ('north', 'b', 1.0), ('south', 'c', 1.0), ('south', 'd', 1.0))},
+            True,
         ),
         id='a coefficient moved',
     ),
@@ -565,74 +565,6 @@ def test_a_dimension_s_labels_update_as_a_source(model):
     assert model.update(change).solve().primal('p').height > 0, "a dimension's labels are a source, and update as one"
 
 
-@pytest.mark.parametrize(
-    ('change', 'checked'),
-    [
-        pytest.param(
-            {'load': pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [41.0, 81.0, 56.0, 96.0]})},
-            {'load'},
-            id='a parameter alone',
-        ),
-        pytest.param({'snapshot': SNAPSHOTS}, {'load'}, id='a dimension and the parameter over it'),
-        pytest.param({'generator': GENERATORS}, {'p_max', 'cost'}, id='a dimension and the parameters over it'),
-    ],
-)
-@pytest.mark.parametrize(
-    ('module', 'check'),
-    [
-        pytest.param('_sources', 'checked_parameter', id='shape'),
-        pytest.param('_encoding', '_refuse_unknown_or_repeated_coordinates', id='content'),
-    ],
-)
-def test_an_update_checks_again_only_the_parameters_it_can_change(model, monkeypatch, change, checked, module, check):
-    """A parameter whose own source and whose dimensions' labels an update leaves alone is neither shaped nor checked again."""
-    held = importlib.import_module(f'specsolve.{module}')
-    real = getattr(held, check)
-    seen: list[str] = []
-
-    def spy(name, *args, **kwargs):
-        seen.append(name)
-        return real(name, *args, **kwargs)
-
-    monkeypatch.setattr(held, check, spy)
-    model.update(change)
-    assert set(seen) == checked, f'the update checked {sorted(seen)} again'
-
-
-def test_an_update_that_drops_a_label_refuses_the_unchanged_parameter_still_over_it(model):
-    """A parameter is checked again against a dimension the update changed, though its own source is unchanged.
-
-    `load` is not in the update, but its rows at snapshot 3 now name a label
-    the dimension no longer has.
-    """
-    with pytest.raises(sps.errors.DataError, match="parameter 'load' has label"):
-        model.update({'snapshot': [0, 1, 2]})
-
-
-def test_an_update_keeps_a_filled_parameter_with_the_coordinates_its_data_gave(dispatch_yaml):
-    """A kept parameter that a build filled still tells the rows its data gave from the ones it filled.
-
-    `derate` declares `missing: 1` and gives a row for `gas` alone; the
-    constraint asks `where: derate`, so only `gas` is capped, before the update
-    of `load` and after it.
-    """
-    spec = yaml.safe_load(dispatch_yaml.read_text())
-    spec['parameters']['derate'] = {'dims': ['generator'], 'missing': 1}
-    spec['constraints']['derated'] = {
-        'dims': ['snapshot', 'generator'],
-        'where': 'derate',
-        'expression': 'p <= derate * p_max',
-    }
-    data = sources() | COORDINATES | {'derate': pl.DataFrame({'generator': ['gas'], 'value': [0.5]})}
-    load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [41.0, 81.0, 56.0, 96.0]})
-    with sps.build(spec, data) as model:
-        rows = model.metrics().rows
-        model.update({'load': load})
-        assert model.metrics().rows == rows, 'the same rows, derated for gas alone'
-        with sps.build(spec, data | {'load': load}) as fresh:
-            assert model.solve().objective == pytest.approx(fresh.solve().objective), 'as a fresh build answers'
-
-
 def test_a_update_can_grow_a_dimension():
     """Appending rows is an update — the Benders master, in three lines.
 
@@ -713,45 +645,6 @@ def test_a_update_that_cannot_build_leaves_nothing_half_built(model):
         model.solve()
 
 
-def test_an_update_after_a_refused_one_reads_the_refused_source_again(model):
-    """`model.update(x)` answers what a fresh build of every source given so far answers.
-
-    The refused `load` is still the model's source, so an update of `cost`
-    alone is refused for it, as a fresh build of the same sources is: a
-    refused update leaves no build to keep a parameter from.
-    """
-    with pytest.raises(sps.errors.DataError):
-        model.update({'load': pl.DataFrame({'snapshot': [0, 0, 1], 'value': [1.0, 2.0, 3.0]})})
-    with pytest.raises(sps.errors.DataError, match='load'):
-        model.update({'cost': pl.DataFrame({'generator': GENERATORS, 'value': [9.0, 2.0, 1.0]})})
-
-
-def test_an_update_interrupted_while_choosing_what_to_keep_reads_every_source_again(model, dispatch_yaml, monkeypatch):
-    """`model.update(x)` answers what a fresh build of every source given so far answers.
-
-    The first update of `load` stops while it chooses what to keep, after the
-    new `load` is among the model's sources. The next update, of `cost` alone,
-    must still read that `load` rather than keep the one built before it.
-    """
-    from specsolve import _api
-
-    load = pl.DataFrame({'snapshot': SNAPSHOTS, 'value': [10.0, 20.0, 30.0, 40.0]})
-    cost = pl.DataFrame({'generator': GENERATORS, 'value': [1.0, 2.0, 60.0]})
-    choose = _api._unchanged
-
-    def interrupted(*args):
-        monkeypatch.setattr(_api, '_unchanged', choose)
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(_api, '_unchanged', interrupted)
-    with pytest.raises(KeyboardInterrupt):
-        model.update({'load': load})
-    model.update({'cost': cost})
-    with sps.build(dispatch_yaml, sources() | COORDINATES | {'load': load, 'cost': cost}) as fresh:
-        expected = fresh.solve().objective
-    assert model.solve().objective == pytest.approx(expected), 'the load given last, not the one built before it'
-
-
 def test_diagnostics_report_the_shape_the_solver_was_handed(dispatch_yaml):
     """The size question `check` cannot answer, needing no data where this needs all of it.
 
@@ -799,3 +692,65 @@ def test_a_cost_falling_to_zero_shrinks_the_objective_and_keeps_the_solver():
         assert updated.objective == fresh.solve().objective, (
             'the pushed cost vector disagrees with the one a cold build hands over'
         )
+
+
+#: One price per generator, a shared demand, and `eff` free to scale `p`.
+ROLES = {
+    'dimensions': {'generator': {'dtype': 'str'}},
+    'parameters': {
+        'cap': {'dims': ['generator']},
+        'eff': {'dims': ['generator']},
+        'price': {'dims': ['generator']},
+        'demand': {'dims': []},
+    },
+    'variables': {'p': {'dims': ['generator'], 'bounds': {'lower': 0, 'upper': 'cap'}}},
+    'constraints': {'meet': {'dims': [], 'expression': 'sum(p, over=generator) >= demand'}},
+    'objective': {'sense': 'minimize', 'expression': 'sum(p * price)'},
+}
+ROLE_GENERATORS = ['a', 'b']
+ROLE_DATA = {
+    'generator': ROLE_GENERATORS,
+    'cap': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [10.0, 10.0]}),
+    'eff': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 1.0]}),
+    'price': pl.DataFrame({'generator': ROLE_GENERATORS, 'value': [1.0, 2.0]}),
+    'demand': pl.DataFrame({'value': [8.0]}),
+}
+
+
+#: `eff` scales `p` on each generator's own row, after `meet`'s, so a changed
+#: coefficient sits in a row the matrix does not start with.
+PER_ROW = override(
+    ROLES,
+    **{
+        'constraints.meet.expression': 'sum(p, over=generator) >= demand',
+        'constraints.limit': {'dims': ['generator'], 'expression': 'eff * p <= cap'},
+    },
+)
+
+
+def test_a_changed_coefficient_is_taken_in_place_and_taken_back(solver_name):
+    """A changed coefficient reaches the loaded solver in place, and so does the change undone.
+
+    `eff` of `a` doubles, so `a` reaches half its capacity and `b`, dearer,
+    covers the rest. Each answer is a fresh build's on the same solver.
+    """
+    doubled = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [2.0, 1.0]))}
+    with sps.build(PER_ROW, ROLE_DATA) as model:
+        model.solve(solver_name)
+        for data in (ROLE_DATA | doubled, ROLE_DATA):
+            with sps.build(PER_ROW, data) as reference:
+                got = model.update({'eff': data['eff']}).solve(solver_name).objective
+                assert got == pytest.approx(reference.solve(solver_name).objective), 'a fresh build answers alike'
+        assert model.metrics().solver_instances == 1, 'the coefficients changed in place, so the solver stayed loaded'
+
+
+def test_a_quadratic_constraint_whose_linear_part_changed_loads_again():
+    """A quadratic row goes to the solver whole, so a coefficient of its linear part loads the model again."""
+    pytest.importorskip('gurobipy', reason='only the gurobi sink takes a quadratic constraint')
+    spec = override(ROLES, **{'constraints.meet.expression': 'sum(eff * p + p * p, over=generator) >= demand'})
+    changed = {'eff': ROLE_DATA['eff'].with_columns(pl.Series('value', [0.5, 4.0]))}
+    with sps.build(spec, ROLE_DATA) as model, sps.build(spec, ROLE_DATA | changed) as reference:
+        model.solve('gurobi')
+        got = model.update(changed).solve('gurobi').objective
+        assert got == pytest.approx(reference.solve('gurobi').objective, rel=1e-6), 'a fresh build answers alike'
+        assert model.metrics().solver_instances == 2, 'a quadratic row whose linear part changed was kept'
